@@ -4,12 +4,13 @@ import { useSession, signOut } from "next-auth/react";
 
 export default function Home() {
   const { data: session } = useSession();
-  const [tab, setTab] = useState<"imagenes" | "integraciones">("imagenes");
+  const [tab, setTab] = useState<"imagenes" | "integraciones" | "album">("imagenes");
   const [prompt, setPrompt] = useState("");
   const [imagen, setImagen] = useState<File | null>(null);
   const [imagenPreview, setImagenPreview] = useState<string | null>(null);
   const [generando, setGenerando] = useState(false);
   const [galeria, setGaleria] = useState<string[]>([]);
+  const [albumImages, setAlbumImages] = useState<string[]>([]);
   const [suscripcionActiva, setSuscripcionActiva] = useState<boolean | null>(null);
   const [errorMsg, setErrorMsg] = useState<string | null>(null);
   const [necesitaApiKey, setNecesitaApiKey] = useState(false);
@@ -17,6 +18,10 @@ export default function Home() {
   const [nuevaApiKey, setNuevaApiKey] = useState("");
   const [guardandoApiKey, setGuardandoApiKey] = useState(false);
   const [apiKeyGuardada, setApiKeyGuardada] = useState(false);
+  
+  // NUEVOS ESTADOS CLOUDINARY
+  const [cloudinaryData, setCloudinaryData] = useState({ name: "", key: "", secret: "" });
+  const [guardandoCloud, setGuardandoCloud] = useState(false);
   
   const [cantidad, setCantidad] = useState(1);
   const [incluirTexto, setIncluirTexto] = useState(false);
@@ -27,11 +32,37 @@ export default function Home() {
     fetch("/api/apikey").then(r => r.json()).then(setApiKeyInfo);
   };
 
+  const handleGuardarApiKey = async () => {
+    if (!nuevaApiKey) return;
+    setGuardandoApiKey(true);
+    setApiKeyGuardada(false);
+    const res = await fetch("/api/apikey", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ apiKey: nuevaApiKey }),
+    });
+    setGuardandoApiKey(false);
+    if (res.ok) {
+      setNuevaApiKey("");
+      setApiKeyGuardada(true);
+      cargarApiKeyInfo();
+    }
+  };
+
+  const cargarAlbum = async () => {
+    const res = await fetch("/api/album");
+    const data = await res.json();
+    if (data.imagenes) {
+      setAlbumImages(data.imagenes.map((item: any) => item.url));
+    }
+  };
+
   useEffect(() => {
     fetch("/api/verificar-suscripcion")
       .then(r => r.json())
       .then(data => setSuscripcionActiva(data.activo))
     cargarApiKeyInfo();
+    cargarAlbum();
   }, [])
 
   const handleFile = (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -67,6 +98,7 @@ export default function Home() {
 
       if (data.imagen_base64) {
         setGaleria((prev) => [`data:image/png;base64,${data.imagen_base64}`, ...prev]);
+        cargarAlbum();
       }
     } catch (e) {
       setErrorMsg("No se pudo conectar con el servidor. Intenta de nuevo.");
@@ -75,20 +107,24 @@ export default function Home() {
     }
   };
 
-  const handleGuardarApiKey = async () => {
-    if (!nuevaApiKey) return;
-    setGuardandoApiKey(true);
-    setApiKeyGuardada(false);
-    const res = await fetch("/api/apikey", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ apiKey: nuevaApiKey }),
-    });
-    setGuardandoApiKey(false);
-    if (res.ok) {
-      setNuevaApiKey("");
-      setApiKeyGuardada(true);
-      cargarApiKeyInfo();
+  const handleGuardarCloudinary = async () => {
+    setGuardandoCloud(true);
+    try {
+      const res = await fetch("/api/configurar-cloudinary", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(cloudinaryData),
+      });
+      
+      if (res.ok) {
+        alert("¡Credenciales de Cloudinary guardadas correctamente!");
+      } else {
+        alert("Error al guardar, intenta nuevamente.");
+      }
+    } catch (error) {
+      console.error("Error:", error);
+    } finally {
+      setGuardandoCloud(false);
     }
   };
 
@@ -103,6 +139,9 @@ export default function Home() {
         </a>
         <div onClick={() => setTab("imagenes")} style={{ padding: "8px 12px", borderRadius: 8, cursor: "pointer", background: tab === "imagenes" ? "#f3f2fe" : "transparent", color: tab === "imagenes" ? "#534AB7" : "#666", fontWeight: tab === "imagenes" ? 500 : 400, fontSize: 14 }}>
           🎨 Imágenes IA
+        </div>
+        <div onClick={() => setTab("album")} style={{ padding: "8px 12px", borderRadius: 8, cursor: "pointer", background: tab === "album" ? "#f3f2fe" : "transparent", color: tab === "album" ? "#534AB7" : "#666", fontWeight: tab === "album" ? 500 : 400, fontSize: 14 }}>
+          📸 Álbum Creativos
         </div>
         <div onClick={() => setTab("integraciones")} style={{ padding: "8px 12px", borderRadius: 8, cursor: "pointer", background: tab === "integraciones" ? "#f3f2fe" : "transparent", color: tab === "integraciones" ? "#534AB7" : "#666", fontWeight: tab === "integraciones" ? 500 : 400, fontSize: 14 }}>
           🔌 Integraciones
@@ -133,7 +172,7 @@ export default function Home() {
 
       <div style={{ flex: 1, display: "flex", flexDirection: "column", overflow: "hidden" }}>
         <div style={{ padding: "1rem 1.5rem", borderBottom: "1px solid #e8e8e6", background: "#fff", fontSize: 15, fontWeight: 500 }}>
-          {tab === "imagenes" ? "Generador de imágenes IA" : "Integraciones"}
+          {tab === "imagenes" ? "Generador de imágenes IA" : tab === "album" ? "Álbum de Creativos" : "Integraciones"}
         </div>
         <div style={{ flex: 1, overflow: "auto", padding: "1.5rem" }}>
           {tab === "imagenes" && (
@@ -215,45 +254,66 @@ export default function Home() {
               )}
             </div>
           )}
+
+          {tab === "album" && (
+            <div style={{ maxWidth: "900px", margin: "0 auto", padding: "2rem" }}>
+              <h2 style={{ fontSize: 18, fontWeight: 600, marginBottom: "1rem" }}>Álbum de Creativos</h2>
+              <div style={{ display: "grid", gridTemplateColumns: "repeat(3, 1fr)", gap: 12 }}>
+                {albumImages.length > 0 ? (
+                  albumImages.map((url, i) => (
+                    <img key={i} src={url} alt="creatividad" style={{ width: "100%", borderRadius: 12, border: "1px solid #e8e8e6" }} />
+                  ))
+                ) : (
+                  <p style={{ fontSize: 14, color: "#666" }}>Aún no tienes imágenes generadas en tu álbum.</p>
+                )}
+              </div>
+            </div>
+          )}
+
           {tab === "integraciones" && (
             <div style={{ maxWidth: "600px", margin: "0 auto", padding: "2rem", background: "#fff", borderRadius: "16px", border: "1px solid #e8e8e6", boxShadow: "0 4px 6px -1px rgba(0, 0, 0, 0.1)" }}>
+              {/* Sección OpenAI */}
               <div style={{ display: "flex", alignItems: "center", gap: "16px", marginBottom: "2rem" }}>
                 <div style={{ width: "60px", height: "60px", borderRadius: "12px", background: "#f3f2fe", display: "flex", alignItems: "center", justifyContent: "center", fontSize: "30px" }}>🤖</div>
                 <div>
                   <h2 style={{ fontSize: "18px", fontWeight: 600, margin: 0 }}>Conexión con OpenAI</h2>
                   <p style={{ fontSize: "14px", color: "#666", margin: "4px 0 0 0" }}>Configura tu API Key para habilitar la generación inteligente.</p>
+                  <a href="https://platform.openai.com/api-keys" target="_blank" rel="noopener noreferrer" style={{ fontSize: "12px", color: "#7F77DD", textDecoration: "underline" }}>Obtener API Key aquí</a>
                 </div>
               </div>
-
               <div style={{ marginBottom: "1.5rem" }}>
                 <label style={{ display: "block", fontSize: "13px", fontWeight: 500, color: "#333", marginBottom: "8px" }}>Estado de la conexión</label>
                 <div style={{ padding: "12px 16px", borderRadius: "8px", background: apiKeyInfo?.hasKey ? "#f0fdf4" : "#fef2f2", border: apiKeyInfo?.hasKey ? "1px solid #bbf7d0" : "1px solid #fecaca", fontSize: "14px", color: apiKeyInfo?.hasKey ? "#166534" : "#991b1b", fontWeight: 500 }}>
                   {apiKeyInfo === null ? "Verificando..." : apiKeyInfo.hasKey ? `● Conectado: ${apiKeyInfo.preview}` : "● No conectado: Se requiere API Key"}
                 </div>
               </div>
-
               <div style={{ marginBottom: "1.5rem" }}>
                 <label style={{ display: "block", fontSize: "13px", fontWeight: 500, color: "#333", marginBottom: "8px" }}>API Key de OpenAI</label>
-                <input
-                  type="password"
-                  placeholder="sk-..."
-                  value={nuevaApiKey}
-                  onChange={(e) => setNuevaApiKey(e.target.value)}
-                  style={{ width: "100%", padding: "12px", borderRadius: "8px", border: "1px solid #e0e0e0", fontSize: "14px", boxSizing: "border-box" }}
-                />
+                <input type="password" placeholder="sk-..." value={nuevaApiKey} onChange={(e) => setNuevaApiKey(e.target.value)} style={{ width: "100%", padding: "12px", borderRadius: "8px", border: "1px solid #e0e0e0", fontSize: "14px", boxSizing: "border-box" }} />
               </div>
-
-              <button
-                onClick={handleGuardarApiKey}
-                disabled={!nuevaApiKey || guardandoApiKey}
-                style={{ width: "100%", padding: "12px", borderRadius: "8px", background: "#7F77DD", color: "#fff", border: "none", fontSize: "14px", fontWeight: 600, cursor: nuevaApiKey ? "pointer" : "not-allowed", opacity: nuevaApiKey ? 1 : 0.6 }}
-              >
+              <button onClick={handleGuardarApiKey} disabled={!nuevaApiKey || guardandoApiKey} style={{ width: "100%", padding: "12px", borderRadius: "8px", background: "#7F77DD", color: "#fff", border: "none", fontSize: "14px", fontWeight: 600, cursor: nuevaApiKey ? "pointer" : "not-allowed", opacity: nuevaApiKey ? 1 : 0.6 }}>
                 {guardandoApiKey ? "Guardando..." : apiKeyInfo?.hasKey ? "Actualizar API Key" : "Guardar API Key"}
               </button>
               
-              {apiKeyGuardada && (
-                <div style={{ marginTop: "1rem", textAlign: "center", fontSize: "13px", color: "#166534" }}>✓ Cambios guardados correctamente</div>
-              )}
+              {/* Sección Cloudinary */}
+              <div style={{ marginTop: "3rem", borderTop: "1px solid #e8e8e6", paddingTop: "2rem" }}>
+                <div style={{ display: "flex", alignItems: "center", gap: "16px", marginBottom: "1.5rem" }}>
+                  <div style={{ width: "60px", height: "60px", borderRadius: "12px", background: "#f3f2fe", display: "flex", alignItems: "center", justifyContent: "center", fontSize: "30px" }}>☁️</div>
+                  <div>
+                    <h2 style={{ fontSize: "18px", fontWeight: 600, margin: 0 }}>Conexión con Cloudinary</h2>
+                    <p style={{ fontSize: "14px", color: "#666", margin: "4px 0 0 0" }}>Configura tus credenciales para el almacenamiento de imágenes.</p>
+                    <a href="https://console.cloudinary.com/console/" target="_blank" rel="noopener noreferrer" style={{ fontSize: "12px", color: "#7F77DD", textDecoration: "underline" }}>Ir al dashboard de Cloudinary</a>
+                  </div>
+                </div>
+                <div style={{ display: "flex", flexDirection: "column", gap: "12px", marginBottom: "1rem" }}>
+                  <input placeholder="Cloud Name" value={cloudinaryData.name} onChange={(e) => setCloudinaryData({...cloudinaryData, name: e.target.value})} style={{ width: "100%", padding: "12px", borderRadius: "8px", border: "1px solid #e0e0e0", fontSize: "14px" }} />
+                  <input placeholder="API Key" value={cloudinaryData.key} onChange={(e) => setCloudinaryData({...cloudinaryData, key: e.target.value})} style={{ width: "100%", padding: "12px", borderRadius: "8px", border: "1px solid #e0e0e0", fontSize: "14px" }} />
+                  <input type="password" placeholder="API Secret" value={cloudinaryData.secret} onChange={(e) => setCloudinaryData({...cloudinaryData, secret: e.target.value})} style={{ width: "100%", padding: "12px", borderRadius: "8px", border: "1px solid #e0e0e0", fontSize: "14px" }} />
+                </div>
+                <button onClick={handleGuardarCloudinary} disabled={guardandoCloud} style={{ width: "100%", padding: "12px", borderRadius: "8px", background: "#7F77DD", color: "#fff", border: "none", fontSize: "14px", fontWeight: 600, cursor: "pointer" }}>
+                  {guardandoCloud ? "Guardando..." : "Guardar Cloudinary"}
+                </button>
+              </div>
             </div>
           )}
         </div>

@@ -1,6 +1,7 @@
 import { auth } from "@/auth"
 import { NextRequest, NextResponse } from "next/server"
 import { supabaseAdmin } from "@/lib/supabase"
+import { v2 as cloudinary } from "cloudinary"
 
 export async function POST(req: NextRequest) {
   // 1. Verificar sesión
@@ -8,10 +9,10 @@ export async function POST(req: NextRequest) {
   if (!session?.user?.email)
     return NextResponse.json({ error: "Debes iniciar sesión" }, { status: 401 })
 
-  // 2. Verificar suscripción activa
+  // 2. Verificar suscripción activa (Agregamos campos de Cloudinary al select)
   const { data: usuario } = await supabaseAdmin
     .from("usuarios")
-    .select("activo, fecha_vencimiento, openai_key")
+    .select("activo, fecha_vencimiento, openai_key, cloudinary_cloud, cloudinary_api_key, cloudinary_api_secret")
     .eq("email", session.user.email)
     .single()
 
@@ -64,7 +65,7 @@ export async function POST(req: NextRequest) {
           incluir_texto: incluirTexto === "true",
           openai_api_key: openaiKey,
           marca: marca ?? null,
-          email: session.user.email,         // ✅ email del usuario
+          email: session.user.email,        // ✅ email del usuario
           colores: marca?.colores ?? null,    // ✅ colores de la marca
           logo_url: marca?.logo_url ?? null,  // ✅ logo de la marca
         }),
@@ -80,6 +81,24 @@ export async function POST(req: NextRequest) {
     const imageBuffer = await n8nRes.arrayBuffer()
     const base64Image = Buffer.from(imageBuffer).toString("base64")
 
+    // --- INTEGRACIÓN CLOUDINARY ---
+    if (usuario.cloudinary_cloud && usuario.cloudinary_api_key && usuario.cloudinary_api_secret) {
+      cloudinary.config({
+        cloud_name: usuario.cloudinary_cloud,
+        api_key: usuario.cloudinary_api_key,
+        api_secret: usuario.cloudinary_api_secret,
+      });
+      
+      const upload = await cloudinary.uploader.upload(`data:image/png;base64,${base64Image}`);
+      
+      // Guardar en tu tabla 'album_creativos' usando tus nombres de columna
+      await supabaseAdmin.from("album_creativos").insert({ 
+        user_id: usuario.id, // Asumiendo que 'usuario' tiene el campo 'id'
+        url_imagen: upload.secure_url,
+        public_id: upload.public_id // Aprovechando que tienes esta columna
+      });
+    }
+    // ------------------------------
     return NextResponse.json({ imagen_base64: base64Image })
 
   } catch (err) {
