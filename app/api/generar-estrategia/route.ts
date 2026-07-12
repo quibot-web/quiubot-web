@@ -1,7 +1,7 @@
 import { auth } from "@/auth";
 import { NextRequest, NextResponse } from "next/server";
 import { supabaseAdmin } from "@/lib/supabase";
-import { PLANES, type PlanId } from "@/lib/planesConfig";
+import { PLANES, type PlanId } from "@/app/lib/planesConfig";
 
 export async function POST(req: NextRequest) {
   const session = await auth();
