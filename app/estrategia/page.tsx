@@ -1,5 +1,5 @@
 "use client";
-import { useState, useRef, useEffect } from "react";
+import { useState, useRef, useEffect, Suspense } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 import AdBlueprintExplorer from "@/app/components/AdBlueprintExplorer";
 
@@ -120,7 +120,7 @@ type EstrategiaStep =
   | "analisis"
   | "creativos";
 
-export default function EstrategiaPage() {
+function EstrategiaContent() {
   const router = useRouter();
   const searchParams = useSearchParams();
   const [step, setStep] = useState<EstrategiaStep>("imagen");
@@ -859,5 +859,17 @@ export default function EstrategiaPage() {
         @keyframes spin-estrategia { 0% { transform: rotate(0deg); } 100% { transform: rotate(360deg); } }
       `}</style>
     </div>
+  );
+}
+
+export default function EstrategiaPage() {
+  return (
+    <Suspense fallback={
+      <div style={{ minHeight: "100vh", background: "#f9f9f8", display: "flex", alignItems: "center", justifyContent: "center" }}>
+        <p style={{ color: "#999", fontSize: 14 }}>Cargando...</p>
+      </div>
+    }>
+      <EstrategiaContent />
+    </Suspense>
   );
 }

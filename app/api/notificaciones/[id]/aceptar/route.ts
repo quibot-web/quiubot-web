@@ -2,7 +2,12 @@ import { auth } from "@/auth";
 import { NextRequest, NextResponse } from "next/server";
 import { supabaseAdmin } from "@/lib/supabase";
 
-export async function POST(req: NextRequest, { params }: { params: { id: string } }) {
+export async function POST(
+  req: NextRequest,
+  { params }: { params: Promise<{ id: string }> }
+) {
+  const { id } = await params;
+
   const session = await auth();
   if (!session?.user?.email) return NextResponse.json({ error: "No autorizado" }, { status: 401 });
 
@@ -11,7 +16,7 @@ export async function POST(req: NextRequest, { params }: { params: { id: string 
   const { data: notificacion, error: fetchError } = await supabaseAdmin
     .from("notificaciones")
     .select("*, campanas_publicadas(meta_campaign_id, meta_adset_id, presupuesto_diario)")
-    .eq("id", params.id)
+    .eq("id", id)
     .single();
 
   if (fetchError || !notificacion) {
@@ -50,7 +55,7 @@ export async function POST(req: NextRequest, { params }: { params: { id: string 
       return NextResponse.json({ error: data.error || "No se pudo aplicar la sugerencia en Meta" }, { status: n8nRes.status || 502 });
     }
 
-    await supabaseAdmin.from("notificaciones").update({ estado: "aplicada" }).eq("id", params.id);
+    await supabaseAdmin.from("notificaciones").update({ estado: "aplicada" }).eq("id", id);
 
     return NextResponse.json({ ok: true });
   } catch (err) {

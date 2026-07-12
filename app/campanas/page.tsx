@@ -1,8 +1,8 @@
 "use client";
-import { useEffect, useState, useRef } from "react";
+import { useEffect, useState, useRef, Suspense } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 
-export default function CampanasPage() {
+function CampanasContent() {
   const router = useRouter();
   const searchParams = useSearchParams();
   const highlightId = searchParams.get("highlight");
@@ -82,7 +82,6 @@ export default function CampanasPage() {
     cargar();
   }, []);
 
-  // --- Nuevo: scroll + resaltado hacia la campaña indicada en ?highlight= ---
   useEffect(() => {
     if (!highlightId || cargando) return;
 
@@ -372,5 +371,17 @@ export default function CampanasPage() {
         {contenido}
       </div>
     </div>
+  );
+}
+
+export default function CampanasPage() {
+  return (
+    <Suspense fallback={
+      <div style={{ minHeight: "100vh", background: "rgb(249, 249, 248)", display: "flex", alignItems: "center", justifyContent: "center" }}>
+        <p style={{ color: "rgb(153, 153, 153)", fontSize: 14 }}>Cargando...</p>
+      </div>
+    }>
+      <CampanasContent />
+    </Suspense>
   );
 }
