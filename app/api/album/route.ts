@@ -1,6 +1,6 @@
 import { NextResponse } from "next/server";
-import { auth } from "@/auth"; // Ajusta según tu configuración de auth
-import { supabaseAdmin } from "@/lib/supabase"; // Asegúrate de tener este import
+import { auth } from "@/auth"; 
+import { supabaseAdmin } from "@/lib/supabase";
 
 export async function GET() {
   const session = await auth();
@@ -9,14 +9,26 @@ export async function GET() {
     return NextResponse.json({ error: "No autorizado" }, { status: 401 });
   }
 
-  // Consulta tu tabla donde guardas las imágenes (ajusta 'galeria' al nombre real de tu tabla)
+  const { data: usuario, error: errorUsuario } = await supabaseAdmin
+    .from("usuarios")
+    .select("id")
+    .eq("email", session.user.email.trim().toLowerCase())
+    .single();
+
+  if (errorUsuario || !usuario) {
+    return NextResponse.json({ error: "Usuario no encontrado" }, { status: 404 });
+  }
+
   const { data, error } = await supabaseAdmin
-    .from("galeria") 
-    .select("url")
-    .eq("email", session.user.email)
+    .from("album_creativos") 
+    .select("id, url_imagen, public_id, tipo, creado_en")
+    .eq("user_id", usuario.id) 
     .order("creado_en", { ascending: false });
 
-  if (error) return NextResponse.json({ error: error.message }, { status: 500 });
+  if (error) {
+    console.error("Error en consulta de álbum:", error);
+    return NextResponse.json({ error: error.message }, { status: 500 });
+  }
 
   return NextResponse.json({ imagenes: data });
 }

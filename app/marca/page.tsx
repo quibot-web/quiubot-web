@@ -20,12 +20,35 @@ const COLORES_PRESET = [
   { nombre: "Blanco", hex: "#ffffff" },
 ];
 
+function IconoGlobo() {
+  return (
+    <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="#7F77DD" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+      <circle cx="12" cy="12" r="10" />
+      <line x1="2" y1="12" x2="22" y2="12" />
+      <path d="M12 2a15.3 15.3 0 0 1 4 10 15.3 15.3 0 0 1-4 10 15.3 15.3 0 0 1-4-10 15.3 15.3 0 0 1 4-10z" />
+    </svg>
+  );
+}
+
+function IconoWhatsApp() {
+  return (
+    <svg width="20" height="20" viewBox="0 0 32 32" fill="none">
+      <circle cx="16" cy="16" r="16" fill="#25D366" />
+      <path
+        fill="#fff"
+        d="M23.47 8.52A9.86 9.86 0 0 0 16.06 5.5c-5.46 0-9.9 4.44-9.9 9.9 0 1.75.46 3.45 1.33 4.95L6 25.5l5.28-1.39a9.9 9.9 0 0 0 4.78 1.22h.01c5.46 0 9.9-4.44 9.9-9.9a9.85 9.85 0 0 0-2.5-6.91zm-7.41 15.24h-.01a8.22 8.22 0 0 1-4.19-1.15l-.3-.18-3.13.82.84-3.05-.2-.31a8.23 8.23 0 0 1-1.26-4.39c0-4.55 3.7-8.25 8.26-8.25a8.2 8.2 0 0 1 5.84 2.42 8.2 8.2 0 0 1 2.42 5.84c0 4.56-3.71 8.25-8.27 8.25zm4.53-6.18c-.25-.12-1.47-.72-1.7-.81-.23-.08-.39-.12-.56.13-.17.25-.64.81-.78.97-.14.17-.29.19-.53.06-.25-.12-1.05-.39-2-1.23-.74-.66-1.24-1.47-1.39-1.72-.14-.25-.02-.38.11-.51.11-.11.25-.29.37-.43.12-.15.16-.25.25-.42.08-.17.04-.31-.02-.43-.06-.12-.56-1.35-.77-1.85-.2-.48-.41-.42-.56-.42-.14-.01-.31-.01-.48-.01-.17 0-.43.06-.66.31s-.87.85-.87 2.08.89 2.41 1.01 2.58c.13.17 1.75 2.67 4.24 3.74.59.26 1.05.41 1.41.52.59.19 1.13.16 1.56.1.48-.07 1.47-.6 1.67-1.18.21-.58.21-1.08.15-1.18-.06-.1-.23-.16-.48-.28z"
+      />
+    </svg>
+  );
+}
+
 const pasos = [
   { id: "nombre_marca", titulo: "¿Cuál es el nombre de tu marca?", descripcion: "El nombre oficial con el que tus clientes te conocen.", placeholder: "Ej: Café del Valle", tipo: "texto" },
   { id: "slogan", titulo: "¿Tienes un slogan o frase de marca?", descripcion: "Si no tienes uno, puedes dejarlo en blanco.", placeholder: "Ej: El sabor que te despierta", tipo: "texto" },
   { id: "sector", titulo: "¿En qué sector o industria opera tu marca?", descripcion: "Cuéntanos a qué se dedica tu empresa.", placeholder: "Ej: Alimentos y bebidas, moda, tecnología, salud...", tipo: "texto" },
   { id: "productos", titulo: "¿Qué productos o servicios vendes?", descripcion: "Descríbelos con detalle — esto ayuda a generar imágenes más precisas.", placeholder: "Ej: Café de origen colombiano, tamales artesanales, postres sin azúcar...", tipo: "textarea" },
   { id: "publico_objetivo", titulo: "¿Quién es tu cliente ideal?", descripcion: "Edad, género, intereses, ubicación — todo ayuda.", placeholder: "Ej: Mujeres de 25 a 40 años, profesionales, amantes del bienestar...", tipo: "textarea" },
+  { id: "destino_venta", titulo: "¿A dónde quieres llevar a tus clientes?", descripcion: "Este es el destino al que llegará la gente cuando toque tus anuncios.", placeholder: "", tipo: "destino" },
   { id: "tono", titulo: "¿Cuál es el tono de comunicación de tu marca?", descripcion: "¿Cómo quieres que se sienta tu marca en las imágenes?", placeholder: "", tipo: "opciones", opciones: ["Elegante y sofisticado", "Fresco y juvenil", "Divertido y creativo", "Profesional y serio", "Natural y orgánico", "Minimalista y moderno", "Cálido y familiar", "Otro (escríbelo)"] },
   { id: "colores", titulo: "¿Cuáles son los colores principales de tu marca?", descripcion: "Selecciona hasta 4 colores. También puedes escribir un código hex personalizado.", placeholder: "", tipo: "colores" },
   { id: "tipografias", titulo: "¿Qué tipografías usa tu marca?", descripcion: "Si no lo sabes, describe el estilo: moderna, serif clásica, manuscrita...", placeholder: "Ej: Montserrat para títulos, Lato para textos. O: tipografía elegante serif.", tipo: "texto" },
@@ -41,6 +64,7 @@ export default function MarcaPage() {
   const [cargando, setCargando] = useState(true);
   const [tonoOtro, setTonoOtro] = useState(false);
   const [logoError, setLogoError] = useState(false);
+  const [errorDestino, setErrorDestino] = useState(false);
   const [coloresSeleccionados, setColoresSeleccionados] = useState<string[]>([]);
   const [colorCustom, setColorCustom] = useState("");
   const inputRef = useRef<HTMLInputElement | HTMLTextAreaElement | null>(null);
@@ -63,6 +87,7 @@ export default function MarcaPage() {
   useEffect(() => {
     setTimeout(() => inputRef.current?.focus(), 100);
     setLogoError(false);
+    setErrorDestino(false);
   }, [pasoActual]);
 
   const paso = pasos[pasoActual];
@@ -89,6 +114,17 @@ export default function MarcaPage() {
   };
 
   const handleSiguiente = async () => {
+    // Validación: en el paso de destino, al menos sitio_web o whatsapp_numero debe tener contenido
+    if (paso.tipo === "destino") {
+      const sitioVacio = !respuestas.sitio_web || !respuestas.sitio_web.trim();
+      const whatsappVacio = !respuestas.whatsapp_numero || !respuestas.whatsapp_numero.trim();
+      if (sitioVacio && whatsappVacio) {
+        setErrorDestino(true);
+        return;
+      }
+    }
+    setErrorDestino(false);
+
     if (pasoActual < pasos.length - 1) {
       setPasoActual(p => p + 1);
     } else {
@@ -141,7 +177,7 @@ export default function MarcaPage() {
         </p>
         <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
           <a href="/" style={{ display: "block", background: "#7F77DD", color: "#fff", padding: "12px", borderRadius: 10, fontSize: 14, fontWeight: 600, textDecoration: "none" }}>
-            ✨ Ir al generador
+            ✨ Ir al panel principal
           </a>
           <button onClick={() => { setCompletado(false); setPasoActual(0) }} style={{ background: "transparent", border: "1px solid #e8e8e6", color: "#666", padding: "10px", borderRadius: 10, fontSize: 14, cursor: "pointer" }}>
             Editar identidad de marca
@@ -291,6 +327,72 @@ export default function MarcaPage() {
                   Agregar
                 </button>
               </div>
+            </div>
+          )}
+
+          {paso.tipo === "destino" && (
+            <div style={{ display: "flex", flexDirection: "column", gap: 14 }}>
+              <div style={{ background: "linear-gradient(135deg, #f3f2fe 0%, #eef9f2 100%)", border: "1px solid #e0defc", borderRadius: 14, padding: "14px 16px", display: "flex", gap: 12, alignItems: "flex-start" }}>
+                <div style={{ fontSize: 20, lineHeight: 1 }}>💡</div>
+                <p style={{ fontSize: 13, color: "#4b4b6b", margin: 0, lineHeight: 1.5 }}>
+                  Cuando alguien toque tu anuncio en Facebook o Instagram, <strong>llegará aquí</strong>. Sin este dato, tus campañas no podrán publicarse. Puedes completar uno de los dos, o ambos si vendes por los dos canales.
+                </p>
+              </div>
+
+              <div style={{ border: "2px solid #e0e0e0", borderRadius: 14, padding: "16px", background: "#fff" }}>
+                <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 10 }}>
+                  <div style={{ width: 32, height: 32, borderRadius: 9, background: "#f3f2fe", display: "flex", alignItems: "center", justifyContent: "center" }}>
+                    <IconoGlobo />
+                  </div>
+                  <div>
+                    <div style={{ fontSize: 14, fontWeight: 600, color: "#1a1a1a" }}>Sitio web o tienda online</div>
+                    <div style={{ fontSize: 12, color: "#999" }}>Para campañas de "Venta Directa"</div>
+                  </div>
+                </div>
+                <input
+                  ref={inputRef as React.RefObject<HTMLInputElement>}
+                  type="text"
+                  value={respuestas.sitio_web ?? ""}
+                  onChange={e => { setRespuestas(r => ({ ...r, sitio_web: e.target.value })); setErrorDestino(false); }}
+                  placeholder="Ej: tienda.miempresa.com"
+                  style={{ width: "100%", border: "2px solid #e0e0e0", borderRadius: 10, padding: "12px 14px", fontSize: 14, fontFamily: "inherit", outline: "none", boxSizing: "border-box" }}
+                  onFocus={e => e.target.style.borderColor = "#7F77DD"}
+                  onBlur={e => e.target.style.borderColor = "#e0e0e0"}
+                />
+              </div>
+
+              <div style={{ display: "flex", alignItems: "center", gap: 10, margin: "-2px 0" }}>
+                <div style={{ flex: 1, height: 1, background: "#e8e8e6" }} />
+                <span style={{ fontSize: 11, color: "#aaa", fontWeight: 600 }}>Y / O</span>
+                <div style={{ flex: 1, height: 1, background: "#e8e8e6" }} />
+              </div>
+
+              <div style={{ border: "2px solid #e0e0e0", borderRadius: 14, padding: "16px", background: "#fff" }}>
+                <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 10 }}>
+                  <div style={{ width: 32, height: 32, borderRadius: 9, background: "#e9fbf0", display: "flex", alignItems: "center", justifyContent: "center" }}>
+                    <IconoWhatsApp />
+                  </div>
+                  <div>
+                    <div style={{ fontSize: 14, fontWeight: 600, color: "#1a1a1a" }}>WhatsApp de ventas</div>
+                    <div style={{ fontSize: 12, color: "#999" }}>Para campañas de "Venta Directa (WhatsApp)"</div>
+                  </div>
+                </div>
+                <input
+                  type="text"
+                  value={respuestas.whatsapp_numero ?? ""}
+                  onChange={e => { setRespuestas(r => ({ ...r, whatsapp_numero: e.target.value })); setErrorDestino(false); }}
+                  placeholder="Ej: 573001234567 (con indicativo)"
+                  style={{ width: "100%", border: "2px solid #e0e0e0", borderRadius: 10, padding: "12px 14px", fontSize: 14, fontFamily: "inherit", outline: "none", boxSizing: "border-box" }}
+                  onFocus={e => e.target.style.borderColor = "#25D366"}
+                  onBlur={e => e.target.style.borderColor = "#e0e0e0"}
+                />
+              </div>
+
+              {errorDestino && (
+                <div style={{ background: "#fee2e2", border: "1px solid #fca5a5", borderRadius: 10, padding: "10px 14px", fontSize: 13, color: "#991b1b", display: "flex", alignItems: "center", gap: 8 }}>
+                  ⚠️ Ingresa al menos tu sitio web o tu número de WhatsApp para continuar.
+                </div>
+              )}
             </div>
           )}
 

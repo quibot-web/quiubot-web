@@ -23,6 +23,20 @@ export async function POST(req: NextRequest) {
 
   const body = await req.json()
 
+  // Normalizar sitio_web: si viene con contenido pero sin protocolo, se lo agregamos
+  if (typeof body.sitio_web === "string" && body.sitio_web.trim() !== "") {
+    let url = body.sitio_web.trim()
+    if (!/^https?:\/\//i.test(url)) {
+      url = "https://" + url
+    }
+    body.sitio_web = url
+  }
+
+  // Normalizar whatsapp_numero: dejar solo dígitos (sin +, espacios, guiones)
+  if (typeof body.whatsapp_numero === "string" && body.whatsapp_numero.trim() !== "") {
+    body.whatsapp_numero = body.whatsapp_numero.replace(/\D/g, "")
+  }
+
   const { error } = await supabaseAdmin
     .from("marcas")
     .upsert({
