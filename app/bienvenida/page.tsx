@@ -143,11 +143,18 @@ export default function BienvenidaPage() {
         .qb-lp .orbit-center img { width: 52px; height: 52px; }
         .qb-lp .orbit-track { position: absolute; inset: 8%; animation: qbSpinSlow 26s linear infinite; }
         .qb-lp .orbit-node { position: absolute; top: 50%; left: 50%; width: 0; height: 0; }
-        .qb-lp .orbit-node .pin { position: absolute; transform: translate(-50%, -50%); display: flex; flex-direction: column; align-items: center; gap: 6px; animation: qbSpinSlowReverse 26s linear infinite; }
+        .qb-lp .orbit-node .pin { position: absolute; transform: translate(-50%, -50%); display: flex; flex-direction: column; align-items: center; gap: 6px; animation-duration: 26s; animation-timing-function: linear; animation-iteration-count: infinite; }
         .qb-lp .orbit-node .dot { width: 12px; height: 12px; border-radius: 50%; background: var(--purple); box-shadow: 0 0 0 5px rgba(127,119,221,0.18); }
         .qb-lp .orbit-node .label { font-family: var(--font-mono), monospace; font-size: 11px; font-weight: 500; letter-spacing: 0.04em; color: var(--purple-deep); background: #fff; padding: 4px 9px; border-radius: 8px; box-shadow: 0 2px 8px rgba(0,0,0,0.06); white-space: nowrap; }
         @keyframes qbSpinSlow { from { transform: rotate(0deg); } to { transform: rotate(360deg); } }
-        @keyframes qbSpinSlowReverse { from { transform: rotate(0deg); } to { transform: rotate(-360deg); } }
+        @keyframes qbCounter0 { from { transform: translate(-50%, -50%) rotate(0deg); } to { transform: translate(-50%, -50%) rotate(-360deg); } }
+        @keyframes qbCounter90 { from { transform: translate(-50%, -50%) rotate(-90deg); } to { transform: translate(-50%, -50%) rotate(-450deg); } }
+        @keyframes qbCounter180 { from { transform: translate(-50%, -50%) rotate(-180deg); } to { transform: translate(-50%, -50%) rotate(-540deg); } }
+        @keyframes qbCounter270 { from { transform: translate(-50%, -50%) rotate(-270deg); } to { transform: translate(-50%, -50%) rotate(-630deg); } }
+        .qb-lp .orbit-node.n0 .pin { animation-name: qbCounter0; }
+        .qb-lp .orbit-node.n90 .pin { animation-name: qbCounter90; }
+        .qb-lp .orbit-node.n180 .pin { animation-name: qbCounter180; }
+        .qb-lp .orbit-node.n270 .pin { animation-name: qbCounter270; }
         @keyframes qbBreathe { 0%, 100% { transform: translate(-50%, -50%) scale(1); } 50% { transform: translate(-50%, -50%) scale(1.06); } }
 
         /* ---- SECTIONS shared ---- */
@@ -183,19 +190,32 @@ export default function BienvenidaPage() {
           100% { opacity: 0; }
         }
         .qb-lp .avatar-marca { width: 54px; height: 54px; border-radius: 16px; background: linear-gradient(135deg, var(--purple), var(--purple-light)); }
+        .qb-lp .paleta { display: flex; gap: 6px; margin-top: 2px; }
+        .qb-lp .paleta span { width: 16px; height: 16px; border-radius: 5px; }
         .qb-lp .badge-ok { display: inline-flex; align-items: center; gap: 6px; font-size: 13px; color: var(--mint); font-weight: 600; }
         .qb-lp .pills { display: flex; gap: 8px; }
         .qb-lp .pill { font-size: 12px; padding: 6px 12px; border-radius: 20px; border: 1px solid #E5E1F5; color: var(--muted); }
         .qb-lp .pill.activo { background: var(--purple); color: #fff; border-color: var(--purple); }
-        .qb-lp .budget-bar { height: 8px; border-radius: 6px; background: #EFEDFA; overflow: hidden; width: 220px; }
-        .qb-lp .budget-fill { height: 100%; border-radius: 6px; background: linear-gradient(90deg, var(--purple-deep), var(--purple)); width: 0%; animation: qbFillBar 12s ease-in-out infinite; animation-delay: 3s; }
+        .qb-lp .budget-row { display: flex; align-items: center; gap: 10px; }
+        .qb-lp .budget-bar { position: relative; height: 8px; border-radius: 6px; background: #EFEDFA; overflow: visible; width: 220px; }
+        .qb-lp .budget-fill { height: 100%; border-radius: 6px; background: linear-gradient(90deg, var(--purple-deep), var(--purple)); width: 0%; animation: qbFillBar 12s ease-in-out infinite; animation-delay: 3s; position: relative; }
+        .qb-lp .budget-fill::after { content: ""; position: absolute; right: -7px; top: 50%; transform: translateY(-50%); width: 14px; height: 14px; border-radius: 50%; background: #fff; border: 3px solid var(--purple-deep); box-shadow: 0 2px 6px rgba(0,0,0,0.15); }
+        .qb-lp .budget-num { font-family: var(--font-mono), monospace; font-size: 13px; font-weight: 600; color: var(--purple-deep); opacity: 0; animation: qbFadeSimple 12s ease-in-out infinite; animation-delay: 3s; }
         @keyframes qbFillBar { 0%, 25% { width: 0%; } 30%, 100% { width: 72%; } }
+        @keyframes qbFadeSimple { 0%, 25% { opacity: 0; } 30%, 100% { opacity: 1; } }
         .qb-lp .creativos-row { display: flex; gap: 10px; }
-        .qb-lp .creativo-card { width: 56px; height: 56px; border-radius: 12px; background: linear-gradient(160deg, var(--purple-light), var(--purple)); opacity: 0; animation: qbFadeInCard 12s ease-in-out infinite; }
+        .qb-lp .creativo-card { position: relative; width: 64px; height: 64px; border-radius: 12px; background: linear-gradient(160deg, var(--purple-light), var(--purple)); opacity: 0; animation: qbFadeInCard 12s ease-in-out infinite; overflow: hidden; }
+        .qb-lp .creativo-card::before { content: ""; position: absolute; inset: 8px 8px auto 8px; height: 6px; border-radius: 3px; background: rgba(255,255,255,0.55); }
+        .qb-lp .creativo-card::after { content: "✓"; position: absolute; bottom: 4px; right: 5px; width: 15px; height: 15px; border-radius: 50%; background: var(--mint); color: #fff; font-size: 9px; display: flex; align-items: center; justify-content: center; }
         .qb-lp .creativo-card:nth-child(1) { animation-delay: 6.2s; }
         .qb-lp .creativo-card:nth-child(2) { animation-delay: 6.6s; }
         .qb-lp .creativo-card:nth-child(3) { animation-delay: 7s; }
         @keyframes qbFadeInCard { 0%, 25% { opacity: 0; transform: translateY(6px); } 27%, 55% { opacity: 1; transform: none; } 60%, 100% { opacity: 0; } }
+        .qb-lp .campana-row { display: flex; align-items: center; gap: 10px; background: #F7F6FD; border: 1px solid #ECE9F7; border-radius: 12px; padding: 12px 16px; width: 260px; }
+        .qb-lp .campana-row .estado-dot { width: 8px; height: 8px; border-radius: 50%; background: var(--mint); box-shadow: 0 0 0 4px rgba(31,169,124,0.18); flex-shrink: 0; }
+        .qb-lp .campana-row .info { display: flex; flex-direction: column; gap: 2px; }
+        .qb-lp .campana-row .info b { font-size: 13px; }
+        .qb-lp .campana-row .info span { font-size: 11px; color: var(--muted); }
         .qb-lp .check-circle { width: 60px; height: 60px; border-radius: 50%; background: linear-gradient(135deg, var(--mint), #2ECC9A); display: flex; align-items: center; justify-content: center; color: #fff; font-size: 26px; box-shadow: 0 0 0 8px rgba(31,169,124,0.14); }
 
         .qb-lp .ganancias { display: flex; flex-direction: column; gap: 20px; }
@@ -211,10 +231,16 @@ export default function BienvenidaPage() {
         .qb-lp .ayuda-card h3::before { content: ""; width: 8px; height: 8px; border-radius: 50%; background: var(--mint); flex-shrink: 0; }
         .qb-lp .ayuda-card p { font-size: 14px; color: var(--muted); line-height: 1.55; margin: 0; }
 
-        /* ---- PRUEBA SOCIAL ---- */
-        .qb-lp .confianza-box { max-width: 760px; margin: 0 auto; text-align: center; }
-        .qb-lp .chips { display: flex; flex-wrap: wrap; justify-content: center; gap: 10px; margin-top: 28px; }
-        .qb-lp .chip { font-size: 13px; font-weight: 600; color: var(--purple-deep); background: #fff; border: 1px solid #E5E1F5; padding: 9px 16px; border-radius: 20px; }
+        /* ---- SELLO DE CONFIANZA ---- */
+        .qb-lp .sello-box { max-width: 780px; margin: 0 auto; text-align: center; background: #fff; border: 1.5px solid #E5E1F5; border-radius: 26px; padding: 48px 40px; position: relative; }
+        .qb-lp .sello-box::before { content: ""; position: absolute; inset: 8px; border: 1px dashed rgba(127,119,221,0.3); border-radius: 20px; pointer-events: none; }
+        .qb-lp .sello-icono { width: 60px; height: 60px; margin: 0 auto 18px; border-radius: 50%; background: linear-gradient(135deg, var(--purple-deep), var(--purple)); display: flex; align-items: center; justify-content: center; box-shadow: 0 10px 26px rgba(74,63,174,0.28); }
+        .qb-lp .sello-icono svg { width: 26px; height: 26px; }
+        .qb-lp .sello-box h2 { font-size: clamp(24px, 3vw, 32px); }
+        .qb-lp .sello-box p.lead { max-width: 560px; margin: 14px auto 0; }
+        .qb-lp .chips { display: flex; flex-wrap: wrap; justify-content: center; gap: 10px; margin-top: 30px; }
+        .qb-lp .chip { display: inline-flex; align-items: center; gap: 7px; font-size: 13px; font-weight: 600; color: var(--purple-deep); background: var(--bg-alt); border: 1px solid #E5E1F5; padding: 9px 16px 9px 12px; border-radius: 20px; }
+        .qb-lp .chip .check-mini { width: 16px; height: 16px; border-radius: 50%; background: var(--mint); color: #fff; font-size: 10px; display: flex; align-items: center; justify-content: center; flex-shrink: 0; }
 
         /* ---- PLANES ---- */
         .qb-lp .planes { max-width: 900px; margin: 0 auto; display: grid; grid-template-columns: repeat(3, 1fr); gap: 18px; }
@@ -286,16 +312,16 @@ export default function BienvenidaPage() {
           <div className="orbit-stage">
             <div className="orbit-ring-bg" />
             <div className="orbit-track">
-              <div className="orbit-node" style={{ transform: "rotate(0deg) translate(0, -160px)" }}>
+              <div className="orbit-node n0" style={{ transform: "rotate(0deg) translate(0, -160px)" }}>
                 <div className="pin"><span className="dot" /><span className="label">Estrategia</span></div>
               </div>
-              <div className="orbit-node" style={{ transform: "rotate(90deg) translate(0, -160px)" }}>
+              <div className="orbit-node n90" style={{ transform: "rotate(90deg) translate(0, -160px)" }}>
                 <div className="pin"><span className="dot" /><span className="label">Creativos</span></div>
               </div>
-              <div className="orbit-node" style={{ transform: "rotate(180deg) translate(0, -160px)" }}>
+              <div className="orbit-node n180" style={{ transform: "rotate(180deg) translate(0, -160px)" }}>
                 <div className="pin"><span className="dot" /><span className="label">Publicación</span></div>
               </div>
-              <div className="orbit-node" style={{ transform: "rotate(270deg) translate(0, -160px)" }}>
+              <div className="orbit-node n270" style={{ transform: "rotate(270deg) translate(0, -160px)" }}>
                 <div className="pin"><span className="dot" /><span className="label">Optimización</span></div>
               </div>
             </div>
@@ -310,11 +336,15 @@ export default function BienvenidaPage() {
         <div className="section-head qb-reveal">
           <p className="eyebrow" style={{ textAlign: "center" }}>El problema real</p>
           <h2>Anunciarte en Meta no debería sentirse como un segundo trabajo.</h2>
+          <p className="lead">
+            Abres el administrador de anuncios con toda la intención del mundo, y una hora después
+            sigues sin publicar nada — o publicas algo a medias, cruzando los dedos.
+          </p>
         </div>
         <div className="pain-list">
-          <div className="pain-item qb-reveal qb-reveal-delay-1"><span className="x">✕</span>Horas armando campañas que no sabes si van a funcionar.</div>
-          <div className="pain-item qb-reveal qb-reveal-delay-2"><span className="x">✕</span>Presupuesto gastado en anuncios que nadie ajustó a tiempo.</div>
-          <div className="pain-item qb-reveal qb-reveal-delay-3"><span className="x">✕</span>Creativos que tardan días en llegar — o que no coinciden con tu marca.</div>
+          <div className="pain-item qb-reveal qb-reveal-delay-1"><span className="x">✕</span>Te sientas a "armar rápido una campaña" y dos horas después sigues decidiendo el texto del anuncio.</div>
+          <div className="pain-item qb-reveal qb-reveal-delay-2"><span className="x">✕</span>Publicas, te desconectas un par de días, y vuelves a ver presupuesto gastado en algo que nadie ajustó a tiempo.</div>
+          <div className="pain-item qb-reveal qb-reveal-delay-3"><span className="x">✕</span>Pides creativos y te tardan días en llegar — o llegan sin parecerse en nada a tu marca.</div>
         </div>
       </section>
 
@@ -331,6 +361,11 @@ export default function BienvenidaPage() {
               <div className="demo-scene scene-1">
                 <span className="tag">01 · Marca</span>
                 <div className="avatar-marca" />
+                <div className="paleta">
+                  <span style={{ background: "#4A3FAE" }} />
+                  <span style={{ background: "#7F77DD" }} />
+                  <span style={{ background: "#C4BFF0" }} />
+                </div>
                 <div className="badge-ok">✓ Identidad de marca detectada</div>
               </div>
               <div className="demo-scene scene-2">
@@ -339,7 +374,10 @@ export default function BienvenidaPage() {
                   <span className="pill activo">Venta Directa</span>
                   <span className="pill">Reconocimiento</span>
                 </div>
-                <div className="budget-bar"><div className="budget-fill" /></div>
+                <div className="budget-row">
+                  <div className="budget-bar"><div className="budget-fill" /></div>
+                  <span className="budget-num">$300.000/mes</span>
+                </div>
               </div>
               <div className="demo-scene scene-3">
                 <span className="tag">03 · Creativos</span>
@@ -348,12 +386,18 @@ export default function BienvenidaPage() {
                   <div className="creativo-card" />
                   <div className="creativo-card" />
                 </div>
-                <div className="titulo" style={{ fontSize: 14, color: "var(--muted)", fontWeight: 500 }}>Generados y auditados por IA</div>
+                <div style={{ fontSize: 14, color: "var(--muted)", fontWeight: 500 }}>Generados y auditados por IA</div>
               </div>
               <div className="demo-scene scene-4">
                 <span className="tag">04 · Publicación</span>
                 <div className="check-circle">✓</div>
-                <div className="titulo">Publicado en Meta</div>
+                <div className="campana-row">
+                  <span className="estado-dot" />
+                  <div className="info">
+                    <b>Venta Directa · Activa</b>
+                    <span>Publicada en Meta Ads</span>
+                  </div>
+                </div>
               </div>
             </div>
           </div>
@@ -385,8 +429,13 @@ export default function BienvenidaPage() {
       </section>
 
       <section className="alt">
-        <div className="confianza-box qb-reveal">
-          <p className="eyebrow">Prueba social</p>
+        <div className="sello-box qb-reveal">
+          <div className="sello-icono">
+            <svg viewBox="0 0 24 24" fill="none" stroke="#fff" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+              <path d="M12 2l7 4v6c0 5-3.5 8-7 10-3.5-2-7-5-7-10V6l7-4z" />
+              <path d="M9 12l2 2 4-4" />
+            </svg>
+          </div>
           <h2>Negocios reales ya están usando Quiubot.</h2>
           <p className="lead">
             Ya generamos estrategias y campañas reales para los primeros negocios que se unieron —
@@ -394,7 +443,7 @@ export default function BienvenidaPage() {
           </p>
           <div className="chips">
             {CHIPS_CONFIANZA.map((c) => (
-              <span className="chip" key={c}>{c}</span>
+              <span className="chip" key={c}><span className="check-mini">✓</span>{c}</span>
             ))}
           </div>
         </div>
@@ -418,7 +467,7 @@ export default function BienvenidaPage() {
           ))}
         </div>
         <div className="planes-footer">
-          <Link href="/pricing">Ver todos los detalles de los planes →</Link>
+          <Link href="/billing">Ver todos los detalles de los planes →</Link>
         </div>
       </section>
 
