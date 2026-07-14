@@ -1,7 +1,12 @@
 "use client"
+import { Suspense } from "react"
 import { signIn } from "next-auth/react"
+import { useSearchParams } from "next/navigation"
 
-export default function LoginPage() {
+function LoginContent() {
+  const searchParams = useSearchParams()
+  const next = searchParams.get("next") || "/"
+
   return (
     <div style={{ minHeight: "100vh", background: "#f9f9f8", display: "flex", alignItems: "center", justifyContent: "center", fontFamily: "system-ui, sans-serif", padding: "2rem" }}>
       <div style={{ background: "#fff", border: "1px solid #e8e8e6", borderRadius: 20, padding: "2.5rem", display: "flex", flexDirection: "column", alignItems: "center", gap: 20, width: "100%", maxWidth: 380, boxShadow: "0 4px 20px rgba(0,0,0,0.04)" }}>
@@ -17,7 +22,7 @@ export default function LoginPage() {
         </p>
 
         <button
-          onClick={() => signIn("google", { callbackUrl: "/" })}
+          onClick={() => signIn("google", { callbackUrl: next })}
           style={{
             width: "100%",
             display: "flex",
@@ -45,5 +50,13 @@ export default function LoginPage() {
         </p>
       </div>
     </div>
+  )
+}
+
+export default function LoginPage() {
+  return (
+    <Suspense fallback={null}>
+      <LoginContent />
+    </Suspense>
   )
 }
