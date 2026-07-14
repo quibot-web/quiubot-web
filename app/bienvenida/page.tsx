@@ -557,6 +557,7 @@ export default function BienvenidaPage() {
 
       <footer>
         <p>© {new Date().getFullYear()} Quiubot. Publicidad con IA para negocios colombianos.</p>
+        <p style={{ marginTop: 6 }}><a href="/terminos">Términos y condiciones</a></p>
       </footer>
     </div>
   );

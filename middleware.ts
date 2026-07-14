@@ -15,10 +15,11 @@ export default auth((req) => {
   const isLoggedIn = !!req.auth
   const isLoginPage = req.nextUrl.pathname === "/login"
   const isBienvenidaPage = req.nextUrl.pathname === "/bienvenida"
+  const isTerminosPage = req.nextUrl.pathname === "/terminos"
   const isActivarRoute = req.nextUrl.pathname === "/api/activar"
 
   if (isActivarRoute) return NextResponse.next()
-  if (!isLoggedIn && !isLoginPage && !isBienvenidaPage) {
+  if (!isLoggedIn && !isLoginPage && !isBienvenidaPage && !isTerminosPage) {
     return NextResponse.redirect(new URL("/login", req.nextUrl))
   }
 })
