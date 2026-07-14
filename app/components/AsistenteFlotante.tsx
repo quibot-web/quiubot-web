@@ -74,6 +74,21 @@ export default function AsistenteFlotante() {
 
   return (
     <div style={{ position: "fixed", bottom: 24, right: 24, zIndex: 1000, fontFamily: "system-ui, sans-serif" }}>
+      <style>{`
+        @keyframes qbSpin {
+          from { transform: rotate(0deg); }
+          to { transform: rotate(360deg); }
+        }
+        @keyframes qbPulse {
+          0% { box-shadow: 0 0 0 0 rgba(127,119,221,0.45); }
+          70% { box-shadow: 0 0 0 14px rgba(127,119,221,0); }
+          100% { box-shadow: 0 0 0 0 rgba(127,119,221,0); }
+        }
+        .qb-boton-flotante:hover .qb-anillo {
+          animation-duration: 1.4s;
+        }
+      `}</style>
+
       {abierto && (
         <div
           style={{
@@ -165,7 +180,7 @@ export default function AsistenteFlotante() {
               >
                 Esto es mejor resolverlo con el equipo directamente.{" "}
                 <a
-                  href="https://wa.me/573122462312"
+                  href="https://wa.me/00000000000"
                   target="_blank"
                   rel="noreferrer"
                   style={{ color: "#7a5c00", fontWeight: 700, textDecoration: "underline" }}
@@ -217,23 +232,47 @@ export default function AsistenteFlotante() {
         </div>
       )}
 
-      <button
-        onClick={() => setAbierto((v) => !v)}
+      <div
+        className="qb-boton-flotante"
         style={{
-          width: 56,
-          height: 56,
+          position: "relative",
+          width: 60,
+          height: 60,
+          animation: "qbPulse 2.8s infinite",
           borderRadius: "50%",
-          background: "#7F77DD",
-          border: "none",
-          boxShadow: "0 4px 16px rgba(127,119,221,0.4)",
-          cursor: "pointer",
-          display: "flex",
-          alignItems: "center",
-          justifyContent: "center",
         }}
       >
-        <span style={{ color: "#fff", fontSize: 24 }}>{abierto ? "×" : "💬"}</span>
-      </button>
+        <div
+          className="qb-anillo"
+          style={{
+            position: "absolute",
+            inset: 0,
+            borderRadius: "50%",
+            background: "conic-gradient(from 0deg, #7F77DD, #534AB7, #C4BFF0, #7F77DD)",
+            animation: "qbSpin 3.2s linear infinite",
+          }}
+        />
+        <button
+          onClick={() => setAbierto((v) => !v)}
+          style={{
+            position: "absolute",
+            inset: 3,
+            borderRadius: "50%",
+            background: "#fff",
+            border: "none",
+            cursor: "pointer",
+            display: "flex",
+            alignItems: "center",
+            justifyContent: "center",
+          }}
+        >
+          {abierto ? (
+            <span style={{ color: "#534AB7", fontSize: 22, fontWeight: 300 }}>×</span>
+          ) : (
+            <img src="/marca/icono-quiubot.svg" alt="Asistente Quiubot" width={30} height={30} />
+          )}
+        </button>
+      </div>
     </div>
   )
 }
