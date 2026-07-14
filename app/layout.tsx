@@ -2,6 +2,7 @@ import type { Metadata } from "next";
 import "./globals.css";
 import { SessionProvider } from "next-auth/react";
 import JobFlotante from "@/app/components/JobFlotante";
+import AsistenteFlotante from "@/app/components/AsistenteFlotante";
 
 export const metadata: Metadata = {
   metadataBase: new URL("https://quiubot.site"),
@@ -36,6 +37,7 @@ export default function RootLayout({
         <SessionProvider>
           {children}
           <JobFlotante />
+          <AsistenteFlotante />
         </SessionProvider>
       </body>
     </html>

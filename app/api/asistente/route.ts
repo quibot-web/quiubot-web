@@ -18,6 +18,37 @@ Reglas:
 - Responde ÚNICAMENTE con un objeto JSON con esta forma exacta, sin texto adicional ni backticks:
 {"respuesta": "tu respuesta aquí", "escalar": true o false}`;
 
+export async function GET() {
+  const session = await auth();
+  if (!session?.user?.email) {
+    return NextResponse.json({ mostrar: false });
+  }
+
+  const emailBusqueda = session.user.email.trim().toLowerCase();
+  const { data: usuario } = await supabaseAdmin
+    .from("usuarios")
+    .select("id, plan, openai_key")
+    .eq("email", emailBusqueda)
+    .single();
+
+  if (!usuario || usuario.plan === "arranque") {
+    return NextResponse.json({ mostrar: false });
+  }
+
+  if (!usuario.openai_key) {
+    return NextResponse.json({ mostrar: true, activo: false, historial: [] });
+  }
+
+  const { data: historial } = await supabaseAdmin
+    .from("asistente_conversaciones")
+    .select("rol, mensaje, creado_en")
+    .eq("user_id", usuario.id)
+    .order("creado_en", { ascending: true })
+    .limit(CANTIDAD_MENSAJES_HISTORIAL);
+
+  return NextResponse.json({ mostrar: true, activo: true, historial: historial || [] });
+}
+
 export async function POST(req: Request) {
   const session = await auth();
   if (!session?.user?.email) {
