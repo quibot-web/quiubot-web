@@ -203,10 +203,18 @@ export default function BienvenidaPage() {
         .qb-lp .budget-num { font-family: var(--font-mono), monospace; font-size: 13px; font-weight: 600; color: var(--purple-deep); opacity: 0; animation: qbFadeSimple 12s ease-in-out infinite; animation-delay: 3s; }
         @keyframes qbFillBar { 0%, 25% { width: 0%; } 30%, 100% { width: 72%; } }
         @keyframes qbFadeSimple { 0%, 25% { opacity: 0; } 30%, 100% { opacity: 1; } }
-        .qb-lp .creativos-row { display: flex; gap: 10px; }
-        .qb-lp .creativo-card { position: relative; width: 64px; height: 64px; border-radius: 12px; background: linear-gradient(160deg, var(--purple-light), var(--purple)); opacity: 0; animation: qbFadeInCard 12s ease-in-out infinite; overflow: hidden; }
-        .qb-lp .creativo-card::before { content: ""; position: absolute; inset: 8px 8px auto 8px; height: 6px; border-radius: 3px; background: rgba(255,255,255,0.55); }
-        .qb-lp .creativo-card::after { content: "✓"; position: absolute; bottom: 4px; right: 5px; width: 15px; height: 15px; border-radius: 50%; background: var(--mint); color: #fff; font-size: 9px; display: flex; align-items: center; justify-content: center; }
+        .qb-lp .creativos-row { display: flex; gap: 12px; }
+        .qb-lp .creativo-card { position: relative; width: 76px; height: 86px; border-radius: 12px; opacity: 0; animation: qbFadeInCard 12s ease-in-out infinite; overflow: hidden; box-shadow: 0 6px 14px rgba(74,63,174,0.16); }
+        .qb-lp .creativo-card .foto { height: 58px; display: flex; align-items: center; justify-content: center; }
+        .qb-lp .creativo-card .foto svg { width: 22px; height: 22px; opacity: 0.9; }
+        .qb-lp .creativo-card .info-mini { background: #fff; padding: 6px 7px; }
+        .qb-lp .creativo-card .info-mini .linea { height: 5px; border-radius: 3px; background: #E5E1F5; margin-bottom: 4px; }
+        .qb-lp .creativo-card .info-mini .linea.corta { width: 60%; }
+        .qb-lp .creativo-card .precio-tag { position: absolute; top: 5px; right: 5px; background: rgba(255,255,255,0.92); color: var(--purple-deep); font-size: 8px; font-weight: 700; padding: 2px 5px; border-radius: 6px; }
+        .qb-lp .creativo-card::after { content: "✓"; position: absolute; bottom: 30px; left: 6px; width: 14px; height: 14px; border-radius: 50%; background: var(--mint); color: #fff; font-size: 8px; display: flex; align-items: center; justify-content: center; box-shadow: 0 0 0 2px #fff; }
+        .qb-lp .creativo-card.c1 .foto { background: linear-gradient(160deg, #8B82E8, #4A3FAE); }
+        .qb-lp .creativo-card.c2 .foto { background: linear-gradient(160deg, #6FCBA6, #1FA97C); }
+        .qb-lp .creativo-card.c3 .foto { background: linear-gradient(160deg, #E8B4E0, #B36FCB); }
         .qb-lp .creativo-card:nth-child(1) { animation-delay: 6.2s; }
         .qb-lp .creativo-card:nth-child(2) { animation-delay: 6.6s; }
         .qb-lp .creativo-card:nth-child(3) { animation-delay: 7s; }
@@ -242,6 +250,17 @@ export default function BienvenidaPage() {
         .qb-lp .chip { display: inline-flex; align-items: center; gap: 7px; font-size: 13px; font-weight: 600; color: var(--purple-deep); background: var(--bg-alt); border: 1px solid #E5E1F5; padding: 9px 16px 9px 12px; border-radius: 20px; }
         .qb-lp .chip .check-mini { width: 16px; height: 16px; border-radius: 50%; background: var(--mint); color: #fff; font-size: 10px; display: flex; align-items: center; justify-content: center; flex-shrink: 0; }
 
+        .qb-lp .presencia { display: flex; flex-direction: column; align-items: center; gap: 10px; margin-top: 32px; padding-top: 28px; border-top: 1px solid #F1EFF9; }
+        .qb-lp .pin-stage { position: relative; width: 64px; height: 64px; display: flex; align-items: center; justify-content: center; }
+        .qb-lp .pin-ring { position: absolute; border-radius: 50%; border: 1.5px solid var(--mint); opacity: 0; animation: qbPinPulse 2.8s ease-out infinite; }
+        .qb-lp .pin-ring.r2 { animation-delay: 0.9s; }
+        .qb-lp .pin-ring.r3 { animation-delay: 1.8s; }
+        @keyframes qbPinPulse { 0% { width: 20px; height: 20px; opacity: 0.6; } 100% { width: 64px; height: 64px; opacity: 0; } }
+        .qb-lp .pin-icon { position: relative; width: 34px; height: 34px; border-radius: 50%; background: linear-gradient(135deg, var(--mint), #2ECC9A); display: flex; align-items: center; justify-content: center; box-shadow: 0 6px 16px rgba(31,169,124,0.3); }
+        .qb-lp .pin-icon svg { width: 17px; height: 17px; }
+        .qb-lp .presencia .pais { font-size: 14px; font-weight: 700; color: var(--ink); }
+        .qb-lp .presencia .subt { font-size: 12px; color: var(--muted); }
+
         /* ---- PLANES ---- */
         .qb-lp .planes { max-width: 900px; margin: 0 auto; display: grid; grid-template-columns: repeat(3, 1fr); gap: 18px; }
         .qb-lp .plan-card { background: #fff; border: 1.5px solid #ECE9F7; border-radius: 18px; padding: 26px 22px; text-align: center; transition: transform .25s ease; }
@@ -275,7 +294,7 @@ export default function BienvenidaPage() {
         }
         @media (prefers-reduced-motion: reduce) {
           .qb-lp .orbit-track, .qb-lp .orbit-node .pin, .qb-lp .orbit-center,
-          .qb-lp .blob-a, .qb-lp .blob-b, .qb-lp .demo-scene, .qb-lp .budget-fill, .qb-lp .creativo-card {
+          .qb-lp .blob-a, .qb-lp .blob-b, .qb-lp .demo-scene, .qb-lp .budget-fill, .qb-lp .creativo-card, .qb-lp .pin-ring {
             animation: none !important;
           }
           .qb-lp .demo-scene.scene-1 { opacity: 1; }
@@ -382,9 +401,33 @@ export default function BienvenidaPage() {
               <div className="demo-scene scene-3">
                 <span className="tag">03 · Creativos</span>
                 <div className="creativos-row">
-                  <div className="creativo-card" />
-                  <div className="creativo-card" />
-                  <div className="creativo-card" />
+                  <div className="creativo-card c1">
+                    <div className="foto">
+                      <svg viewBox="0 0 24 24" fill="none" stroke="#fff" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                        <path d="M6 2l1.5 4h9L18 2" /><path d="M3.5 6h17l-1.4 13a2 2 0 01-2 1.8H6.9a2 2 0 01-2-1.8L3.5 6z" />
+                      </svg>
+                    </div>
+                    <div className="precio-tag">-20%</div>
+                    <div className="info-mini"><div className="linea" /><div className="linea corta" /></div>
+                  </div>
+                  <div className="creativo-card c2">
+                    <div className="foto">
+                      <svg viewBox="0 0 24 24" fill="none" stroke="#fff" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                        <path d="M13 2L4 14h6l-1 8 9-12h-6l1-8z" />
+                      </svg>
+                    </div>
+                    <div className="precio-tag">Nuevo</div>
+                    <div className="info-mini"><div className="linea" /><div className="linea corta" /></div>
+                  </div>
+                  <div className="creativo-card c3">
+                    <div className="foto">
+                      <svg viewBox="0 0 24 24" fill="none" stroke="#fff" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                        <circle cx="12" cy="12" r="9" /><path d="M9 12l2 2 4-4" />
+                      </svg>
+                    </div>
+                    <div className="precio-tag">Top</div>
+                    <div className="info-mini"><div className="linea" /><div className="linea corta" /></div>
+                  </div>
                 </div>
                 <div style={{ fontSize: 14, color: "var(--muted)", fontWeight: 500 }}>Generados y auditados por IA</div>
               </div>
@@ -446,6 +489,22 @@ export default function BienvenidaPage() {
               <span className="chip" key={c}><span className="check-mini">✓</span>{c}</span>
             ))}
           </div>
+
+          <div className="presencia">
+            <div className="pin-stage">
+              <span className="pin-ring r1" />
+              <span className="pin-ring r2" />
+              <span className="pin-ring r3" />
+              <div className="pin-icon">
+                <svg viewBox="0 0 24 24" fill="none" stroke="#fff" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                  <path d="M12 21s7-6.5 7-12a7 7 0 10-14 0c0 5.5 7 12 7 12z" />
+                  <circle cx="12" cy="9" r="2.5" />
+                </svg>
+              </div>
+            </div>
+            <div className="pais">Colombia</div>
+            <div className="subt">Generando campañas reales, hoy mismo.</div>
+          </div>
         </div>
       </section>
 
@@ -467,7 +526,7 @@ export default function BienvenidaPage() {
           ))}
         </div>
         <div className="planes-footer">
-          <Link href="/billing">Ver todos los detalles de los planes →</Link>
+          <Link href="/login?next=/billing">Ver todos los detalles de los planes →</Link>
         </div>
       </section>
 
