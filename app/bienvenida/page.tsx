@@ -250,16 +250,13 @@ export default function BienvenidaPage() {
         .qb-lp .chip { display: inline-flex; align-items: center; gap: 7px; font-size: 13px; font-weight: 600; color: var(--purple-deep); background: var(--bg-alt); border: 1px solid #E5E1F5; padding: 9px 16px 9px 12px; border-radius: 20px; }
         .qb-lp .chip .check-mini { width: 16px; height: 16px; border-radius: 50%; background: var(--mint); color: #fff; font-size: 10px; display: flex; align-items: center; justify-content: center; flex-shrink: 0; }
 
-        .qb-lp .presencia { display: flex; flex-direction: column; align-items: center; gap: 10px; margin-top: 32px; padding-top: 28px; border-top: 1px solid #F1EFF9; }
-        .qb-lp .pin-stage { position: relative; width: 64px; height: 64px; display: flex; align-items: center; justify-content: center; }
-        .qb-lp .pin-ring { position: absolute; border-radius: 50%; border: 1.5px solid var(--mint); opacity: 0; animation: qbPinPulse 2.8s ease-out infinite; }
-        .qb-lp .pin-ring.r2 { animation-delay: 0.9s; }
-        .qb-lp .pin-ring.r3 { animation-delay: 1.8s; }
-        @keyframes qbPinPulse { 0% { width: 20px; height: 20px; opacity: 0.6; } 100% { width: 64px; height: 64px; opacity: 0; } }
-        .qb-lp .pin-icon { position: relative; width: 34px; height: 34px; border-radius: 50%; background: linear-gradient(135deg, var(--mint), #2ECC9A); display: flex; align-items: center; justify-content: center; box-shadow: 0 6px 16px rgba(31,169,124,0.3); }
-        .qb-lp .pin-icon svg { width: 17px; height: 17px; }
-        .qb-lp .presencia .pais { font-size: 14px; font-weight: 700; color: var(--ink); }
-        .qb-lp .presencia .subt { font-size: 12px; color: var(--muted); }
+        .qb-lp .garantias { display: grid; grid-template-columns: repeat(3, 1fr); gap: 16px; margin-top: 34px; padding-top: 30px; border-top: 1px solid #F1EFF9; text-align: left; }
+        .qb-lp .garantia { display: flex; flex-direction: column; gap: 8px; }
+        .qb-lp .garantia .icono-g { width: 38px; height: 38px; border-radius: 12px; background: var(--bg-alt); display: flex; align-items: center; justify-content: center; }
+        .qb-lp .garantia .icono-g svg { width: 18px; height: 18px; }
+        .qb-lp .garantia .titulo-g { font-size: 15px; font-weight: 700; color: var(--ink); }
+        .qb-lp .garantia .texto-g { font-size: 13px; color: var(--muted); line-height: 1.5; }
+        .qb-lp .sello-cta { margin-top: 32px; display: flex; flex-direction: column; align-items: center; gap: 10px; }
 
         /* ---- PLANES ---- */
         .qb-lp .planes { max-width: 900px; margin: 0 auto; display: grid; grid-template-columns: repeat(3, 1fr); gap: 18px; }
@@ -290,6 +287,7 @@ export default function BienvenidaPage() {
           .qb-lp .demo-grid { grid-template-columns: 1fr; }
           .qb-lp .ayudas { grid-template-columns: 1fr; }
           .qb-lp .planes { grid-template-columns: 1fr; }
+          .qb-lp .garantias { grid-template-columns: 1fr; }
           .qb-lp section { padding: 64px 20px; }
         }
         @media (prefers-reduced-motion: reduce) {
@@ -490,20 +488,39 @@ export default function BienvenidaPage() {
             ))}
           </div>
 
-          <div className="presencia">
-            <div className="pin-stage">
-              <span className="pin-ring r1" />
-              <span className="pin-ring r2" />
-              <span className="pin-ring r3" />
-              <div className="pin-icon">
-                <svg viewBox="0 0 24 24" fill="none" stroke="#fff" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                  <path d="M12 21s7-6.5 7-12a7 7 0 10-14 0c0 5.5 7 12 7 12z" />
-                  <circle cx="12" cy="9" r="2.5" />
+          <div className="garantias">
+            <div className="garantia">
+              <div className="icono-g">
+                <svg viewBox="0 0 24 24" fill="none" stroke="#4A3FAE" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                  <rect x="3" y="4" width="18" height="18" rx="3" /><path d="M3 9h18" /><path d="M8 2v4M16 2v4" />
                 </svg>
               </div>
+              <div className="titulo-g">7 días gratis, de verdad</div>
+              <div className="texto-g">Todo el poder de Quiubot desde el primer minuto, sin pagar nada.</div>
             </div>
-            <div className="pais">Colombia</div>
-            <div className="subt">Generando campañas reales, hoy mismo.</div>
+            <div className="garantia">
+              <div className="icono-g">
+                <svg viewBox="0 0 24 24" fill="none" stroke="#4A3FAE" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                  <rect x="2" y="5" width="20" height="14" rx="3" /><path d="M2 10h20" strokeDasharray="3 3" />
+                </svg>
+              </div>
+              <div className="titulo-g">Sin tarjeta de crédito</div>
+              <div className="texto-g">Entras con tu cuenta de Google. Nada de datos de pago para empezar.</div>
+            </div>
+            <div className="garantia">
+              <div className="icono-g">
+                <svg viewBox="0 0 24 24" fill="none" stroke="#4A3FAE" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                  <path d="M9 12l2 2 4-4" /><circle cx="12" cy="12" r="9" />
+                </svg>
+              </div>
+              <div className="titulo-g">Tú apruebas cada acción</div>
+              <div className="texto-g">Ningún cambio se aplica en tus campañas sin tu clic. Siempre decides tú.</div>
+            </div>
+          </div>
+
+          <div className="sello-cta">
+            <Link href="/login" className="btn-cta">Iniciar prueba gratuita de 7 días →</Link>
+            <p className="micro">Sin tarjeta de crédito. Cancela cuando quieras.</p>
           </div>
         </div>
       </section>
