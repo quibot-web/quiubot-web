@@ -248,6 +248,7 @@ export default function Home() {
         <a href="/billing" style={{ padding: "8px 12px", borderRadius: 8, color: "#666", fontSize: 14, textDecoration: "none" }}>💳 Mi plan</a>
         {rol === "admin" && (<a href="/admin/playbook" style={{ padding: "8px 12px", borderRadius: 8, color: "#7F77DD", fontSize: 14, textDecoration: "none", fontWeight: 500, borderTop: "1px solid #e8e8e6", marginTop: 8, paddingTop: 16 }}>🛡️ Playbook (Admin)</a>)}
         {rol === "admin" && (<a href="/admin/objetivos" style={{ padding: "8px 12px", borderRadius: 8, color: "#7F77DD", fontSize: 14, textDecoration: "none", fontWeight: 500 }}>🎯 Objetivos (Admin)</a>)}
+        {rol === "admin" && (<a href="/admin/conocimiento" style={{ padding: "8px 12px", borderRadius: 8, color: "#7F77DD", fontSize: 14, textDecoration: "none", fontWeight: 500 }}>🧠 Conocimiento (Admin)</a>)}
 
         <div style={{ marginTop: "auto", borderTop: "1px solid #e8e8e6", paddingTop: 12 }}>
           {session?.user && (
