@@ -27,12 +27,12 @@ export default function TerminosPage() {
             <h2 style={sectionTitle}>1. Identificación del prestador del servicio</h2>
             <p>
               Quiubot es un nombre comercial operado por <strong>Juan José Palacios Villarreal</strong>,
-              persona natural identificada con NIT/RUT <em>[en trámite ante la DIAN]</em>, con domicilio
+              persona natural identificada con NIT/RUT <strong>1005870718-0</strong>, con domicilio
               en Colombia. El servicio se presta a través del sitio web <strong>quiubot.site</strong>.
             </p>
             <p>
-              Correo de contacto: <a href="mailto:hola@quiubot.site" style={linkStyle}>hola@quiubot.site</a><br />
-              Teléfono de contacto: <em>[teléfono de la empresa — pendiente de reemplazar]</em>
+              Correo de contacto: <a href="mailto:admin@quiubot.site" style={linkStyle}>admin@quiubot.site</a><br />
+              Teléfono de contacto: <strong>+57 312 246 2312</strong>
             </p>
           </section>
 
@@ -126,7 +126,7 @@ export default function TerminosPage() {
             <h2 style={sectionTitle}>10. Contacto</h2>
             <p>
               Para cualquier pregunta sobre estos términos, puedes escribir a{" "}
-              <a href="mailto:hola@quiubot.site" style={linkStyle}>hola@quiubot.site</a>.
+              <a href="mailto:admin@quiubot.site" style={linkStyle}>admin@quiubot.site</a>.
             </p>
           </section>
 
