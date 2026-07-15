@@ -1,6 +1,7 @@
 "use client";
 import { useEffect, useState, useRef, Suspense } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
+import TutorialVideo from "@/app/components/TutorialVideo";
 
 function CampanasContent() {
   const router = useRouter();
@@ -363,7 +364,10 @@ function CampanasContent() {
           </button>
         </div>
 
-        <h1 style={{ fontSize: 22, fontWeight: 700, marginBottom: 4, color: "rgb(26, 26, 26)" }}>Mis Campanas</h1>
+        <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 4 }}>
+          <h1 style={{ fontSize: 22, fontWeight: 700, margin: 0, color: "rgb(26, 26, 26)" }}>Mis Campanas</h1>
+          <TutorialVideo seccion="campanas" />
+        </div>
         <p style={{ fontSize: 13, color: "rgb(153, 153, 153)", marginBottom: "1.5rem" }}>
           Seguimiento y recomendaciones automaticas para tus campanas activas.
         </p>

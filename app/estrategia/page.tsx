@@ -2,6 +2,7 @@
 import { useState, useRef, useEffect, Suspense } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 import AdBlueprintExplorer from "@/app/components/AdBlueprintExplorer";
+import TutorialVideo from "@/app/components/TutorialVideo";
 
 function IconoWhatsApp() {
   return (
@@ -455,7 +456,10 @@ function EstrategiaContent() {
           ← Volver al panel principal
         </button>
 
-        <h1 style={{ fontSize: 20, fontWeight: 700, marginBottom: 4, color: "#1a1a1a" }}>Motor de Estrategia Publicitaria</h1>
+        <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 4 }}>
+          <h1 style={{ fontSize: 20, fontWeight: 700, margin: 0, color: "#1a1a1a" }}>Motor de Estrategia Publicitaria</h1>
+          <TutorialVideo seccion="motor-estrategia" />
+        </div>
         <p style={{ fontSize: 13, color: "#999", marginBottom: "2rem" }}>
           Paso {step === "imagen" ? "1" : step === "objetivo" ? "2" : step === "presupuesto" ? "3" : step === "resultado" ? "4" : "5"} de 5
         </p>

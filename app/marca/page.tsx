@@ -1,5 +1,6 @@
 "use client";
 import { useState, useEffect, useRef } from "react";
+import TutorialVideo from "@/app/components/TutorialVideo";
 
 const COLORES_PRESET = [
   { nombre: "Rojo", hex: "#e63946" },
@@ -193,7 +194,10 @@ export default function MarcaPage() {
         <a href="/" style={{ fontSize: 18, fontWeight: 700, textDecoration: "none", color: "#1a1a1a" }}>
           quiu<span style={{ color: "#7F77DD" }}>bot</span>
         </a>
-        <div style={{ fontSize: 13, color: "#999" }}>Paso {pasoActual + 1} de {pasos.length}</div>
+        <div style={{ display: "flex", alignItems: "center", gap: 12 }}>
+          <TutorialVideo seccion="mi-marca" />
+          <div style={{ fontSize: 13, color: "#999" }}>Paso {pasoActual + 1} de {pasos.length}</div>
+        </div>
       </div>
 
       <div style={{ height: 3, background: "#e8e8e6" }}>
