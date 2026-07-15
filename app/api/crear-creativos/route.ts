@@ -1,5 +1,7 @@
 import { auth } from "@/auth";
 import { NextRequest, NextResponse } from "next/server";
+import { supabaseAdmin } from "@/lib/supabase";
+import { desencriptarSiHaceFalta } from "@/lib/crypto";
 
 export async function POST(req: NextRequest) {
   const session = await auth();
@@ -14,6 +16,34 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ error: "Falta la estrategia, la descripción o la foto del producto" }, { status: 400 });
   }
 
+  const { data: usuario } = await supabaseAdmin
+    .from("usuarios")
+    .select("openai_key")
+    .eq("email", emailBusqueda)
+    .single();
+
+  if (!usuario) {
+    return NextResponse.json({ error: "Usuario no encontrado" }, { status: 404 });
+  }
+
+  if (!usuario.openai_key) {
+    return NextResponse.json(
+      { error: "Necesitas conectar tu API key de OpenAI en Integraciones antes de generar creativos." },
+      { status: 400 }
+    );
+  }
+
+  let openaiKeyDescifrada: string;
+  try {
+    openaiKeyDescifrada = desencriptarSiHaceFalta(usuario.openai_key);
+  } catch (err) {
+    console.error("Error al descifrar openai_key:", err);
+    return NextResponse.json(
+      { error: "No se pudo leer tu API key guardada. Vuelve a conectarla en Integraciones." },
+      { status: 500 }
+    );
+  }
+
   try {
     const n8nRes = await fetch("https://n8n.quibot.juanshow.cloud/webhook/crear_creativos", {
       method: "POST",
@@ -23,6 +53,7 @@ export async function POST(req: NextRequest) {
         estrategia,
         descripcion_visual_producto,
         imagen_producto_base64,
+        openai_key: openaiKeyDescifrada,
       }),
     });
 

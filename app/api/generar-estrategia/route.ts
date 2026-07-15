@@ -2,6 +2,7 @@ import { auth } from "@/auth";
 import { NextRequest, NextResponse } from "next/server";
 import { supabaseAdmin } from "@/lib/supabase";
 import { PLANES, type PlanId } from "@/app/lib/planesConfig";
+import { desencriptarSiHaceFalta } from "@/lib/crypto";
 
 export async function POST(req: NextRequest) {
   const session = await auth();
@@ -22,12 +23,30 @@ export async function POST(req: NextRequest) {
 
   const { data: usuario } = await supabaseAdmin
     .from("usuarios")
-    .select("id, plan")
+    .select("id, plan, openai_key")
     .eq("email", emailBusqueda)
     .single();
 
   if (!usuario) {
     return NextResponse.json({ error: "Usuario no encontrado" }, { status: 404 });
+  }
+
+  if (!usuario.openai_key) {
+    return NextResponse.json(
+      { error: "Necesitas conectar tu API key de OpenAI en Integraciones antes de generar una estrategia." },
+      { status: 400 }
+    );
+  }
+
+  let openaiKeyDescifrada: string;
+  try {
+    openaiKeyDescifrada = desencriptarSiHaceFalta(usuario.openai_key);
+  } catch (err) {
+    console.error("Error al descifrar openai_key:", err);
+    return NextResponse.json(
+      { error: "No se pudo leer tu API key guardada. Vuelve a conectarla en Integraciones." },
+      { status: 500 }
+    );
   }
 
   const plan = (usuario.plan as PlanId) || "arranque";
@@ -64,6 +83,7 @@ export async function POST(req: NextRequest) {
         imagen_base64,
         objetivo,
         presupuesto_diario_cop,
+        openai_key: openaiKeyDescifrada,
       }),
     });
 
