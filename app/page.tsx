@@ -4,6 +4,7 @@ import { useSession, signOut } from "next-auth/react";
 import { useRouter } from "next/navigation";
 import HomeInicio from "@/app/components/HomeInicio";
 import TutorialVideo from "@/app/components/TutorialVideo";
+import TourGuiado from "@/app/components/TourGuiado";
 
 export default function Home() {
   const { data: session } = useSession();
@@ -234,11 +235,11 @@ export default function Home() {
             quiu<span style={{ color: "#7F77DD" }}>bot</span>
           </div>
         </div>
-        <div onClick={() => setTab("inicio")} style={{ padding: "8px 12px", borderRadius: 8, cursor: "pointer", background: tab === "inicio" ? "#f3f2fe" : "transparent", color: tab === "inicio" ? "#534AB7" : "#666", fontWeight: tab === "inicio" ? 500 : 400, fontSize: 14 }}>
+        <div data-tour="sidebar-inicio" onClick={() => setTab("inicio")} style={{ padding: "8px 12px", borderRadius: 8, cursor: "pointer", background: tab === "inicio" ? "#f3f2fe" : "transparent", color: tab === "inicio" ? "#534AB7" : "#666", fontWeight: tab === "inicio" ? 500 : 400, fontSize: 14 }}>
           🏠 Inicio
         </div>
         <a href="/marca" style={{ padding: "8px 12px", borderRadius: 8, color: "#666", fontSize: 14, textDecoration: "none" }}>🎨 Mi marca</a>
-        <a href="/estrategia" style={{ padding: "8px 12px", borderRadius: 8, color: "#666", fontSize: 14, textDecoration: "none" }}>🎯 Motor de Estrategia</a>
+        <a data-tour="sidebar-estrategia" href="/estrategia" style={{ padding: "8px 12px", borderRadius: 8, color: "#666", fontSize: 14, textDecoration: "none" }}>🎯 Motor de Estrategia</a>
         <a href="/campanas" style={{ padding: "8px 12px", borderRadius: 8, color: "#666", fontSize: 14, textDecoration: "none" }}>📊 Mis Campañas</a>
         <div onClick={() => setTab("album")} style={{ padding: "8px 12px", borderRadius: 8, cursor: "pointer", background: tab === "album" ? "#f3f2fe" : "transparent", color: tab === "album" ? "#534AB7" : "#666", fontWeight: tab === "album" ? 500 : 400, fontSize: 14 }}>
           📸 Álbum Creativos
@@ -246,7 +247,7 @@ export default function Home() {
         <div onClick={() => setTab("integraciones")} style={{ padding: "8px 12px", borderRadius: 8, cursor: "pointer", background: tab === "integraciones" ? "#f3f2fe" : "transparent", color: tab === "integraciones" ? "#534AB7" : "#666", fontWeight: tab === "integraciones" ? 500 : 400, fontSize: 14 }}>
           🔌 Integraciones
         </div>
-        <a href="/billing" style={{ padding: "8px 12px", borderRadius: 8, color: "#666", fontSize: 14, textDecoration: "none" }}>💳 Mi plan</a>
+        <a data-tour="sidebar-plan" href="/billing" style={{ padding: "8px 12px", borderRadius: 8, color: "#666", fontSize: 14, textDecoration: "none" }}>💳 Mi plan</a>
         {rol === "admin" && (<a href="/admin/playbook" style={{ padding: "8px 12px", borderRadius: 8, color: "#7F77DD", fontSize: 14, textDecoration: "none", fontWeight: 500, borderTop: "1px solid #e8e8e6", marginTop: 8, paddingTop: 16 }}>🛡️ Playbook (Admin)</a>)}
         {rol === "admin" && (<a href="/admin/objetivos" style={{ padding: "8px 12px", borderRadius: 8, color: "#7F77DD", fontSize: 14, textDecoration: "none", fontWeight: 500 }}>🎯 Objetivos (Admin)</a>)}
         {rol === "admin" && (<a href="/admin/conocimiento" style={{ padding: "8px 12px", borderRadius: 8, color: "#7F77DD", fontSize: 14, textDecoration: "none", fontWeight: 500 }}>🧠 Conocimiento (Admin)</a>)}
@@ -275,10 +276,30 @@ export default function Home() {
           <div style={{ display: "flex", alignItems: "center", gap: 12 }}>
             <span>{tab === "inicio" ? "Inicio" : tab === "album" ? "Álbum de Creativos" : "Integraciones"}</span>
             {tab === "inicio" && <TutorialVideo seccion="inicio" />}
+            {tab === "inicio" && (
+              <TourGuiado
+                seccion="inicio"
+                pasos={[
+                  { selector: '[data-tour="sidebar-inicio"]', titulo: "Tu punto de partida", texto: "Aquí siempre verás un resumen de lo que pasó mientras no estabas: gasto, campañas activas y decisiones pendientes." },
+                  { selector: '[data-tour="campana-notificaciones"]', titulo: "Alertas y sugerencias", texto: "Cuando Quiubot detecte algo que necesita tu atención (o proponga un ajuste), te avisa aquí." },
+                  { selector: '[data-tour="sidebar-estrategia"]', titulo: "Genera tu primera campaña", texto: "Cuando estés listo, aquí es donde subes tu producto y Quiubot arma la estrategia completa." },
+                  { selector: '[data-tour="sidebar-plan"]', titulo: "Tu plan", texto: "Aquí ves cuánto te queda del plan actual y puedes subir de plan cuando quieras." },
+                ]}
+              />
+            )}
             {tab === "album" && <TutorialVideo seccion="album-creativos" />}
+            {tab === "album" && (
+              <TourGuiado
+                seccion="album-creativos"
+                pasos={[
+                  { selector: '[data-tour="album-subir"]', titulo: "Sube tus propios creativos", texto: "Aquí puedes subir imágenes o videos que ya tengas — luego los podrás usar directo en cualquier estrategia sin generar de nuevo con IA." },
+                ]}
+              />
+            )}
           </div>
           <div style={{ position: "relative" }}>
             <button
+              data-tour="campana-notificaciones"
               onClick={() => setMostrarNotis((v) => !v)}
               className={campanaShaking ? "shake-bell" : ""}
               style={{
@@ -405,6 +426,7 @@ export default function Home() {
               <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: "1rem" }}>
                 <h2 style={{ fontSize: 18, fontWeight: 600, margin: 0 }}>Álbum de Creativos</h2>
                 <button
+                  data-tour="album-subir"
                   onClick={() => albumFileRef.current?.click()}
                   disabled={subiendoArchivo}
                   style={{
@@ -477,10 +499,19 @@ export default function Home() {
                 {apiKeyInfo?.hasKey && <div style={{ background: "#f9fafb", padding: "10px", borderRadius: "8px", fontSize: "12px", color: "#666", marginBottom: "15px", fontFamily: "monospace" }}>{apiKeyInfo.preview}</div>}
                 <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 6 }}>
                   <span style={{ fontSize: 12, fontWeight: 600, color: "#666" }}>Tu API key de OpenAI</span>
-                  <TutorialVideo seccion="integraciones-openai" />
+                  <div style={{ display: "flex", gap: 6 }}>
+                    <TutorialVideo seccion="integraciones-openai" />
+                    <TourGuiado
+                      seccion="integraciones-openai"
+                      pasos={[
+                        { selector: '[data-tour="openai-input"]', titulo: "Pega tu API key aquí", texto: "Empieza con sk-. La consigues en tu cuenta de platform.openai.com, sección API Keys." },
+                        { selector: '[data-tour="openai-conectar"]', titulo: "Conecta tu cuenta", texto: "Con un clic queda guardada y lista para que Quiubot genere estrategia y creativos." },
+                      ]}
+                    />
+                  </div>
                 </div>
-                <input type="password" placeholder={apiKeyInfo?.hasKey ? "Actualizar API Key..." : "sk-..."} value={nuevaApiKey} onChange={(e) => setNuevaApiKey(e.target.value)} style={{ width: "100%", padding: "12px", borderRadius: "8px", border: "1px solid #e0e0e0", marginBottom: "10px" }} />
-                <button onClick={handleGuardarApiKey} style={{ width: "100%", padding: "10px", borderRadius: "8px", background: "#534AB7", color: "#fff", border: "none", fontWeight: 600, cursor: "pointer" }}>{guardandoApiKey ? "Guardando..." : apiKeyInfo?.hasKey ? "Actualizar Conexión" : "Conectar OpenAI"}</button>
+                <input data-tour="openai-input" type="password" placeholder={apiKeyInfo?.hasKey ? "Actualizar API Key..." : "sk-..."} value={nuevaApiKey} onChange={(e) => setNuevaApiKey(e.target.value)} style={{ width: "100%", padding: "12px", borderRadius: "8px", border: "1px solid #e0e0e0", marginBottom: "10px" }} />
+                <button data-tour="openai-conectar" onClick={handleGuardarApiKey} style={{ width: "100%", padding: "10px", borderRadius: "8px", background: "#534AB7", color: "#fff", border: "none", fontWeight: 600, cursor: "pointer" }}>{guardandoApiKey ? "Guardando..." : apiKeyInfo?.hasKey ? "Actualizar Conexión" : "Conectar OpenAI"}</button>
               </div>
 
               <div style={{ background: "#fff", padding: "2rem", borderRadius: "16px", border: "1px solid #e8e8e6", boxShadow: "0 2px 4px rgba(0,0,0,0.05)" }}>
@@ -498,14 +529,23 @@ export default function Home() {
                 </div>
                 <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 6 }}>
                   <span style={{ fontSize: 12, fontWeight: 600, color: "#666" }}>Tus credenciales de Cloudinary</span>
-                  <TutorialVideo seccion="integraciones-cloudinary" />
+                  <div style={{ display: "flex", gap: 6 }}>
+                    <TutorialVideo seccion="integraciones-cloudinary" />
+                    <TourGuiado
+                      seccion="integraciones-cloudinary"
+                      pasos={[
+                        { selector: '[data-tour="cloudinary-inputs"]', titulo: "Tus 3 credenciales de Cloudinary", texto: "Las encuentras en el Dashboard de tu cuenta de Cloudinary: Cloud Name, API Key y API Secret." },
+                        { selector: '[data-tour="cloudinary-guardar"]', titulo: "Guarda y listo", texto: "Con esto Quiubot ya puede almacenar tus creativos generados con IA." },
+                      ]}
+                    />
+                  </div>
                 </div>
-                <div style={{ display: "flex", flexDirection: "column", gap: "10px" }}>
+                <div data-tour="cloudinary-inputs" style={{ display: "flex", flexDirection: "column", gap: "10px" }}>
                   <input placeholder="Cloud Name" value={cloudinaryData.name} onChange={(e) => setCloudinaryData({...cloudinaryData, name: e.target.value})} style={{ width: "100%", padding: "12px", borderRadius: "8px", border: "1px solid #e0e0e0" }} />
                   <input placeholder="API Key" value={cloudinaryData.key} onChange={(e) => setCloudinaryData({...cloudinaryData, key: e.target.value})} style={{ width: "100%", padding: "12px", borderRadius: "8px", border: "1px solid #e0e0e0" }} />
                   <input type="password" placeholder="API Secret" value={cloudinaryData.secret} onChange={(e) => setCloudinaryData({...cloudinaryData, secret: e.target.value})} style={{ width: "100%", padding: "12px", borderRadius: "8px", border: "1px solid #e0e0e0" }} />
                 </div>
-                <button onClick={handleGuardarCloudinary} style={{ width: "100%", padding: "10px", borderRadius: "8px", background: "#534AB7", color: "#fff", border: "none", marginTop: "15px", fontWeight: 600 }}>{guardandoCloud ? "Guardando..." : "Guardar Credenciales"}</button>
+                <button data-tour="cloudinary-guardar" onClick={handleGuardarCloudinary} style={{ width: "100%", padding: "10px", borderRadius: "8px", background: "#534AB7", color: "#fff", border: "none", marginTop: "15px", fontWeight: 600 }}>{guardandoCloud ? "Guardando..." : "Guardar Credenciales"}</button>
               </div>
 
               <div style={{ background: "#fff", padding: "2rem", borderRadius: "16px", border: "1px solid #e8e8e6", boxShadow: "0 2px 4px rgba(0,0,0,0.05)" }}>
@@ -530,11 +570,17 @@ export default function Home() {
                       <div style={{ marginTop: 4 }}><strong>Página de Facebook:</strong> {metaInfo.pagina || "—"}</div>
                     </div>
 
-                    <div style={{ display: "flex", justifyContent: "flex-end", marginBottom: 8 }}>
+                    <div style={{ display: "flex", justifyContent: "flex-end", alignItems: "center", gap: 6, marginBottom: 8 }}>
                       <TutorialVideo seccion="integraciones-meta" />
+                      <TourGuiado
+                        seccion="integraciones-meta"
+                        pasos={[
+                          { selector: '[data-tour="meta-conectar"]', titulo: "Reconecta cuando lo necesites", texto: "Si tu conexión con Meta se cae, aquí la vuelves a autorizar en un clic." },
+                        ]}
+                      />
                     </div>
 
-                    <a  href="/api/meta/conectar"
+                    <a  data-tour="meta-conectar" href="/api/meta/conectar"
                       style={{ display: "block", textAlign: "center", width: "100%", padding: "10px", borderRadius: "8px", background: "#fff", color: "#534AB7", border: "1px solid #534AB7", fontWeight: 600, textDecoration: "none", boxSizing: "border-box" }}
                     >
                       Reconectar cuenta
@@ -546,11 +592,17 @@ export default function Home() {
                       Conecta tu cuenta publicitaria de Meta para poder publicar campañas directamente desde Quiubot.
                     </p>
 
-                    <div style={{ display: "flex", justifyContent: "flex-end", marginBottom: 8 }}>
+                    <div style={{ display: "flex", justifyContent: "flex-end", alignItems: "center", gap: 6, marginBottom: 8 }}>
                       <TutorialVideo seccion="integraciones-meta" />
+                      <TourGuiado
+                        seccion="integraciones-meta"
+                        pasos={[
+                          { selector: '[data-tour="meta-conectar"]', titulo: "Conecta tu cuenta de Meta", texto: "Sin esto, tus campañas no se pueden publicar. Te lleva al login de Facebook para autorizar el acceso." },
+                        ]}
+                      />
                     </div>
 
-                    <a   href="/api/meta/conectar"
+                    <a  data-tour="meta-conectar" href="/api/meta/conectar"
                       style={{ display: "block", textAlign: "center", width: "100%", padding: "10px", borderRadius: "8px", background: "#534AB7", color: "#fff", fontWeight: 600, textDecoration: "none", boxSizing: "border-box" }}
                     >
                       Conectar con Meta

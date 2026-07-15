@@ -2,6 +2,7 @@
 import { useEffect, useState, useRef, Suspense } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 import TutorialVideo from "@/app/components/TutorialVideo";
+import TourGuiado from "@/app/components/TourGuiado";
 
 function CampanasContent() {
   const router = useRouter();
@@ -234,6 +235,7 @@ function CampanasContent() {
             Ir al Motor de Estrategia
           </button>
           <button
+            data-tour="campanas-ejemplo"
             onClick={function () { setModoDemo(true); }}
             style={{
               background: "rgb(255, 255, 255)",
@@ -366,7 +368,15 @@ function CampanasContent() {
 
         <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 4 }}>
           <h1 style={{ fontSize: 22, fontWeight: 700, margin: 0, color: "rgb(26, 26, 26)" }}>Mis Campanas</h1>
-          <TutorialVideo seccion="campanas" />
+          <div style={{ display: "flex", gap: 6 }}>
+            <TutorialVideo seccion="campanas" />
+            <TourGuiado
+              seccion="campanas"
+              pasos={[
+                { selector: '[data-tour="campanas-ejemplo"]', titulo: "¿No tienes campañas todavía?", texto: "Dale clic aquí para ver cómo se ve esta pantalla una vez tengas campañas activas — es solo un ejemplo, no afecta nada real." },
+              ]}
+            />
+          </div>
         </div>
         <p style={{ fontSize: 13, color: "rgb(153, 153, 153)", marginBottom: "1.5rem" }}>
           Seguimiento y recomendaciones automaticas para tus campanas activas.

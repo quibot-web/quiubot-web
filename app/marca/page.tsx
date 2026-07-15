@@ -1,6 +1,7 @@
 "use client";
 import { useState, useEffect, useRef } from "react";
 import TutorialVideo from "@/app/components/TutorialVideo";
+import TourGuiado from "@/app/components/TourGuiado";
 
 const COLORES_PRESET = [
   { nombre: "Rojo", hex: "#e63946" },
@@ -196,11 +197,18 @@ export default function MarcaPage() {
         </a>
         <div style={{ display: "flex", alignItems: "center", gap: 12 }}>
           <TutorialVideo seccion="mi-marca" />
+          <TourGuiado
+            seccion="mi-marca"
+            pasos={[
+              { selector: '[data-tour="marca-progreso"]', titulo: "Un formulario corto", texto: "Son 11 preguntas rápidas. Esta barra te muestra cuánto te falta." },
+              { selector: '[data-tour="marca-siguiente"]', titulo: "Avanza a tu ritmo", texto: "Puedes volver atrás en cualquier momento con \"Anterior\" sin perder lo que ya escribiste." },
+            ]}
+          />
           <div style={{ fontSize: 13, color: "#999" }}>Paso {pasoActual + 1} de {pasos.length}</div>
         </div>
       </div>
 
-      <div style={{ height: 3, background: "#e8e8e6" }}>
+      <div data-tour="marca-progreso" style={{ height: 3, background: "#e8e8e6" }}>
         <div style={{ height: "100%", background: "#7F77DD", width: `${progreso}%`, transition: "width 0.4s ease" }} />
       </div>
 
@@ -445,6 +453,7 @@ export default function MarcaPage() {
               </button>
             )}
             <button
+              data-tour="marca-siguiente"
               onClick={handleSiguiente}
               disabled={guardando}
               style={{ flex: 1, padding: "12px 20px", borderRadius: 10, border: "none", background: "#7F77DD", color: "#fff", fontSize: 14, fontWeight: 600, cursor: "pointer", fontFamily: "inherit", opacity: guardando ? 0.7 : 1 }}
