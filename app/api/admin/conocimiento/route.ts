@@ -2,6 +2,7 @@ import { auth } from "@/auth";
 import { NextResponse } from "next/server";
 import { supabaseAdmin } from "@/lib/supabase";
 import { generarEmbedding } from "@/app/lib/embeddings";
+import { desencriptarSiHaceFalta } from "@/lib/crypto";
 
 async function requireAdmin() {
   const session = await auth();
@@ -64,7 +65,7 @@ export async function POST(req: Request) {
 
   let embedding: number[];
   try {
-    embedding = await generarEmbedding(`${seccion}\n\n${contenido}`, check.usuario!.openai_key);
+    embedding = await generarEmbedding(`${seccion}\n\n${contenido}`, desencriptarSiHaceFalta(check.usuario!.openai_key));
   } catch (err: any) {
     return NextResponse.json(
       { error: `No se pudo generar el embedding: ${err.message}` },

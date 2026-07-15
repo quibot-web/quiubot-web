@@ -2,6 +2,7 @@ import { auth } from "@/auth";
 import { NextResponse } from "next/server";
 import { supabaseAdmin } from "@/lib/supabase";
 import { generarEmbedding } from "@/app/lib/embeddings";
+import { desencriptarSiHaceFalta } from "@/lib/crypto";
 
 // Modelos usados por el asistente. Ambos son de los más económicos de OpenAI.
 const MODELO_CHAT = "gpt-4o-mini";
@@ -91,7 +92,7 @@ export async function POST(req: Request) {
     );
   }
 
-  const apiKeyUsuario = usuario.openai_key;
+  const apiKeyUsuario = desencriptarSiHaceFalta(usuario.openai_key);
 
   // 1. Busca los fragmentos de conocimiento más relevantes para la pregunta.
   let fragmentos: { seccion: string; contenido: string }[] = [];
