@@ -1,18 +1,5 @@
 import Link from "next/link";
-import { Space_Grotesk, JetBrains_Mono } from "next/font/google";
 import RevealObserver from "@/app/components/RevealObserver";
-
-const display = Space_Grotesk({
-  subsets: ["latin"],
-  weight: ["500", "600", "700"],
-  variable: "--font-display",
-});
-
-const mono = JetBrains_Mono({
-  subsets: ["latin"],
-  weight: ["500"],
-  variable: "--font-mono",
-});
 
 export const metadata = {
   title: "Publicidad con IA para tu negocio",
@@ -59,7 +46,11 @@ const PLANES = [
 
 export default function BienvenidaPage() {
   return (
-    <div className={`${display.variable} ${mono.variable} qb-lp`}>
+    <div className="qb-lp">
+      <link
+        rel="stylesheet"
+        href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@500;600;700&family=JetBrains+Mono:wght@500&display=swap"
+      />
       <RevealObserver />
       <style>{`
         .qb-lp {
@@ -72,6 +63,8 @@ export default function BienvenidaPage() {
           --purple-light: #C4BFF0;
           --mint: #1FA97C;
           --white: #FFFFFF;
+          --font-display: 'Space Grotesk', system-ui, sans-serif;
+          --font-mono: 'JetBrains Mono', monospace;
           background: var(--bg);
           color: var(--ink);
           font-family: system-ui, sans-serif;
