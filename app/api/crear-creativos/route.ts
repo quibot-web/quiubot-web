@@ -2,11 +2,20 @@ import { auth } from "@/auth";
 import { NextRequest, NextResponse } from "next/server";
 import { supabaseAdmin } from "@/lib/supabase";
 import { desencriptarSiHaceFalta } from "@/lib/crypto";
+import { verificarLimite } from "@/lib/rateLimit";
 
 export async function POST(req: NextRequest) {
   const session = await auth();
   if (!session?.user?.email) {
     return NextResponse.json({ error: "No autorizado" }, { status: 401 });
+  }
+
+  const permitido = verificarLimite(`crear-creativos:${session.user.email}`, 3, 5 * 60 * 1000);
+  if (!permitido) {
+    return NextResponse.json(
+      { error: "Estás generando creativos muy rápido. Espera unos minutos e intenta de nuevo." },
+      { status: 429 }
+    );
   }
 
   const emailBusqueda = session.user.email.trim().toLowerCase();

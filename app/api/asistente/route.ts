@@ -3,6 +3,7 @@ import { NextResponse } from "next/server";
 import { supabaseAdmin } from "@/lib/supabase";
 import { generarEmbedding } from "@/app/lib/embeddings";
 import { desencriptarSiHaceFalta } from "@/lib/crypto";
+import { verificarLimite } from "@/lib/rateLimit";
 
 // Modelos usados por el asistente. Ambos son de los más económicos de OpenAI.
 const MODELO_CHAT = "gpt-4o-mini";
@@ -54,6 +55,14 @@ export async function POST(req: Request) {
   const session = await auth();
   if (!session?.user?.email) {
     return NextResponse.json({ error: "No autenticado" }, { status: 401 });
+  }
+
+  const permitido = verificarLimite(`asistente:${session.user.email}`, 15, 2 * 60 * 1000);
+  if (!permitido) {
+    return NextResponse.json(
+      { error: "Estás enviando mensajes muy rápido. Espera un momento e intenta de nuevo." },
+      { status: 429 }
+    );
   }
 
   const { mensaje } = await req.json();
