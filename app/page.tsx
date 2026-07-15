@@ -473,9 +473,12 @@ export default function Home() {
                       </div>
                     </div>
                   </div>
-                  <TutorialVideo seccion="integraciones-openai" />
                 </div>
                 {apiKeyInfo?.hasKey && <div style={{ background: "#f9fafb", padding: "10px", borderRadius: "8px", fontSize: "12px", color: "#666", marginBottom: "15px", fontFamily: "monospace" }}>{apiKeyInfo.preview}</div>}
+                <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 6 }}>
+                  <span style={{ fontSize: 12, fontWeight: 600, color: "#666" }}>Tu API key de OpenAI</span>
+                  <TutorialVideo seccion="integraciones-openai" />
+                </div>
                 <input type="password" placeholder={apiKeyInfo?.hasKey ? "Actualizar API Key..." : "sk-..."} value={nuevaApiKey} onChange={(e) => setNuevaApiKey(e.target.value)} style={{ width: "100%", padding: "12px", borderRadius: "8px", border: "1px solid #e0e0e0", marginBottom: "10px" }} />
                 <button onClick={handleGuardarApiKey} style={{ width: "100%", padding: "10px", borderRadius: "8px", background: "#534AB7", color: "#fff", border: "none", fontWeight: 600, cursor: "pointer" }}>{guardandoApiKey ? "Guardando..." : apiKeyInfo?.hasKey ? "Actualizar Conexión" : "Conectar OpenAI"}</button>
               </div>
@@ -492,6 +495,9 @@ export default function Home() {
                       </div>
                     </div>
                   </div>
+                </div>
+                <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 6 }}>
+                  <span style={{ fontSize: 12, fontWeight: 600, color: "#666" }}>Tus credenciales de Cloudinary</span>
                   <TutorialVideo seccion="integraciones-cloudinary" />
                 </div>
                 <div style={{ display: "flex", flexDirection: "column", gap: "10px" }}>
@@ -514,7 +520,6 @@ export default function Home() {
                       </div>
                     </div>
                   </div>
-                  <TutorialVideo seccion="integraciones-meta" />
                 </div>
 
                 {metaInfo?.conectado ? (
@@ -523,6 +528,10 @@ export default function Home() {
                       <div><strong>Cuenta:</strong> {metaInfo.nombre || "—"}</div>
                       <div style={{ marginTop: 4 }}><strong>Cuenta publicitaria:</strong> {metaInfo.cuentaPublicitaria || "—"}</div>
                       <div style={{ marginTop: 4 }}><strong>Página de Facebook:</strong> {metaInfo.pagina || "—"}</div>
+                    </div>
+
+                    <div style={{ display: "flex", justifyContent: "flex-end", marginBottom: 8 }}>
+                      <TutorialVideo seccion="integraciones-meta" />
                     </div>
 
                     <a  href="/api/meta/conectar"
@@ -536,6 +545,10 @@ export default function Home() {
                     <p style={{ fontSize: 13, color: "#666", marginBottom: 12 }}>
                       Conecta tu cuenta publicitaria de Meta para poder publicar campañas directamente desde Quiubot.
                     </p>
+
+                    <div style={{ display: "flex", justifyContent: "flex-end", marginBottom: 8 }}>
+                      <TutorialVideo seccion="integraciones-meta" />
+                    </div>
 
                     <a   href="/api/meta/conectar"
                       style={{ display: "block", textAlign: "center", width: "100%", padding: "10px", borderRadius: "8px", background: "#534AB7", color: "#fff", fontWeight: 600, textDecoration: "none", boxSizing: "border-box" }}
