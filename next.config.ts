@@ -25,24 +25,6 @@ const nextConfig: NextConfig = {
           // Fuerza HTTPS en el navegador por 2 años, incluidos subdominios
           // (quiubot.site ya está 100% en HTTPS, así que esto es seguro de activar)
           { key: "Strict-Transport-Security", value: "max-age=63072000; includeSubDomains; preload" },
-
-          // CSP en modo "solo reportar" — por ahora NO bloquea nada, solo avisa en la
-          // consola del navegador si algo hubiera sido bloqueado. Revisar la consola
-          // en /, /bienvenida, /login y /estrategia antes de pasarlo a modo real.
-          {
-            key: "Content-Security-Policy-Report-Only",
-            value: [
-              "default-src 'self'",
-              "script-src 'self'",
-              "style-src 'self' 'unsafe-inline' https://fonts.googleapis.com",
-              "font-src 'self' https://fonts.gstatic.com",
-              "img-src 'self' data: https:",
-              "connect-src 'self' https://*.supabase.co https://accounts.google.com",
-              "frame-src https://accounts.google.com",
-              "object-src 'none'",
-              "base-uri 'self'",
-            ].join("; "),
-          },
         ],
       },
     ];
