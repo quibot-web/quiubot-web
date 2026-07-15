@@ -255,7 +255,7 @@ function CampanasContent() {
     );
   } else {
     contenido = (
-      <div style={{ display: "flex", flexDirection: "column", gap: 16 }}>
+      <div data-tour="campanas-lista" style={{ display: "flex", flexDirection: "column", gap: 16 }}>
         {campanasAMostrar.map(function (c) {
           const presupuestoTexto = c.presupuesto_diario
             ? "$" + Number(c.presupuesto_diario).toLocaleString("es-CO") + " COP"
@@ -374,6 +374,7 @@ function CampanasContent() {
               seccion="campanas"
               pasos={[
                 { selector: '[data-tour="campanas-ejemplo"]', titulo: "¿No tienes campañas todavía?", texto: "Dale clic aquí para ver cómo se ve esta pantalla una vez tengas campañas activas — es solo un ejemplo, no afecta nada real." },
+                { selector: '[data-tour="campanas-lista"]', titulo: "Tus campañas activas", texto: "Aquí ves el estado y la efectividad de cada una. Si aparece una sugerencia, revísala y decide si aplicarla — nunca se aplica sola." },
               ]}
             />
           </div>

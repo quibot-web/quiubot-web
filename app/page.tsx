@@ -284,6 +284,7 @@ export default function Home() {
                   { selector: '[data-tour="campana-notificaciones"]', titulo: "Alertas y sugerencias", texto: "Cuando Quiubot detecte algo que necesita tu atención (o proponga un ajuste), te avisa aquí." },
                   { selector: '[data-tour="sidebar-estrategia"]', titulo: "Genera tu primera campaña", texto: "Cuando estés listo, aquí es donde subes tu producto y Quiubot arma la estrategia completa." },
                   { selector: '[data-tour="sidebar-plan"]', titulo: "Tu plan", texto: "Aquí ves cuánto te queda del plan actual y puedes subir de plan cuando quieras." },
+                  { selector: '[data-tour="asistente-flotante"]', titulo: "Tu asistente siempre disponible", texto: "¿Tienes una duda sobre cómo funciona algo? Este ícono abre un chat con IA que conoce Quiubot a fondo y te guía en el momento." },
                 ]}
               />
             )}

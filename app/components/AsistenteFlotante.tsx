@@ -73,7 +73,7 @@ export default function AsistenteFlotante() {
   if (!mostrar) return null
 
   return (
-    <div style={{ position: "fixed", bottom: 24, right: 24, zIndex: 1000, fontFamily: "system-ui, sans-serif" }}>
+    <div data-tour="asistente-flotante" style={{ position: "fixed", bottom: 24, right: 24, zIndex: 1000, fontFamily: "system-ui, sans-serif" }}>
       <style>{`
         @keyframes qbSpin {
           from { transform: rotate(0deg); }
