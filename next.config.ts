@@ -25,6 +25,27 @@ const nextConfig: NextConfig = {
           // Fuerza HTTPS en el navegador por 2 años, incluidos subdominios
           // (quiubot.site ya está 100% en HTTPS, así que esto es seguro de activar)
           { key: "Strict-Transport-Security", value: "max-age=63072000; includeSubDomains; preload" },
+
+          // CSP en modo "solo reportar" — revisar la consola en /, /bienvenida, /login
+          // y /estrategia. 'unsafe-inline' en script-src es una decisión consciente:
+          // un CSP con nonce "perfecto" requeriría forzar renderizado dinámico en varias
+          // páginas y activarlo en modo bloqueo desde el inicio (Next.js no aplica nonces
+          // en modo "solo reportar" — limitación conocida del framework), un riesgo
+          // desproporcionado sin una vulnerabilidad de XSS identificada hoy.
+          {
+            key: "Content-Security-Policy-Report-Only",
+            value: [
+              "default-src 'self'",
+              "script-src 'self' 'unsafe-inline'",
+              "style-src 'self' 'unsafe-inline' https://fonts.googleapis.com",
+              "font-src 'self' https://fonts.gstatic.com",
+              "img-src 'self' data: https:",
+              "connect-src 'self' https://*.supabase.co https://accounts.google.com",
+              "frame-src https://accounts.google.com",
+              "object-src 'none'",
+              "base-uri 'self'",
+            ].join("; "),
+          },
         ],
       },
     ];
