@@ -3,6 +3,7 @@ import { useState, useEffect, useRef } from "react";
 import { useSession, signOut } from "next-auth/react";
 import { useRouter } from "next/navigation";
 import HomeInicio from "@/app/components/HomeInicio";
+import TutorialVideo from "@/app/components/TutorialVideo";
 
 export default function Home() {
   const { data: session } = useSession();
@@ -249,6 +250,7 @@ export default function Home() {
         {rol === "admin" && (<a href="/admin/playbook" style={{ padding: "8px 12px", borderRadius: 8, color: "#7F77DD", fontSize: 14, textDecoration: "none", fontWeight: 500, borderTop: "1px solid #e8e8e6", marginTop: 8, paddingTop: 16 }}>🛡️ Playbook (Admin)</a>)}
         {rol === "admin" && (<a href="/admin/objetivos" style={{ padding: "8px 12px", borderRadius: 8, color: "#7F77DD", fontSize: 14, textDecoration: "none", fontWeight: 500 }}>🎯 Objetivos (Admin)</a>)}
         {rol === "admin" && (<a href="/admin/conocimiento" style={{ padding: "8px 12px", borderRadius: 8, color: "#7F77DD", fontSize: 14, textDecoration: "none", fontWeight: 500 }}>🧠 Conocimiento (Admin)</a>)}
+        {rol === "admin" && (<a href="/admin/tutoriales" style={{ padding: "8px 12px", borderRadius: 8, color: "#7F77DD", fontSize: 14, textDecoration: "none", fontWeight: 500 }}>🎬 Tutoriales (Admin)</a>)}
 
         <div style={{ marginTop: "auto", borderTop: "1px solid #e8e8e6", paddingTop: 12 }}>
           {session?.user && (
@@ -270,7 +272,11 @@ export default function Home() {
 
       <div style={{ flex: 1, display: "flex", flexDirection: "column", overflow: "hidden" }}>
         <div style={{ padding: "1rem 1.5rem", borderBottom: "1px solid #e8e8e6", background: "#fff", fontSize: 15, fontWeight: 500, display: "flex", alignItems: "center", justifyContent: "space-between" }}>
-          <span>{tab === "inicio" ? "Inicio" : tab === "album" ? "Álbum de Creativos" : "Integraciones"}</span>
+          <div style={{ display: "flex", alignItems: "center", gap: 12 }}>
+            <span>{tab === "inicio" ? "Inicio" : tab === "album" ? "Álbum de Creativos" : "Integraciones"}</span>
+            {tab === "inicio" && <TutorialVideo seccion="inicio" />}
+            {tab === "album" && <TutorialVideo seccion="album-creativos" />}
+          </div>
           <div style={{ position: "relative" }}>
             <button
               onClick={() => setMostrarNotis((v) => !v)}
@@ -467,6 +473,7 @@ export default function Home() {
                       </div>
                     </div>
                   </div>
+                  <TutorialVideo seccion="integraciones-openai" />
                 </div>
                 {apiKeyInfo?.hasKey && <div style={{ background: "#f9fafb", padding: "10px", borderRadius: "8px", fontSize: "12px", color: "#666", marginBottom: "15px", fontFamily: "monospace" }}>{apiKeyInfo.preview}</div>}
                 <input type="password" placeholder={apiKeyInfo?.hasKey ? "Actualizar API Key..." : "sk-..."} value={nuevaApiKey} onChange={(e) => setNuevaApiKey(e.target.value)} style={{ width: "100%", padding: "12px", borderRadius: "8px", border: "1px solid #e0e0e0", marginBottom: "10px" }} />
@@ -474,15 +481,18 @@ export default function Home() {
               </div>
 
               <div style={{ background: "#fff", padding: "2rem", borderRadius: "16px", border: "1px solid #e8e8e6", boxShadow: "0 2px 4px rgba(0,0,0,0.05)" }}>
-                <div style={{ display: "flex", alignItems: "center", gap: "12px", marginBottom: "1.5rem" }}>
-                  <div style={{ width: 48, height: 48, borderRadius: "12px", background: "#f3f2fe", display: "flex", alignItems: "center", justifyContent: "center", fontSize: "24px" }}>☁️</div>
-                  <div>
-                    <h2 style={{ fontSize: "16px", fontWeight: 600, margin: 0 }}>Cloudinary</h2>
-                    <div style={{ display: "flex", alignItems: "center", gap: "6px", fontSize: "12px", color: cloudinaryInfo?.hasConfig ? "#10b981" : "#6b7280" }}>
-                      <span style={{ width: 8, height: 8, borderRadius: "50%", background: cloudinaryInfo?.hasConfig ? "#10b981" : "#6b7280" }}></span>
-                      {cloudinaryInfo?.hasConfig ? "Conectado" : "Configuración pendiente"}
+                <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: "1.5rem" }}>
+                  <div style={{ display: "flex", alignItems: "center", gap: "12px" }}>
+                    <div style={{ width: 48, height: 48, borderRadius: "12px", background: "#f3f2fe", display: "flex", alignItems: "center", justifyContent: "center", fontSize: "24px" }}>☁️</div>
+                    <div>
+                      <h2 style={{ fontSize: "16px", fontWeight: 600, margin: 0 }}>Cloudinary</h2>
+                      <div style={{ display: "flex", alignItems: "center", gap: "6px", fontSize: "12px", color: cloudinaryInfo?.hasConfig ? "#10b981" : "#6b7280" }}>
+                        <span style={{ width: 8, height: 8, borderRadius: "50%", background: cloudinaryInfo?.hasConfig ? "#10b981" : "#6b7280" }}></span>
+                        {cloudinaryInfo?.hasConfig ? "Conectado" : "Configuración pendiente"}
+                      </div>
                     </div>
                   </div>
+                  <TutorialVideo seccion="integraciones-cloudinary" />
                 </div>
                 <div style={{ display: "flex", flexDirection: "column", gap: "10px" }}>
                   <input placeholder="Cloud Name" value={cloudinaryData.name} onChange={(e) => setCloudinaryData({...cloudinaryData, name: e.target.value})} style={{ width: "100%", padding: "12px", borderRadius: "8px", border: "1px solid #e0e0e0" }} />
@@ -493,15 +503,18 @@ export default function Home() {
               </div>
 
               <div style={{ background: "#fff", padding: "2rem", borderRadius: "16px", border: "1px solid #e8e8e6", boxShadow: "0 2px 4px rgba(0,0,0,0.05)" }}>
-                <div style={{ display: "flex", alignItems: "center", gap: "12px", marginBottom: "1.5rem" }}>
-                  <div style={{ width: 48, height: 48, borderRadius: "12px", background: "#f3f2fe", display: "flex", alignItems: "center", justifyContent: "center", fontSize: "24px" }}>📣</div>
-                  <div>
-                    <h2 style={{ fontSize: "16px", fontWeight: 600, margin: 0 }}>Meta Ads</h2>
-                    <div style={{ display: "flex", alignItems: "center", gap: "6px", fontSize: "12px", color: metaInfo?.conectado ? "#10b981" : "#6b7280" }}>
-                      <span style={{ width: 8, height: 8, borderRadius: "50%", background: metaInfo?.conectado ? "#10b981" : "#6b7280" }}></span>
-                      {metaInfo?.conectado ? "Conectado" : "No conectado"}
+                <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: "1.5rem" }}>
+                  <div style={{ display: "flex", alignItems: "center", gap: "12px" }}>
+                    <div style={{ width: 48, height: 48, borderRadius: "12px", background: "#f3f2fe", display: "flex", alignItems: "center", justifyContent: "center", fontSize: "24px" }}>📣</div>
+                    <div>
+                      <h2 style={{ fontSize: "16px", fontWeight: 600, margin: 0 }}>Meta Ads</h2>
+                      <div style={{ display: "flex", alignItems: "center", gap: "6px", fontSize: "12px", color: metaInfo?.conectado ? "#10b981" : "#6b7280" }}>
+                        <span style={{ width: 8, height: 8, borderRadius: "50%", background: metaInfo?.conectado ? "#10b981" : "#6b7280" }}></span>
+                        {metaInfo?.conectado ? "Conectado" : "No conectado"}
+                      </div>
                     </div>
                   </div>
+                  <TutorialVideo seccion="integraciones-meta" />
                 </div>
 
                 {metaInfo?.conectado ? (
