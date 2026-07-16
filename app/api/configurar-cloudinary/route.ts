@@ -1,28 +1,30 @@
 import { NextRequest, NextResponse } from "next/server";
-import { auth } from "@/auth"; // Asegúrate de que este archivo exista en tu carpeta raíz o src
+import { auth } from "@/auth";
 import { supabaseAdmin } from "@/lib/supabase";
+import { encriptar } from "@/lib/crypto";
 
 export async function POST(req: NextRequest) {
   try {
-    // 1. Obtener sesión de forma segura
     const session = await auth();
-    
+
     if (!session?.user?.email) {
       return NextResponse.json({ error: "No autorizado" }, { status: 401 });
     }
 
-    // 2. Obtener datos del cuerpo
     const body = await req.json();
 
-    // 3. Actualizar en Supabase
-    // NOTA: Asegúrate de que las columnas 'cloudinary_name', 'cloudinary_key', 
-    // y 'cloudinary_secret' existan realmente en tu tabla 'usuarios'
+    if (!body.name?.trim() || !body.key?.trim() || !body.secret?.trim()) {
+      return NextResponse.json({ error: "Los 3 campos son obligatorios" }, { status: 400 });
+    }
+
+    // cloudinary_name no es sensible (aparece público en cada URL de imagen),
+    // pero cloudinary_key y cloudinary_secret sí, así que se guardan cifradas.
     const { error } = await supabaseAdmin
       .from("usuarios")
-      .update({ 
-        cloudinary_name: body.name, 
-        cloudinary_key: body.key, 
-        cloudinary_secret: body.secret 
+      .update({
+        cloudinary_name: body.name.trim(),
+        cloudinary_key: encriptar(body.key.trim()),
+        cloudinary_secret: encriptar(body.secret.trim()),
       })
       .eq("email", session.user.email);
 
