@@ -1,14 +1,18 @@
 "use client"
-import { useEffect, useState } from "react"
+import { useEffect, useRef, useState } from "react"
 import { useSession } from "next-auth/react"
 import { useRouter } from "next/navigation"
 
 const TU_WHATSAPP = "573122462312"
 
 const LINKS_WOMPI: Record<string, string> = {
-  crecimiento: "https://checkout.wompi.co/l/xUEbaU",
-  escala: "https://checkout.wompi.co/l/4Ybupm",
+  crecimiento: "https://checkout.wompi.co/l/zIDoEZ",
+  escala: "https://checkout.wompi.co/l/zTDsWF",
+  crecimiento_anual: "https://checkout.wompi.co/l/Bhqrus",
+  escala_anual: "https://checkout.wompi.co/l/Zqip25",
 }
+
+const DESCUENTO_ANUAL = 0.15
 
 type BillingInfo = {
   plan: string
@@ -58,10 +62,39 @@ const PLANES = [
   },
 ]
 
+function PrecioAnimado({ valor }: { valor: number }) {
+  const [mostrado, setMostrado] = useState(valor)
+  const anteriorRef = useRef(valor)
+
+  useEffect(() => {
+    const inicio = anteriorRef.current
+    const fin = valor
+    if (inicio === fin) return
+    const inicioTiempo = performance.now()
+    const duracion = 450
+    let raf = 0
+    const paso = (ahora: number) => {
+      const p = Math.min(1, (ahora - inicioTiempo) / duracion)
+      const ease = 1 - Math.pow(1 - p, 3)
+      setMostrado(Math.round(inicio + (fin - inicio) * ease))
+      if (p < 1) {
+        raf = requestAnimationFrame(paso)
+      } else {
+        anteriorRef.current = fin
+      }
+    }
+    raf = requestAnimationFrame(paso)
+    return () => cancelAnimationFrame(raf)
+  }, [valor])
+
+  return <>{mostrado.toLocaleString("es-CO")}</>
+}
+
 export default function BillingPage() {
   const { data: session } = useSession()
   const router = useRouter()
   const [info, setInfo] = useState<BillingInfo | null>(null)
+  const [ciclo, setCiclo] = useState<"mensual" | "anual">("mensual")
 
   useEffect(() => {
     fetch("/api/billing")
@@ -80,10 +113,18 @@ export default function BillingPage() {
     return Math.max(0, Math.ceil(diff / (1000 * 60 * 60 * 24)))
   }
 
-  const handlePagar = (planId: "crecimiento" | "escala", planNombre: string) => {
+  const handlePagarMensual = (planId: "crecimiento" | "escala", planNombre: string) => {
     window.open(LINKS_WOMPI[planId], "_blank")
     const mensaje = encodeURIComponent(
-      `Hola, ya voy a pagar el plan ${planNombre} de Quiubot. Mi correo es ${session?.user?.email || ""}`
+      `Hola, ya voy a pagar el plan ${planNombre} (mensual) de Quiubot. Mi correo es ${session?.user?.email || ""}`
+    )
+    window.open(`https://wa.me/${TU_WHATSAPP}?text=${mensaje}`, "_blank")
+  }
+
+  const handlePagarAnual = (planId: "crecimiento" | "escala", planNombre: string, totalAnual: number) => {
+    window.open(LINKS_WOMPI[`${planId}_anual`], "_blank")
+    const mensaje = encodeURIComponent(
+      `Hola, ya voy a pagar el plan ${planNombre} ANUAL de Quiubot (con 15% de descuento), por $${totalAnual.toLocaleString("es-CO")} facturado una vez al año. Mi correo es ${session?.user?.email || ""}`
     )
     window.open(`https://wa.me/${TU_WHATSAPP}?text=${mensaje}`, "_blank")
   }
@@ -101,7 +142,7 @@ export default function BillingPage() {
       <div style={{ maxWidth: 1000, margin: "0 auto" }}>
         <a href="/" style={{ color: "#7F77DD", textDecoration: "none", fontSize: 14 }}>← Volver</a>
 
-        <div style={{ marginTop: "1rem", marginBottom: "2rem" }}>
+        <div style={{ marginTop: "1rem", marginBottom: "1.5rem" }}>
           <h1 style={{ fontSize: 24, fontWeight: 700, color: "#1a1a1a", margin: 0 }}>Mi plan</h1>
           {info.en_trial ? (
             <p style={{ fontSize: 14, color: "#534AB7", marginTop: 6, background: "#f3f2fe", display: "inline-block", padding: "6px 14px", borderRadius: 20 }}>
@@ -116,10 +157,72 @@ export default function BillingPage() {
           )}
         </div>
 
+        <div style={{ display: "flex", justifyContent: "center", marginBottom: 8 }}>
+          <div style={{ display: "inline-flex", background: "#fff", border: "1px solid #e8e8e6", borderRadius: 999, padding: 4, gap: 2 }}>
+            <button
+              onClick={() => setCiclo("mensual")}
+              style={{
+                padding: "9px 20px",
+                borderRadius: 999,
+                border: "none",
+                cursor: "pointer",
+                fontSize: 13.5,
+                fontWeight: 600,
+                background: ciclo === "mensual" ? "#534AB7" : "transparent",
+                color: ciclo === "mensual" ? "#fff" : "#666",
+                transition: "background .15s ease, color .15s ease",
+              }}
+            >
+              Mensual
+            </button>
+            <button
+              onClick={() => setCiclo("anual")}
+              style={{
+                padding: "9px 20px",
+                borderRadius: 999,
+                border: "none",
+                cursor: "pointer",
+                fontSize: 13.5,
+                fontWeight: 600,
+                display: "flex",
+                alignItems: "center",
+                gap: 8,
+                background: ciclo === "anual" ? "#534AB7" : "transparent",
+                color: ciclo === "anual" ? "#fff" : "#666",
+                transition: "background .15s ease, color .15s ease",
+              }}
+            >
+              Anual
+              <span
+                style={{
+                  fontSize: 11,
+                  fontWeight: 700,
+                  padding: "2px 8px",
+                  borderRadius: 999,
+                  background: ciclo === "anual" ? "rgba(255,255,255,0.22)" : "#dcfce7",
+                  color: ciclo === "anual" ? "#fff" : "#15803d",
+                }}
+              >
+                -15%
+              </span>
+            </button>
+          </div>
+        </div>
+        <p style={{ textAlign: "center", fontSize: 12.5, color: "#999", marginBottom: 28 }}>
+          {ciclo === "anual"
+            ? "Pagas una vez al año, tu precio queda congelado los 12 meses."
+            : "Cambia a anual cuando quieras y ahorra cerca de 2 meses de plan."}
+        </p>
+
         <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(260px, 1fr))", gap: 20, alignItems: "start" }}>
           {PLANES.map((plan) => {
             const esPlanActual = plan.id === info.plan
             const destacarComoPopular = plan.masElegido && !esPlanActual
+            const esAnual = ciclo === "anual" && plan.precio > 0
+            const totalAnual = Math.round(plan.precio * 12 * (1 - DESCUENTO_ANUAL))
+            const mensualEquivalente = Math.round(totalAnual / 12)
+            const ahorroAnual = plan.precio * 12 - totalAnual
+            const precioMostrado = esAnual ? mensualEquivalente : plan.precio
 
             return (
               <div
@@ -148,27 +251,50 @@ export default function BillingPage() {
                 <h2 style={{ fontSize: 20, fontWeight: 700, color: "#1a1a1a", margin: "8px 0 4px" }}>{plan.nombre}</h2>
                 <p style={{ fontSize: 13, color: "#666", minHeight: 40, margin: "0 0 16px" }}>{plan.tagline}</p>
 
-                <div style={{ marginBottom: 4 }}>
+                <div style={{ marginBottom: 2, display: "flex", alignItems: "baseline", gap: 8, flexWrap: "wrap" }}>
                   <span style={{ fontSize: 32, fontWeight: 700, color: "#1a1a1a" }}>
-                    {plan.precio === 0 ? "Gratis" : `$${plan.precio.toLocaleString("es-CO")}`}
+                    {plan.precio === 0 ? "Gratis" : <>${<PrecioAnimado valor={precioMostrado} />}</>}
                   </span>
                   {plan.precio > 0 && <span style={{ fontSize: 14, color: "#999" }}>/mes</span>}
+                  {esAnual && (
+                    <span style={{ fontSize: 14, color: "#bbb", textDecoration: "line-through" }}>
+                      ${plan.precio.toLocaleString("es-CO")}
+                    </span>
+                  )}
                 </div>
+
                 {plan.precio > 0 ? (
-                  <p style={{ fontSize: 12, color: "#999", margin: "0 0 20px" }}>
-                    Menos de ${Math.round(plan.precio / 30).toLocaleString("es-CO")} al día
-                  </p>
+                  esAnual ? (
+                    <div style={{ margin: "0 0 14px" }}>
+                      <p style={{ fontSize: 12, color: "#999", margin: "0 0 8px" }}>
+                        ${totalAnual.toLocaleString("es-CO")} facturado una vez al año
+                      </p>
+                      <div style={{ display: "inline-flex", alignItems: "center", gap: 6, background: "#dcfce7", color: "#15803d", fontSize: 12.5, fontWeight: 700, padding: "5px 12px", borderRadius: 999 }}>
+                        🎉 Ahorras ${ahorroAnual.toLocaleString("es-CO")} al año
+                      </div>
+                    </div>
+                  ) : (
+                    <p style={{ fontSize: 12, color: "#999", margin: "0 0 20px" }}>
+                      Menos de ${Math.round(plan.precio / 30).toLocaleString("es-CO")} al día
+                    </p>
+                  )
                 ) : (
                   <p style={{ fontSize: 12, color: "#999", margin: "0 0 20px" }}>Para siempre, sin tarjeta</p>
                 )}
 
-                <div style={{ display: "flex", flexDirection: "column", gap: 10, marginBottom: 24 }}>
+                <div style={{ display: "flex", flexDirection: "column", gap: 10, marginBottom: 24, marginTop: esAnual ? 14 : 0 }}>
                   {plan.features.map((f) => (
                     <div key={f} style={{ display: "flex", alignItems: "flex-start", gap: 8, fontSize: 13, color: "#333" }}>
                       <span style={{ color: "#10b981", fontWeight: 700, flexShrink: 0 }}>✓</span>
                       {f}
                     </div>
                   ))}
+                  {esAnual && (
+                    <div style={{ display: "flex", alignItems: "flex-start", gap: 8, fontSize: 13, color: "#333" }}>
+                      <span style={{ color: "#534AB7", fontWeight: 700, flexShrink: 0 }}>🔒</span>
+                      Precio congelado por 12 meses, aunque suban las tarifas
+                    </div>
+                  )}
                 </div>
 
                 {esPlanActual ? (
@@ -181,7 +307,11 @@ export default function BillingPage() {
                   </div>
                 ) : (
                   <button
-                    onClick={() => handlePagar(plan.id as "crecimiento" | "escala", plan.nombre)}
+                    onClick={() =>
+                      esAnual
+                        ? handlePagarAnual(plan.id as "crecimiento" | "escala", plan.nombre, totalAnual)
+                        : handlePagarMensual(plan.id as "crecimiento" | "escala", plan.nombre)
+                    }
                     style={{
                       width: "100%",
                       padding: "13px",
@@ -194,8 +324,13 @@ export default function BillingPage() {
                       cursor: "pointer",
                     }}
                   >
-                    💳 {info.plan === "arranque" ? "Mejorar a" : "Cambiar a"} {plan.nombre}
+                    💳 {info.plan === "arranque" ? "Mejorar a" : "Cambiar a"} {plan.nombre}{esAnual ? " · Anual" : ""}
                   </button>
+                )}
+                {esAnual && !esPlanActual && plan.id !== "arranque" && (
+                  <p style={{ fontSize: 10.5, color: "#bbb", textAlign: "center", marginTop: 8 }}>
+                    Pago anual único, sin reembolsos — te llevará a la pasarela de pago segura de Wompi.
+                  </p>
                 )}
               </div>
             )
