@@ -198,7 +198,6 @@ export default function BienvenidaExperience() {
   const [pasoActivo, setPasoActivo] = useState(0);
   const [progreso, setProgreso] = useState(0);
   const [navScrolled, setNavScrolled] = useState(false);
-  const refs = useRef<Array<HTMLDivElement | null>>([]);
 
   useEffect(() => {
     const onScroll = () => {
@@ -213,19 +212,10 @@ export default function BienvenidaExperience() {
   }, []);
 
   useEffect(() => {
-    const observer = new IntersectionObserver(
-      (entries) => {
-        entries.forEach((entry) => {
-          if (entry.isIntersecting) {
-            const idx = Number((entry.target as HTMLElement).dataset.paso);
-            setPasoActivo(idx);
-          }
-        });
-      },
-      { rootMargin: "-40% 0px -40% 0px", threshold: 0 }
-    );
-    refs.current.forEach((el) => el && observer.observe(el));
-    return () => observer.disconnect();
+    const id = setInterval(() => {
+      setPasoActivo((p) => (p + 1) % PASOS.length);
+    }, 4500);
+    return () => clearInterval(id);
   }, []);
 
   return (
@@ -328,16 +318,21 @@ export default function BienvenidaExperience() {
         .qb-lp .pain-item { display: flex; gap: 14px; align-items: flex-start; font-size: 16px; color: var(--ink); background: #fff; border: 1px solid #ECE9F7; border-radius: 14px; padding: 16px 20px; }
         .qb-lp .pain-item .x { color: #C24545; font-weight: 700; flex-shrink: 0; }
 
-        /* ---- EXPERIENCIA SCROLL-DRIVEN ---- */
-        .qb-lp .experiencia-grid { max-width: 1080px; margin: 0 auto; display: grid; grid-template-columns: 0.85fr 1.05fr; gap: 60px; }
-        .qb-lp .pasos-col { display: flex; flex-direction: column; gap: 0; }
-        .qb-lp .paso-block { min-height: 62vh; display: flex; flex-direction: column; justify-content: center; padding: 24px 0; }
-        .qb-lp .paso-block .tab-activa { display: none; }
-        .qb-lp .paso-block h3 { font-size: clamp(22px, 2.6vw, 30px); font-weight: 700; margin: 10px 0 12px; }
-        .qb-lp .paso-block p { font-size: 15.5px; color: var(--muted); line-height: 1.6; max-width: 420px; }
+        /* ---- EXPERIENCIA AUTOMATICA (sin scroll forzado) ---- */
+        .qb-lp .experiencia-grid { max-width: 1080px; margin: 0 auto; display: grid; grid-template-columns: 0.85fr 1.05fr; gap: 60px; align-items: center; }
+        .qb-lp .pasos-col { display: flex; flex-direction: column; gap: 28px; }
+        .qb-lp .paso-progress { display: flex; gap: 6px; }
+        .qb-lp .progress-seg { flex: 1; height: 3px; border-radius: 2px; background: #E5E1F5; overflow: hidden; }
+        .qb-lp .progress-fill { height: 100%; width: 0; background: var(--purple-deep); border-radius: 2px; }
+        .qb-lp .progress-fill.full { width: 100%; }
+        .qb-lp .progress-fill.activo { animation: qbProgressFill 4.5s linear forwards; }
+        @keyframes qbProgressFill { from { width: 0; } to { width: 100%; } }
+        .qb-lp .paso-actual { min-height: 168px; animation: qbPanelFade .4s cubic-bezier(.16,.84,.44,1); }
+        .qb-lp .paso-actual h3 { font-size: clamp(22px, 2.6vw, 30px); font-weight: 700; margin: 10px 0 12px; }
+        .qb-lp .paso-actual p { font-size: 15.5px; color: var(--muted); line-height: 1.6; max-width: 420px; }
         .qb-lp .paso-num { font-family: var(--font-mono), monospace; font-size: 12px; color: var(--purple); letter-spacing: 0.08em; text-transform: uppercase; }
 
-        .qb-lp .panel-col { position: sticky; top: 100px; align-self: start; height: fit-content; }
+        .qb-lp .panel-col { align-self: center; }
         .qb-lp .panel-frame { background: #fff; border-radius: 16px; border: 1px solid #ECE9F7; box-shadow: 0 20px 44px rgba(23,21,43,0.1); overflow: hidden; display: flex; height: 340px; }
         .qb-lp .panel-rail { width: 56px; background: var(--bg-alt); border-right: 1px solid #ECE9F7; display: flex; flex-direction: column; align-items: center; padding: 18px 0; gap: 14px; }
         .qb-lp .rail-icon { width: 34px; height: 34px; border-radius: 9px; display: flex; align-items: center; justify-content: center; color: var(--muted); transition: background .2s ease, color .2s ease; }
@@ -444,16 +439,17 @@ export default function BienvenidaExperience() {
           .qb-lp .garantias { grid-template-columns: 1fr; }
           .qb-lp section { padding: 64px 20px; }
           .qb-lp .experiencia-grid { grid-template-columns: 1fr; gap: 0; }
-          .qb-lp .panel-col { position: static; margin-bottom: 18px; }
-          .qb-lp .paso-block { min-height: 0; padding: 20px 0; }
+          .qb-lp .panel-col { margin-bottom: 18px; }
           .qb-lp .core-stage { max-width: 280px; margin-bottom: 56px; }
         }
         @media (prefers-reduced-motion: reduce) {
           .qb-lp .panel-fade, .qb-lp .budget-fill, .qb-lp .creativo-card,
-          .qb-lp .core-glow, .qb-lp .core-ring::before, .qb-lp .hud-line {
+          .qb-lp .core-glow, .qb-lp .core-ring::before, .qb-lp .hud-line,
+          .qb-lp .progress-fill.activo, .qb-lp .paso-actual {
             animation: none !important;
           }
           .qb-lp .budget-fill { width: 72% !important; }
+          .qb-lp .progress-fill.activo { width: 100% !important; }
           .qb-lp .hud-line { opacity: 1 !important; color: var(--ink) !important; }
           .qb-lp .qb-reveal { opacity: 1 !important; transform: none !important; transition: none !important; }
         }
@@ -520,18 +516,21 @@ export default function BienvenidaExperience() {
 
         <div className="experiencia-grid">
           <div className="pasos-col">
-            {PASOS.map((p, i) => (
-              <div
-                className="paso-block"
-                key={p.tab}
-                data-paso={i}
-                ref={(el) => { refs.current[i] = el; }}
-              >
-                <span className="paso-num">{p.eyebrow}</span>
-                <h3>{p.titulo}</h3>
-                <p>{p.texto}</p>
-              </div>
-            ))}
+            <div className="paso-progress">
+              {PASOS.map((_, i) => (
+                <div className="progress-seg" key={i}>
+                  <div
+                    className={`progress-fill ${i < pasoActivo ? "full" : i === pasoActivo ? "activo" : ""}`}
+                    key={i === pasoActivo ? `activo-${pasoActivo}` : `quieto-${i}`}
+                  />
+                </div>
+              ))}
+            </div>
+            <div className="paso-actual" key={pasoActivo}>
+              <span className="paso-num">{PASOS[pasoActivo].eyebrow}</span>
+              <h3>{PASOS[pasoActivo].titulo}</h3>
+              <p>{PASOS[pasoActivo].texto}</p>
+            </div>
             <div className="ganancias qb-reveal">
               <h3>Lo que te regala Quiubot</h3>
               {GANANCIAS.map((g) => (
