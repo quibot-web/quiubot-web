@@ -223,13 +223,36 @@ function DisolucionCanvas() {
     const easeInOut = (x: number) => (x < 0.5 ? 4 * x * x * x : 1 - Math.pow(-2 * x + 2, 3) / 2);
     const lerp = (a: number, b: number, t: number) => a + (b - a) * t;
 
+    // Muestrea los pixeles del logo real para que las particulas lo dibujen
+    let puntosLogo: { x: number; y: number }[] = [];
+    const img = new Image();
+    img.src = "/marca/icono-quiubot.svg";
+    img.onload = () => {
+      const tam = 96;
+      const off = document.createElement("canvas");
+      off.width = tam;
+      off.height = tam;
+      const octx = off.getContext("2d");
+      if (!octx) return;
+      octx.drawImage(img, 0, 0, tam, tam);
+      const data = octx.getImageData(0, 0, tam, tam).data;
+      const pts: { x: number; y: number }[] = [];
+      for (let y = 0; y < tam; y += 3) {
+        for (let x = 0; x < tam; x += 3) {
+          const alpha = data[(y * tam + x) * 4 + 3];
+          if (alpha > 80) pts.push({ x: x / tam - 0.5, y: y / tam - 0.5 });
+        }
+      }
+      puntosLogo = pts;
+    };
+
     const origenesRel = [
-      { x: 0.5, y: 0.5, dx: -0.24, dy: -0.24 },
-      { x: 0.5, y: 0.5, dx: 0.08, dy: 0.02 },
-      { x: 0.5, y: 0.5, dx: -0.26, dy: 0.22 },
+      { dx: -0.24, dy: -0.24 },
+      { dx: 0.08, dy: 0.02 },
+      { dx: -0.26, dy: 0.22 },
     ];
 
-    const particulas = Array.from({ length: 84 }).map(() => {
+    const particulas = Array.from({ length: 90 }).map(() => {
       const grupo = origenesRel[Math.floor(Math.random() * origenesRel.length)];
       const jitterX = (Math.random() - 0.5) * 0.08;
       const jitterY = (Math.random() - 0.5) * 0.08;
@@ -243,7 +266,8 @@ function DisolucionCanvas() {
         radioOrbita: 0.045 + Math.random() * 0.09,
         tam: 1.4 + Math.random() * 2.6,
         color: colores[Math.floor(Math.random() * colores.length)],
-        offsetFase: (Math.random() - 0.5) * 0.015,
+        offsetFase: (Math.random() - 0.5) * 0.012,
+        logoTarget: null as { x: number; y: number } | null,
       };
     });
 
@@ -256,17 +280,26 @@ function DisolucionCanvas() {
         const cx = W / 2;
         const cy = H * 0.46;
         const escala = Math.min(W, H);
-        const transcurrido = reduce ? CICLO * 0.8 : (ahora - inicio) / 1000;
+        const escalaLogo = escala * 0.62;
+        const transcurrido = reduce ? CICLO * 0.95 : (ahora - inicio) / 1000;
         const tGlobal = (transcurrido % CICLO) / CICLO;
 
         let glowAlpha = 0;
 
         particulas.forEach((p) => {
-          const t = reduce ? 0.8 : Math.min(1, Math.max(0, tGlobal + p.offsetFase));
+          const t = reduce ? 0.95 : Math.min(1, Math.max(0, tGlobal + p.offsetFase));
           const origX = cx + p.origX * escala;
           const origY = cy + p.origY * escala;
           const explX = origX + Math.cos(p.anguloExplosion) * p.distExplosion * escala;
           const explY = origY + Math.sin(p.anguloExplosion) * p.distExplosion * escala;
+
+          if (!p.logoTarget && puntosLogo.length) {
+            p.logoTarget = puntosLogo[Math.floor(Math.random() * puntosLogo.length)];
+          }
+          const orbX = cx + Math.cos(p.anguloOrbita) * p.radioOrbita * escala;
+          const orbY = cy + Math.sin(p.anguloOrbita) * p.radioOrbita * escala * 0.85;
+          const destX = p.logoTarget ? cx + p.logoTarget.x * escalaLogo : orbX;
+          const destY = p.logoTarget ? cy + p.logoTarget.y * escalaLogo : orbY;
 
           let x = origX;
           let y = origY;
@@ -274,51 +307,51 @@ function DisolucionCanvas() {
 
           if (t < 0.4) {
             alpha = 0;
-            x = origX;
-            y = origY;
           } else if (t < 0.55) {
             const p2 = easeOut((t - 0.4) / 0.15);
             x = lerp(origX, explX, p2);
             y = lerp(origY, explY, p2);
             alpha = p2;
-          } else if (t < 0.72) {
-            const p2 = easeInOut((t - 0.55) / 0.17);
-            const orbX = cx + Math.cos(p.anguloOrbita) * p.radioOrbita * escala;
-            const orbY = cy + Math.sin(p.anguloOrbita) * p.radioOrbita * escala * 0.85;
-            x = lerp(explX, orbX, p2);
-            y = lerp(explY, orbY, p2);
+          } else if (t < 0.74) {
+            const p2 = easeInOut((t - 0.55) / 0.19);
+            x = lerp(explX, destX, p2);
+            y = lerp(explY, destY, p2);
             alpha = 1;
             glowAlpha = Math.max(glowAlpha, p2);
-          } else if (t < 0.9) {
-            const p2 = (t - 0.72) / 0.18;
-            const angulo = p.anguloOrbita + p2 * 0.7;
-            x = cx + Math.cos(angulo) * p.radioOrbita * escala;
-            y = cy + Math.sin(angulo) * p.radioOrbita * escala * 0.85;
+          } else if (t < 0.8) {
+            x = destX;
+            y = destY;
             alpha = 1;
             glowAlpha = 1;
-          } else {
-            const p2 = (t - 0.9) / 0.1;
-            const angulo = p.anguloOrbita + 0.7;
-            x = cx + Math.cos(angulo) * p.radioOrbita * escala;
-            y = cy + Math.sin(angulo) * p.radioOrbita * escala * 0.85;
+          } else if (t < 0.88) {
+            const p2 = (t - 0.8) / 0.08;
+            x = destX;
+            y = destY;
             alpha = 1 - p2;
-            glowAlpha = 1 - p2;
+            glowAlpha = 1;
+          } else if (t < 0.94) {
+            alpha = 0;
+            glowAlpha = 1 - (t - 0.88) / 0.06;
+          } else {
+            alpha = 0;
+            glowAlpha = 0;
           }
 
-          if (alpha <= 0.01) return;
-          ctx.beginPath();
-          ctx.arc(x, y, p.tam, 0, Math.PI * 2);
-          ctx.fillStyle = p.color;
-          ctx.shadowColor = p.color;
-          ctx.shadowBlur = 8;
-          ctx.globalAlpha = alpha * 0.85;
-          ctx.fill();
+          if (alpha > 0.01) {
+            ctx.beginPath();
+            ctx.arc(x, y, p.tam, 0, Math.PI * 2);
+            ctx.fillStyle = p.color;
+            ctx.shadowColor = p.color;
+            ctx.shadowBlur = 8;
+            ctx.globalAlpha = alpha * 0.85;
+            ctx.fill();
+          }
         });
 
         if (glowAlpha > 0.01) {
-          const r = escala * 0.16;
+          const r = escala * 0.22;
           const grad = ctx.createRadialGradient(cx, cy, 0, cx, cy, r);
-          grad.addColorStop(0, `rgba(127,119,221,${0.35 * glowAlpha})`);
+          grad.addColorStop(0, `rgba(127,119,221,${0.3 * glowAlpha})`);
           grad.addColorStop(1, "rgba(127,119,221,0)");
           ctx.globalAlpha = 1;
           ctx.fillStyle = grad;
@@ -503,15 +536,20 @@ export default function BienvenidaExperience() {
         .qb-lp .pn-sub { font-size: 12.5px; color: var(--muted); margin-top: 3px; line-height: 1.4; }
 
         .qb-lp .disolucion-canvas { position: absolute; inset: 0; width: 100%; height: 100%; }
-        .qb-lp .calma-content { position: relative; z-index: 4; text-align: center; padding: 0 32px; opacity: 0; transform: translateY(8px) scale(0.96); animation: qbCalmContent 9s ease-in-out infinite; pointer-events: none; }
-        @keyframes qbCalmContent {
-          0%, 58% { opacity: 0; transform: translateY(8px) scale(0.96); }
-          66%, 85% { opacity: 1; transform: translateY(0) scale(1); }
-          93%, 100% { opacity: 0; transform: translateY(-6px) scale(0.97); }
+        .qb-lp .logo-render { position: relative; z-index: 4; width: 68px; height: 68px; border-radius: 20px; background: #fff; box-shadow: 0 16px 40px rgba(74,63,174,0.32); display: flex; align-items: center; justify-content: center; margin: 0 auto 18px; opacity: 0; transform: scale(0.7); animation: qbLogoRender 9s ease-in-out infinite; }
+        .qb-lp .logo-render img { width: 38px; height: 38px; }
+        @keyframes qbLogoRender {
+          0%, 76% { opacity: 0; transform: scale(0.7); }
+          82%, 88% { opacity: 1; transform: scale(1); }
+          95%, 100% { opacity: 0; transform: scale(0.85); }
         }
-        .qb-lp .calma-check { width: 56px; height: 56px; border-radius: 50%; background: #fff; box-shadow: 0 10px 30px rgba(74,63,174,0.3); display: flex; align-items: center; justify-content: center; margin: 0 auto 16px; }
-        .qb-lp .calma-check svg { width: 26px; height: 26px; }
-        .qb-lp .calma-content h4 { color: var(--ink); font-size: 19px; font-weight: 700; margin-bottom: 8px; }
+        .qb-lp .calma-content { position: relative; z-index: 4; text-align: center; padding: 0 32px; opacity: 0; transform: translateY(10px); animation: qbCalmContent 9s ease-in-out infinite; pointer-events: none; }
+        @keyframes qbCalmContent {
+          0%, 80% { opacity: 0; transform: translateY(10px); }
+          86%, 90% { opacity: 1; transform: translateY(0); }
+          96%, 100% { opacity: 0; transform: translateY(-6px); }
+        }
+        .qb-lp .calma-content h4 { color: var(--ink); font-size: 21px; font-weight: 700; letter-spacing: -0.01em; margin-bottom: 8px; }
         .qb-lp .calma-content p { color: var(--muted); font-size: 13.5px; line-height: 1.5; max-width: 320px; margin: 0 auto; }
 
         /* ---- EXPERIENCIA AUTOMATICA (sin scroll forzado) ---- */
@@ -645,13 +683,15 @@ export default function BienvenidaExperience() {
           .qb-lp .panel-fade, .qb-lp .budget-fill, .qb-lp .creativo-card,
           .qb-lp .core-glow, .qb-lp .core-ring::before, .qb-lp .hud-line,
           .qb-lp .progress-fill.activo, .qb-lp .paso-actual,
-          .qb-lp .caos-calma-stage, .qb-lp .pain-notif, .qb-lp .calma-content {
+          .qb-lp .caos-calma-stage, .qb-lp .pain-notif,
+          .qb-lp .logo-render, .qb-lp .calma-content {
             animation: none !important;
           }
           .qb-lp .budget-fill { width: 72% !important; }
           .qb-lp .progress-fill.activo { width: 100% !important; }
           .qb-lp .hud-line { opacity: 1 !important; color: var(--ink) !important; }
           .qb-lp .pain-notif { opacity: 0 !important; }
+          .qb-lp .logo-render { opacity: 1 !important; transform: none !important; }
           .qb-lp .calma-content { opacity: 1 !important; transform: none !important; }
           .qb-lp .qb-reveal { opacity: 1 !important; transform: none !important; transition: none !important; }
         }
@@ -746,14 +786,12 @@ export default function BienvenidaExperience() {
           </div>
 
           <DisolucionCanvas />
+          <div className="logo-render">
+            <img src="/marca/icono-quiubot.svg" alt="Quiubot" />
+          </div>
           <div className="calma-content">
-            <div className="calma-check">
-              <svg viewBox="0 0 24 24" fill="none" stroke="#4A3FAE" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                <path d="M9 12l2 2 4-4" /><circle cx="12" cy="12" r="9" />
-              </svg>
-            </div>
-            <h4>Quiubot ya se encargó.</h4>
-            <p>Tu campaña sigue vigilada, tus creativos ya están listos, y tú no moviste un dedo.</p>
+            <h4>Esto es tener a Quiubot de tu lado.</h4>
+            <p>Cero horas tuyas, cero estrés — tu campaña vigilada y tus creativos listos, siempre.</p>
           </div>
         </div>
       </section>
