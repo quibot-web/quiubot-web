@@ -194,6 +194,154 @@ function CoreOrb() {
   return <canvas ref={canvasRef} width={340} height={340} className="core-canvas" />;
 }
 
+function DisolucionCanvas() {
+  const canvasRef = useRef<HTMLCanvasElement | null>(null);
+
+  useEffect(() => {
+    const canvas = canvasRef.current;
+    const contenedor = canvas?.parentElement;
+    if (!canvas || !contenedor) return;
+    const ctx = canvas.getContext("2d");
+    if (!ctx) return;
+
+    const reduce = window.matchMedia("(prefers-reduced-motion: reduce)").matches;
+    const colores = ["#7F77DD", "#4A3FAE", "#1FA97C", "#C4BFF0"];
+    const CICLO = 9;
+
+    let W = 0;
+    let H = 0;
+    const medir = () => {
+      W = contenedor.clientWidth;
+      H = contenedor.clientHeight;
+      canvas.width = W;
+      canvas.height = H;
+    };
+    medir();
+    window.addEventListener("resize", medir);
+
+    const easeOut = (x: number) => 1 - Math.pow(1 - x, 3);
+    const easeInOut = (x: number) => (x < 0.5 ? 4 * x * x * x : 1 - Math.pow(-2 * x + 2, 3) / 2);
+    const lerp = (a: number, b: number, t: number) => a + (b - a) * t;
+
+    const origenesRel = [
+      { x: 0.5, y: 0.5, dx: -0.24, dy: -0.24 },
+      { x: 0.5, y: 0.5, dx: 0.08, dy: 0.02 },
+      { x: 0.5, y: 0.5, dx: -0.26, dy: 0.22 },
+    ];
+
+    const particulas = Array.from({ length: 84 }).map(() => {
+      const grupo = origenesRel[Math.floor(Math.random() * origenesRel.length)];
+      const jitterX = (Math.random() - 0.5) * 0.08;
+      const jitterY = (Math.random() - 0.5) * 0.08;
+      const angulo = Math.random() * Math.PI * 2;
+      return {
+        origX: grupo.dx + jitterX,
+        origY: grupo.dy + jitterY,
+        anguloExplosion: angulo,
+        distExplosion: 0.14 + Math.random() * 0.22,
+        anguloOrbita: Math.random() * Math.PI * 2,
+        radioOrbita: 0.045 + Math.random() * 0.09,
+        tam: 1.4 + Math.random() * 2.6,
+        color: colores[Math.floor(Math.random() * colores.length)],
+        offsetFase: (Math.random() - 0.5) * 0.015,
+      };
+    });
+
+    let raf = 0;
+    const inicio = performance.now();
+
+    const dibujar = (ahora: number) => {
+      if (W && H) {
+        ctx.clearRect(0, 0, W, H);
+        const cx = W / 2;
+        const cy = H * 0.46;
+        const escala = Math.min(W, H);
+        const transcurrido = reduce ? CICLO * 0.8 : (ahora - inicio) / 1000;
+        const tGlobal = (transcurrido % CICLO) / CICLO;
+
+        let glowAlpha = 0;
+
+        particulas.forEach((p) => {
+          const t = reduce ? 0.8 : Math.min(1, Math.max(0, tGlobal + p.offsetFase));
+          const origX = cx + p.origX * escala;
+          const origY = cy + p.origY * escala;
+          const explX = origX + Math.cos(p.anguloExplosion) * p.distExplosion * escala;
+          const explY = origY + Math.sin(p.anguloExplosion) * p.distExplosion * escala;
+
+          let x = origX;
+          let y = origY;
+          let alpha = 0;
+
+          if (t < 0.4) {
+            alpha = 0;
+            x = origX;
+            y = origY;
+          } else if (t < 0.55) {
+            const p2 = easeOut((t - 0.4) / 0.15);
+            x = lerp(origX, explX, p2);
+            y = lerp(origY, explY, p2);
+            alpha = p2;
+          } else if (t < 0.72) {
+            const p2 = easeInOut((t - 0.55) / 0.17);
+            const orbX = cx + Math.cos(p.anguloOrbita) * p.radioOrbita * escala;
+            const orbY = cy + Math.sin(p.anguloOrbita) * p.radioOrbita * escala * 0.85;
+            x = lerp(explX, orbX, p2);
+            y = lerp(explY, orbY, p2);
+            alpha = 1;
+            glowAlpha = Math.max(glowAlpha, p2);
+          } else if (t < 0.9) {
+            const p2 = (t - 0.72) / 0.18;
+            const angulo = p.anguloOrbita + p2 * 0.7;
+            x = cx + Math.cos(angulo) * p.radioOrbita * escala;
+            y = cy + Math.sin(angulo) * p.radioOrbita * escala * 0.85;
+            alpha = 1;
+            glowAlpha = 1;
+          } else {
+            const p2 = (t - 0.9) / 0.1;
+            const angulo = p.anguloOrbita + 0.7;
+            x = cx + Math.cos(angulo) * p.radioOrbita * escala;
+            y = cy + Math.sin(angulo) * p.radioOrbita * escala * 0.85;
+            alpha = 1 - p2;
+            glowAlpha = 1 - p2;
+          }
+
+          if (alpha <= 0.01) return;
+          ctx.beginPath();
+          ctx.arc(x, y, p.tam, 0, Math.PI * 2);
+          ctx.fillStyle = p.color;
+          ctx.shadowColor = p.color;
+          ctx.shadowBlur = 8;
+          ctx.globalAlpha = alpha * 0.85;
+          ctx.fill();
+        });
+
+        if (glowAlpha > 0.01) {
+          const r = escala * 0.16;
+          const grad = ctx.createRadialGradient(cx, cy, 0, cx, cy, r);
+          grad.addColorStop(0, `rgba(127,119,221,${0.35 * glowAlpha})`);
+          grad.addColorStop(1, "rgba(127,119,221,0)");
+          ctx.globalAlpha = 1;
+          ctx.fillStyle = grad;
+          ctx.beginPath();
+          ctx.arc(cx, cy, r, 0, Math.PI * 2);
+          ctx.fill();
+        }
+        ctx.globalAlpha = 1;
+      }
+      if (!reduce) raf = requestAnimationFrame(dibujar);
+    };
+
+    dibujar(performance.now());
+    if (reduce) return () => window.removeEventListener("resize", medir);
+    return () => {
+      cancelAnimationFrame(raf);
+      window.removeEventListener("resize", medir);
+    };
+  }, []);
+
+  return <canvas ref={canvasRef} className="disolucion-canvas" />;
+}
+
 export default function BienvenidaExperience() {
   const [pasoActivo, setPasoActivo] = useState(0);
   const [progreso, setProgreso] = useState(0);
@@ -354,22 +502,17 @@ export default function BienvenidaExperience() {
         .qb-lp .pn-title { font-size: 14.5px; font-weight: 700; color: var(--ink); line-height: 1.3; }
         .qb-lp .pn-sub { font-size: 12.5px; color: var(--muted); margin-top: 3px; line-height: 1.4; }
 
-        .qb-lp .calma-wipe { position: absolute; inset: 0; display: flex; align-items: center; justify-content: center; background: linear-gradient(120deg, var(--purple-deep), var(--purple) 55%, var(--mint)); transform: scaleX(0); transform-origin: 50% 50%; animation: qbWipe 9s ease-in-out infinite; z-index: 2; }
-        @keyframes qbWipe {
-          0%, 38% { transform: scaleX(0); }
-          55%, 85% { transform: scaleX(1); }
-          97%, 100% { transform: scaleX(0); }
-        }
-        .qb-lp .calma-content { text-align: center; padding: 0 32px; opacity: 0; transform: translateY(8px); animation: qbCalmContent 9s ease-in-out infinite; }
+        .qb-lp .disolucion-canvas { position: absolute; inset: 0; width: 100%; height: 100%; }
+        .qb-lp .calma-content { position: relative; z-index: 4; text-align: center; padding: 0 32px; opacity: 0; transform: translateY(8px) scale(0.96); animation: qbCalmContent 9s ease-in-out infinite; pointer-events: none; }
         @keyframes qbCalmContent {
-          0%, 54% { opacity: 0; transform: translateY(8px); }
-          62%, 80% { opacity: 1; transform: translateY(0); }
-          90%, 100% { opacity: 0; transform: translateY(-6px); }
+          0%, 58% { opacity: 0; transform: translateY(8px) scale(0.96); }
+          66%, 85% { opacity: 1; transform: translateY(0) scale(1); }
+          93%, 100% { opacity: 0; transform: translateY(-6px) scale(0.97); }
         }
-        .qb-lp .calma-check { width: 52px; height: 52px; border-radius: 50%; background: rgba(255,255,255,0.16); border: 1.5px solid rgba(255,255,255,0.5); display: flex; align-items: center; justify-content: center; margin: 0 auto 16px; }
-        .qb-lp .calma-check svg { width: 24px; height: 24px; }
-        .qb-lp .calma-content h4 { color: #fff; font-size: 19px; font-weight: 700; margin-bottom: 8px; }
-        .qb-lp .calma-content p { color: rgba(255,255,255,0.85); font-size: 13.5px; line-height: 1.5; max-width: 320px; margin: 0 auto; }
+        .qb-lp .calma-check { width: 56px; height: 56px; border-radius: 50%; background: #fff; box-shadow: 0 10px 30px rgba(74,63,174,0.3); display: flex; align-items: center; justify-content: center; margin: 0 auto 16px; }
+        .qb-lp .calma-check svg { width: 26px; height: 26px; }
+        .qb-lp .calma-content h4 { color: var(--ink); font-size: 19px; font-weight: 700; margin-bottom: 8px; }
+        .qb-lp .calma-content p { color: var(--muted); font-size: 13.5px; line-height: 1.5; max-width: 320px; margin: 0 auto; }
 
         /* ---- EXPERIENCIA AUTOMATICA (sin scroll forzado) ---- */
         .qb-lp .experiencia-grid { max-width: 1080px; margin: 0 auto; display: grid; grid-template-columns: 0.85fr 1.05fr; gap: 60px; align-items: center; }
@@ -502,14 +645,13 @@ export default function BienvenidaExperience() {
           .qb-lp .panel-fade, .qb-lp .budget-fill, .qb-lp .creativo-card,
           .qb-lp .core-glow, .qb-lp .core-ring::before, .qb-lp .hud-line,
           .qb-lp .progress-fill.activo, .qb-lp .paso-actual,
-          .qb-lp .caos-calma-stage, .qb-lp .pain-notif, .qb-lp .calma-wipe, .qb-lp .calma-content {
+          .qb-lp .caos-calma-stage, .qb-lp .pain-notif, .qb-lp .calma-content {
             animation: none !important;
           }
           .qb-lp .budget-fill { width: 72% !important; }
           .qb-lp .progress-fill.activo { width: 100% !important; }
           .qb-lp .hud-line { opacity: 1 !important; color: var(--ink) !important; }
           .qb-lp .pain-notif { opacity: 0 !important; }
-          .qb-lp .calma-wipe { transform: scaleX(1) !important; }
           .qb-lp .calma-content { opacity: 1 !important; transform: none !important; }
           .qb-lp .qb-reveal { opacity: 1 !important; transform: none !important; transition: none !important; }
         }
@@ -603,16 +745,15 @@ export default function BienvenidaExperience() {
             </div>
           </div>
 
-          <div className="calma-wipe">
-            <div className="calma-content">
-              <div className="calma-check">
-                <svg viewBox="0 0 24 24" fill="none" stroke="#fff" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                  <path d="M9 12l2 2 4-4" /><circle cx="12" cy="12" r="9" />
-                </svg>
-              </div>
-              <h4>Quiubot ya se encargó.</h4>
-              <p>Tu campaña sigue vigilada, tus creativos ya están listos, y tú no moviste un dedo.</p>
+          <DisolucionCanvas />
+          <div className="calma-content">
+            <div className="calma-check">
+              <svg viewBox="0 0 24 24" fill="none" stroke="#4A3FAE" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                <path d="M9 12l2 2 4-4" /><circle cx="12" cy="12" r="9" />
+              </svg>
             </div>
+            <h4>Quiubot ya se encargó.</h4>
+            <p>Tu campaña sigue vigilada, tus creativos ya están listos, y tú no moviste un dedo.</p>
           </div>
         </div>
       </section>
