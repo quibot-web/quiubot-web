@@ -1,12 +1,18 @@
 "use client"
 import { useEffect, useRef, useState } from "react"
+import { usePathname } from "next/navigation"
 
 type Mensaje = {
   rol: "user" | "assistant"
   mensaje: string
 }
 
+const RUTAS_PUBLICAS = ["/bienvenida", "/login", "/terminos", "/pricing"]
+
 export default function AsistenteFlotante() {
+  const pathname = usePathname()
+  const esRutaPublica = RUTAS_PUBLICAS.some((ruta) => pathname?.startsWith(ruta))
+
   const [mostrar, setMostrar] = useState(false)
   const [activo, setActivo] = useState(false)
   const [abierto, setAbierto] = useState(false)
@@ -17,6 +23,8 @@ export default function AsistenteFlotante() {
   const finRef = useRef<HTMLDivElement>(null)
 
   useEffect(() => {
+    if (esRutaPublica) return
+
     fetch("/api/asistente")
       .then((res) => res.json())
       .then((data) => {
@@ -29,7 +37,7 @@ export default function AsistenteFlotante() {
         }
       })
       .catch(() => setMostrar(false))
-  }, [])
+  }, [esRutaPublica])
 
   useEffect(() => {
     finRef.current?.scrollIntoView({ behavior: "smooth" })
@@ -70,7 +78,7 @@ export default function AsistenteFlotante() {
     }
   }
 
-  if (!mostrar) return null
+  if (esRutaPublica || !mostrar) return null
 
   return (
     <div data-tour="asistente-flotante" style={{ position: "fixed", bottom: 24, right: 24, zIndex: 1000, fontFamily: "system-ui, sans-serif" }}>
