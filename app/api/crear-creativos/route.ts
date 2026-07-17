@@ -27,7 +27,7 @@ export async function POST(req: NextRequest) {
 
   const { data: usuario } = await supabaseAdmin
     .from("usuarios")
-    .select("openai_key")
+    .select("openai_key, cloudinary_name, cloudinary_key, cloudinary_secret")
     .eq("email", emailBusqueda)
     .single();
 
@@ -42,13 +42,24 @@ export async function POST(req: NextRequest) {
     );
   }
 
+  if (!usuario.cloudinary_name || !usuario.cloudinary_key || !usuario.cloudinary_secret) {
+    return NextResponse.json(
+      { error: "Necesitas conectar tus credenciales de Cloudinary en Integraciones antes de generar creativos." },
+      { status: 400 }
+    );
+  }
+
   let openaiKeyDescifrada: string;
+  let cloudinaryKeyDescifrada: string;
+  let cloudinarySecretDescifrado: string;
   try {
     openaiKeyDescifrada = desencriptarSiHaceFalta(usuario.openai_key);
+    cloudinaryKeyDescifrada = desencriptarSiHaceFalta(usuario.cloudinary_key);
+    cloudinarySecretDescifrado = desencriptarSiHaceFalta(usuario.cloudinary_secret);
   } catch (err) {
-    console.error("Error al descifrar openai_key:", err);
+    console.error("Error al descifrar credenciales:", err);
     return NextResponse.json(
-      { error: "No se pudo leer tu API key guardada. Vuelve a conectarla en Integraciones." },
+      { error: "No se pudieron leer tus credenciales guardadas. Vuelve a conectarlas en Integraciones." },
       { status: 500 }
     );
   }
@@ -63,6 +74,9 @@ export async function POST(req: NextRequest) {
         descripcion_visual_producto,
         imagen_producto_base64,
         openai_key: openaiKeyDescifrada,
+        cloudinary_name: usuario.cloudinary_name,
+        cloudinary_key: cloudinaryKeyDescifrada,
+        cloudinary_secret: cloudinarySecretDescifrado,
       }),
     });
 
