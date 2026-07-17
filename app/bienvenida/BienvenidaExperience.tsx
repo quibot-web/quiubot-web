@@ -315,7 +315,7 @@ export default function BienvenidaExperience() {
         .qb-lp .alt { background: var(--bg-alt); }
 
         /* ---- CAOS -> OLEADA DE COLOR -> CALMA ---- */
-        .qb-lp .caos-calma-stage { position: relative; max-width: 620px; margin: 0 auto; min-height: 430px; background: #fff; border-radius: 28px; border: 1px solid #ECE9F7; box-shadow: 0 20px 50px rgba(23,21,43,0.12); overflow: hidden; animation: qbShake 9s ease-in-out infinite; }
+        .qb-lp .caos-calma-stage { position: relative; max-width: 640px; margin: 0 auto; min-height: 400px; animation: qbShake 9s ease-in-out infinite; }
         @keyframes qbShake {
           0%, 32%, 44%, 100% { transform: translateX(0); }
           34% { transform: translateX(-3px); }
@@ -353,10 +353,10 @@ export default function BienvenidaExperience() {
         .qb-lp .pn-title { font-size: 14.5px; font-weight: 700; color: var(--ink); line-height: 1.3; }
         .qb-lp .pn-sub { font-size: 12.5px; color: var(--muted); margin-top: 3px; line-height: 1.4; }
 
-        .qb-lp .calma-wipe { position: absolute; inset: 0; display: flex; align-items: center; justify-content: center; background: linear-gradient(135deg, var(--purple-deep), var(--purple) 55%, var(--mint)); clip-path: circle(0% at 50% 46%); animation: qbWipe 9s ease-in-out infinite; }
+        .qb-lp .calma-wipe { position: absolute; inset: -30px -18px; display: flex; align-items: center; justify-content: center; background: linear-gradient(135deg, var(--purple-deep), var(--purple) 55%, var(--mint)); clip-path: circle(0% at 50% 46%); animation: qbWipe 9s ease-in-out infinite; }
         @keyframes qbWipe {
           0%, 38% { clip-path: circle(0% at 50% 46%); }
-          55%, 85% { clip-path: circle(85% at 50% 46%); }
+          55%, 85% { clip-path: circle(130% at 50% 46%); }
           97%, 100% { clip-path: circle(0% at 50% 46%); }
         }
         .qb-lp .calma-content { text-align: center; padding: 0 32px; opacity: 0; transform: translateY(8px); animation: qbCalmContent 9s ease-in-out infinite; }
@@ -507,7 +507,7 @@ export default function BienvenidaExperience() {
           .qb-lp .progress-fill.activo { width: 100% !important; }
           .qb-lp .hud-line { opacity: 1 !important; color: var(--ink) !important; }
           .qb-lp .pain-notif { opacity: 0 !important; }
-          .qb-lp .calma-wipe { clip-path: circle(100% at 50% 50%) !important; }
+          .qb-lp .calma-wipe { clip-path: circle(130% at 50% 46%) !important; }
           .qb-lp .calma-content { opacity: 1 !important; transform: none !important; }
           .qb-lp .qb-reveal { opacity: 1 !important; transform: none !important; transition: none !important; }
         }
