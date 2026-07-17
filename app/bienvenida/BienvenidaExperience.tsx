@@ -437,13 +437,13 @@ function SeccionVideo() {
 
   return (
     <section>
-      <div className="section-head qb-reveal">
+      <div className="section-head">
         <p className="eyebrow" style={{ textAlign: "center" }}>Míralo con tus propios ojos</p>
         <h2>{info.titulo || "¿Qué es Quiubot, exactamente?"}</h2>
         {info.descripcion && <p className="lead">{info.descripcion}</p>}
       </div>
 
-      <div className="video-card qb-reveal" onClick={() => setAbierto(true)}>
+      <div className="video-card" onClick={() => setAbierto(true)}>
         {miniatura ? (
           <img src={miniatura} alt="" className="video-thumb" />
         ) : (
