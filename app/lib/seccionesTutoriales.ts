@@ -1,4 +1,5 @@
 export const SECCIONES_TUTORIALES = [
+  { key: "bienvenida", label: "Bienvenida (video de presentación, público)" },
   { key: "inicio", label: "Inicio" },
   { key: "mi-marca", label: "Mi marca" },
   { key: "motor-estrategia", label: "Motor de Estrategia" },

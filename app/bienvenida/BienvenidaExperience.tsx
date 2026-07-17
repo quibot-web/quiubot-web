@@ -383,6 +383,97 @@ function DisolucionCanvas() {
   return <canvas ref={canvasRef} className="disolucion-canvas" />;
 }
 
+type InfoVideoPublico = {
+  configurado: boolean;
+  titulo?: string;
+  url_video?: string;
+  descripcion?: string;
+};
+
+function idYoutube(url: string): string | null {
+  if (url.includes("youtube.com/watch")) {
+    try {
+      return new URL(url).searchParams.get("v");
+    } catch {
+      return null;
+    }
+  }
+  if (url.includes("youtu.be/")) {
+    return url.split("youtu.be/")[1]?.split(/[?&]/)[0] || null;
+  }
+  return null;
+}
+
+function embedVideo(url: string): string | null {
+  const yt = idYoutube(url);
+  if (yt) return `https://www.youtube.com/embed/${yt}?autoplay=1`;
+  if (url.includes("vimeo.com/")) {
+    const id = url.split("vimeo.com/")[1]?.split(/[?&]/)[0];
+    return id ? `https://player.vimeo.com/video/${id}?autoplay=1` : null;
+  }
+  return null;
+}
+
+function miniaturaVideo(url: string): string | null {
+  const yt = idYoutube(url);
+  return yt ? `https://img.youtube.com/vi/${yt}/hqdefault.jpg` : null;
+}
+
+function SeccionVideo() {
+  const [info, setInfo] = useState<InfoVideoPublico | null>(null);
+  const [abierto, setAbierto] = useState(false);
+
+  useEffect(() => {
+    fetch("/api/tutoriales-publicos/bienvenida")
+      .then((r) => r.json())
+      .then(setInfo)
+      .catch(() => setInfo({ configurado: false }));
+  }, []);
+
+  if (!info?.configurado || !info.url_video) return null;
+
+  const embed = embedVideo(info.url_video);
+  const miniatura = miniaturaVideo(info.url_video);
+
+  return (
+    <section>
+      <div className="section-head qb-reveal">
+        <p className="eyebrow" style={{ textAlign: "center" }}>Míralo con tus propios ojos</p>
+        <h2>{info.titulo || "¿Qué es Quiubot, exactamente?"}</h2>
+        {info.descripcion && <p className="lead">{info.descripcion}</p>}
+      </div>
+
+      <div className="video-card qb-reveal" onClick={() => setAbierto(true)}>
+        {miniatura ? (
+          <img src={miniatura} alt="" className="video-thumb" />
+        ) : (
+          <div className="video-thumb-fallback" />
+        )}
+        <div className="video-play-btn">
+          <svg viewBox="0 0 24 24" width="26" height="26" fill="#4A3FAE">
+            <path d="M8 5v14l11-7z" />
+          </svg>
+        </div>
+      </div>
+
+      {abierto && (
+        <div className="video-modal-backdrop" onClick={() => setAbierto(false)}>
+          <div className="video-modal" onClick={(e) => e.stopPropagation()}>
+            <button className="video-modal-close" onClick={() => setAbierto(false)}>✕</button>
+            <div className="video-modal-frame">
+              {embed ? (
+                <iframe src={embed} allow="autoplay; fullscreen; picture-in-picture" allowFullScreen />
+              ) : (
+                <video src={info.url_video} controls autoPlay />
+              )}
+            </div>
+          </div>
+        </div>
+      )}
+    </section>
+  );
+}
+
 export default function BienvenidaExperience() {
   const [pasoActivo, setPasoActivo] = useState(0);
   const [progreso, setProgreso] = useState(0);
@@ -504,6 +595,24 @@ export default function BienvenidaExperience() {
         .qb-lp .alt { background: var(--bg-alt); }
 
         /* ---- CAOS -> OLEADA DE COLOR -> CALMA (ancho completo) ---- */
+        /* ---- VIDEO DE PRESENTACION ---- */
+        .qb-lp .video-card { position: relative; max-width: 760px; margin: 0 auto; border-radius: 20px; overflow: hidden; aspect-ratio: 16 / 9; background: linear-gradient(135deg, var(--purple-deep), var(--purple)); cursor: pointer; border: 1px dashed var(--purple-light); box-shadow: 0 20px 50px rgba(74,63,174,0.18); }
+        .qb-lp .video-thumb { width: 100%; height: 100%; object-fit: cover; display: block; }
+        .qb-lp .video-thumb-fallback { width: 100%; height: 100%; background-image: radial-gradient(rgba(255,255,255,0.16) 1px, transparent 1px); background-size: 22px 22px; }
+        .qb-lp .video-play-btn { position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%); width: 72px; height: 72px; border-radius: 50%; background: #fff; display: flex; align-items: center; justify-content: center; box-shadow: 0 10px 30px rgba(0,0,0,0.25); animation: qbPlayPulse 2.4s infinite; transition: transform .2s ease; }
+        .qb-lp .video-play-btn svg { margin-left: 3px; }
+        .qb-lp .video-card:hover .video-play-btn { transform: translate(-50%, -50%) scale(1.07); }
+        @keyframes qbPlayPulse {
+          0% { box-shadow: 0 0 0 0 rgba(255,255,255,0.5), 0 10px 30px rgba(0,0,0,0.25); }
+          70% { box-shadow: 0 0 0 18px rgba(255,255,255,0), 0 10px 30px rgba(0,0,0,0.25); }
+          100% { box-shadow: 0 0 0 0 rgba(255,255,255,0), 0 10px 30px rgba(0,0,0,0.25); }
+        }
+        .qb-lp .video-modal-backdrop { position: fixed; inset: 0; background: rgba(23,21,43,0.75); z-index: 2000; display: flex; align-items: center; justify-content: center; padding: 24px; }
+        .qb-lp .video-modal { width: 100%; max-width: 860px; background: #000; border-radius: 16px; overflow: hidden; position: relative; }
+        .qb-lp .video-modal-close { position: absolute; top: 10px; right: 10px; z-index: 2; width: 34px; height: 34px; border-radius: 50%; background: rgba(255,255,255,0.92); border: none; cursor: pointer; font-size: 15px; color: var(--ink); }
+        .qb-lp .video-modal-frame { position: relative; padding-top: 56.25%; }
+        .qb-lp .video-modal-frame iframe, .qb-lp .video-modal-frame video { position: absolute; inset: 0; width: 100%; height: 100%; border: none; }
+
         .qb-lp .caos-calma-band { position: relative; width: 100vw; margin-left: calc(50% - 50vw); margin-right: calc(50% - 50vw); min-height: 420px; overflow: hidden; padding: 44px 24px; }
         .qb-lp .caos-calma-stage { position: relative; max-width: 640px; margin: 0 auto; min-height: 330px; animation: qbShake 14s ease-in-out infinite; z-index: 1; }
         @keyframes qbShake {
@@ -822,6 +931,8 @@ export default function BienvenidaExperience() {
           </div>
         </div>
       </section>
+
+      <SeccionVideo />
 
       <section className="alt">
         <div className="section-head qb-reveal">
