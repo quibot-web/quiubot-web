@@ -206,7 +206,7 @@ function DisolucionCanvas() {
 
     const reduce = window.matchMedia("(prefers-reduced-motion: reduce)").matches;
     const colores = ["#7F77DD", "#4A3FAE", "#1FA97C", "#C4BFF0"];
-    const CICLO = 9;
+    const CICLO = 14;
 
     let W = 0;
     let H = 0;
@@ -305,33 +305,30 @@ function DisolucionCanvas() {
           let y = origY;
           let alpha = 0;
 
-          if (t < 0.4) {
+          if (t < 0.257) {
             alpha = 0;
-          } else if (t < 0.55) {
-            const p2 = easeOut((t - 0.4) / 0.15);
+          } else if (t < 0.354) {
+            const p2 = easeOut((t - 0.257) / 0.097);
             x = lerp(origX, explX, p2);
             y = lerp(origY, explY, p2);
             alpha = p2;
-          } else if (t < 0.74) {
-            const p2 = easeInOut((t - 0.55) / 0.19);
+          } else if (t < 0.476) {
+            const p2 = easeInOut((t - 0.354) / 0.122);
             x = lerp(explX, destX, p2);
             y = lerp(explY, destY, p2);
             alpha = 1;
             glowAlpha = Math.max(glowAlpha, p2);
-          } else if (t < 0.8) {
+          } else if (t < 0.514) {
             x = destX;
             y = destY;
             alpha = 1;
             glowAlpha = 1;
-          } else if (t < 0.88) {
-            const p2 = (t - 0.8) / 0.08;
+          } else if (t < 0.571) {
+            const p2 = (t - 0.514) / 0.057;
             x = destX;
             y = destY;
             alpha = 1 - p2;
-            glowAlpha = 1;
-          } else if (t < 0.94) {
-            alpha = 0;
-            glowAlpha = 1 - (t - 0.88) / 0.06;
+            glowAlpha = 1 - p2;
           } else {
             alpha = 0;
             glowAlpha = 0;
@@ -497,35 +494,35 @@ export default function BienvenidaExperience() {
 
         /* ---- CAOS -> OLEADA DE COLOR -> CALMA (ancho completo) ---- */
         .qb-lp .caos-calma-band { position: relative; width: 100vw; margin-left: calc(50% - 50vw); margin-right: calc(50% - 50vw); min-height: 420px; overflow: hidden; padding: 44px 24px; }
-        .qb-lp .caos-calma-stage { position: relative; max-width: 640px; margin: 0 auto; min-height: 330px; animation: qbShake 9s ease-in-out infinite; z-index: 1; }
+        .qb-lp .caos-calma-stage { position: relative; max-width: 640px; margin: 0 auto; min-height: 330px; animation: qbShake 14s ease-in-out infinite; z-index: 1; }
         @keyframes qbShake {
-          0%, 32%, 44%, 100% { transform: translateX(0); }
-          34% { transform: translateX(-3px); }
-          36.5% { transform: translateX(3px); }
-          39% { transform: translateX(-3px); }
-          41.5% { transform: translateX(2px); }
+          0%, 20%, 29%, 100% { transform: translateX(0); }
+          21.4% { transform: translateX(-3px); }
+          23% { transform: translateX(3px); }
+          24.5% { transform: translateX(-3px); }
+          26% { transform: translateX(2px); }
         }
         .qb-lp .pain-notif { position: absolute; width: min(360px, 82vw); display: flex; gap: 12px; align-items: flex-start; background: #fff; border: 1px solid #F1EFF9; border-radius: 16px; padding: 14px 16px; box-shadow: 0 16px 32px rgba(23,21,43,0.14); opacity: 0; }
-        .qb-lp .pn-1 { top: 0; left: 0; --rot: -3deg; animation: qbNotif1 9s ease-in-out infinite; }
-        .qb-lp .pn-2 { top: 120px; left: 130px; --rot: 2.5deg; animation: qbNotif2 9s ease-in-out infinite; }
-        .qb-lp .pn-3 { top: 246px; left: 12px; --rot: -1.5deg; animation: qbNotif3 9s ease-in-out infinite; }
+        .qb-lp .pn-1 { top: 0; left: 0; --rot: -3deg; animation: qbNotif1 14s ease-in-out infinite; }
+        .qb-lp .pn-2 { top: 120px; left: 130px; --rot: 2.5deg; animation: qbNotif2 14s ease-in-out infinite; }
+        .qb-lp .pn-3 { top: 246px; left: 12px; --rot: -1.5deg; animation: qbNotif3 14s ease-in-out infinite; }
         @keyframes qbNotif1 {
           0%, 100% { opacity: 0; transform: translateY(-22px) scale(0.92) rotate(var(--rot)); }
           5% { opacity: 1; transform: translateY(0) scale(1) rotate(var(--rot)); }
-          42% { opacity: 1; transform: translateY(0) scale(1) rotate(var(--rot)); }
-          48% { opacity: 0; transform: translateY(-8px) scale(0.96) rotate(var(--rot)); }
+          25.7% { opacity: 1; transform: translateY(0) scale(1) rotate(var(--rot)); }
+          30.7% { opacity: 0; transform: translateY(-8px) scale(0.96) rotate(var(--rot)); }
         }
         @keyframes qbNotif2 {
           0%, 100% { opacity: 0; transform: translateY(-22px) scale(0.92) rotate(var(--rot)); }
-          13% { opacity: 1; transform: translateY(0) scale(1) rotate(var(--rot)); }
-          42% { opacity: 1; transform: translateY(0) scale(1) rotate(var(--rot)); }
-          48% { opacity: 0; transform: translateY(-8px) scale(0.96) rotate(var(--rot)); }
+          12.9% { opacity: 1; transform: translateY(0) scale(1) rotate(var(--rot)); }
+          25.7% { opacity: 1; transform: translateY(0) scale(1) rotate(var(--rot)); }
+          30.7% { opacity: 0; transform: translateY(-8px) scale(0.96) rotate(var(--rot)); }
         }
         @keyframes qbNotif3 {
           0%, 100% { opacity: 0; transform: translateY(-22px) scale(0.92) rotate(var(--rot)); }
-          21% { opacity: 1; transform: translateY(0) scale(1) rotate(var(--rot)); }
-          42% { opacity: 1; transform: translateY(0) scale(1) rotate(var(--rot)); }
-          48% { opacity: 0; transform: translateY(-8px) scale(0.96) rotate(var(--rot)); }
+          20.7% { opacity: 1; transform: translateY(0) scale(1) rotate(var(--rot)); }
+          25.7% { opacity: 1; transform: translateY(0) scale(1) rotate(var(--rot)); }
+          30.7% { opacity: 0; transform: translateY(-8px) scale(0.96) rotate(var(--rot)); }
         }
         .qb-lp .pn-badge { position: absolute; top: -5px; right: -5px; width: 12px; height: 12px; border-radius: 50%; background: #C24545; box-shadow: 0 0 0 3px #fff; }
         .qb-lp .pn-icon { width: 36px; height: 36px; border-radius: 10px; background: rgba(194,69,69,0.1); color: #C24545; display: flex; align-items: center; justify-content: center; flex-shrink: 0; }
@@ -536,18 +533,18 @@ export default function BienvenidaExperience() {
         .qb-lp .pn-sub { font-size: 12.5px; color: var(--muted); margin-top: 3px; line-height: 1.4; }
 
         .qb-lp .disolucion-canvas { position: absolute; inset: 0; width: 100%; height: 100%; }
-        .qb-lp .logo-render { position: relative; z-index: 4; width: 68px; height: 68px; border-radius: 20px; background: #fff; box-shadow: 0 16px 40px rgba(74,63,174,0.32); display: flex; align-items: center; justify-content: center; margin: 0 auto 18px; opacity: 0; transform: scale(0.7); animation: qbLogoRender 9s ease-in-out infinite; }
+        .qb-lp .logo-render { position: relative; z-index: 4; width: 68px; height: 68px; border-radius: 20px; background: #fff; box-shadow: 0 16px 40px rgba(74,63,174,0.32); display: flex; align-items: center; justify-content: center; margin: 0 auto 18px; opacity: 0; transform: scale(0.7); animation: qbLogoRender 14s ease-in-out infinite; }
         .qb-lp .logo-render img { width: 38px; height: 38px; }
         @keyframes qbLogoRender {
-          0%, 76% { opacity: 0; transform: scale(0.7); }
-          82%, 88% { opacity: 1; transform: scale(1); }
-          95%, 100% { opacity: 0; transform: scale(0.85); }
+          0%, 51% { opacity: 0; transform: scale(0.7); }
+          57%, 85.5% { opacity: 1; transform: scale(1); }
+          94%, 100% { opacity: 0; transform: scale(0.85); }
         }
-        .qb-lp .calma-content { position: relative; z-index: 4; text-align: center; padding: 0 32px; opacity: 0; transform: translateY(10px); animation: qbCalmContent 9s ease-in-out infinite; pointer-events: none; }
+        .qb-lp .calma-content { position: relative; z-index: 4; text-align: center; padding: 0 32px; opacity: 0; transform: translateY(10px); animation: qbCalmContent 14s ease-in-out infinite; pointer-events: none; }
         @keyframes qbCalmContent {
-          0%, 80% { opacity: 0; transform: translateY(10px); }
-          86%, 90% { opacity: 1; transform: translateY(0); }
-          96%, 100% { opacity: 0; transform: translateY(-6px); }
+          0%, 54% { opacity: 0; transform: translateY(10px); }
+          60%, 85% { opacity: 1; transform: translateY(0); }
+          93%, 100% { opacity: 0; transform: translateY(-6px); }
         }
         .qb-lp .calma-content h4 { color: var(--ink); font-size: 21px; font-weight: 700; letter-spacing: -0.01em; margin-bottom: 8px; }
         .qb-lp .calma-content p { color: var(--muted); font-size: 13.5px; line-height: 1.5; max-width: 320px; margin: 0 auto; }
