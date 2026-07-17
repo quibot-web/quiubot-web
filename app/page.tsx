@@ -6,6 +6,14 @@ import HomeInicio from "@/app/components/HomeInicio";
 import TutorialVideo from "@/app/components/TutorialVideo";
 import TourGuiado from "@/app/components/TourGuiado";
 
+function Icono({ children }: { children: React.ReactNode }) {
+  return (
+    <svg viewBox="0 0 24 24" width="17" height="17" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+      {children}
+    </svg>
+  );
+}
+
 export default function Home() {
   const { data: session } = useSession();
   const router = useRouter();
@@ -33,6 +41,8 @@ export default function Home() {
   const [metaInfo, setMetaInfo] = useState<{ conectado: boolean; nombre: string | null; cuentaPublicitaria: string | null; pagina: string | null } | null>(null);
 
   const [rol, setRol] = useState<string | null>(null);
+  const [colapsado, setColapsado] = useState(false);
+  const [adminAbierto, setAdminAbierto] = useState(false);
 
   const cargarRol = () => {
     fetch("/api/usuario/rol").then(r => r.json()).then(data => setRol(data.rol));
@@ -227,35 +237,183 @@ export default function Home() {
           80% { transform: rotate(-4deg); }
         }
         .shake-bell { animation: shake-bell 0.6s ease-in-out; transform-origin: top center; }
+
+        @keyframes qbOrbPulse {
+          0% { box-shadow: 0 0 0 0 rgba(16,185,129,0.5); }
+          70% { box-shadow: 0 0 0 7px rgba(16,185,129,0); }
+          100% { box-shadow: 0 0 0 0 rgba(16,185,129,0); }
+        }
+        .qb-sidebar { transition: width .25s ease; position: relative; }
+        .qb-sidebar-toggle {
+          position: absolute; top: 22px; right: -12px; width: 24px; height: 24px; border-radius: 50%;
+          background: #fff; border: 1px solid #e8e8e6; box-shadow: 0 2px 6px rgba(0,0,0,0.1);
+          display: flex; align-items: center; justify-content: center; cursor: pointer; z-index: 6;
+        }
+        .qb-sidebar-toggle:hover { border-color: #534AB7; color: #534AB7; }
+        .qb-orb { width: 8px; height: 8px; border-radius: 50%; background: #10b981; animation: qbOrbPulse 2.4s infinite; flex-shrink: 0; }
+        .qb-logo-mark {
+          width: 34px; height: 34px; border-radius: 9px; flex-shrink: 0; overflow: hidden;
+          display: flex; align-items: center; justify-content: center; background: #534AB7;
+        }
+        .qb-nav-item {
+          display: flex; align-items: center; gap: 10px; padding: 9px 10px; border-radius: 10px;
+          color: #666; font-size: 13.5px; text-decoration: none; cursor: pointer; position: relative;
+          transition: background .15s ease, color .15s ease;
+        }
+        .qb-nav-item:hover { background: #f9f9fc; color: #534AB7; }
+        .qb-nav-item.activo { background: #f3f2fe; color: #534AB7; font-weight: 600; }
+        .qb-nav-icon {
+          width: 28px; height: 28px; border-radius: 8px; background: #f3f2fe; color: #534AB7;
+          display: flex; align-items: center; justify-content: center; flex-shrink: 0;
+          transition: background .15s ease, color .15s ease;
+        }
+        .qb-nav-item.activo .qb-nav-icon, .qb-nav-item:hover .qb-nav-icon { background: #534AB7; color: #fff; }
+        .qb-nav-label { white-space: nowrap; overflow: hidden; }
+        .qb-sidebar.colapsado .qb-nav-label,
+        .qb-sidebar.colapsado .qb-logo-texto,
+        .qb-sidebar.colapsado .qb-footer-info,
+        .qb-sidebar.colapsado .qb-admin-tag { display: none; }
+        .qb-tooltip {
+          position: absolute; left: calc(100% + 10px); top: 50%; transform: translateY(-50%);
+          background: #1a1a1a; color: #fff; font-size: 12px; padding: 5px 10px; border-radius: 6px;
+          white-space: nowrap; opacity: 0; pointer-events: none; transition: opacity .15s ease; z-index: 30;
+        }
+        .qb-sidebar.colapsado .qb-nav-item:hover .qb-tooltip,
+        .qb-sidebar.colapsado .qb-admin-toggle:hover .qb-tooltip { opacity: 1; }
+        .qb-admin-toggle {
+          display: flex; align-items: center; gap: 10px; padding: 9px 10px; border-radius: 10px; cursor: pointer;
+          color: #534AB7; font-weight: 600; font-size: 13px; background: transparent; border: none; width: 100%;
+          text-align: left; position: relative;
+        }
+        .qb-admin-toggle:hover { background: #f9f9fc; }
+        .qb-admin-toggle .qb-nav-icon { background: #ece9fb; }
+        .qb-admin-chevron { margin-left: auto; transition: transform .2s ease; flex-shrink: 0; }
+        .qb-admin-chevron.abierto { transform: rotate(90deg); }
+        .qb-admin-panel {
+          max-height: 0; overflow: hidden; transition: max-height .3s ease, padding .3s ease, margin .3s ease;
+          background: linear-gradient(180deg, #f7f6ff, #fcfbff); border-radius: 12px;
+        }
+        .qb-admin-panel.abierto { max-height: 280px; padding: 8px; margin-top: 4px; border: 1px dashed #d8d3f5; }
+        .qb-admin-item {
+          display: flex; align-items: center; gap: 9px; padding: 7px 8px; border-radius: 8px;
+          color: #534AB7; font-size: 12.5px; text-decoration: none; font-weight: 500;
+        }
+        .qb-admin-item:hover { background: #fff; }
+        .qb-admin-item .qb-nav-icon { width: 24px; height: 24px; background: #fff; }
+        .qb-footer-btn { display: flex; align-items: center; gap: 8px; justify-content: flex-start; }
+        .qb-sidebar.colapsado .qb-footer-btn { justify-content: center; }
       `}</style>
-      <div style={{ width: 220, background: "#fff", borderRight: "1px solid #e8e8e6", padding: "1.5rem 1rem", display: "flex", flexDirection: "column", gap: 4 }}>
-        <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: "1.5rem" }}>
-          <img src="/marca/icono-quiubot.svg" alt="" width={28} height={28} style={{ borderRadius: 7 }} />
-          <div style={{ fontSize: 20, fontWeight: 600, letterSpacing: "-0.5px" }}>
-            quiu<span style={{ color: "#7F77DD" }}>bot</span>
+      <div className={`qb-sidebar${colapsado ? " colapsado" : ""}`} style={{ width: colapsado ? 72 : 232, background: "#fff", borderRight: "1px solid #e8e8e6", padding: "1.25rem 0.85rem", display: "flex", flexDirection: "column", gap: 4, flexShrink: 0 }}>
+
+        <div className="qb-sidebar-toggle" onClick={() => setColapsado((v) => !v)} title={colapsado ? "Expandir menú" : "Contraer menú"}>
+          <Icono>
+            {colapsado ? <path d="M9 6l6 6-6 6" /> : <path d="M15 6l-6 6 6 6" />}
+          </Icono>
+        </div>
+
+        <div style={{ display: "flex", alignItems: "center", gap: 10, marginBottom: "0.75rem", padding: "0 2px" }}>
+          <div className="qb-logo-mark">
+            <img src="/marca/icono-quiubot.svg" alt="" width={20} height={20} />
+          </div>
+          <div className="qb-logo-texto" style={{ display: "flex", flexDirection: "column", minWidth: 0 }}>
+            <div style={{ fontSize: 17, fontWeight: 600, letterSpacing: "-0.3px", whiteSpace: "nowrap" }}>
+              quiu<span style={{ color: "#7F77DD" }}>bot</span>
+            </div>
+            <div style={{ display: "flex", alignItems: "center", gap: 5, marginTop: 1 }}>
+              <span className="qb-orb" />
+              <span style={{ fontSize: 10, color: "#999", fontFamily: "monospace", letterSpacing: "0.02em" }}>sistema activo</span>
+            </div>
           </div>
         </div>
-        <div data-tour="sidebar-inicio" onClick={() => setTab("inicio")} style={{ padding: "8px 12px", borderRadius: 8, cursor: "pointer", background: tab === "inicio" ? "#f3f2fe" : "transparent", color: tab === "inicio" ? "#534AB7" : "#666", fontWeight: tab === "inicio" ? 500 : 400, fontSize: 14 }}>
-          🏠 Inicio
+
+        <div data-tour="sidebar-inicio" onClick={() => setTab("inicio")} className={`qb-nav-item${tab === "inicio" ? " activo" : ""}`}>
+          <span className="qb-nav-icon"><Icono><path d="M3 11l9-8 9 8" /><path d="M5 10v9a1 1 0 001 1h4v-6h4v6h4a1 1 0 001-1v-9" /></Icono></span>
+          <span className="qb-nav-label">Inicio</span>
+          <span className="qb-tooltip">Inicio</span>
         </div>
-        <a href="/marca" style={{ padding: "8px 12px", borderRadius: 8, color: "#666", fontSize: 14, textDecoration: "none" }}>🎨 Mi marca</a>
-        <a data-tour="sidebar-estrategia" href="/estrategia" style={{ padding: "8px 12px", borderRadius: 8, color: "#666", fontSize: 14, textDecoration: "none" }}>🎯 Motor de Estrategia</a>
-        <a href="/campanas" style={{ padding: "8px 12px", borderRadius: 8, color: "#666", fontSize: 14, textDecoration: "none" }}>📊 Mis Campañas</a>
-        <div onClick={() => setTab("album")} style={{ padding: "8px 12px", borderRadius: 8, cursor: "pointer", background: tab === "album" ? "#f3f2fe" : "transparent", color: tab === "album" ? "#534AB7" : "#666", fontWeight: tab === "album" ? 500 : 400, fontSize: 14 }}>
-          📸 Álbum Creativos
+
+        <a href="/marca" className="qb-nav-item">
+          <span className="qb-nav-icon"><Icono><path d="M20.59 13.41L11 3.83A2 2 0 009.57 3H4a1 1 0 00-1 1v5.57a2 2 0 00.59 1.41l9.58 9.59a2 2 0 002.83 0l4.59-4.59a2 2 0 000-2.83z" /><circle cx="7.5" cy="7.5" r="1.2" /></Icono></span>
+          <span className="qb-nav-label">Mi marca</span>
+          <span className="qb-tooltip">Mi marca</span>
+        </a>
+
+        <a data-tour="sidebar-estrategia" href="/estrategia" className="qb-nav-item">
+          <span className="qb-nav-icon"><Icono><circle cx="12" cy="12" r="9" /><circle cx="12" cy="12" r="5" /><circle cx="12" cy="12" r="1" fill="currentColor" /></Icono></span>
+          <span className="qb-nav-label">Motor de Estrategia</span>
+          <span className="qb-tooltip">Motor de Estrategia</span>
+        </a>
+
+        <a href="/campanas" className="qb-nav-item">
+          <span className="qb-nav-icon"><Icono><rect x="4" y="12" width="3" height="8" /><rect x="10.5" y="6" width="3" height="14" /><rect x="17" y="9" width="3" height="11" /></Icono></span>
+          <span className="qb-nav-label">Mis Campañas</span>
+          <span className="qb-tooltip">Mis Campañas</span>
+        </a>
+
+        <div onClick={() => setTab("album")} className={`qb-nav-item${tab === "album" ? " activo" : ""}`}>
+          <span className="qb-nav-icon"><Icono><rect x="3" y="3" width="18" height="18" rx="2" /><circle cx="8.5" cy="8.5" r="1.4" /><path d="M21 15l-5-5L5 21" /></Icono></span>
+          <span className="qb-nav-label">Álbum Creativos</span>
+          <span className="qb-tooltip">Álbum Creativos</span>
         </div>
-        <div onClick={() => setTab("integraciones")} style={{ padding: "8px 12px", borderRadius: 8, cursor: "pointer", background: tab === "integraciones" ? "#f3f2fe" : "transparent", color: tab === "integraciones" ? "#534AB7" : "#666", fontWeight: tab === "integraciones" ? 500 : 400, fontSize: 14 }}>
-          🔌 Integraciones
+
+        <div onClick={() => setTab("integraciones")} className={`qb-nav-item${tab === "integraciones" ? " activo" : ""}`}>
+          <span className="qb-nav-icon"><Icono><path d="M9 2v4M15 2v4M6 8h12l-1 6a5 5 0 01-10 0L6 8z" /><path d="M12 18v4" /></Icono></span>
+          <span className="qb-nav-label">Integraciones</span>
+          <span className="qb-tooltip">Integraciones</span>
         </div>
-        <a data-tour="sidebar-plan" href="/billing" style={{ padding: "8px 12px", borderRadius: 8, color: "#666", fontSize: 14, textDecoration: "none" }}>💳 Mi plan</a>
-        {rol === "admin" && (<a href="/admin/playbook" style={{ padding: "8px 12px", borderRadius: 8, color: "#7F77DD", fontSize: 14, textDecoration: "none", fontWeight: 500, borderTop: "1px solid #e8e8e6", marginTop: 8, paddingTop: 16 }}>🛡️ Playbook (Admin)</a>)}
-        {rol === "admin" && (<a href="/admin/objetivos" style={{ padding: "8px 12px", borderRadius: 8, color: "#7F77DD", fontSize: 14, textDecoration: "none", fontWeight: 500 }}>🎯 Objetivos (Admin)</a>)}
-        {rol === "admin" && (<a href="/admin/conocimiento" style={{ padding: "8px 12px", borderRadius: 8, color: "#7F77DD", fontSize: 14, textDecoration: "none", fontWeight: 500 }}>🧠 Conocimiento (Admin)</a>)}
-        {rol === "admin" && (<a href="/admin/tutoriales" style={{ padding: "8px 12px", borderRadius: 8, color: "#7F77DD", fontSize: 14, textDecoration: "none", fontWeight: 500 }}>🎬 Tutoriales (Admin)</a>)}
+
+        <a data-tour="sidebar-plan" href="/billing" className="qb-nav-item">
+          <span className="qb-nav-icon"><Icono><rect x="2" y="5" width="20" height="14" rx="2" /><path d="M2 10h20" /></Icono></span>
+          <span className="qb-nav-label">Mi plan</span>
+          <span className="qb-tooltip">Mi plan</span>
+        </a>
+
+        {rol === "admin" && (
+          <div style={{ borderTop: "1px solid #e8e8e6", marginTop: 8, paddingTop: 8 }}>
+            <button
+              className="qb-admin-toggle"
+              onClick={() => {
+                if (colapsado) {
+                  setColapsado(false);
+                  setAdminAbierto(true);
+                } else {
+                  setAdminAbierto((v) => !v);
+                }
+              }}
+            >
+              <span className="qb-nav-icon"><Icono><path d="M12 2l7 4v6c0 5-3.5 8-7 10-3.5-2-7-5-7-10V6l7-4z" /></Icono></span>
+              <span className="qb-nav-label">Admin</span>
+              <span className="qb-tooltip">Panel de Admin</span>
+              <span className={`qb-admin-chevron${adminAbierto ? " abierto" : ""} qb-nav-label`}>
+                <Icono><path d="M9 6l6 6-6 6" /></Icono>
+              </span>
+            </button>
+
+            <div className={`qb-admin-panel${adminAbierto && !colapsado ? " abierto" : ""}`}>
+              <div className="qb-admin-tag">MODO ADMIN</div>
+              <a href="/admin/playbook" className="qb-admin-item">
+                <span className="qb-nav-icon"><Icono><path d="M2 5a2 2 0 012-2h6v18H4a2 2 0 01-2-2V5z" /><path d="M22 5a2 2 0 00-2-2h-6v18h6a2 2 0 002-2V5z" /></Icono></span>
+                Playbook
+              </a>
+              <a href="/admin/objetivos" className="qb-admin-item">
+                <span className="qb-nav-icon"><Icono><path d="M5 21V4M5 4h13l-3 4 3 4H5" /></Icono></span>
+                Objetivos
+              </a>
+              <a href="/admin/conocimiento" className="qb-admin-item">
+                <span className="qb-nav-icon"><Icono><path d="M9 18h6M10 22h4M12 2a6 6 0 00-6 6c0 2 1 3 2 4.5S9 15 9 16h6c0-1 0-2 1-3.5S18 10 18 8a6 6 0 00-6-6z" /></Icono></span>
+                Conocimiento
+              </a>
+              <a href="/admin/tutoriales" className="qb-admin-item">
+                <span className="qb-nav-icon"><Icono><rect x="2" y="3" width="20" height="18" rx="2" /><path d="M10 8l6 4-6 4V8z" /></Icono></span>
+                Tutoriales
+              </a>
+            </div>
+          </div>
+        )}
 
         <div style={{ marginTop: "auto", borderTop: "1px solid #e8e8e6", paddingTop: 12 }}>
           {session?.user && (
-            <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 8 }}>
+            <div className="qb-footer-info" style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 8 }}>
               <div style={{ width: 30, height: 30, borderRadius: "50%", background: "#7F77DD", display: "flex", alignItems: "center", justifyContent: "center", color: "#fff", fontSize: 13, fontWeight: 600, flexShrink: 0 }}>
                 {session.user.name?.[0]?.toUpperCase() ?? "U"}
               </div>
@@ -265,8 +423,9 @@ export default function Home() {
               </div>
             </div>
           )}
-          <button onClick={() => signOut({ callbackUrl: "/login" })} style={{ width: "100%", padding: "7px 12px", borderRadius: 8, border: "1px solid #e8e8e6", background: "transparent", color: "#666", fontSize: 13, cursor: "pointer", textAlign: "left" }}>
-            Cerrar sesión
+          <button onClick={() => signOut({ callbackUrl: "/login" })} className="qb-footer-btn" style={{ width: "100%", padding: "7px 10px", borderRadius: 8, border: "1px solid #e8e8e6", background: "transparent", color: "#666", fontSize: 13, cursor: "pointer" }} title="Cerrar sesión">
+            <Icono><path d="M9 21H5a2 2 0 01-2-2V5a2 2 0 012-2h4" /><path d="M16 17l5-5-5-5" /><path d="M21 12H9" /></Icono>
+            <span className="qb-nav-label">Cerrar sesión</span>
           </button>
         </div>
       </div>
