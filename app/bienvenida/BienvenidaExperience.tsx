@@ -314,8 +314,9 @@ export default function BienvenidaExperience() {
         .qb-lp .section-head p.lead { font-size: 16px; color: var(--muted); margin-top: 14px; line-height: 1.55; }
         .qb-lp .alt { background: var(--bg-alt); }
 
-        /* ---- CAOS -> OLEADA DE COLOR -> CALMA ---- */
-        .qb-lp .caos-calma-stage { position: relative; max-width: 640px; margin: 0 auto; min-height: 400px; animation: qbShake 9s ease-in-out infinite; }
+        /* ---- CAOS -> OLEADA DE COLOR -> CALMA (ancho completo) ---- */
+        .qb-lp .caos-calma-band { position: relative; width: 100vw; margin-left: calc(50% - 50vw); margin-right: calc(50% - 50vw); min-height: 420px; overflow: hidden; padding: 44px 24px; }
+        .qb-lp .caos-calma-stage { position: relative; max-width: 640px; margin: 0 auto; min-height: 330px; animation: qbShake 9s ease-in-out infinite; z-index: 1; }
         @keyframes qbShake {
           0%, 32%, 44%, 100% { transform: translateX(0); }
           34% { transform: translateX(-3px); }
@@ -324,9 +325,9 @@ export default function BienvenidaExperience() {
           41.5% { transform: translateX(2px); }
         }
         .qb-lp .pain-notif { position: absolute; width: min(360px, 82vw); display: flex; gap: 12px; align-items: flex-start; background: #fff; border: 1px solid #F1EFF9; border-radius: 16px; padding: 14px 16px; box-shadow: 0 16px 32px rgba(23,21,43,0.14); opacity: 0; }
-        .qb-lp .pn-1 { top: 18px; left: 18px; --rot: -3deg; animation: qbNotif1 9s ease-in-out infinite; }
-        .qb-lp .pn-2 { top: 140px; left: 148px; --rot: 2.5deg; animation: qbNotif2 9s ease-in-out infinite; }
-        .qb-lp .pn-3 { top: 268px; left: 30px; --rot: -1.5deg; animation: qbNotif3 9s ease-in-out infinite; }
+        .qb-lp .pn-1 { top: 0; left: 0; --rot: -3deg; animation: qbNotif1 9s ease-in-out infinite; }
+        .qb-lp .pn-2 { top: 120px; left: 130px; --rot: 2.5deg; animation: qbNotif2 9s ease-in-out infinite; }
+        .qb-lp .pn-3 { top: 246px; left: 12px; --rot: -1.5deg; animation: qbNotif3 9s ease-in-out infinite; }
         @keyframes qbNotif1 {
           0%, 100% { opacity: 0; transform: translateY(-22px) scale(0.92) rotate(var(--rot)); }
           5% { opacity: 1; transform: translateY(0) scale(1) rotate(var(--rot)); }
@@ -353,16 +354,16 @@ export default function BienvenidaExperience() {
         .qb-lp .pn-title { font-size: 14.5px; font-weight: 700; color: var(--ink); line-height: 1.3; }
         .qb-lp .pn-sub { font-size: 12.5px; color: var(--muted); margin-top: 3px; line-height: 1.4; }
 
-        .qb-lp .calma-wipe { position: absolute; inset: -30px -18px; display: flex; align-items: center; justify-content: center; background: linear-gradient(135deg, var(--purple-deep), var(--purple) 55%, var(--mint)); clip-path: circle(0% at 50% 46%); animation: qbWipe 9s ease-in-out infinite; }
+        .qb-lp .calma-wipe { position: absolute; inset: 0; display: flex; align-items: center; justify-content: center; background: linear-gradient(120deg, var(--purple-deep), var(--purple) 55%, var(--mint)); transform: scaleX(0); transform-origin: 50% 50%; animation: qbWipe 9s ease-in-out infinite; z-index: 2; }
         @keyframes qbWipe {
-          0%, 38% { clip-path: circle(0% at 50% 46%); }
-          55%, 85% { clip-path: circle(130% at 50% 46%); }
-          97%, 100% { clip-path: circle(0% at 50% 46%); }
+          0%, 38% { transform: scaleX(0); }
+          55%, 85% { transform: scaleX(1); }
+          97%, 100% { transform: scaleX(0); }
         }
         .qb-lp .calma-content { text-align: center; padding: 0 32px; opacity: 0; transform: translateY(8px); animation: qbCalmContent 9s ease-in-out infinite; }
         @keyframes qbCalmContent {
-          0%, 52% { opacity: 0; transform: translateY(8px); }
-          60%, 80% { opacity: 1; transform: translateY(0); }
+          0%, 54% { opacity: 0; transform: translateY(8px); }
+          62%, 80% { opacity: 1; transform: translateY(0); }
           90%, 100% { opacity: 0; transform: translateY(-6px); }
         }
         .qb-lp .calma-check { width: 52px; height: 52px; border-radius: 50%; background: rgba(255,255,255,0.16); border: 1.5px solid rgba(255,255,255,0.5); display: flex; align-items: center; justify-content: center; margin: 0 auto 16px; }
@@ -484,6 +485,7 @@ export default function BienvenidaExperience() {
         .qb-lp footer a { color: var(--muted); text-decoration: underline; }
 
         @media (max-width: 860px) {
+          .qb-lp .caos-calma-band { min-height: 0; padding: 28px 16px; }
           .qb-lp .caos-calma-stage { min-height: 0; animation: none; }
           .qb-lp .pain-notif { position: static; width: 100%; margin-bottom: 12px; }
           .qb-lp .hero { grid-template-columns: 1fr; padding-top: 32px; }
@@ -507,7 +509,7 @@ export default function BienvenidaExperience() {
           .qb-lp .progress-fill.activo { width: 100% !important; }
           .qb-lp .hud-line { opacity: 1 !important; color: var(--ink) !important; }
           .qb-lp .pain-notif { opacity: 0 !important; }
-          .qb-lp .calma-wipe { clip-path: circle(130% at 50% 46%) !important; }
+          .qb-lp .calma-wipe { transform: scaleX(1) !important; }
           .qb-lp .calma-content { opacity: 1 !important; transform: none !important; }
           .qb-lp .qb-reveal { opacity: 1 !important; transform: none !important; transition: none !important; }
         }
@@ -558,44 +560,46 @@ export default function BienvenidaExperience() {
             sigues sin publicar nada — o publicas algo a medias, cruzando los dedos.
           </p>
         </div>
-        <div className="caos-calma-stage qb-reveal">
-          <div className="pain-notif pn-1">
-            <span className="pn-badge" />
-            <div className="pn-icon">
-              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                <circle cx="12" cy="12" r="9" /><path d="M12 7v5l3 3" />
-              </svg>
+        <div className="caos-calma-band">
+          <div className="caos-calma-stage qb-reveal">
+            <div className="pain-notif pn-1">
+              <span className="pn-badge" />
+              <div className="pn-icon">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                  <circle cx="12" cy="12" r="9" /><path d="M12 7v5l3 3" />
+                </svg>
+              </div>
+              <div className="pn-body">
+                <div className="pn-meta">Meta Ads Manager · hace 2h</div>
+                <div className="pn-title">Sigues editando el mismo anuncio 😮‍💨</div>
+                <div className="pn-sub">Empezaste hace 2 horas. Todavía no publicas.</div>
+              </div>
             </div>
-            <div className="pn-body">
-              <div className="pn-meta">Meta Ads Manager · hace 2h</div>
-              <div className="pn-title">Sigues editando el mismo anuncio 😮‍💨</div>
-              <div className="pn-sub">Empezaste hace 2 horas. Todavía no publicas.</div>
+            <div className="pain-notif pn-2">
+              <span className="pn-badge" />
+              <div className="pn-icon">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                  <path d="M12 1v22M17 5H9.5a3.5 3.5 0 000 7h5a3.5 3.5 0 010 7H6" />
+                </svg>
+              </div>
+              <div className="pn-body">
+                <div className="pn-meta">Alerta de gasto · hace 3 días</div>
+                <div className="pn-title">Te gastaste $180.000 sin darte cuenta</div>
+                <div className="pn-sub">Nadie ajustó la campaña a tiempo.</div>
+              </div>
             </div>
-          </div>
-          <div className="pain-notif pn-2">
-            <span className="pn-badge" />
-            <div className="pn-icon">
-              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                <path d="M12 1v22M17 5H9.5a3.5 3.5 0 000 7h5a3.5 3.5 0 010 7H6" />
-              </svg>
-            </div>
-            <div className="pn-body">
-              <div className="pn-meta">Alerta de gasto · hace 3 días</div>
-              <div className="pn-title">Te gastaste $180.000 sin darte cuenta</div>
-              <div className="pn-sub">Nadie ajustó la campaña a tiempo.</div>
-            </div>
-          </div>
-          <div className="pain-notif pn-3">
-            <span className="pn-badge" />
-            <div className="pn-icon">
-              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                <rect x="3" y="3" width="18" height="18" rx="2" /><path d="M3 16l5-5 4 4 5-6 4 5" />
-              </svg>
-            </div>
-            <div className="pn-body">
-              <div className="pn-meta">Diseñador · hace 4 días</div>
-              <div className="pn-title">Los creativos no se parecen a tu marca</div>
-              <div className="pn-sub">Y llevas 4 días esperando que lleguen.</div>
+            <div className="pain-notif pn-3">
+              <span className="pn-badge" />
+              <div className="pn-icon">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                  <rect x="3" y="3" width="18" height="18" rx="2" /><path d="M3 16l5-5 4 4 5-6 4 5" />
+                </svg>
+              </div>
+              <div className="pn-body">
+                <div className="pn-meta">Diseñador · hace 4 días</div>
+                <div className="pn-title">Los creativos no se parecen a tu marca</div>
+                <div className="pn-sub">Y llevas 4 días esperando que lleguen.</div>
+              </div>
             </div>
           </div>
 
