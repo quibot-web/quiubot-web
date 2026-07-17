@@ -6,25 +6,36 @@ import RevealObserver from "@/app/components/RevealObserver";
 
 const AYUDAS = [
   {
+    tag: "AUTOMATICO",
     titulo: "Vigila constantemente",
     texto:
       "Sincroniza tus campañas activas y compara su rendimiento contra tu propio promedio, no contra reglas genéricas.",
   },
   {
+    tag: "AUDITORIA IA",
     titulo: "Audita cada creativo",
     texto:
       "Antes de mostrártelo, una segunda IA revisa que el logo, los colores y el mensaje coincidan con tu marca.",
   },
   {
+    tag: "TU DECIDES",
     titulo: "Nunca actúa sin ti",
     texto:
       'Las sugerencias de ajuste, como pausar o subir presupuesto, solo se aplican cuando tú das clic en "Aplicar".',
   },
   {
+    tag: "SIN SORPRESAS",
     titulo: "Sin sorpresas de costo",
     texto:
       "Conectas tu propia cuenta de OpenAI, así que solo pagas exactamente lo que usas — nunca un margen escondido.",
   },
+];
+
+const AYUDA_ICONS = [
+  <path key="a" d="M2 12s4-7 10-7 10 7 10 7-4 7-10 7-10-7-10-7z M12 15a3 3 0 100-6 3 3 0 000 6z" />,
+  <path key="b" d="M12 2l7 4v6c0 5-3.5 8-7 10-3.5-2-7-5-7-10V6l7-4z M9 12l2 2 4-4" />,
+  <path key="c" d="M9 11V6a3 3 0 016 0v5 M7 11h10l1 4a2 2 0 01-2 2H8a2 2 0 01-2-2l1-4z" />,
+  <path key="d" d="M12 1v22M17 5H9.5a3.5 3.5 0 000 7h5a3.5 3.5 0 010 7H6" />,
 ];
 
 const GANANCIAS = [
@@ -616,11 +627,19 @@ export default function BienvenidaExperience() {
         .qb-lp .ganancia-item .check { color: var(--mint); font-weight: 700; flex-shrink: 0; }
 
         .qb-lp .ayudas { max-width: 1000px; margin: 0 auto; display: grid; grid-template-columns: repeat(2, 1fr); gap: 18px; }
-        .qb-lp .ayuda-card { background: #fff; border-radius: 14px; padding: 26px 24px; border: 1px solid #ECE9F7; border-left: 3px solid transparent; transition: border-color .2s ease, background .2s ease; }
-        .qb-lp .ayuda-card:hover { border-left-color: var(--purple); background: #FDFCFF; }
-        .qb-lp .ayuda-card h3 { font-size: 16px; font-weight: 600; margin-bottom: 8px; display: flex; align-items: center; gap: 8px; }
-        .qb-lp .ayuda-card h3::before { content: ""; width: 8px; height: 8px; border-radius: 50%; background: var(--mint); flex-shrink: 0; }
+        .qb-lp .ayuda-card { background: #fff; border-radius: 14px; padding: 26px 24px; border: 1px solid #ECE9F7; border-left: 3px solid transparent; transition: border-color .2s ease, background .2s ease, transform .2s ease; }
+        .qb-lp .ayuda-card:hover { border-left-color: var(--purple); background: #FDFCFF; transform: translateY(-2px); }
+        .qb-lp .ayuda-icon { width: 38px; height: 38px; border-radius: 10px; background: var(--bg-alt); color: var(--purple-deep); display: flex; align-items: center; justify-content: center; margin-bottom: 14px; }
+        .qb-lp .ayuda-icon svg { width: 18px; height: 18px; }
+        .qb-lp .ayuda-tag { font-family: var(--font-mono), monospace; font-size: 10.5px; letter-spacing: 0.08em; color: var(--mint); font-weight: 600; margin-bottom: 6px; }
+        .qb-lp .ayuda-card h3 { font-size: 16px; font-weight: 600; margin-bottom: 8px; }
         .qb-lp .ayuda-card p { font-size: 14px; color: var(--muted); line-height: 1.55; margin: 0; }
+
+        .qb-lp .mini-cta { max-width: 780px; margin: 32px auto 0; background: #fff; border: 1px dashed var(--purple-light); border-radius: 18px; padding: 26px 30px; display: flex; align-items: center; justify-content: space-between; gap: 20px; flex-wrap: wrap; }
+        .qb-lp .mini-cta-tag { display: flex; align-items: center; gap: 7px; font-family: var(--font-mono), monospace; font-size: 11px; letter-spacing: 0.06em; color: var(--mint); font-weight: 600; margin-bottom: 6px; }
+        .qb-lp .mini-cta-tag .dot-mini { width: 7px; height: 7px; border-radius: 50%; background: var(--mint); box-shadow: 0 0 0 3px rgba(31,169,124,0.18); }
+        .qb-lp .mini-cta h4 { font-size: 18px; font-weight: 700; color: var(--ink); }
+        .qb-lp .mini-cta .btn-cta { padding: 12px 22px; font-size: 14.5px; border-radius: 10px; flex-shrink: 0; }
 
         .qb-lp .sello-box { max-width: 780px; margin: 0 auto; text-align: center; background: #fff; border: 1.5px solid #E5E1F5; border-radius: 20px; padding: 48px 40px; position: relative; }
         .qb-lp .sello-box::before { content: ""; position: absolute; inset: 8px; border: 1px dashed rgba(127,119,221,0.3); border-radius: 14px; pointer-events: none; }
@@ -853,10 +872,24 @@ export default function BienvenidaExperience() {
         <div className="ayudas">
           {AYUDAS.map((a, i) => (
             <div className={`ayuda-card qb-reveal qb-reveal-delay-${(i % 4) + 1}`} key={a.titulo}>
+              <div className="ayuda-icon">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                  {AYUDA_ICONS[i]}
+                </svg>
+              </div>
+              <div className="ayuda-tag">{a.tag}</div>
               <h3>{a.titulo}</h3>
               <p>{a.texto}</p>
             </div>
           ))}
+        </div>
+
+        <div className="mini-cta qb-reveal">
+          <div>
+            <div className="mini-cta-tag"><span className="dot-mini" />Ya viste cómo te cuida Quiubot</div>
+            <h4>Falta lo mejor: verlo funcionar en tu negocio.</h4>
+          </div>
+          <Link href="/login" className="btn-cta">Iniciar prueba gratuita →</Link>
         </div>
       </section>
 
