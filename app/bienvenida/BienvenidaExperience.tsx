@@ -314,9 +314,20 @@ export default function BienvenidaExperience() {
         .qb-lp .section-head p.lead { font-size: 16px; color: var(--muted); margin-top: 14px; line-height: 1.55; }
         .qb-lp .alt { background: var(--bg-alt); }
 
-        .qb-lp .pain-list { max-width: 700px; margin: 0 auto; display: flex; flex-direction: column; gap: 16px; }
-        .qb-lp .pain-item { display: flex; gap: 14px; align-items: flex-start; font-size: 16px; color: var(--ink); background: #fff; border: 1px solid #ECE9F7; border-radius: 14px; padding: 16px 20px; }
-        .qb-lp .pain-item .x { color: #C24545; font-weight: 700; flex-shrink: 0; }
+        /* ---- COLLAGE DE NOTIFICACIONES (dolor real) ---- */
+        .qb-lp .pain-collage { position: relative; max-width: 620px; margin: 0 auto; min-height: 420px; }
+        .qb-lp .pain-notif { position: absolute; width: min(380px, 86vw); display: flex; gap: 12px; align-items: flex-start; background: #fff; border: 1px solid #F1EFF9; border-radius: 16px; padding: 14px 16px; box-shadow: 0 16px 32px rgba(23,21,43,0.14); transition: transform .25s ease, box-shadow .25s ease; cursor: default; }
+        .qb-lp .pain-notif:hover { transform: rotate(0deg) translateY(-3px) !important; box-shadow: 0 20px 40px rgba(23,21,43,0.18); z-index: 5 !important; }
+        .qb-lp .pn-1 { top: 0; left: 0; transform: rotate(-3deg); z-index: 3; }
+        .qb-lp .pn-2 { top: 130px; left: 130px; transform: rotate(2.5deg); z-index: 2; }
+        .qb-lp .pn-3 { top: 262px; left: 14px; transform: rotate(-1.5deg); z-index: 1; }
+        .qb-lp .pn-badge { position: absolute; top: -5px; right: -5px; width: 12px; height: 12px; border-radius: 50%; background: #C24545; box-shadow: 0 0 0 3px #fff; }
+        .qb-lp .pn-icon { width: 36px; height: 36px; border-radius: 10px; background: rgba(194,69,69,0.1); color: #C24545; display: flex; align-items: center; justify-content: center; flex-shrink: 0; }
+        .qb-lp .pn-icon svg { width: 18px; height: 18px; }
+        .qb-lp .pn-body { min-width: 0; }
+        .qb-lp .pn-meta { font-family: var(--font-mono), monospace; font-size: 10.5px; letter-spacing: 0.06em; text-transform: uppercase; color: var(--muted); margin-bottom: 3px; }
+        .qb-lp .pn-title { font-size: 14.5px; font-weight: 700; color: var(--ink); line-height: 1.3; }
+        .qb-lp .pn-sub { font-size: 12.5px; color: var(--muted); margin-top: 3px; line-height: 1.4; }
 
         /* ---- EXPERIENCIA AUTOMATICA (sin scroll forzado) ---- */
         .qb-lp .experiencia-grid { max-width: 1080px; margin: 0 auto; display: grid; grid-template-columns: 0.85fr 1.05fr; gap: 60px; align-items: center; }
@@ -432,6 +443,8 @@ export default function BienvenidaExperience() {
         .qb-lp footer a { color: var(--muted); text-decoration: underline; }
 
         @media (max-width: 860px) {
+          .qb-lp .pain-collage { min-height: 0; display: flex; flex-direction: column; gap: 14px; }
+          .qb-lp .pain-notif { position: static; width: 100%; transform: none !important; }
           .qb-lp .hero { grid-template-columns: 1fr; padding-top: 32px; }
           .qb-lp .hero p.sub { max-width: 100%; }
           .qb-lp .ayudas { grid-template-columns: 1fr; }
@@ -500,10 +513,46 @@ export default function BienvenidaExperience() {
             sigues sin publicar nada — o publicas algo a medias, cruzando los dedos.
           </p>
         </div>
-        <div className="pain-list">
-          <div className="pain-item qb-reveal qb-reveal-delay-1"><span className="x">✕</span>Te sientas a "armar rápido una campaña" y dos horas después sigues decidiendo el texto del anuncio.</div>
-          <div className="pain-item qb-reveal qb-reveal-delay-2"><span className="x">✕</span>Publicas, te desconectas un par de días, y vuelves a ver presupuesto gastado en algo que nadie ajustó a tiempo.</div>
-          <div className="pain-item qb-reveal qb-reveal-delay-3"><span className="x">✕</span>Pides creativos y te tardan días en llegar — o llegan sin parecerse en nada a tu marca.</div>
+        <div className="pain-collage">
+          <div className="pain-notif pn-1 qb-reveal qb-reveal-delay-1">
+            <span className="pn-badge" />
+            <div className="pn-icon">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                <circle cx="12" cy="12" r="9" /><path d="M12 7v5l3 3" />
+              </svg>
+            </div>
+            <div className="pn-body">
+              <div className="pn-meta">Meta Ads Manager · hace 2h</div>
+              <div className="pn-title">Sigues editando el mismo anuncio 😮‍💨</div>
+              <div className="pn-sub">Empezaste hace 2 horas. Todavía no publicas.</div>
+            </div>
+          </div>
+          <div className="pain-notif pn-2 qb-reveal qb-reveal-delay-2">
+            <span className="pn-badge" />
+            <div className="pn-icon">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                <path d="M12 1v22M17 5H9.5a3.5 3.5 0 000 7h5a3.5 3.5 0 010 7H6" />
+              </svg>
+            </div>
+            <div className="pn-body">
+              <div className="pn-meta">Alerta de gasto · hace 3 días</div>
+              <div className="pn-title">Te gastaste $180.000 sin darte cuenta</div>
+              <div className="pn-sub">Nadie ajustó la campaña a tiempo.</div>
+            </div>
+          </div>
+          <div className="pain-notif pn-3 qb-reveal qb-reveal-delay-3">
+            <span className="pn-badge" />
+            <div className="pn-icon">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                <rect x="3" y="3" width="18" height="18" rx="2" /><path d="M3 16l5-5 4 4 5-6 4 5" />
+              </svg>
+            </div>
+            <div className="pn-body">
+              <div className="pn-meta">Diseñador · hace 4 días</div>
+              <div className="pn-title">Los creativos no se parecen a tu marca</div>
+              <div className="pn-sub">Y llevas 4 días esperando que lleguen.</div>
+            </div>
+          </div>
         </div>
       </section>
 
