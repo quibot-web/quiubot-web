@@ -271,8 +271,7 @@ export default function Home() {
         .qb-nav-label { white-space: nowrap; overflow: hidden; }
         .qb-sidebar.colapsado .qb-nav-label,
         .qb-sidebar.colapsado .qb-logo-texto,
-        .qb-sidebar.colapsado .qb-footer-info,
-        .qb-sidebar.colapsado .qb-admin-tag { display: none; }
+        .qb-sidebar.colapsado .qb-footer-info { display: none; }
         .qb-tooltip {
           position: absolute; left: calc(100% + 10px); top: 50%; transform: translateY(-50%);
           background: #1a1a1a; color: #fff; font-size: 12px; padding: 5px 10px; border-radius: 6px;
@@ -390,7 +389,6 @@ export default function Home() {
             </button>
 
             <div className={`qb-admin-panel${adminAbierto && !colapsado ? " abierto" : ""}`}>
-              <div className="qb-admin-tag">MODO ADMIN</div>
               <a href="/admin/playbook" className="qb-admin-item">
                 <span className="qb-nav-icon"><Icono><path d="M2 5a2 2 0 012-2h6v18H4a2 2 0 01-2-2V5z" /><path d="M22 5a2 2 0 00-2-2h-6v18h6a2 2 0 002-2V5z" /></Icono></span>
                 Playbook
