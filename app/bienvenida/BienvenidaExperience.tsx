@@ -41,11 +41,11 @@ const PLANES = [
   { nombre: "Escala", precio: "$249.900", detalle: "Estrategias y campañas vigiladas sin límite." },
 ];
 
-const RECIBO_LINEAS = [
-  { estado: "x", texto: "Estrategia", nota: "generada" },
-  { estado: "x", texto: "Creativos", nota: "3 listos" },
-  { estado: "x", texto: "Publicacion", nota: "activa" },
-  { estado: " ", texto: "Optimizacion", nota: "vigilando" },
+const HUD_LINEAS = [
+  "Analizando tu categoria",
+  "Calculando presupuesto ideal",
+  "Auditando creativos",
+  "Vigilando tu campaña",
 ];
 
 const PASOS = [
@@ -138,6 +138,60 @@ function PanelContenido({ paso }: { paso: number }) {
       )}
     </div>
   );
+}
+
+function CoreOrb() {
+  const canvasRef = useRef<HTMLCanvasElement | null>(null);
+
+  useEffect(() => {
+    const canvas = canvasRef.current;
+    if (!canvas) return;
+    const ctx = canvas.getContext("2d");
+    if (!ctx) return;
+
+    const reduce = window.matchMedia("(prefers-reduced-motion: reduce)").matches;
+    const W = canvas.width;
+    const H = canvas.height;
+    const cx = W / 2;
+    const cy = H / 2;
+    const colores = ["#7F77DD", "#4A3FAE", "#1FA97C", "#C4BFF0"];
+    const particulas = Array.from({ length: 42 }).map(() => ({
+      angulo: Math.random() * Math.PI * 2,
+      radio: 26 + Math.random() * 92,
+      velocidad: (Math.random() * 0.006 + 0.0025) * (Math.random() < 0.5 ? 1 : -1),
+      tam: Math.random() * 2.2 + 1,
+      color: colores[Math.floor(Math.random() * colores.length)],
+      fase: Math.random() * Math.PI * 2,
+    }));
+
+    const pintar = () => {
+      ctx.clearRect(0, 0, W, H);
+      particulas.forEach((p) => {
+        if (!reduce) {
+          p.angulo += p.velocidad;
+          p.fase += 0.02;
+        }
+        const r = p.radio + Math.sin(p.fase) * 6;
+        const x = cx + Math.cos(p.angulo) * r;
+        const y = cy + Math.sin(p.angulo) * r * 0.85;
+        ctx.beginPath();
+        ctx.arc(x, y, p.tam, 0, Math.PI * 2);
+        ctx.fillStyle = p.color;
+        ctx.shadowColor = p.color;
+        ctx.shadowBlur = 9;
+        ctx.globalAlpha = 0.78;
+        ctx.fill();
+      });
+      if (!reduce) raf = requestAnimationFrame(pintar);
+    };
+
+    let raf = 0;
+    pintar();
+    if (reduce) return;
+    return () => cancelAnimationFrame(raf);
+  }, []);
+
+  return <canvas ref={canvasRef} width={340} height={340} className="core-canvas" />;
 }
 
 export default function BienvenidaExperience() {
@@ -234,32 +288,35 @@ export default function BienvenidaExperience() {
         .qb-lp .hero h1 .grad { color: var(--purple-deep); }
         .qb-lp .hero p.sub { font-size: 17px; line-height: 1.55; color: var(--muted); margin: 20px 0 28px; max-width: 480px; }
 
-        .qb-lp .recibo-stage { display: flex; justify-content: center; }
-        .qb-lp .recibo-shadow { filter: drop-shadow(0 22px 40px rgba(23,21,43,0.16)); }
-        .qb-lp .recibo { width: 100%; max-width: 320px; background: var(--paper); padding: 26px 26px 22px; font-family: var(--font-mono), monospace; transform: rotate(-2deg);
-          clip-path: polygon(0% 0%, 100% 0%, 100% 94%, 96% 100%, 92% 94%, 88% 100%, 84% 94%, 80% 100%, 76% 94%, 72% 100%, 68% 94%, 64% 100%, 60% 94%, 56% 100%, 52% 94%, 48% 100%, 44% 94%, 40% 100%, 36% 94%, 32% 100%, 28% 94%, 24% 100%, 20% 94%, 16% 100%, 12% 94%, 8% 100%, 4% 94%, 0% 100%);
+        /* ---- NUCLEO (brillo + profundidad) ---- */
+        .qb-lp .core-stage { position: relative; width: 100%; max-width: 360px; aspect-ratio: 1 / 1; margin: 0 auto 46px; }
+        .qb-lp .core-glow { position: absolute; inset: -6%; border-radius: 50%; background: radial-gradient(circle at 50% 42%, rgba(127,119,221,0.55), rgba(74,63,174,0.22) 42%, transparent 72%); filter: blur(26px); animation: qbCoreBreathe 5s ease-in-out infinite; }
+        .qb-lp .core-glow::after { content: ""; position: absolute; inset: 14%; border-radius: 50%; background: radial-gradient(circle at 55% 60%, rgba(31,169,124,0.35), transparent 70%); filter: blur(20px); }
+        @keyframes qbCoreBreathe { 0%, 100% { transform: scale(1); opacity: 1; } 50% { transform: scale(1.05); opacity: 0.88; } }
+        .qb-lp .core-canvas { position: absolute; inset: 0; width: 100%; height: 100%; }
+        .qb-lp .core-ring { position: absolute; inset: 9%; border-radius: 50%; border: 1px solid rgba(127,119,221,0.3); }
+        .qb-lp .core-ring::before { content: ""; position: absolute; inset: -1px; border-radius: 50%; border: 1px dashed rgba(127,119,221,0.18); animation: qbCoreSpin 40s linear infinite; }
+        @keyframes qbCoreSpin { from { transform: rotate(0deg); } to { transform: rotate(360deg); } }
+        .qb-lp .core-mark { position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%); width: 64px; height: 64px; border-radius: 20px; background: #fff; box-shadow: 0 10px 26px rgba(74,63,174,0.25); display: flex; align-items: center; justify-content: center; }
+        .qb-lp .core-mark img { width: 34px; height: 34px; }
+        .qb-lp .core-hud { position: absolute; left: 50%; bottom: -18px; transform: translateX(-50%); width: 88%; background: rgba(255,255,255,0.82); backdrop-filter: blur(10px); border: 1px solid rgba(255,255,255,0.7); border-radius: 14px; padding: 14px 18px; box-shadow: 0 16px 36px rgba(23,21,43,0.14); font-family: var(--font-mono), monospace; }
+        .qb-lp .hud-line { display: flex; align-items: center; gap: 8px; padding: 3px 0; font-size: 12.5px; color: var(--muted); font-weight: 500; opacity: 0.45; animation: qbHudPulse 8s ease-in-out infinite; }
+        .qb-lp .hud-line .dot { width: 6px; height: 6px; border-radius: 50%; background: var(--purple); flex-shrink: 0; }
+        .qb-lp .hud-line:nth-child(1) { animation-delay: 0s; }
+        .qb-lp .hud-line:nth-child(2) { animation-delay: 2s; }
+        .qb-lp .hud-line:nth-child(3) { animation-delay: 4s; }
+        .qb-lp .hud-line:nth-child(4) { animation-delay: 6s; }
+        @keyframes qbHudPulse {
+          0% { opacity: 0.4; color: var(--muted); font-weight: 500; }
+          6% { opacity: 1; color: var(--ink); font-weight: 600; }
+          20% { opacity: 1; color: var(--ink); font-weight: 600; }
+          26% { opacity: 0.4; color: var(--muted); font-weight: 500; }
+          100% { opacity: 0.4; color: var(--muted); font-weight: 500; }
         }
-        .qb-lp .recibo-top { display: flex; justify-content: space-between; align-items: baseline; margin-bottom: 4px; }
-        .qb-lp .recibo-top b { font-size: 14px; letter-spacing: 0.06em; }
-        .qb-lp .recibo-top span { font-size: 11px; color: var(--muted); }
-        .qb-lp .recibo-fecha { font-size: 11px; color: var(--muted); margin-bottom: 14px; }
-        .qb-lp .recibo-div { border-top: 1px dashed #D8D3EC; margin: 12px 0; }
-        .qb-lp .recibo-linea { display: flex; align-items: baseline; gap: 8px; font-size: 13px; padding: 5px 0; white-space: nowrap; overflow: hidden; width: 0; animation: qbTypeLine 10s steps(24, end) infinite; }
-        .qb-lp .recibo-linea .box { color: var(--mint); font-weight: 700; flex-shrink: 0; }
-        .qb-lp .recibo-linea.pend .box { color: var(--purple); }
-        .qb-lp .recibo-linea .rel-txt { flex-shrink: 0; }
-        .qb-lp .recibo-linea .dots { color: #C7C1E0; flex: 1; }
-        .qb-lp .recibo-linea .nota { flex-shrink: 0; color: var(--ink); font-weight: 600; }
-        .qb-lp .recibo-linea.pend .nota::after { content: "_"; animation: qbBlink 1s steps(1) infinite; }
-        .qb-lp .recibo-linea:nth-child(1) { animation-delay: 0s; }
-        .qb-lp .recibo-linea:nth-child(2) { animation-delay: 1.4s; }
-        .qb-lp .recibo-linea:nth-child(3) { animation-delay: 2.8s; }
-        .qb-lp .recibo-linea:nth-child(4) { animation-delay: 4.2s; }
-        @keyframes qbTypeLine { 0% { width: 0; } 12%, 100% { width: 100%; } }
-        @keyframes qbBlink { 0%, 49% { opacity: 1; } 50%, 100% { opacity: 0; } }
-        .qb-lp .recibo-total { display: flex; justify-content: space-between; font-size: 13px; font-weight: 700; margin-top: 4px; }
-        .qb-lp .recibo-total span:last-child { color: var(--purple-deep); }
-        .qb-lp .recibo-code { text-align: center; font-size: 10px; letter-spacing: 0.3em; color: var(--muted); margin-top: 16px; }
+        .qb-lp .hud-line:nth-child(1) .dot { background: var(--purple); }
+        .qb-lp .hud-line:nth-child(2) .dot { background: var(--purple-deep); }
+        .qb-lp .hud-line:nth-child(3) .dot { background: var(--purple); }
+        .qb-lp .hud-line:nth-child(4) .dot { background: var(--mint); }
 
         .qb-lp section { padding: 88px 24px; position: relative; }
         .qb-lp .section-head { max-width: 640px; margin: 0 auto 48px; text-align: center; }
@@ -389,14 +446,15 @@ export default function BienvenidaExperience() {
           .qb-lp .experiencia-grid { grid-template-columns: 1fr; gap: 0; }
           .qb-lp .panel-col { position: static; margin-bottom: 18px; }
           .qb-lp .paso-block { min-height: 0; padding: 20px 0; }
+          .qb-lp .core-stage { max-width: 280px; margin-bottom: 56px; }
         }
         @media (prefers-reduced-motion: reduce) {
-          .qb-lp .recibo-linea, .qb-lp .recibo-linea.pend .nota::after, .qb-lp .panel-fade,
-          .qb-lp .budget-fill, .qb-lp .creativo-card {
+          .qb-lp .panel-fade, .qb-lp .budget-fill, .qb-lp .creativo-card,
+          .qb-lp .core-glow, .qb-lp .core-ring::before, .qb-lp .hud-line {
             animation: none !important;
           }
-          .qb-lp .recibo-linea { width: 100% !important; }
           .qb-lp .budget-fill { width: 72% !important; }
+          .qb-lp .hud-line { opacity: 1 !important; color: var(--ink) !important; }
           .qb-lp .qb-reveal { opacity: 1 !important; transform: none !important; transition: none !important; }
         }
       `}</style>
@@ -422,24 +480,17 @@ export default function BienvenidaExperience() {
           <Link href="/login" className="btn-cta">Iniciar prueba gratuita de 7 días →</Link>
           <p className="micro">Sin tarjeta de crédito. Cancela cuando quieras.</p>
         </div>
-        <div className="recibo-stage">
-          <div className="recibo-shadow">
-            <div className="recibo">
-              <div className="recibo-top"><b>QUIUBOT</b><span>PEDIDO #00482</span></div>
-              <div className="recibo-fecha">Hoy · Meta Ads</div>
-              <div className="recibo-div" />
-              {RECIBO_LINEAS.map((l) => (
-                <div className={`recibo-linea ${l.estado === " " ? "pend" : ""}`} key={l.texto}>
-                  <span className="box">[{l.estado}]</span>
-                  <span className="rel-txt">{l.texto}</span>
-                  <span className="dots">···········</span>
-                  <span className="nota">{l.nota}</span>
-                </div>
-              ))}
-              <div className="recibo-div" />
-              <div className="recibo-total"><span>TOTAL</span><span>0 horas tuyas</span></div>
-              <div className="recibo-code">* GRACIAS POR SU VISITA *</div>
-            </div>
+        <div className="core-stage">
+          <div className="core-glow" />
+          <CoreOrb />
+          <div className="core-ring" />
+          <div className="core-mark">
+            <img src="/marca/icono-quiubot.svg" alt="Quiubot" />
+          </div>
+          <div className="core-hud">
+            {HUD_LINEAS.map((linea) => (
+              <div className="hud-line" key={linea}><span className="dot" />{linea}</div>
+            ))}
           </div>
         </div>
       </section>
