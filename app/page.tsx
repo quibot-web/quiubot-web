@@ -43,6 +43,8 @@ export default function Home() {
   const [rol, setRol] = useState<string | null>(null);
   const [colapsado, setColapsado] = useState(false);
   const [adminAbierto, setAdminAbierto] = useState(false);
+  const [hoverExpandido, setHoverExpandido] = useState(false);
+  const expandidoVisual = !colapsado || hoverExpandido;
 
   const cargarRol = () => {
     fetch("/api/usuario/rol").then(r => r.json()).then(data => setRol(data.rol));
@@ -269,9 +271,7 @@ export default function Home() {
         }
         .qb-nav-item.activo .qb-nav-icon, .qb-nav-item:hover .qb-nav-icon { background: #534AB7; color: #fff; }
         .qb-nav-label { white-space: nowrap; overflow: hidden; }
-        .qb-sidebar.colapsado .qb-nav-label,
-        .qb-sidebar.colapsado .qb-logo-texto,
-        .qb-sidebar.colapsado .qb-footer-info { display: none; }
+        .qb-sidebar.colapsado .qb-nav-label { display: none; }
         .qb-tooltip {
           position: absolute; left: calc(100% + 10px); top: 50%; transform: translateY(-50%);
           background: #1a1a1a; color: #fff; font-size: 12px; padding: 5px 10px; border-radius: 6px;
@@ -302,7 +302,12 @@ export default function Home() {
         .qb-footer-btn { display: flex; align-items: center; gap: 8px; justify-content: flex-start; }
         .qb-sidebar.colapsado .qb-footer-btn { justify-content: center; }
       `}</style>
-      <div className={`qb-sidebar${colapsado ? " colapsado" : ""}`} style={{ width: colapsado ? 72 : 232, background: "#fff", borderRight: "1px solid #e8e8e6", padding: "1.25rem 0.85rem", display: "flex", flexDirection: "column", gap: 4, flexShrink: 0 }}>
+      <div
+        className={`qb-sidebar${expandidoVisual ? "" : " colapsado"}`}
+        style={{ width: expandidoVisual ? 232 : 72, background: "#fff", borderRight: "1px solid #e8e8e6", padding: "1.25rem 0.85rem", display: "flex", flexDirection: "column", gap: 4, flexShrink: 0 }}
+        onMouseEnter={() => { if (colapsado) setHoverExpandido(true); }}
+        onMouseLeave={() => setHoverExpandido(false)}
+      >
 
         <div className="qb-sidebar-toggle" onClick={() => setColapsado((v) => !v)} title={colapsado ? "Expandir menú" : "Contraer menú"}>
           <Icono>
@@ -314,15 +319,17 @@ export default function Home() {
           <div className="qb-logo-mark">
             <img src="/marca/icono-quiubot.svg" alt="" width={20} height={20} />
           </div>
-          <div className="qb-logo-texto" style={{ display: "flex", flexDirection: "column", minWidth: 0 }}>
-            <div style={{ fontSize: 17, fontWeight: 600, letterSpacing: "-0.3px", whiteSpace: "nowrap" }}>
-              quiu<span style={{ color: "#7F77DD" }}>bot</span>
+          {expandidoVisual && (
+            <div className="qb-logo-texto" style={{ display: "flex", flexDirection: "column", minWidth: 0 }}>
+              <div style={{ fontSize: 17, fontWeight: 600, letterSpacing: "-0.3px", whiteSpace: "nowrap" }}>
+                quiu<span style={{ color: "#7F77DD" }}>bot</span>
+              </div>
+              <div style={{ display: "flex", alignItems: "center", gap: 5, marginTop: 1 }}>
+                <span className="qb-orb" />
+                <span style={{ fontSize: 10, color: "#999", fontFamily: "monospace", letterSpacing: "0.02em" }}>sistema activo</span>
+              </div>
             </div>
-            <div style={{ display: "flex", alignItems: "center", gap: 5, marginTop: 1 }}>
-              <span className="qb-orb" />
-              <span style={{ fontSize: 10, color: "#999", fontFamily: "monospace", letterSpacing: "0.02em" }}>sistema activo</span>
-            </div>
-          </div>
+          )}
         </div>
 
         <div data-tour="sidebar-inicio" onClick={() => setTab("inicio")} className={`qb-nav-item${tab === "inicio" ? " activo" : ""}`}>
@@ -411,14 +418,16 @@ export default function Home() {
 
         <div style={{ marginTop: "auto", borderTop: "1px solid #e8e8e6", paddingTop: 12 }}>
           {session?.user && (
-            <div className="qb-footer-info" style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 8 }}>
+            <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 8, justifyContent: expandidoVisual ? "flex-start" : "center" }}>
               <div style={{ width: 30, height: 30, borderRadius: "50%", background: "#7F77DD", display: "flex", alignItems: "center", justifyContent: "center", color: "#fff", fontSize: 13, fontWeight: 600, flexShrink: 0 }}>
                 {session.user.name?.[0]?.toUpperCase() ?? "U"}
               </div>
-              <div style={{ overflow: "hidden" }}>
-                <div style={{ fontSize: 12, fontWeight: 500, color: "#333", whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>{session.user.name}</div>
-                <div style={{ fontSize: 10, color: "#999", whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>{session.user.email}</div>
-              </div>
+              {expandidoVisual && (
+                <div style={{ overflow: "hidden" }}>
+                  <div style={{ fontSize: 12, fontWeight: 500, color: "#333", whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>{session.user.name}</div>
+                  <div style={{ fontSize: 10, color: "#999", whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>{session.user.email}</div>
+                </div>
+              )}
             </div>
           )}
           <button onClick={() => signOut({ callbackUrl: "/login" })} className="qb-footer-btn" style={{ width: "100%", padding: "7px 10px", borderRadius: 8, border: "1px solid #e8e8e6", background: "transparent", color: "#666", fontSize: 13, cursor: "pointer" }} title="Cerrar sesión">
