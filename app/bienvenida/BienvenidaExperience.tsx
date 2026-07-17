@@ -314,13 +314,37 @@ export default function BienvenidaExperience() {
         .qb-lp .section-head p.lead { font-size: 16px; color: var(--muted); margin-top: 14px; line-height: 1.55; }
         .qb-lp .alt { background: var(--bg-alt); }
 
-        /* ---- COLLAGE DE NOTIFICACIONES (dolor real) ---- */
-        .qb-lp .pain-collage { position: relative; max-width: 620px; margin: 0 auto; min-height: 420px; }
-        .qb-lp .pain-notif { position: absolute; width: min(380px, 86vw); display: flex; gap: 12px; align-items: flex-start; background: #fff; border: 1px solid #F1EFF9; border-radius: 16px; padding: 14px 16px; box-shadow: 0 16px 32px rgba(23,21,43,0.14); transition: transform .25s ease, box-shadow .25s ease; cursor: default; }
-        .qb-lp .pain-notif:hover { transform: rotate(0deg) translateY(-3px) !important; box-shadow: 0 20px 40px rgba(23,21,43,0.18); z-index: 5 !important; }
-        .qb-lp .pn-1 { top: 0; left: 0; transform: rotate(-3deg); z-index: 3; }
-        .qb-lp .pn-2 { top: 130px; left: 130px; transform: rotate(2.5deg); z-index: 2; }
-        .qb-lp .pn-3 { top: 262px; left: 14px; transform: rotate(-1.5deg); z-index: 1; }
+        /* ---- CAOS -> OLEADA DE COLOR -> CALMA ---- */
+        .qb-lp .caos-calma-stage { position: relative; max-width: 620px; margin: 0 auto; min-height: 430px; background: #fff; border-radius: 28px; border: 1px solid #ECE9F7; box-shadow: 0 20px 50px rgba(23,21,43,0.12); overflow: hidden; animation: qbShake 9s ease-in-out infinite; }
+        @keyframes qbShake {
+          0%, 32%, 44%, 100% { transform: translateX(0); }
+          34% { transform: translateX(-3px); }
+          36.5% { transform: translateX(3px); }
+          39% { transform: translateX(-3px); }
+          41.5% { transform: translateX(2px); }
+        }
+        .qb-lp .pain-notif { position: absolute; width: min(360px, 82vw); display: flex; gap: 12px; align-items: flex-start; background: #fff; border: 1px solid #F1EFF9; border-radius: 16px; padding: 14px 16px; box-shadow: 0 16px 32px rgba(23,21,43,0.14); opacity: 0; }
+        .qb-lp .pn-1 { top: 18px; left: 18px; --rot: -3deg; animation: qbNotif1 9s ease-in-out infinite; }
+        .qb-lp .pn-2 { top: 140px; left: 148px; --rot: 2.5deg; animation: qbNotif2 9s ease-in-out infinite; }
+        .qb-lp .pn-3 { top: 268px; left: 30px; --rot: -1.5deg; animation: qbNotif3 9s ease-in-out infinite; }
+        @keyframes qbNotif1 {
+          0%, 100% { opacity: 0; transform: translateY(-22px) scale(0.92) rotate(var(--rot)); }
+          5% { opacity: 1; transform: translateY(0) scale(1) rotate(var(--rot)); }
+          42% { opacity: 1; transform: translateY(0) scale(1) rotate(var(--rot)); }
+          48% { opacity: 0; transform: translateY(-8px) scale(0.96) rotate(var(--rot)); }
+        }
+        @keyframes qbNotif2 {
+          0%, 100% { opacity: 0; transform: translateY(-22px) scale(0.92) rotate(var(--rot)); }
+          13% { opacity: 1; transform: translateY(0) scale(1) rotate(var(--rot)); }
+          42% { opacity: 1; transform: translateY(0) scale(1) rotate(var(--rot)); }
+          48% { opacity: 0; transform: translateY(-8px) scale(0.96) rotate(var(--rot)); }
+        }
+        @keyframes qbNotif3 {
+          0%, 100% { opacity: 0; transform: translateY(-22px) scale(0.92) rotate(var(--rot)); }
+          21% { opacity: 1; transform: translateY(0) scale(1) rotate(var(--rot)); }
+          42% { opacity: 1; transform: translateY(0) scale(1) rotate(var(--rot)); }
+          48% { opacity: 0; transform: translateY(-8px) scale(0.96) rotate(var(--rot)); }
+        }
         .qb-lp .pn-badge { position: absolute; top: -5px; right: -5px; width: 12px; height: 12px; border-radius: 50%; background: #C24545; box-shadow: 0 0 0 3px #fff; }
         .qb-lp .pn-icon { width: 36px; height: 36px; border-radius: 10px; background: rgba(194,69,69,0.1); color: #C24545; display: flex; align-items: center; justify-content: center; flex-shrink: 0; }
         .qb-lp .pn-icon svg { width: 18px; height: 18px; }
@@ -328,6 +352,23 @@ export default function BienvenidaExperience() {
         .qb-lp .pn-meta { font-family: var(--font-mono), monospace; font-size: 10.5px; letter-spacing: 0.06em; text-transform: uppercase; color: var(--muted); margin-bottom: 3px; }
         .qb-lp .pn-title { font-size: 14.5px; font-weight: 700; color: var(--ink); line-height: 1.3; }
         .qb-lp .pn-sub { font-size: 12.5px; color: var(--muted); margin-top: 3px; line-height: 1.4; }
+
+        .qb-lp .calma-wipe { position: absolute; inset: 0; display: flex; align-items: center; justify-content: center; background: linear-gradient(135deg, var(--purple-deep), var(--purple) 55%, var(--mint)); clip-path: circle(0% at 50% 46%); animation: qbWipe 9s ease-in-out infinite; }
+        @keyframes qbWipe {
+          0%, 38% { clip-path: circle(0% at 50% 46%); }
+          55%, 85% { clip-path: circle(85% at 50% 46%); }
+          97%, 100% { clip-path: circle(0% at 50% 46%); }
+        }
+        .qb-lp .calma-content { text-align: center; padding: 0 32px; opacity: 0; transform: translateY(8px); animation: qbCalmContent 9s ease-in-out infinite; }
+        @keyframes qbCalmContent {
+          0%, 52% { opacity: 0; transform: translateY(8px); }
+          60%, 80% { opacity: 1; transform: translateY(0); }
+          90%, 100% { opacity: 0; transform: translateY(-6px); }
+        }
+        .qb-lp .calma-check { width: 52px; height: 52px; border-radius: 50%; background: rgba(255,255,255,0.16); border: 1.5px solid rgba(255,255,255,0.5); display: flex; align-items: center; justify-content: center; margin: 0 auto 16px; }
+        .qb-lp .calma-check svg { width: 24px; height: 24px; }
+        .qb-lp .calma-content h4 { color: #fff; font-size: 19px; font-weight: 700; margin-bottom: 8px; }
+        .qb-lp .calma-content p { color: rgba(255,255,255,0.85); font-size: 13.5px; line-height: 1.5; max-width: 320px; margin: 0 auto; }
 
         /* ---- EXPERIENCIA AUTOMATICA (sin scroll forzado) ---- */
         .qb-lp .experiencia-grid { max-width: 1080px; margin: 0 auto; display: grid; grid-template-columns: 0.85fr 1.05fr; gap: 60px; align-items: center; }
@@ -443,8 +484,8 @@ export default function BienvenidaExperience() {
         .qb-lp footer a { color: var(--muted); text-decoration: underline; }
 
         @media (max-width: 860px) {
-          .qb-lp .pain-collage { min-height: 0; display: flex; flex-direction: column; gap: 14px; }
-          .qb-lp .pain-notif { position: static; width: 100%; transform: none !important; }
+          .qb-lp .caos-calma-stage { min-height: 0; animation: none; }
+          .qb-lp .pain-notif { position: static; width: 100%; margin-bottom: 12px; }
           .qb-lp .hero { grid-template-columns: 1fr; padding-top: 32px; }
           .qb-lp .hero p.sub { max-width: 100%; }
           .qb-lp .ayudas { grid-template-columns: 1fr; }
@@ -458,12 +499,16 @@ export default function BienvenidaExperience() {
         @media (prefers-reduced-motion: reduce) {
           .qb-lp .panel-fade, .qb-lp .budget-fill, .qb-lp .creativo-card,
           .qb-lp .core-glow, .qb-lp .core-ring::before, .qb-lp .hud-line,
-          .qb-lp .progress-fill.activo, .qb-lp .paso-actual {
+          .qb-lp .progress-fill.activo, .qb-lp .paso-actual,
+          .qb-lp .caos-calma-stage, .qb-lp .pain-notif, .qb-lp .calma-wipe, .qb-lp .calma-content {
             animation: none !important;
           }
           .qb-lp .budget-fill { width: 72% !important; }
           .qb-lp .progress-fill.activo { width: 100% !important; }
           .qb-lp .hud-line { opacity: 1 !important; color: var(--ink) !important; }
+          .qb-lp .pain-notif { opacity: 0 !important; }
+          .qb-lp .calma-wipe { clip-path: circle(100% at 50% 50%) !important; }
+          .qb-lp .calma-content { opacity: 1 !important; transform: none !important; }
           .qb-lp .qb-reveal { opacity: 1 !important; transform: none !important; transition: none !important; }
         }
       `}</style>
@@ -513,8 +558,8 @@ export default function BienvenidaExperience() {
             sigues sin publicar nada — o publicas algo a medias, cruzando los dedos.
           </p>
         </div>
-        <div className="pain-collage">
-          <div className="pain-notif pn-1 qb-reveal qb-reveal-delay-1">
+        <div className="caos-calma-stage qb-reveal">
+          <div className="pain-notif pn-1">
             <span className="pn-badge" />
             <div className="pn-icon">
               <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
@@ -527,7 +572,7 @@ export default function BienvenidaExperience() {
               <div className="pn-sub">Empezaste hace 2 horas. Todavía no publicas.</div>
             </div>
           </div>
-          <div className="pain-notif pn-2 qb-reveal qb-reveal-delay-2">
+          <div className="pain-notif pn-2">
             <span className="pn-badge" />
             <div className="pn-icon">
               <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
@@ -540,7 +585,7 @@ export default function BienvenidaExperience() {
               <div className="pn-sub">Nadie ajustó la campaña a tiempo.</div>
             </div>
           </div>
-          <div className="pain-notif pn-3 qb-reveal qb-reveal-delay-3">
+          <div className="pain-notif pn-3">
             <span className="pn-badge" />
             <div className="pn-icon">
               <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
@@ -551,6 +596,18 @@ export default function BienvenidaExperience() {
               <div className="pn-meta">Diseñador · hace 4 días</div>
               <div className="pn-title">Los creativos no se parecen a tu marca</div>
               <div className="pn-sub">Y llevas 4 días esperando que lleguen.</div>
+            </div>
+          </div>
+
+          <div className="calma-wipe">
+            <div className="calma-content">
+              <div className="calma-check">
+                <svg viewBox="0 0 24 24" fill="none" stroke="#fff" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                  <path d="M9 12l2 2 4-4" /><circle cx="12" cy="12" r="9" />
+                </svg>
+              </div>
+              <h4>Quiubot ya se encargó.</h4>
+              <p>Tu campaña sigue vigilada, tus creativos ya están listos, y tú no moviste un dedo.</p>
             </div>
           </div>
         </div>
