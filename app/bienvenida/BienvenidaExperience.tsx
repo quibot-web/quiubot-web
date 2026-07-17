@@ -647,6 +647,15 @@ export default function BienvenidaExperience() {
         .qb-lp .sello-icono svg { width: 26px; height: 26px; }
         .qb-lp .sello-box h2 { font-size: clamp(24px, 3vw, 32px); }
         .qb-lp .sello-box p.lead { max-width: 560px; margin: 14px auto 0; }
+        .qb-lp .founder-note { display: flex; align-items: center; gap: 18px; text-align: left; background: var(--bg-alt); border-radius: 16px; padding: 20px 24px; margin: 26px auto 0; max-width: 600px; }
+        .qb-lp .founder-photo-wrap { position: relative; width: 64px; height: 64px; border-radius: 50%; flex-shrink: 0; overflow: hidden; box-shadow: 0 6px 16px rgba(74,63,174,0.2); }
+        .qb-lp .founder-photo { width: 100%; height: 100%; object-fit: cover; display: block; }
+        .qb-lp .founder-fallback { position: absolute; inset: 0; display: none; align-items: center; justify-content: center; background: var(--purple-deep); color: #fff; font-weight: 700; font-size: 19px; font-family: var(--font-display), sans-serif; }
+        .qb-lp .founder-fallback.visible { display: flex; }
+        .qb-lp .founder-quote { font-size: 14.5px; color: var(--ink); line-height: 1.5; font-style: italic; margin: 0 0 8px; }
+        .qb-lp .founder-firma { display: flex; flex-direction: column; }
+        .qb-lp .founder-nombre { font-size: 13px; font-weight: 700; color: var(--ink); font-style: normal; }
+        .qb-lp .founder-cargo { font-size: 11px; color: var(--muted); font-family: var(--font-mono), monospace; letter-spacing: 0.02em; }
         .qb-lp .chips { display: flex; flex-wrap: wrap; justify-content: center; gap: 10px; margin-top: 30px; }
         .qb-lp .chip { display: inline-flex; align-items: center; gap: 7px; font-size: 13px; font-weight: 600; color: var(--purple-deep); background: var(--bg-alt); border: 1px solid #E5E1F5; padding: 9px 16px 9px 12px; border-radius: 20px; }
         .qb-lp .chip .check-mini { width: 16px; height: 16px; border-radius: 50%; background: var(--mint); color: #fff; font-size: 10px; display: flex; align-items: center; justify-content: center; flex-shrink: 0; }
@@ -682,6 +691,8 @@ export default function BienvenidaExperience() {
         .qb-lp footer a { color: var(--muted); text-decoration: underline; }
 
         @media (max-width: 860px) {
+          .qb-lp .founder-note { flex-direction: column; text-align: center; }
+          .qb-lp .founder-firma { align-items: center; }
           .qb-lp .caos-calma-band { min-height: 0; padding: 28px 16px; }
           .qb-lp .caos-calma-stage { min-height: 0; animation: none; }
           .qb-lp .pain-notif { position: static; width: 100%; margin-bottom: 12px; }
@@ -906,6 +917,30 @@ export default function BienvenidaExperience() {
             Ya generamos estrategias y campañas reales para los primeros negocios que se unieron —
             sin equipos de marketing, sin agencias, sin líos. Tú puedes ser el próximo en recuperar tus horas.
           </p>
+          <div className="founder-note">
+            <div className="founder-photo-wrap">
+              <img
+                src="/marca/fundador-juan-jose.jpg"
+                alt="Juan José Palacios Villarreal, fundador de Quiubot"
+                className="founder-photo"
+                onError={(e) => {
+                  e.currentTarget.style.display = "none";
+                  e.currentTarget.nextElementSibling?.classList.add("visible");
+                }}
+              />
+              <div className="founder-fallback">JP</div>
+            </div>
+            <div>
+              <p className="founder-quote">
+                "Yo mismo perdía horas armando campañas para mi propio negocio — por eso construí Quiubot.
+                Apenas estamos empezando, así que cada negocio que entra lo reviso yo, personalmente."
+              </p>
+              <div className="founder-firma">
+                <span className="founder-nombre">Juan José Palacios Villarreal</span>
+                <span className="founder-cargo">Fundador de Quiubot</span>
+              </div>
+            </div>
+          </div>
           <div className="chips">
             {CHIPS_CONFIANZA.map((c) => (
               <span className="chip" key={c}><span className="check-mini">✓</span>{c}</span>
