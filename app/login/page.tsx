@@ -136,7 +136,7 @@ function LoginContent() {
           <span className="ql-chip">Cancela cuando quieras</span>
         </div>
 
-        <p className="ql-terminos">Al ingresar aceptas los términos de uso</p>
+        <p className="ql-terminos">Al ingresar aceptas los <a href="/terminos" style={{ color: "#7F77DD", fontWeight: 600 }}>términos de uso</a></p>
       </div>
     </div>
   )

@@ -1,6 +1,7 @@
 import { auth } from "@/auth"
 import { NextRequest, NextResponse } from "next/server"
 import { supabaseAdmin } from "@/lib/supabase"
+import { encriptar, desencriptarSiHaceFalta } from "@/lib/crypto"
 
 export async function POST(req: NextRequest) {
   const session = await auth()
@@ -13,7 +14,7 @@ export async function POST(req: NextRequest) {
 
   const { error } = await supabaseAdmin
     .from("usuarios")
-    .upsert({ email: session.user.email, openai_key: apiKey }, { onConflict: "email" })
+    .upsert({ email: session.user.email, openai_key: encriptar(apiKey) }, { onConflict: "email" })
 
   if (error) return NextResponse.json({ error: error.message }, { status: 500 })
   return NextResponse.json({ ok: true })
@@ -30,9 +31,20 @@ export async function GET() {
     .eq("email", session.user.email)
     .single()
 
-  const key = data?.openai_key
+  const keyGuardada = data?.openai_key
+  let preview: string | null = null
+
+  if (keyGuardada) {
+    try {
+      const keyReal = desencriptarSiHaceFalta(keyGuardada)
+      preview = `sk-...${keyReal.slice(-6)}`
+    } catch {
+      preview = null
+    }
+  }
+
   return NextResponse.json({
-    hasKey: !!key,
-    preview: key ? `sk-...${key.slice(-6)}` : null,
+    hasKey: !!keyGuardada,
+    preview,
   })
 }

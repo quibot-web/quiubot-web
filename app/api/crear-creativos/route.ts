@@ -1,5 +1,8 @@
 import { auth } from "@/auth";
 import { NextRequest, NextResponse } from "next/server";
+import { supabaseAdmin } from "@/lib/supabase";
+import { desencriptarSiHaceFalta } from "@/lib/crypto";
+import { verificarLimite } from "@/lib/rateLimit";
 
 export async function POST(req: NextRequest) {
   const session = await auth();
@@ -7,11 +10,58 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ error: "No autorizado" }, { status: 401 });
   }
 
+  const permitido = verificarLimite(`crear-creativos:${session.user.email}`, 3, 5 * 60 * 1000);
+  if (!permitido) {
+    return NextResponse.json(
+      { error: "Estás generando creativos muy rápido. Espera unos minutos e intenta de nuevo." },
+      { status: 429 }
+    );
+  }
+
   const emailBusqueda = session.user.email.trim().toLowerCase();
   const { estrategia, descripcion_visual_producto, imagen_producto_base64 } = await req.json();
 
   if (!estrategia || !descripcion_visual_producto || !imagen_producto_base64) {
     return NextResponse.json({ error: "Falta la estrategia, la descripción o la foto del producto" }, { status: 400 });
+  }
+
+  const { data: usuario } = await supabaseAdmin
+    .from("usuarios")
+    .select("openai_key, cloudinary_name, cloudinary_key, cloudinary_secret")
+    .eq("email", emailBusqueda)
+    .single();
+
+  if (!usuario) {
+    return NextResponse.json({ error: "Usuario no encontrado" }, { status: 404 });
+  }
+
+  if (!usuario.openai_key) {
+    return NextResponse.json(
+      { error: "Necesitas conectar tu API key de OpenAI en Integraciones antes de generar creativos." },
+      { status: 400 }
+    );
+  }
+
+  if (!usuario.cloudinary_name || !usuario.cloudinary_key || !usuario.cloudinary_secret) {
+    return NextResponse.json(
+      { error: "Necesitas conectar tus credenciales de Cloudinary en Integraciones antes de generar creativos." },
+      { status: 400 }
+    );
+  }
+
+  let openaiKeyDescifrada: string;
+  let cloudinaryKeyDescifrada: string;
+  let cloudinarySecretDescifrado: string;
+  try {
+    openaiKeyDescifrada = desencriptarSiHaceFalta(usuario.openai_key);
+    cloudinaryKeyDescifrada = desencriptarSiHaceFalta(usuario.cloudinary_key);
+    cloudinarySecretDescifrado = desencriptarSiHaceFalta(usuario.cloudinary_secret);
+  } catch (err) {
+    console.error("Error al descifrar credenciales:", err);
+    return NextResponse.json(
+      { error: "No se pudieron leer tus credenciales guardadas. Vuelve a conectarlas en Integraciones." },
+      { status: 500 }
+    );
   }
 
   try {
@@ -23,6 +73,10 @@ export async function POST(req: NextRequest) {
         estrategia,
         descripcion_visual_producto,
         imagen_producto_base64,
+        openai_key: openaiKeyDescifrada,
+        cloudinary_name: usuario.cloudinary_name,
+        cloudinary_key: cloudinaryKeyDescifrada,
+        cloudinary_secret: cloudinarySecretDescifrado,
       }),
     });
 

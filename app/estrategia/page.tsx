@@ -2,6 +2,8 @@
 import { useState, useRef, useEffect, Suspense } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 import AdBlueprintExplorer from "@/app/components/AdBlueprintExplorer";
+import TutorialVideo from "@/app/components/TutorialVideo";
+import TourGuiado from "@/app/components/TourGuiado";
 
 function IconoWhatsApp() {
   return (
@@ -455,7 +457,19 @@ function EstrategiaContent() {
           ← Volver al panel principal
         </button>
 
-        <h1 style={{ fontSize: 20, fontWeight: 700, marginBottom: 4, color: "#1a1a1a" }}>Motor de Estrategia Publicitaria</h1>
+        <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 4 }}>
+          <h1 style={{ fontSize: 20, fontWeight: 700, margin: 0, color: "#1a1a1a" }}>Motor de Estrategia Publicitaria</h1>
+          <div style={{ display: "flex", gap: 6 }}>
+            <TutorialVideo seccion="motor-estrategia" />
+            <TourGuiado
+              seccion="motor-estrategia"
+              pasos={[
+                { selector: '[data-tour="estrategia-upload"]', titulo: "Empieza subiendo tu producto", texto: "Una foto clara del producto es todo lo que necesitas para arrancar." },
+                { selector: '[data-tour="estrategia-siguiente"]', titulo: "Avanza paso a paso", texto: "Objetivo, presupuesto, y en segundos tienes la estrategia completa lista." },
+              ]}
+            />
+          </div>
+        </div>
         <p style={{ fontSize: 13, color: "#999", marginBottom: "2rem" }}>
           Paso {step === "imagen" ? "1" : step === "objetivo" ? "2" : step === "presupuesto" ? "3" : step === "resultado" ? "4" : "5"} de 5
         </p>
@@ -463,7 +477,7 @@ function EstrategiaContent() {
         {step === "imagen" && (
           <div style={{ display: "flex", flexDirection: "column", gap: "1.5rem" }}>
             <p style={{ fontSize: 15, fontWeight: 600, color: "#1a1a1a" }}>1. Sube la foto de tu producto</p>
-            <div onClick={() => fileRef.current?.click()} style={{ border: "1.5px dashed #7F77DD", borderRadius: 12, padding: "2rem", display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", cursor: "pointer", background: "#fcfcff", minHeight: 180 }}>
+            <div data-tour="estrategia-upload" onClick={() => fileRef.current?.click()} style={{ border: "1.5px dashed #7F77DD", borderRadius: 12, padding: "2rem", display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", cursor: "pointer", background: "#fcfcff", minHeight: 180 }}>
               {preview ? (
                 <img src={preview} alt="preview" style={{ maxHeight: 200, borderRadius: 8 }} />
               ) : (
@@ -475,7 +489,7 @@ function EstrategiaContent() {
               )}
               <input ref={fileRef} type="file" accept="image/*" style={{ display: "none" }} onChange={handleFile} />
             </div>
-            <button onClick={() => setStep("objetivo")} disabled={!imagen} style={{ background: !imagen ? "#ccc" : "#534AB7", color: "#fff", border: "none", padding: "16px", borderRadius: 10, fontSize: 16, fontWeight: 600, cursor: !imagen ? "not-allowed" : "pointer" }}>
+            <button data-tour="estrategia-siguiente" onClick={() => setStep("objetivo")} disabled={!imagen} style={{ background: !imagen ? "#ccc" : "#534AB7", color: "#fff", border: "none", padding: "16px", borderRadius: 10, fontSize: 16, fontWeight: 600, cursor: !imagen ? "not-allowed" : "pointer" }}>
               Siguiente paso
             </button>
           </div>
