@@ -167,6 +167,7 @@ export default function Home() {
     cargarNotificaciones();
     cargarMetaInfo();
     cargarRol();
+    fetch("/api/registro-riesgo", { method: "POST" }).catch(() => {}); // anti-multicuenteo: se auto-protege, seguro llamarlo siempre
 
     const params = new URLSearchParams(window.location.search);
     if (params.get("meta_conectado") === "1") {
