@@ -1,12 +1,39 @@
 "use client"
-import { Suspense } from "react"
+import { Suspense, useState } from "react"
 import { signIn } from "next-auth/react"
-import { useSearchParams } from "next/navigation"
+import { useSearchParams, useRouter } from "next/navigation"
+import Link from "next/link"
 
 function LoginContent() {
   const searchParams = useSearchParams()
+  const router = useRouter()
   const next = searchParams.get("next") || "/"
   const vaAPagar = next === "/billing"
+  const verificado = searchParams.get("verificado")
+
+  const [email, setEmail] = useState("")
+  const [password, setPassword] = useState("")
+  const [enviando, setEnviando] = useState(false)
+  const [error, setError] = useState<string | null>(null)
+
+  const handleSubmitPassword = async (e: React.FormEvent) => {
+    e.preventDefault()
+    if (enviando) return
+    setEnviando(true)
+    setError(null)
+    try {
+      const res = await signIn("credentials", { email, password, redirect: false })
+      if (res?.error) {
+        setError("Correo o contraseña incorrectos. Si no verificaste tu correo, revisa tu bandeja de entrada.")
+        return
+      }
+      router.push(next)
+    } catch {
+      setError("No se pudo conectar. Intenta de nuevo.")
+    } finally {
+      setEnviando(false)
+    }
+  }
 
   return (
     <div className="ql-page">
@@ -43,7 +70,7 @@ function LoginContent() {
           display: flex;
           flex-direction: column;
           align-items: center;
-          gap: 18px;
+          gap: 14px;
           width: 100%;
           max-width: 400px;
           box-shadow: 0 24px 60px rgba(74,63,174,0.14);
@@ -93,10 +120,24 @@ function LoginContent() {
           border-color: #C4BFF0;
         }
 
+        .ql-divider { display: flex; align-items: center; gap: 10px; width: 100%; margin: 4px 0; }
+        .ql-divider::before, .ql-divider::after { content: ""; flex: 1; height: 1px; background: #ECE9F7; }
+        .ql-divider span { font-size: 11px; color: #aaa; font-weight: 600; text-transform: uppercase; letter-spacing: 0.05em; }
+
+        .ql-form { width: 100%; display: flex; flex-direction: column; gap: 10px; }
+        .ql-input { width: 100%; padding: 12px 14px; border-radius: 10px; border: 1px solid #e0e0e0; font-size: 14px; box-sizing: border-box; font-family: inherit; }
+        .ql-btn-password { width: 100%; background: #534AB7; color: #fff; border: none; padding: 13px; border-radius: 10px; font-size: 14px; font-weight: 700; cursor: pointer; }
+        .ql-btn-password:disabled { opacity: 0.6; cursor: not-allowed; }
+
+        .ql-links { display: flex; justify-content: space-between; width: 100%; font-size: 12.5px; }
+        .ql-links a { color: #7F77DD; font-weight: 600; text-decoration: none; }
+
         .ql-chips { display: flex; gap: 8px; flex-wrap: wrap; justify-content: center; margin-top: 4px; }
         .ql-chip { font-size: 11px; font-weight: 600; color: #4A3FAE; background: #F1EFFB; padding: 5px 10px; border-radius: 20px; }
 
         .ql-terminos { color: #aaa; font-size: 11px; text-align: center; margin: 4px 0 0; }
+        .ql-alerta-ok { background: #f0fdf4; border: 1px solid #bbf7d0; color: #15803d; border-radius: 8px; padding: 8px 12px; font-size: 12.5px; width: 100%; box-sizing: border-box; text-align: center; }
+        .ql-alerta-error { background: #fef2f2; border: 1px solid #fecaca; color: #b91c1c; border-radius: 8px; padding: 8px 12px; font-size: 12.5px; width: 100%; box-sizing: border-box; text-align: center; }
       `}</style>
 
       <div className="ql-blob ql-blob-a" />
@@ -121,6 +162,17 @@ function LoginContent() {
             : "Estrategia, creativos y campañas con IA — mientras Quiubot vigila y ajusta todo por ti."}
         </p>
 
+        {verificado === "1" && (
+          <div style={{ background: "#f0fdf4", border: "1px solid #bbf7d0", color: "#15803d", borderRadius: 8, padding: "8px 12px", fontSize: 12.5, width: "100%", boxSizing: "border-box", textAlign: "center" }}>
+            ✅ Correo confirmado. Ya puedes iniciar sesión.
+          </div>
+        )}
+        {verificado === "error" && (
+          <div className="ql-alerta-error">
+            El enlace de confirmación no es válido o ya venció.
+          </div>
+        )}
+
         <button
           className="ql-btn-google"
           onClick={() => signIn("google", { callbackUrl: next })}
@@ -130,6 +182,35 @@ function LoginContent() {
           </svg>
           Continuar con Google
         </button>
+
+        <div className="ql-divider"><span>o con tu correo</span></div>
+
+        <form className="ql-form" onSubmit={handleSubmitPassword}>
+          <input
+            className="ql-input"
+            type="email"
+            placeholder="Correo electrónico"
+            required
+            value={email}
+            onChange={(e) => setEmail(e.target.value)}
+          />
+          <input
+            className="ql-input"
+            type="password"
+            placeholder="Contraseña"
+            required
+            value={password}
+            onChange={(e) => setPassword(e.target.value)}
+          />
+          {error && <div className="ql-alerta-error">{error}</div>}
+          <button className="ql-btn-password" type="submit" disabled={enviando}>
+            {enviando ? "Entrando..." : "Iniciar sesión"}
+          </button>
+          <div className="ql-links">
+            <Link href="/registro">Crear cuenta</Link>
+            <Link href="/olvide-password">Olvidé mi contraseña</Link>
+          </div>
+        </form>
 
         <div className="ql-chips">
           <span className="ql-chip">Sin tarjeta de crédito</span>
