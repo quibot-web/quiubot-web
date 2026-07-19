@@ -2,6 +2,8 @@ import { auth } from "@/auth";
 import { NextResponse } from "next/server";
 import { supabaseAdmin } from "@/lib/supabase";
 
+const PLANES_VALIDOS = ["arranque", "crecimiento", "escala"];
+
 export async function POST(
   req: Request,
   { params }: { params: Promise<{ id: string }> }
@@ -25,11 +27,24 @@ export async function POST(
     return NextResponse.json({ error: "No autorizado" }, { status: 403 });
   }
 
-  const { activo } = await req.json();
+  const body = await req.json().catch(() => ({}));
+  const { activo, plan_minimo } = body as { activo?: boolean; plan_minimo?: string };
+
+  if (activo === undefined && plan_minimo === undefined) {
+    return NextResponse.json({ error: "Nada que actualizar" }, { status: 400 });
+  }
+
+  if (plan_minimo !== undefined && !PLANES_VALIDOS.includes(plan_minimo)) {
+    return NextResponse.json({ error: "Plan minimo invalido" }, { status: 400 });
+  }
+
+  const cambios: Record<string, any> = { actualizado_en: new Date().toISOString() };
+  if (activo !== undefined) cambios.activo = activo;
+  if (plan_minimo !== undefined) cambios.plan_minimo = plan_minimo;
 
   const { data, error } = await supabaseAdmin
     .from("objetivos_config")
-    .update({ activo, actualizado_en: new Date().toISOString() })
+    .update(cambios)
     .eq("id", id)
     .select()
     .single();

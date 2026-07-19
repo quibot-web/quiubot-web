@@ -30,7 +30,7 @@ const PLANES = [
     precio: 0,
     features: [
       "1 estrategia nueva por mes",
-      "Venta Directa y Tráfico/Mensajes",
+      "Objetivo de Tráfico y Mensajes",
       "Álbum de creativos con auditoría de marca",
       "Notificaciones informativas",
     ],
