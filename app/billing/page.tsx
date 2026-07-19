@@ -3,6 +3,8 @@ import { useEffect, useRef, useState } from "react"
 import { useSession } from "next-auth/react"
 import { useRouter } from "next/navigation"
 
+import { OBJETIVOS_INFO } from "@/app/lib/objetivosInfo"
+
 const TU_WHATSAPP = "573122462312"
 
 const LINKS_WOMPI: Record<string, string> = {
@@ -13,6 +15,7 @@ const LINKS_WOMPI: Record<string, string> = {
 }
 
 const DESCUENTO_ANUAL = 0.15
+const ORDEN_PLANES = ["arranque", "crecimiento", "escala"]
 
 type BillingInfo = {
   plan: string
@@ -30,7 +33,6 @@ const PLANES = [
     precio: 0,
     features: [
       "1 estrategia nueva por mes",
-      "Objetivo de Tráfico y Mensajes",
       "Álbum de creativos con auditoría de marca",
       "Notificaciones informativas",
     ],
@@ -42,7 +44,6 @@ const PLANES = [
     precio: 149900,
     features: [
       "4 estrategias nuevas por mes",
-      "Todos los objetivos publicitarios",
       "Playbook vigilando 2 campañas",
       "Alertas y sugerencias inteligentes",
     ],
@@ -55,7 +56,6 @@ const PLANES = [
     masElegido: true,
     features: [
       "Estrategias nuevas ilimitadas",
-      "Todos los objetivos publicitarios",
       "Playbook vigilando todas tus campañas",
       "Alertas y sugerencias con prioridad",
     ],
@@ -95,12 +95,32 @@ export default function BillingPage() {
   const router = useRouter()
   const [info, setInfo] = useState<BillingInfo | null>(null)
   const [ciclo, setCiclo] = useState<"mensual" | "anual">("mensual")
+  const [objetivosActivos, setObjetivosActivos] = useState<string[]>([])
+  const [planMinimoPorId, setPlanMinimoPorId] = useState<Record<string, string>>({})
 
   useEffect(() => {
     fetch("/api/billing")
       .then(r => r.json())
       .then(setInfo)
+
+    fetch("/api/objetivos-activos")
+      .then(r => r.json())
+      .then((data) => {
+        setObjetivosActivos(data.activos ?? [])
+        setPlanMinimoPorId(data.planMinimoPorId ?? {})
+      })
+      .catch(() => {})
   }, [])
+
+  const objetivosDelPlan = (planId: string): string[] => {
+    return OBJETIVOS_INFO
+      .filter((o) => {
+        if (!objetivosActivos.includes(o.id)) return false
+        const planRequerido = planMinimoPorId[o.id] || "arranque"
+        return ORDEN_PLANES.indexOf(planId) >= ORDEN_PLANES.indexOf(planRequerido)
+      })
+      .map((o) => o.label)
+  }
 
   const formatFecha = (fecha: string | null) => {
     if (!fecha) return "—"
@@ -223,6 +243,7 @@ export default function BillingPage() {
             const mensualEquivalente = Math.round(totalAnual / 12)
             const ahorroAnual = plan.precio * 12 - totalAnual
             const precioMostrado = esAnual ? mensualEquivalente : plan.precio
+            const objetivosIncluidos = objetivosDelPlan(plan.id)
 
             return (
               <div
@@ -283,6 +304,16 @@ export default function BillingPage() {
                 )}
 
                 <div style={{ display: "flex", flexDirection: "column", gap: 10, marginBottom: 24, marginTop: esAnual ? 14 : 0 }}>
+                  {objetivosIncluidos.length > 0 && (
+                    <div style={{ display: "flex", alignItems: "flex-start", gap: 8, fontSize: 13, color: "#333" }}>
+                      <span style={{ color: "#10b981", fontWeight: 700, flexShrink: 0 }}>✓</span>
+                      <span>
+                        {objetivosIncluidos.length === OBJETIVOS_INFO.filter((o) => objetivosActivos.includes(o.id)).length
+                          ? "Todos los objetivos publicitarios activos"
+                          : `Objetivos: ${objetivosIncluidos.join(", ")}`}
+                      </span>
+                    </div>
+                  )}
                   {plan.features.map((f) => (
                     <div key={f} style={{ display: "flex", alignItems: "flex-start", gap: 8, fontSize: 13, color: "#333" }}>
                       <span style={{ color: "#10b981", fontWeight: 700, flexShrink: 0 }}>✓</span>
