@@ -1,6 +1,15 @@
 import { NextRequest, NextResponse } from "next/server";
 import { supabaseAdmin } from "@/lib/supabase";
 
+// Senal de riesgo mas fuerte de las tres: si una misma cuenta publicitaria
+// de Meta (un negocio real) ya esta conectada a OTRO usuario de Quiubot,
+// es casi seguro que se trate de una cuenta duplicada para abusar del plan
+// gratis o del trial. No bloqueamos la conexion (el usuario igual puede
+// usar su cuenta de Meta con normalidad) — solo se apaga el trial si lo
+// tenia, y queda registrado para revision manual, igual que las otras
+// senales (ver /api/registro-riesgo).
+const RIESGO_META_REPETIDA = 6;
+
 export async function GET(req: NextRequest) {
   const { searchParams } = new URL(req.url);
   const code = searchParams.get("code");
@@ -64,7 +73,45 @@ export async function GET(req: NextRequest) {
 
     const fechaExpira = new Date(Date.now() + expiresIn * 1000);
 
-    // 4. Guardar todo en Supabase
+    // 3.5 — Deteccion de cuenta publicitaria repetida entre usuarios distintos.
+    // Se hace ANTES de guardar, comparando contra lo que ya hay en la tabla.
+    if (primeraCuenta) {
+      const { data: otroUsuarioConEstaCuenta } = await supabaseAdmin
+        .from("usuarios")
+        .select("id, email")
+        .eq("meta_ad_account_id", primeraCuenta.id)
+        .neq("email", email)
+        .maybeSingle();
+
+      if (otroUsuarioConEstaCuenta) {
+        const { data: usuarioActual } = await supabaseAdmin
+          .from("usuarios")
+          .select("id, en_trial")
+          .eq("email", email)
+          .maybeSingle();
+
+        if (usuarioActual) {
+          await supabaseAdmin.from("senales_registro").insert({
+            usuario_id: usuarioActual.id,
+            ip_hash: "meta-ad-account-repetida",
+            dispositivo_id: null,
+            riesgo: RIESGO_META_REPETIDA,
+            marcado_sospechoso: true,
+            detalle: `La cuenta publicitaria de Meta ${primeraCuenta.id} ya estaba conectada al usuario ${otroUsuarioConEstaCuenta.email}.`,
+          });
+
+          if (usuarioActual.en_trial) {
+            await supabaseAdmin
+              .from("usuarios")
+              .update({ en_trial: false, plan: "arranque", trial_termina_en: null })
+              .eq("id", usuarioActual.id);
+          }
+        }
+      }
+    }
+
+    // 4. Guardar todo en Supabase (esto sigue pasando siempre — nunca se
+    // le rompe la conexion de Meta a nadie, solo se apaga el trial si aplicaba)
     const { error } = await supabaseAdmin
       .from("usuarios")
       .update({
