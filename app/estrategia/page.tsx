@@ -152,6 +152,8 @@ const TARJETAS_TIPO: Record<
     chips: { icono: typeof ShoppingBag; label: string }[];
     iconoPreview: typeof Camera;
     beneficio: string;
+    headlineEjemplo: string;
+    ctaEjemplo: string;
   }
 > = {
   producto: {
@@ -167,6 +169,8 @@ const TARJETAS_TIPO: Record<
     ],
     iconoPreview: Camera,
     beneficio: "Una sola foto es suficiente",
+    headlineEjemplo: "Descúbrelo antes de que se agote",
+    ctaEjemplo: "Comprar ahora",
   },
   servicio: {
     etiqueta: "TIPO_02",
@@ -181,6 +185,8 @@ const TARJETAS_TIPO: Record<
     ],
     iconoPreview: Sparkles,
     beneficio: "Genera varios ángulos por ti",
+    headlineEjemplo: "Vive la experiencia completa",
+    ctaEjemplo: "Reservar ahora",
   },
 };
 
@@ -783,50 +789,70 @@ function EstrategiaContent() {
               />
             </div>
 
-            {/* Banner de confirmación — el momento en que la elección "se activa",
-                como un loadout: refuerza qué modo va a usar el resto del wizard. */}
-            {tipoContenido && (
-              <div
-                style={{
-                  display: "flex",
-                  alignItems: "center",
-                  gap: 12,
-                  background: tipoContenido === "servicio" ? "#534AB7" : "#F3F2FE",
-                  borderRadius: 14,
-                  padding: "14px 18px",
-                  animation: "quiubot-banner-in .2s ease",
-                }}
-              >
-                {(() => {
-                  const IconoModo = TARJETAS_TIPO[tipoContenido].icono;
-                  const enServicio = tipoContenido === "servicio";
-                  return (
+            {/* Vista previa del anuncio — reacciona al hover (exploración sin compromiso)
+                y a la selección (vista "bloqueada" con más peso visual). Mostrar el
+                resultado concreto antes de decidir reduce la incertidumbre de elegir. */}
+            {(() => {
+              const tipoAMostrar = tipoContenido ?? hoverTipo;
+              if (!tipoAMostrar) {
+                return (
+                  <p style={{ fontSize: 12, color: "#bbb", textAlign: "center", margin: 0 }}>
+                    Pasa el mouse sobre una opción para ver cómo se vería tu anuncio
+                  </p>
+                );
+              }
+              const data = TARJETAS_TIPO[tipoAMostrar];
+              const bloqueado = tipoContenido === tipoAMostrar;
+              const esServicioPreview = tipoAMostrar === "servicio";
+              const IconoGrande = data.icono;
+              return (
+                <div
+                  style={{
+                    display: "flex",
+                    alignItems: "center",
+                    gap: 14,
+                    background: bloqueado ? (esServicioPreview ? "#534AB7" : "#F3F2FE") : "#fff",
+                    border: bloqueado ? "none" : "1.5px dashed #ddd",
+                    borderRadius: 14,
+                    padding: "14px 16px",
+                    animation: "quiubot-banner-in .2s ease",
+                  }}
+                >
+                  {/* Mini mockup de publicación */}
+                  <div style={{ display: "flex", alignItems: "center", gap: 8, background: "#fff", borderRadius: 10, padding: 8, boxShadow: "0 0 0 1px #eee" }}>
                     <div
                       style={{
-                        width: 32,
-                        height: 32,
-                        borderRadius: 9,
-                        background: enServicio ? "rgba(255,255,255,0.18)" : "#fff",
+                        width: 52,
+                        height: 52,
+                        borderRadius: 8,
+                        background: esServicioPreview ? "#534AB7" : "#F3F2FE",
                         display: "flex",
                         alignItems: "center",
                         justifyContent: "center",
                         flexShrink: 0,
                       }}
                     >
-                      <IconoModo size={17} color={enServicio ? "#fff" : "#534AB7"} strokeWidth={2} aria-hidden="true" />
+                      <IconoGrande size={24} color={esServicioPreview ? "#fff" : "#534AB7"} strokeWidth={2} aria-hidden="true" />
                     </div>
-                  );
-                })()}
-                <div>
-                  <p style={{ margin: 0, fontSize: 13, fontWeight: 700, color: tipoContenido === "servicio" ? "#fff" : "#534AB7" }}>
-                    Modo {TARJETAS_TIPO[tipoContenido].titulo} activado
-                  </p>
-                  <p style={{ margin: 0, fontSize: 12, color: tipoContenido === "servicio" ? "rgba(255,255,255,0.8)" : "#534AB7" }}>
-                    El resto del proceso se ajusta a esta elección. Puedes cambiarla arriba cuando quieras.
-                  </p>
+                    <div>
+                      <p style={{ margin: "0 0 6px", fontSize: 11, fontWeight: 600, color: "#333", maxWidth: 150, lineHeight: 1.3 }}>{data.headlineEjemplo}</p>
+                      <span style={{ display: "inline-block", background: "#534AB7", color: "#fff", fontSize: 10, fontWeight: 600, padding: "3px 10px", borderRadius: 12 }}>
+                        {data.ctaEjemplo}
+                      </span>
+                    </div>
+                  </div>
+
+                  <div style={{ flex: 1 }}>
+                    <p style={{ margin: 0, fontSize: 13, fontWeight: 700, color: bloqueado ? (esServicioPreview ? "#fff" : "#534AB7") : "#666" }}>
+                      {bloqueado ? `Modo ${data.titulo} activado` : `Así se vería tu anuncio de ${data.titulo.toLowerCase()}`}
+                    </p>
+                    <p style={{ margin: "2px 0 0", fontSize: 11, color: bloqueado ? (esServicioPreview ? "rgba(255,255,255,0.8)" : "#534AB7") : "#999" }}>
+                      {bloqueado ? "Ejemplo ilustrativo — puedes cambiar de opción arriba cuando quieras." : "Haz clic en la tarjeta para elegir este modo."}
+                    </p>
+                  </div>
                 </div>
-              </div>
-            )}
+              );
+            })()}
 
             <button
               onClick={() => setStep("imagen")}
