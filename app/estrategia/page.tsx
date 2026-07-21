@@ -144,7 +144,7 @@ const NUMERO_DE_PASO: Record<EstrategiaStep, number> = {
 // objeto para no repetir textos/íconos entre el render y la lógica de estilos.
 const TARJETAS_TIPO: Record<
   TipoContenido,
-  { etiqueta: string; icono: typeof ShoppingBag; titulo: string; descripcion: string; ejemplos: string; iconoPreview: typeof Camera; labelPreview: string }
+  { etiqueta: string; icono: typeof ShoppingBag; titulo: string; descripcion: string; ejemplos: string; iconoPreview: typeof Camera; beneficio: string }
 > = {
   producto: {
     etiqueta: "TIPO_01",
@@ -153,7 +153,7 @@ const TARJETAS_TIPO: Record<
     descripcion: "Ropa, tecnología, cosméticos, alimentos. Sube la foto y la convertimos en anuncios.",
     ejemplos: "Tiendas de ropa, electrónica, belleza, comida",
     iconoPreview: Camera,
-    labelPreview: "analizando producto",
+    beneficio: "Una sola foto es suficiente",
   },
   servicio: {
     etiqueta: "TIPO_02",
@@ -162,7 +162,7 @@ const TARJETAS_TIPO: Record<
     descripcion: "Viajes, cursos, consultorías. Sube tu pieza ya diseñada y generamos los ángulos.",
     ejemplos: "Agencias de viaje, coaches, cursos online, SaaS",
     iconoPreview: Sparkles,
-    labelPreview: "detectando ángulos",
+    beneficio: "Genera varios ángulos por ti",
   },
 };
 
@@ -172,12 +172,14 @@ const TARJETAS_TIPO: Record<
 function TarjetaTipoContenido({
   tipo,
   seleccionado,
+  algunaSeleccionada,
   enHover,
   onSelect,
   onHoverChange,
 }: {
   tipo: TipoContenido;
   seleccionado: boolean;
+  algunaSeleccionada: boolean;
   enHover: boolean;
   onSelect: () => void;
   onHoverChange: (activo: boolean) => void;
@@ -186,11 +188,17 @@ function TarjetaTipoContenido({
   const colorActivo = "#534AB7";
   const colorActivoClaro = "#7F77DD";
   const fondoActivo = "#F3F2FE";
+  const esServicio = tipo === "servicio";
 
   const colorTexto = seleccionado ? colorActivo : "#1a1a1a";
-  const colorMuted = seleccionado ? colorActivo : "#999";
   const colorBorde = seleccionado ? colorActivo : enHover ? "#bbb" : "#e8e8e6";
-  const colorBordePreview = seleccionado ? colorActivoClaro : "#ccc";
+  // Cuando ya hay una elección hecha, la tarjeta no elegida retrocede visualmente
+  // (como en un selector de personaje/skin), a menos que el mouse esté encima —
+  // así sigue siendo fácil cambiar de opinión sin perder la sensación de "modo activado".
+  const atenuada = algunaSeleccionada && !seleccionado && !enHover;
+
+  const Icono = data.icono;
+  const IconoPreview = data.iconoPreview;
 
   return (
     <div
@@ -213,25 +221,45 @@ function TarjetaTipoContenido({
         background: seleccionado ? fondoActivo : "#fff",
         padding: "1.25rem",
         position: "relative",
-        transition: "border-color .18s ease, background-color .18s ease, transform .12s ease",
-        transform: enHover && !seleccionado ? "scale(1.008)" : "scale(1)",
+        transition: "border-color .18s ease, background-color .18s ease, transform .12s ease, opacity .18s ease",
+        transform: enHover && !seleccionado ? "scale(1.008)" : seleccionado ? "scale(1.01)" : "scale(1)",
+        opacity: atenuada ? 0.5 : 1,
         outline: "none",
       }}
     >
-      <span
-        style={{
-          position: "absolute",
-          top: 14,
-          right: 16,
-          fontFamily: "ui-monospace, monospace",
-          fontSize: 10,
-          letterSpacing: "0.04em",
-          color: colorMuted,
-          transition: "color .18s ease",
-        }}
-      >
-        {data.etiqueta}
-      </span>
+      {esServicio ? (
+        <span
+          style={{
+            position: "absolute",
+            top: 14,
+            right: 16,
+            fontFamily: "ui-monospace, monospace",
+            fontSize: 10,
+            fontWeight: 700,
+            letterSpacing: "0.04em",
+            color: "#fff",
+            background: colorActivo,
+            padding: "2px 8px",
+            borderRadius: 8,
+          }}
+        >
+          NUEVO
+        </span>
+      ) : (
+        <span
+          style={{
+            position: "absolute",
+            top: 14,
+            right: 16,
+            fontFamily: "ui-monospace, monospace",
+            fontSize: 10,
+            letterSpacing: "0.04em",
+            color: "#999",
+          }}
+        >
+          {data.etiqueta}
+        </span>
+      )}
 
       {/* Insignia de check, escondida hasta que la tarjeta está seleccionada */}
       <div
@@ -254,55 +282,30 @@ function TarjetaTipoContenido({
         <Check size={12} color="#fff" strokeWidth={3} aria-hidden="true" />
       </div>
 
-      <div style={{ display: "flex", alignItems: "center", gap: 10, marginBottom: 14, paddingLeft: 2 }}>
+      <div style={{ display: "flex", alignItems: "center", gap: 10, marginBottom: 12 }}>
         <div
           style={{
-            width: 40,
-            height: 40,
-            borderRadius: 10,
-            border: `1px dashed ${seleccionado ? colorActivoClaro : "#ccc"}`,
+            width: 44,
+            height: 44,
+            borderRadius: 12,
+            background: esServicio ? colorActivo : fondoActivo,
             display: "flex",
             alignItems: "center",
             justifyContent: "center",
-            transition: "border-color .18s ease",
             flexShrink: 0,
           }}
         >
-          <data.icono size={19} color={colorMuted} strokeWidth={2} aria-hidden="true" />
+          <Icono size={22} color={esServicio ? "#fff" : colorActivo} strokeWidth={2} aria-hidden="true" />
         </div>
-        <p style={{ fontWeight: 600, fontSize: 15, margin: 0, color: colorTexto, transition: "color .18s ease" }}>{data.titulo}</p>
+        <p style={{ fontWeight: 600, fontSize: 16, margin: 0, color: colorTexto, transition: "color .18s ease" }}>{data.titulo}</p>
       </div>
 
       <p style={{ fontSize: 13, color: "#666", lineHeight: 1.5, margin: "0 0 10px" }}>{data.descripcion}</p>
       <p style={{ fontSize: 11, color: "#999", margin: "0 0 14px", fontStyle: "italic" }}>Ej: {data.ejemplos}</p>
 
-      <div style={{ position: "relative", background: "#fafafa", borderRadius: 10, padding: 12 }}>
-        <div style={{ position: "absolute", top: 5, left: 5, width: 8, height: 8, borderTop: `1.5px solid ${colorBordePreview}`, borderLeft: `1.5px solid ${colorBordePreview}`, transition: "border-color .18s ease" }} />
-        <div style={{ position: "absolute", top: 5, right: 5, width: 8, height: 8, borderTop: `1.5px solid ${colorBordePreview}`, borderRight: `1.5px solid ${colorBordePreview}`, transition: "border-color .18s ease" }} />
-        <div style={{ position: "absolute", bottom: 5, left: 5, width: 8, height: 8, borderBottom: `1.5px solid ${colorBordePreview}`, borderLeft: `1.5px solid ${colorBordePreview}`, transition: "border-color .18s ease" }} />
-        <div style={{ position: "absolute", bottom: 5, right: 5, width: 8, height: 8, borderBottom: `1.5px solid ${colorBordePreview}`, borderRight: `1.5px solid ${colorBordePreview}`, transition: "border-color .18s ease" }} />
-        <div style={{ display: "flex", gap: 8, alignItems: "center" }}>
-          <div style={{ width: 36, height: 36, borderRadius: 6, background: "#fff", flexShrink: 0, display: "flex", alignItems: "center", justifyContent: "center" }}>
-            <data.iconoPreview size={16} color="#bbb" strokeWidth={2} aria-hidden="true" />
-          </div>
-          <div style={{ flex: 1 }}>
-            <div style={{ height: 6, width: "70%", background: "#ddd", borderRadius: 3, marginBottom: 5 }} />
-            <div style={{ height: 6, width: "45%", background: "#eee", borderRadius: 3 }} />
-          </div>
-        </div>
-        <div style={{ display: "flex", alignItems: "center", gap: 5, marginTop: 10 }}>
-          <span
-            style={{
-              width: 5,
-              height: 5,
-              borderRadius: "50%",
-              background: colorMuted,
-              transition: "background-color .18s ease",
-              animation: seleccionado ? "quiubot-pulse-dot 1.4s ease-in-out infinite" : "none",
-            }}
-          />
-          <span style={{ fontFamily: "ui-monospace, monospace", fontSize: 10, color: "#999" }}>{data.labelPreview}</span>
-        </div>
+      <div style={{ background: fondoActivo, borderRadius: 10, padding: 10, display: "flex", alignItems: "center", gap: 8 }}>
+        <IconoPreview size={16} color={colorActivoClaro} strokeWidth={2} aria-hidden="true" />
+        <span style={{ fontSize: 11, color: colorActivo, fontWeight: 500 }}>{data.beneficio}</span>
       </div>
     </div>
   );
@@ -683,6 +686,7 @@ function EstrategiaContent() {
               <TarjetaTipoContenido
                 tipo="producto"
                 seleccionado={tipoContenido === "producto"}
+                algunaSeleccionada={tipoContenido !== null}
                 enHover={hoverTipo === "producto"}
                 onSelect={() => setTipoContenido("producto")}
                 onHoverChange={(activo) => setHoverTipo(activo ? "producto" : null)}
@@ -690,16 +694,66 @@ function EstrategiaContent() {
               <TarjetaTipoContenido
                 tipo="servicio"
                 seleccionado={tipoContenido === "servicio"}
+                algunaSeleccionada={tipoContenido !== null}
                 enHover={hoverTipo === "servicio"}
                 onSelect={() => setTipoContenido("servicio")}
                 onHoverChange={(activo) => setHoverTipo(activo ? "servicio" : null)}
               />
             </div>
 
+            {/* Banner de confirmación — el momento en que la elección "se activa",
+                como un loadout: refuerza qué modo va a usar el resto del wizard. */}
+            {tipoContenido && (
+              <div
+                style={{
+                  display: "flex",
+                  alignItems: "center",
+                  gap: 12,
+                  background: tipoContenido === "servicio" ? "#534AB7" : "#F3F2FE",
+                  borderRadius: 14,
+                  padding: "14px 18px",
+                  animation: "quiubot-banner-in .2s ease",
+                }}
+              >
+                {(() => {
+                  const IconoModo = TARJETAS_TIPO[tipoContenido].icono;
+                  const enServicio = tipoContenido === "servicio";
+                  return (
+                    <div
+                      style={{
+                        width: 32,
+                        height: 32,
+                        borderRadius: 9,
+                        background: enServicio ? "rgba(255,255,255,0.18)" : "#fff",
+                        display: "flex",
+                        alignItems: "center",
+                        justifyContent: "center",
+                        flexShrink: 0,
+                      }}
+                    >
+                      <IconoModo size={17} color={enServicio ? "#fff" : "#534AB7"} strokeWidth={2} aria-hidden="true" />
+                    </div>
+                  );
+                })()}
+                <div>
+                  <p style={{ margin: 0, fontSize: 13, fontWeight: 700, color: tipoContenido === "servicio" ? "#fff" : "#534AB7" }}>
+                    Modo {TARJETAS_TIPO[tipoContenido].titulo} activado
+                  </p>
+                  <p style={{ margin: 0, fontSize: 12, color: tipoContenido === "servicio" ? "rgba(255,255,255,0.8)" : "#534AB7" }}>
+                    El resto del proceso se ajusta a esta elección. Puedes cambiarla arriba cuando quieras.
+                  </p>
+                </div>
+              </div>
+            )}
+
             <button
               onClick={() => setStep("imagen")}
               disabled={!tipoContenido}
               style={{
+                display: "flex",
+                alignItems: "center",
+                justifyContent: "center",
+                gap: 8,
                 background: !tipoContenido ? "#eee" : "#534AB7",
                 color: !tipoContenido ? "#aaa" : "#fff",
                 border: "none",
@@ -711,6 +765,10 @@ function EstrategiaContent() {
                 transition: "background-color .18s ease, color .18s ease",
               }}
             >
+              {tipoContenido && (() => {
+                const IconoBtn = TARJETAS_TIPO[tipoContenido].icono;
+                return <IconoBtn size={18} strokeWidth={2} aria-hidden="true" />;
+              })()}
               {!tipoContenido
                 ? "Selecciona una opción para continuar"
                 : tipoContenido === "producto"
@@ -1147,6 +1205,7 @@ function EstrategiaContent() {
         .spinner-estrategia { border: 4px solid #f3f3f3; border-top: 4px solid #534AB7; border-radius: 50%; width: 40px; height: 40px; animation: spin-estrategia 1s linear infinite; }
         @keyframes spin-estrategia { 0% { transform: rotate(0deg); } 100% { transform: rotate(360deg); } }
         @keyframes quiubot-pulse-dot { 0%, 100% { opacity: 1; } 50% { opacity: .25; } }
+        @keyframes quiubot-banner-in { from { opacity: 0; transform: translateY(-4px); } to { opacity: 1; transform: translateY(0); } }
         .quiubot-card-tipo:focus-visible { box-shadow: 0 0 0 3px rgba(83, 74, 183, 0.3); }
       `}</style>
     </div>
