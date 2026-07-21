@@ -207,6 +207,7 @@ function TarjetaTipoContenido({
   const colorActivoClaro = "#7F77DD";
   const fondoActivo = "#F3F2FE";
   const esServicio = tipo === "servicio";
+  const [collageHover, setCollageHover] = useState(false);
 
   const colorTexto = seleccionado ? colorActivo : "#1a1a1a";
   const colorBorde = seleccionado ? colorActivo : enHover ? "#bbb" : "#e8e8e6";
@@ -344,14 +345,16 @@ function TarjetaTipoContenido({
       </div>
 
       {/* Collage decorativo: los mismos iconos de categoría, como si "salieran" de la
-          esquina de la tarjeta — refuerzo visual además de los chips con etiqueta. */}
+          esquina de la tarjeta. Al pasar el mouse, se separan y agrandan (efecto burbuja)
+          para que cada uno se identifique sin ambigüedad. */}
       <div
+        onMouseEnter={() => setCollageHover(true)}
+        onMouseLeave={() => setCollageHover(false)}
         style={{
           position: "absolute",
           bottom: -10,
           right: 18,
           display: "flex",
-          pointerEvents: "none",
         }}
       >
         {data.chips.map((chip, i) => {
@@ -361,20 +364,22 @@ function TarjetaTipoContenido({
             <div
               key={i}
               style={{
-                width: 26,
-                height: 26,
+                width: collageHover ? 30 : 26,
+                height: collageHover ? 30 : 26,
                 borderRadius: "50%",
                 background: esServicio ? colorActivo : "#fff",
                 border: `1.5px solid ${esServicio ? "#fff" : fondoActivo}`,
                 display: "flex",
                 alignItems: "center",
                 justifyContent: "center",
-                marginLeft: i === 0 ? 0 : -8,
-                transform: `rotate(${rotaciones[i % rotaciones.length]}deg)`,
+                marginLeft: i === 0 ? 0 : collageHover ? 5 : -8,
+                transform: collageHover ? "rotate(0deg) scale(1.08)" : `rotate(${rotaciones[i % rotaciones.length]}deg) scale(1)`,
+                transition: "all .28s cubic-bezier(.34,1.56,.64,1)",
+                transitionDelay: collageHover ? `${i * 0.035}s` : "0s",
                 zIndex: 10 - i,
               }}
             >
-              <IconoFloat size={12} color={esServicio ? "#fff" : colorActivo} strokeWidth={2} aria-hidden="true" />
+              <IconoFloat size={collageHover ? 14 : 12} color={esServicio ? "#fff" : colorActivo} strokeWidth={2} aria-hidden="true" />
             </div>
           );
         })}
