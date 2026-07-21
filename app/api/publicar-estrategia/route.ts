@@ -22,7 +22,7 @@ export async function POST(req: NextRequest) {
     .single();
 
   try {
-    const n8nRes = await fetch("https://n8n.quibot.juanshow.cloud/webhook/publicar_estrategia", {
+    const n8nRes = await fetch("https://n8n.quiubot.site/webhook/publicar_estrategia", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({

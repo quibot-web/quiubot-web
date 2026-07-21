@@ -35,7 +35,7 @@ export async function POST(
 
   try {
     // Esta llamada es la que ejecuta el cambio real en el Administrador de Anuncios de Meta
-    const n8nRes = await fetch("https://n8n.quibot.juanshow.cloud/webhook/aplicar_sugerencia", {
+    const n8nRes = await fetch("https://n8n.quiubot.site/webhook/aplicar_sugerencia", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({

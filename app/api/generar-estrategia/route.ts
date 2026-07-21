@@ -107,7 +107,7 @@ export async function POST(req: NextRequest) {
   }
 
   try {
-    const n8nRes = await fetch("https://n8n.quibot.juanshow.cloud/webhook/generar_estrategia", {
+    const n8nRes = await fetch("https://n8n.quiubot.site/webhook/generar_estrategia", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({
