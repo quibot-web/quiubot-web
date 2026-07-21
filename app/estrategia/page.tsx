@@ -1,6 +1,7 @@
 "use client";
 import { useState, useRef, useEffect, Suspense } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
+import { ShoppingBag, Target, Camera, Sparkles, Check } from "lucide-react";
 import AdBlueprintExplorer from "@/app/components/AdBlueprintExplorer";
 import TutorialVideo from "@/app/components/TutorialVideo";
 import TourGuiado from "@/app/components/TourGuiado";
@@ -139,11 +140,180 @@ const NUMERO_DE_PASO: Record<EstrategiaStep, number> = {
   creativos: 6,
 };
 
+// Contenido fijo de cada tarjeta del selector de tipo — se separa en un
+// objeto para no repetir textos/íconos entre el render y la lógica de estilos.
+const TARJETAS_TIPO: Record<
+  TipoContenido,
+  { etiqueta: string; icono: typeof ShoppingBag; titulo: string; descripcion: string; ejemplos: string; iconoPreview: typeof Camera; labelPreview: string }
+> = {
+  producto: {
+    etiqueta: "TIPO_01",
+    icono: ShoppingBag,
+    titulo: "Producto físico",
+    descripcion: "Ropa, tecnología, cosméticos, alimentos. Sube la foto y la convertimos en anuncios.",
+    ejemplos: "Tiendas de ropa, electrónica, belleza, comida",
+    iconoPreview: Camera,
+    labelPreview: "analizando producto",
+  },
+  servicio: {
+    etiqueta: "TIPO_02",
+    icono: Target,
+    titulo: "Servicio o infoproducto",
+    descripcion: "Viajes, cursos, consultorías. Sube tu pieza ya diseñada y generamos los ángulos.",
+    ejemplos: "Agencias de viaje, coaches, cursos online, SaaS",
+    iconoPreview: Sparkles,
+    labelPreview: "detectando ángulos",
+  },
+};
+
+// Tarjeta seleccionable del Paso 1 (Producto vs Servicio), con estados de
+// hover, selección y foco por teclado. Vive fuera del componente principal
+// porque no depende de ningún estado que no reciba por props.
+function TarjetaTipoContenido({
+  tipo,
+  seleccionado,
+  enHover,
+  onSelect,
+  onHoverChange,
+}: {
+  tipo: TipoContenido;
+  seleccionado: boolean;
+  enHover: boolean;
+  onSelect: () => void;
+  onHoverChange: (activo: boolean) => void;
+}) {
+  const data = TARJETAS_TIPO[tipo];
+  const colorActivo = "#534AB7";
+  const colorActivoClaro = "#7F77DD";
+  const fondoActivo = "#F3F2FE";
+
+  const colorTexto = seleccionado ? colorActivo : "#1a1a1a";
+  const colorMuted = seleccionado ? colorActivo : "#999";
+  const colorBorde = seleccionado ? colorActivo : enHover ? "#bbb" : "#e8e8e6";
+  const colorBordePreview = seleccionado ? colorActivoClaro : "#ccc";
+
+  return (
+    <div
+      role="button"
+      tabIndex={0}
+      onClick={onSelect}
+      onKeyDown={(e) => {
+        if (e.key === "Enter" || e.key === " ") {
+          e.preventDefault();
+          onSelect();
+        }
+      }}
+      onMouseEnter={() => onHoverChange(true)}
+      onMouseLeave={() => onHoverChange(false)}
+      className="quiubot-card-tipo"
+      style={{
+        cursor: "pointer",
+        borderRadius: 16,
+        border: `2px solid ${colorBorde}`,
+        background: seleccionado ? fondoActivo : "#fff",
+        padding: "1.25rem",
+        position: "relative",
+        transition: "border-color .18s ease, background-color .18s ease, transform .12s ease",
+        transform: enHover && !seleccionado ? "scale(1.008)" : "scale(1)",
+        outline: "none",
+      }}
+    >
+      <span
+        style={{
+          position: "absolute",
+          top: 14,
+          right: 16,
+          fontFamily: "ui-monospace, monospace",
+          fontSize: 10,
+          letterSpacing: "0.04em",
+          color: colorMuted,
+          transition: "color .18s ease",
+        }}
+      >
+        {data.etiqueta}
+      </span>
+
+      {/* Insignia de check, escondida hasta que la tarjeta está seleccionada */}
+      <div
+        style={{
+          position: "absolute",
+          top: 12,
+          left: 14,
+          width: 18,
+          height: 18,
+          borderRadius: "50%",
+          background: colorActivo,
+          display: "flex",
+          alignItems: "center",
+          justifyContent: "center",
+          transform: seleccionado ? "scale(1)" : "scale(0)",
+          opacity: seleccionado ? 1 : 0,
+          transition: "transform .16s cubic-bezier(.34,1.56,.64,1), opacity .16s ease",
+        }}
+      >
+        <Check size={12} color="#fff" strokeWidth={3} aria-hidden="true" />
+      </div>
+
+      <div style={{ display: "flex", alignItems: "center", gap: 10, marginBottom: 14, paddingLeft: 2 }}>
+        <div
+          style={{
+            width: 40,
+            height: 40,
+            borderRadius: 10,
+            border: `1px dashed ${seleccionado ? colorActivoClaro : "#ccc"}`,
+            display: "flex",
+            alignItems: "center",
+            justifyContent: "center",
+            transition: "border-color .18s ease",
+            flexShrink: 0,
+          }}
+        >
+          <data.icono size={19} color={colorMuted} strokeWidth={2} aria-hidden="true" />
+        </div>
+        <p style={{ fontWeight: 600, fontSize: 15, margin: 0, color: colorTexto, transition: "color .18s ease" }}>{data.titulo}</p>
+      </div>
+
+      <p style={{ fontSize: 13, color: "#666", lineHeight: 1.5, margin: "0 0 10px" }}>{data.descripcion}</p>
+      <p style={{ fontSize: 11, color: "#999", margin: "0 0 14px", fontStyle: "italic" }}>Ej: {data.ejemplos}</p>
+
+      <div style={{ position: "relative", background: "#fafafa", borderRadius: 10, padding: 12 }}>
+        <div style={{ position: "absolute", top: 5, left: 5, width: 8, height: 8, borderTop: `1.5px solid ${colorBordePreview}`, borderLeft: `1.5px solid ${colorBordePreview}`, transition: "border-color .18s ease" }} />
+        <div style={{ position: "absolute", top: 5, right: 5, width: 8, height: 8, borderTop: `1.5px solid ${colorBordePreview}`, borderRight: `1.5px solid ${colorBordePreview}`, transition: "border-color .18s ease" }} />
+        <div style={{ position: "absolute", bottom: 5, left: 5, width: 8, height: 8, borderBottom: `1.5px solid ${colorBordePreview}`, borderLeft: `1.5px solid ${colorBordePreview}`, transition: "border-color .18s ease" }} />
+        <div style={{ position: "absolute", bottom: 5, right: 5, width: 8, height: 8, borderBottom: `1.5px solid ${colorBordePreview}`, borderRight: `1.5px solid ${colorBordePreview}`, transition: "border-color .18s ease" }} />
+        <div style={{ display: "flex", gap: 8, alignItems: "center" }}>
+          <div style={{ width: 36, height: 36, borderRadius: 6, background: "#fff", flexShrink: 0, display: "flex", alignItems: "center", justifyContent: "center" }}>
+            <data.iconoPreview size={16} color="#bbb" strokeWidth={2} aria-hidden="true" />
+          </div>
+          <div style={{ flex: 1 }}>
+            <div style={{ height: 6, width: "70%", background: "#ddd", borderRadius: 3, marginBottom: 5 }} />
+            <div style={{ height: 6, width: "45%", background: "#eee", borderRadius: 3 }} />
+          </div>
+        </div>
+        <div style={{ display: "flex", alignItems: "center", gap: 5, marginTop: 10 }}>
+          <span
+            style={{
+              width: 5,
+              height: 5,
+              borderRadius: "50%",
+              background: colorMuted,
+              transition: "background-color .18s ease",
+              animation: seleccionado ? "quiubot-pulse-dot 1.4s ease-in-out infinite" : "none",
+            }}
+          />
+          <span style={{ fontFamily: "ui-monospace, monospace", fontSize: 10, color: "#999" }}>{data.labelPreview}</span>
+        </div>
+      </div>
+    </div>
+  );
+}
+
 function EstrategiaContent() {
   const router = useRouter();
   const searchParams = useSearchParams();
   const [step, setStep] = useState<EstrategiaStep>("tipo");
   const [tipoContenido, setTipoContenido] = useState<TipoContenido | null>(null);
+  const [hoverTipo, setHoverTipo] = useState<TipoContenido | null>(null);
   const [descripcionServicio, setDescripcionServicio] = useState<string>("");
   const [imagen, setImagen] = useState<File | null>(null);
   const [preview, setPreview] = useState<string | null>(null);
@@ -502,56 +672,50 @@ function EstrategiaContent() {
 
         {step === "tipo" && (
           <div style={{ display: "flex", flexDirection: "column", gap: "1.5rem" }} data-tour="estrategia-tipo">
-            <p style={{ fontSize: 15, fontWeight: 600, color: "#1a1a1a" }}>1. ¿Qué vas a promocionar?</p>
-            <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(260px, 1fr))", gap: "1.25rem" }}>
-              <div
-                onClick={() => setTipoContenido("producto")}
-                style={{
-                  padding: "2rem",
-                  borderRadius: 18,
-                  border: tipoContenido === "producto" ? "2px solid #534AB7" : "1px solid #e8e8e6",
-                  background: tipoContenido === "producto" ? "#f3f2fe" : "#fff",
-                  cursor: "pointer",
-                  transition: "all 0.2s",
-                }}
-              >
-                <div style={{ fontSize: 40, marginBottom: 12 }}>🛍️</div>
-                <div style={{ fontWeight: 700, fontSize: 16, color: "#1a1a1a", marginBottom: 8 }}>Producto físico</div>
-                <div style={{ fontSize: 13, color: "#666", lineHeight: 1.5 }}>
-                  Tienes un artículo tangible — ropa, tecnología, cosméticos, alimentos. Súbenos la foto del producto y la convertimos en anuncios listos.
-                </div>
-                <div style={{ fontSize: 11, color: "#999", marginTop: 10, fontStyle: "italic" }}>
-                  Ej: tiendas de ropa, electrónica, belleza, comida.
-                </div>
-              </div>
-
-              <div
-                onClick={() => setTipoContenido("servicio")}
-                style={{
-                  padding: "2rem",
-                  borderRadius: 18,
-                  border: tipoContenido === "servicio" ? "2px solid #534AB7" : "1px solid #e8e8e6",
-                  background: tipoContenido === "servicio" ? "#f3f2fe" : "#fff",
-                  cursor: "pointer",
-                  transition: "all 0.2s",
-                }}
-              >
-                <div style={{ fontSize: 40, marginBottom: 12 }}>🎯</div>
-                <div style={{ fontWeight: 700, fontSize: 16, color: "#1a1a1a", marginBottom: 8 }}>Servicio o Infoproducto</div>
-                <div style={{ fontSize: 13, color: "#666", lineHeight: 1.5 }}>
-                  Vendes algo intangible — viajes, cursos, consultorías, membresías. Súbenos una pieza ya diseñada con la info clave y generamos distintos ángulos publicitarios a partir de ella.
-                </div>
-                <div style={{ fontSize: 11, color: "#999", marginTop: 10, fontStyle: "italic" }}>
-                  Ej: agencias de viaje, coaches, cursos online, SaaS, servicios profesionales.
-                </div>
-              </div>
+            <div>
+              <p style={{ fontSize: 15, fontWeight: 600, color: "#1a1a1a", margin: "0 0 4px" }}>1. ¿Qué vas a promocionar?</p>
+              <p style={{ fontSize: 13, color: "#666", margin: 0 }}>
+                {tipoContenido ? "Puedes cambiar de opción antes de continuar." : "Elige una opción para continuar."}
+              </p>
             </div>
+
+            <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(260px, 1fr))", gap: "1rem" }}>
+              <TarjetaTipoContenido
+                tipo="producto"
+                seleccionado={tipoContenido === "producto"}
+                enHover={hoverTipo === "producto"}
+                onSelect={() => setTipoContenido("producto")}
+                onHoverChange={(activo) => setHoverTipo(activo ? "producto" : null)}
+              />
+              <TarjetaTipoContenido
+                tipo="servicio"
+                seleccionado={tipoContenido === "servicio"}
+                enHover={hoverTipo === "servicio"}
+                onSelect={() => setTipoContenido("servicio")}
+                onHoverChange={(activo) => setHoverTipo(activo ? "servicio" : null)}
+              />
+            </div>
+
             <button
               onClick={() => setStep("imagen")}
               disabled={!tipoContenido}
-              style={{ background: !tipoContenido ? "#ccc" : "#534AB7", color: "#fff", border: "none", padding: "16px", borderRadius: 10, fontSize: 16, fontWeight: 600, cursor: !tipoContenido ? "not-allowed" : "pointer" }}
+              style={{
+                background: !tipoContenido ? "#eee" : "#534AB7",
+                color: !tipoContenido ? "#aaa" : "#fff",
+                border: "none",
+                padding: "16px",
+                borderRadius: 10,
+                fontSize: 16,
+                fontWeight: 600,
+                cursor: !tipoContenido ? "not-allowed" : "pointer",
+                transition: "background-color .18s ease, color .18s ease",
+              }}
             >
-              Siguiente paso
+              {!tipoContenido
+                ? "Selecciona una opción para continuar"
+                : tipoContenido === "producto"
+                ? "Continuar con producto físico"
+                : "Continuar con servicio o infoproducto"}
             </button>
           </div>
         )}
@@ -982,6 +1146,8 @@ function EstrategiaContent() {
       <style>{`
         .spinner-estrategia { border: 4px solid #f3f3f3; border-top: 4px solid #534AB7; border-radius: 50%; width: 40px; height: 40px; animation: spin-estrategia 1s linear infinite; }
         @keyframes spin-estrategia { 0% { transform: rotate(0deg); } 100% { transform: rotate(360deg); } }
+        @keyframes quiubot-pulse-dot { 0%, 100% { opacity: 1; } 50% { opacity: .25; } }
+        .quiubot-card-tipo:focus-visible { box-shadow: 0 0 0 3px rgba(83, 74, 183, 0.3); }
       `}</style>
     </div>
   );
