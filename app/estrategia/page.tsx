@@ -1,7 +1,7 @@
 "use client";
 import { useState, useRef, useEffect, Suspense } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
-import { ShoppingBag, Target, Camera, Sparkles, Check } from "lucide-react";
+import { ShoppingBag, Target, Camera, Sparkles, Check, Shirt, Smartphone, UtensilsCrossed, Plane, Briefcase, Palmtree, Video, Watch } from "lucide-react";
 import AdBlueprintExplorer from "@/app/components/AdBlueprintExplorer";
 import TutorialVideo from "@/app/components/TutorialVideo";
 import TourGuiado from "@/app/components/TourGuiado";
@@ -144,14 +144,27 @@ const NUMERO_DE_PASO: Record<EstrategiaStep, number> = {
 // objeto para no repetir textos/íconos entre el render y la lógica de estilos.
 const TARJETAS_TIPO: Record<
   TipoContenido,
-  { etiqueta: string; icono: typeof ShoppingBag; titulo: string; descripcion: string; ejemplos: string; iconoPreview: typeof Camera; beneficio: string }
+  {
+    etiqueta: string;
+    icono: typeof ShoppingBag;
+    titulo: string;
+    descripcion: string;
+    chips: { icono: typeof ShoppingBag; label: string }[];
+    iconoPreview: typeof Camera;
+    beneficio: string;
+  }
 > = {
   producto: {
     etiqueta: "TIPO_01",
     icono: ShoppingBag,
     titulo: "Producto físico",
     descripcion: "Ropa, tecnología, cosméticos, alimentos. Sube la foto y la convertimos en anuncios.",
-    ejemplos: "Tiendas de ropa, electrónica, belleza, comida",
+    chips: [
+      { icono: Shirt, label: "Ropa" },
+      { icono: Smartphone, label: "Tecnología" },
+      { icono: Watch, label: "Accesorios" },
+      { icono: UtensilsCrossed, label: "Comida" },
+    ],
     iconoPreview: Camera,
     beneficio: "Una sola foto es suficiente",
   },
@@ -160,7 +173,12 @@ const TARJETAS_TIPO: Record<
     icono: Target,
     titulo: "Servicio o infoproducto",
     descripcion: "Viajes, cursos, consultorías. Sube tu pieza ya diseñada y generamos los ángulos.",
-    ejemplos: "Agencias de viaje, coaches, cursos online, SaaS",
+    chips: [
+      { icono: Plane, label: "Viajes" },
+      { icono: Palmtree, label: "Playas" },
+      { icono: Briefcase, label: "Profesiones" },
+      { icono: Video, label: "Influencer" },
+    ],
     iconoPreview: Sparkles,
     beneficio: "Genera varios ángulos por ti",
   },
@@ -300,8 +318,67 @@ function TarjetaTipoContenido({
         <p style={{ fontWeight: 600, fontSize: 16, margin: 0, color: colorTexto, transition: "color .18s ease" }}>{data.titulo}</p>
       </div>
 
-      <p style={{ fontSize: 13, color: "#666", lineHeight: 1.5, margin: "0 0 10px" }}>{data.descripcion}</p>
-      <p style={{ fontSize: 11, color: "#999", margin: "0 0 14px", fontStyle: "italic" }}>Ej: {data.ejemplos}</p>
+      <p style={{ fontSize: 13, color: "#666", lineHeight: 1.5, margin: "0 0 12px" }}>{data.descripcion}</p>
+
+      <div style={{ display: "flex", flexWrap: "wrap", gap: 6, marginBottom: 14 }}>
+        {data.chips.map((chip, i) => {
+          const IconoChip = chip.icono;
+          return (
+            <span
+              key={i}
+              style={{
+                display: "inline-flex",
+                alignItems: "center",
+                gap: 4,
+                background: esServicio ? "#fff" : fondoActivo,
+                border: esServicio ? `1px solid ${fondoActivo === "#F3F2FE" ? "#E4E1FA" : "#eee"}` : "none",
+                borderRadius: 20,
+                padding: "4px 10px 4px 8px",
+              }}
+            >
+              <IconoChip size={12} color={colorActivo} strokeWidth={2} aria-hidden="true" />
+              <span style={{ fontSize: 11, color: colorActivo, fontWeight: 500 }}>{chip.label}</span>
+            </span>
+          );
+        })}
+      </div>
+
+      {/* Collage decorativo: los mismos iconos de categoría, como si "salieran" de la
+          esquina de la tarjeta — refuerzo visual además de los chips con etiqueta. */}
+      <div
+        style={{
+          position: "absolute",
+          bottom: -10,
+          right: 18,
+          display: "flex",
+          pointerEvents: "none",
+        }}
+      >
+        {data.chips.map((chip, i) => {
+          const IconoFloat = chip.icono;
+          const rotaciones = [-10, 6, -4, 9];
+          return (
+            <div
+              key={i}
+              style={{
+                width: 26,
+                height: 26,
+                borderRadius: "50%",
+                background: esServicio ? colorActivo : "#fff",
+                border: `1.5px solid ${esServicio ? "#fff" : fondoActivo}`,
+                display: "flex",
+                alignItems: "center",
+                justifyContent: "center",
+                marginLeft: i === 0 ? 0 : -8,
+                transform: `rotate(${rotaciones[i % rotaciones.length]}deg)`,
+                zIndex: 10 - i,
+              }}
+            >
+              <IconoFloat size={12} color={esServicio ? "#fff" : colorActivo} strokeWidth={2} aria-hidden="true" />
+            </div>
+          );
+        })}
+      </div>
 
       <div style={{ background: fondoActivo, borderRadius: 10, padding: 10, display: "flex", alignItems: "center", gap: 8 }}>
         <IconoPreview size={16} color={colorActivoClaro} strokeWidth={2} aria-hidden="true" />
