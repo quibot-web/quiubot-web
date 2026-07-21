@@ -112,7 +112,10 @@ function ErrorConAccion({ mensaje }: { mensaje: string }) {
   );
 }
 
+type TipoContenido = "producto" | "servicio";
+
 type EstrategiaStep =
+  | "tipo"
   | "imagen"
   | "objetivo"
   | "presupuesto"
@@ -122,10 +125,26 @@ type EstrategiaStep =
   | "analisis"
   | "creativos";
 
+// Mapa de número de paso visible para el usuario (1 a 6), independiente
+// del nombre interno de cada step.
+const NUMERO_DE_PASO: Record<EstrategiaStep, number> = {
+  tipo: 1,
+  imagen: 2,
+  objetivo: 3,
+  presupuesto: 4,
+  resultado: 5,
+  fuente: 6,
+  "album-selector": 6,
+  analisis: 6,
+  creativos: 6,
+};
+
 function EstrategiaContent() {
   const router = useRouter();
   const searchParams = useSearchParams();
-  const [step, setStep] = useState<EstrategiaStep>("imagen");
+  const [step, setStep] = useState<EstrategiaStep>("tipo");
+  const [tipoContenido, setTipoContenido] = useState<TipoContenido | null>(null);
+  const [descripcionServicio, setDescripcionServicio] = useState<string>("");
   const [imagen, setImagen] = useState<File | null>(null);
   const [preview, setPreview] = useState<string | null>(null);
   const [objetivo, setObjetivo] = useState<typeof OBJETIVOS[number] | null>(null);
@@ -233,7 +252,7 @@ function EstrategiaContent() {
   };
 
   const handleGenerarEstrategia = async () => {
-    if (!imagen || !objetivo || presupuestoDiario < 20000) return;
+    if (!imagen || !objetivo || presupuestoDiario < 20000 || !tipoContenido) return;
     setCargandoEstrategia(true);
     setErrorMsg(null);
     try {
@@ -241,7 +260,13 @@ function EstrategiaContent() {
       const res = await fetch("/api/generar-estrategia", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ imagen_base64: imagenBase64, objetivo, presupuesto_diario_cop: presupuestoDiario }),
+        body: JSON.stringify({
+          imagen_base64: imagenBase64,
+          objetivo,
+          presupuesto_diario_cop: presupuestoDiario,
+          tipo_contenido: tipoContenido,
+          descripcion_servicio: tipoContenido === "servicio" ? descripcionServicio : null,
+        }),
       });
       const data = await res.json().catch(() => ({}));
       if (!res.ok || data.ok === false) {
@@ -464,31 +489,117 @@ function EstrategiaContent() {
             <TourGuiado
               seccion="motor-estrategia"
               pasos={[
-                { selector: '[data-tour="estrategia-upload"]', titulo: "Empieza subiendo tu producto", texto: "Una foto clara del producto es todo lo que necesitas para arrancar." },
+                { selector: '[data-tour="estrategia-tipo"]', titulo: "Empieza eligiendo qué vas a promocionar", texto: "Producto físico o servicio/infoproducto — la estrategia se adapta según tu elección." },
+                { selector: '[data-tour="estrategia-upload"]', titulo: "Sube tu imagen", texto: "Una foto clara del producto, o una pieza ya diseñada de tu servicio, es todo lo que necesitas para arrancar." },
                 { selector: '[data-tour="estrategia-siguiente"]', titulo: "Avanza paso a paso", texto: "Objetivo, presupuesto, y en segundos tienes la estrategia completa lista." },
               ]}
             />
           </div>
         </div>
         <p style={{ fontSize: 13, color: "#999", marginBottom: "2rem" }}>
-          Paso {step === "imagen" ? "1" : step === "objetivo" ? "2" : step === "presupuesto" ? "3" : step === "resultado" ? "4" : "5"} de 5
+          Paso {NUMERO_DE_PASO[step]} de 6
         </p>
+
+        {step === "tipo" && (
+          <div style={{ display: "flex", flexDirection: "column", gap: "1.5rem" }} data-tour="estrategia-tipo">
+            <p style={{ fontSize: 15, fontWeight: 600, color: "#1a1a1a" }}>1. ¿Qué vas a promocionar?</p>
+            <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(260px, 1fr))", gap: "1.25rem" }}>
+              <div
+                onClick={() => setTipoContenido("producto")}
+                style={{
+                  padding: "2rem",
+                  borderRadius: 18,
+                  border: tipoContenido === "producto" ? "2px solid #534AB7" : "1px solid #e8e8e6",
+                  background: tipoContenido === "producto" ? "#f3f2fe" : "#fff",
+                  cursor: "pointer",
+                  transition: "all 0.2s",
+                }}
+              >
+                <div style={{ fontSize: 40, marginBottom: 12 }}>🛍️</div>
+                <div style={{ fontWeight: 700, fontSize: 16, color: "#1a1a1a", marginBottom: 8 }}>Producto físico</div>
+                <div style={{ fontSize: 13, color: "#666", lineHeight: 1.5 }}>
+                  Tienes un artículo tangible — ropa, tecnología, cosméticos, alimentos. Súbenos la foto del producto y la convertimos en anuncios listos.
+                </div>
+                <div style={{ fontSize: 11, color: "#999", marginTop: 10, fontStyle: "italic" }}>
+                  Ej: tiendas de ropa, electrónica, belleza, comida.
+                </div>
+              </div>
+
+              <div
+                onClick={() => setTipoContenido("servicio")}
+                style={{
+                  padding: "2rem",
+                  borderRadius: 18,
+                  border: tipoContenido === "servicio" ? "2px solid #534AB7" : "1px solid #e8e8e6",
+                  background: tipoContenido === "servicio" ? "#f3f2fe" : "#fff",
+                  cursor: "pointer",
+                  transition: "all 0.2s",
+                }}
+              >
+                <div style={{ fontSize: 40, marginBottom: 12 }}>🎯</div>
+                <div style={{ fontWeight: 700, fontSize: 16, color: "#1a1a1a", marginBottom: 8 }}>Servicio o Infoproducto</div>
+                <div style={{ fontSize: 13, color: "#666", lineHeight: 1.5 }}>
+                  Vendes algo intangible — viajes, cursos, consultorías, membresías. Súbenos una pieza ya diseñada con la info clave y generamos distintos ángulos publicitarios a partir de ella.
+                </div>
+                <div style={{ fontSize: 11, color: "#999", marginTop: 10, fontStyle: "italic" }}>
+                  Ej: agencias de viaje, coaches, cursos online, SaaS, servicios profesionales.
+                </div>
+              </div>
+            </div>
+            <button
+              onClick={() => setStep("imagen")}
+              disabled={!tipoContenido}
+              style={{ background: !tipoContenido ? "#ccc" : "#534AB7", color: "#fff", border: "none", padding: "16px", borderRadius: 10, fontSize: 16, fontWeight: 600, cursor: !tipoContenido ? "not-allowed" : "pointer" }}
+            >
+              Siguiente paso
+            </button>
+          </div>
+        )}
 
         {step === "imagen" && (
           <div style={{ display: "flex", flexDirection: "column", gap: "1.5rem" }}>
-            <p style={{ fontSize: 15, fontWeight: 600, color: "#1a1a1a" }}>1. Sube la foto de tu producto</p>
+            <button onClick={() => setStep("tipo")} style={{ background: "none", border: "none", color: "#7F77DD", cursor: "pointer", fontSize: 13, padding: 0, alignSelf: "flex-start" }}>
+              ← Cambiar tipo
+            </button>
+            <p style={{ fontSize: 15, fontWeight: 600, color: "#1a1a1a" }}>
+              2. {tipoContenido === "servicio" ? "Sube la pieza gráfica de tu servicio" : "Sube la foto de tu producto"}
+            </p>
+            {tipoContenido === "servicio" && (
+              <p style={{ fontSize: 13, color: "#666", marginTop: -12 }}>
+                Sube la pieza ya diseñada (por ti o con otro editor/IA) que muestra la información de tu servicio: destino, precio, fecha, beneficio principal, etc.
+              </p>
+            )}
             <div data-tour="estrategia-upload" onClick={() => fileRef.current?.click()} style={{ border: "1.5px dashed #7F77DD", borderRadius: 12, padding: "2rem", display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", cursor: "pointer", background: "#fcfcff", minHeight: 180 }}>
               {preview ? (
                 <img src={preview} alt="preview" style={{ maxHeight: 200, borderRadius: 8 }} />
               ) : (
                 <>
                   <div style={{ fontSize: 40, marginBottom: 8 }}>📸</div>
-                  <div style={{ fontSize: 14, color: "#534AB7", fontWeight: 500 }}>Subir foto del producto</div>
+                  <div style={{ fontSize: 14, color: "#534AB7", fontWeight: 500 }}>
+                    {tipoContenido === "servicio" ? "Subir pieza gráfica del servicio" : "Subir foto del producto"}
+                  </div>
                   <div style={{ fontSize: 12, color: "#999", marginTop: 4 }}>Arrastra o haz clic aquí</div>
                 </>
               )}
               <input ref={fileRef} type="file" accept="image/*" style={{ display: "none" }} onChange={handleFile} />
             </div>
+
+            {tipoContenido === "servicio" && (
+              <div>
+                <label style={{ fontSize: 13, fontWeight: 600, color: "#1a1a1a", display: "block", marginBottom: 6 }}>
+                  ¿Quieres darnos más contexto? <span style={{ fontWeight: 400, color: "#999" }}>(opcional)</span>
+                </label>
+                <textarea
+                  value={descripcionServicio}
+                  onChange={(e) => setDescripcionServicio(e.target.value.slice(0, 500))}
+                  placeholder='Ej: "Paquete todo incluido a Cartagena, 4 noches, incluye vuelos"'
+                  maxLength={500}
+                  style={{ width: "100%", padding: 10, borderRadius: 8, border: "1px solid #e0e0e0", fontSize: 13, resize: "none", minHeight: 70, fontFamily: "inherit", boxSizing: "border-box" }}
+                />
+                <div style={{ fontSize: 11, color: "#999", textAlign: "right", marginTop: 4 }}>{descripcionServicio.length}/500</div>
+              </div>
+            )}
+
             <button data-tour="estrategia-siguiente" onClick={() => setStep("objetivo")} disabled={!imagen} style={{ background: !imagen ? "#ccc" : "#534AB7", color: "#fff", border: "none", padding: "16px", borderRadius: 10, fontSize: 16, fontWeight: 600, cursor: !imagen ? "not-allowed" : "pointer" }}>
               Siguiente paso
             </button>
@@ -497,7 +608,7 @@ function EstrategiaContent() {
 
         {step === "objetivo" && (
           <div style={{ display: "flex", flexDirection: "column", gap: "1.5rem" }}>
-            <p style={{ fontSize: 15, fontWeight: 600, color: "#1a1a1a" }}>2. Selecciona tu objetivo publicitario</p>
+            <p style={{ fontSize: 15, fontWeight: 600, color: "#1a1a1a" }}>3. Selecciona tu objetivo publicitario</p>
             {objetivosActivos === null && <p style={{ fontSize: 13, color: "#999" }}>Cargando objetivos disponibles...</p>}
             {objetivosActivos !== null && (
               <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(180px, 1fr))", gap: "1rem" }}>
@@ -578,7 +689,7 @@ function EstrategiaContent() {
             <button onClick={() => setStep("objetivo")} style={{ background: "none", border: "none", color: "#7F77DD", cursor: "pointer", fontSize: 13, padding: 0, alignSelf: "flex-start" }}>
               ← Cambiar objetivo
             </button>
-            <p style={{ fontSize: 15, fontWeight: 600, color: "#1a1a1a" }}>3. ¿Cuál es tu presupuesto diario?</p>
+            <p style={{ fontSize: 15, fontWeight: 600, color: "#1a1a1a" }}>4. ¿Cuál es tu presupuesto diario?</p>
             <p style={{ fontSize: 13, color: "#666", marginTop: -8 }}>La IA diseñará la mejor estructura de campaña posible para este monto exacto.</p>
             <div style={{ background: "#fff", border: "2px solid #e0e0e0", borderRadius: 14, padding: "1.5rem" }}>
               <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
@@ -637,7 +748,7 @@ function EstrategiaContent() {
             <button onClick={() => setStep("resultado")} style={{ marginBottom: 16, background: "none", border: "none", color: "#7F77DD", cursor: "pointer", fontSize: 13 }}>
               ← Volver a estrategias
             </button>
-            <p style={{ fontSize: 15, fontWeight: 600, color: "#1a1a1a", marginBottom: 16 }}>4. ¿Cómo quieres tus creativos?</p>
+            <p style={{ fontSize: 15, fontWeight: 600, color: "#1a1a1a", marginBottom: 16 }}>5. ¿Cómo quieres tus creativos?</p>
             <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 16 }}>
               <div onClick={handleGenerarConIA} style={{ padding: "2rem", borderRadius: 16, border: "1px solid #e8e8e6", background: "#fff", cursor: "pointer", textAlign: "center" }}>
                 <div style={{ fontSize: 36, marginBottom: 10 }}>🤖</div>
@@ -752,7 +863,7 @@ function EstrategiaContent() {
             )}
 
             <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 16, flexWrap: "wrap", gap: 8 }}>
-              <p style={{ fontSize: 15, fontWeight: 600, color: "#1a1a1a", margin: 0 }}>5. Creativos de tu campaña</p>
+              <p style={{ fontSize: 15, fontWeight: 600, color: "#1a1a1a", margin: 0 }}>6. Creativos de tu campaña</p>
               <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
                 {scoreParaMostrar != null && (
                   <span style={{ background: "#f3f2fe", color: "#534AB7", fontSize: 13, fontWeight: 600, padding: "6px 14px", borderRadius: 20 }}>

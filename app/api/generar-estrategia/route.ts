@@ -13,7 +13,13 @@ export async function POST(req: NextRequest) {
   }
 
   const emailBusqueda = session.user.email.trim().toLowerCase();
-  const { imagen_base64, objetivo, presupuesto_diario_cop } = await req.json();
+  const {
+    imagen_base64,
+    objetivo,
+    presupuesto_diario_cop,
+    tipo_contenido,       // "producto" | "servicio" — nuevo
+    descripcion_servicio, // opcional, solo aplica si tipo_contenido === "servicio"
+  } = await req.json();
 
   if (!imagen_base64 || !objetivo?.id) {
     return NextResponse.json({ error: "Falta la imagen o el objetivo publicitario" }, { status: 400 });
@@ -22,6 +28,17 @@ export async function POST(req: NextRequest) {
   if (!presupuesto_diario_cop || presupuesto_diario_cop < 20000) {
     return NextResponse.json({ error: "El presupuesto diario mínimo es $20.000 COP" }, { status: 400 });
   }
+
+  // Normalizamos el tipo de contenido: si no llega o llega con un valor
+  // inesperado, caemos de vuelta al comportamiento actual ("producto"),
+  // para no romper llamadas viejas ni el flujo existente.
+  const tipoContenidoFinal: "producto" | "servicio" =
+    tipo_contenido === "servicio" ? "servicio" : "producto";
+
+  const descripcionServicioFinal: string | null =
+    tipoContenidoFinal === "servicio" && typeof descripcion_servicio === "string"
+      ? descripcion_servicio.trim().slice(0, 500) || null
+      : null;
 
   const { data: usuario } = await supabaseAdmin
     .from("usuarios")
@@ -116,6 +133,8 @@ export async function POST(req: NextRequest) {
         objetivo,
         presupuesto_diario_cop,
         openai_key: openaiKeyDescifrada,
+        tipo_contenido: tipoContenidoFinal,
+        descripcion_servicio: descripcionServicioFinal,
       }),
     });
 
@@ -128,7 +147,10 @@ export async function POST(req: NextRequest) {
       );
     }
 
-    await supabaseAdmin.from("estrategias_generadas").insert({ user_id: usuario.id });
+    await supabaseAdmin.from("estrategias_generadas").insert({
+      user_id: usuario.id,
+      tipo_contenido: tipoContenidoFinal,
+    });
 
     return NextResponse.json(data);
   } catch (err) {
