@@ -575,6 +575,8 @@ function EstrategiaContent() {
           estrategia: estrategiaSeleccionada,
           descripcion_visual_producto: descripcionVisual,
           imagen_producto_base64: imagenBase64,
+          tipo_contenido: tipoContenido,
+          descripcion_servicio: tipoContenido === "servicio" ? descripcionServicio : null,
         }),
       });
       const data = await res.json().catch(() => ({}));
@@ -625,6 +627,8 @@ function EstrategiaContent() {
           estrategia: estrategiaMini,
           descripcion_visual_producto: descripcionVisual,
           imagen_producto_base64: imagenBase64,
+          tipo_contenido: tipoContenido,
+          descripcion_servicio: tipoContenido === "servicio" ? descripcionServicio : null,
         }),
       });
       const data = await res.json().catch(() => ({}));

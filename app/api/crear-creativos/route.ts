@@ -19,11 +19,27 @@ export async function POST(req: NextRequest) {
   }
 
   const emailBusqueda = session.user.email.trim().toLowerCase();
-  const { estrategia, descripcion_visual_producto, imagen_producto_base64 } = await req.json();
+  const {
+    estrategia,
+    descripcion_visual_producto,
+    imagen_producto_base64,
+    tipo_contenido,       // "producto" | "servicio" — nuevo
+    descripcion_servicio, // opcional, solo aplica si tipo_contenido === "servicio"
+  } = await req.json();
 
   if (!estrategia || !descripcion_visual_producto || !imagen_producto_base64) {
     return NextResponse.json({ error: "Falta la estrategia, la descripción o la foto del producto" }, { status: 400 });
   }
+
+  // Igual que en generar-estrategia: normalizamos con fallback a "producto"
+  // para no romper llamadas viejas ni el comportamiento actual.
+  const tipoContenidoFinal: "producto" | "servicio" =
+    tipo_contenido === "servicio" ? "servicio" : "producto";
+
+  const descripcionServicioFinal: string | null =
+    tipoContenidoFinal === "servicio" && typeof descripcion_servicio === "string"
+      ? descripcion_servicio.trim().slice(0, 500) || null
+      : null;
 
   const { data: usuario } = await supabaseAdmin
     .from("usuarios")
@@ -77,6 +93,8 @@ export async function POST(req: NextRequest) {
         cloudinary_name: usuario.cloudinary_name,
         cloudinary_key: cloudinaryKeyDescifrada,
         cloudinary_secret: cloudinarySecretDescifrado,
+        tipo_contenido: tipoContenidoFinal,
+        descripcion_servicio: descripcionServicioFinal,
       }),
     });
 
