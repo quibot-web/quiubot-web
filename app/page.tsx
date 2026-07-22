@@ -42,6 +42,11 @@ export default function Home() {
 
   const [rol, setRol] = useState<string | null>(null);
   const [colapsado, setColapsado] = useState(false);
+  const [tutorialListoInicio, setTutorialListoInicio] = useState(false);
+  const [tutorialListoAlbum, setTutorialListoAlbum] = useState(false);
+  const [tutorialListoOpenai, setTutorialListoOpenai] = useState(false);
+  const [tutorialListoCloudinary, setTutorialListoCloudinary] = useState(false);
+  const [tutorialListoMeta, setTutorialListoMeta] = useState(false);
   const [adminAbierto, setAdminAbierto] = useState(false);
   const [hoverExpandido, setHoverExpandido] = useState(false);
   const expandidoVisual = !colapsado || hoverExpandido;
@@ -442,10 +447,11 @@ export default function Home() {
         <div style={{ padding: "1rem 1.5rem", borderBottom: "1px solid #e8e8e6", background: "#fff", fontSize: 15, fontWeight: 500, display: "flex", alignItems: "center", justifyContent: "space-between" }}>
           <div style={{ display: "flex", alignItems: "center", gap: 12 }}>
             <span>{tab === "inicio" ? "Inicio" : tab === "album" ? "Álbum de Creativos" : "Integraciones"}</span>
-            {tab === "inicio" && <TutorialVideo seccion="inicio" />}
+            {tab === "inicio" && <TutorialVideo seccion="inicio" onListo={() => setTutorialListoInicio(true)} />}
             {tab === "inicio" && (
               <TourGuiado
                 seccion="inicio"
+                listo={tutorialListoInicio}
                 pasos={[
                   { selector: '[data-tour="sidebar-inicio"]', titulo: "Tu punto de partida", texto: "Aquí siempre verás un resumen de lo que pasó mientras no estabas: gasto, campañas activas y decisiones pendientes." },
                   { selector: '[data-tour="campana-notificaciones"]', titulo: "Alertas y sugerencias", texto: "Cuando Quiubot detecte algo que necesita tu atención (o proponga un ajuste), te avisa aquí." },
@@ -455,10 +461,11 @@ export default function Home() {
                 ]}
               />
             )}
-            {tab === "album" && <TutorialVideo seccion="album-creativos" />}
+            {tab === "album" && <TutorialVideo seccion="album-creativos" onListo={() => setTutorialListoAlbum(true)} />}
             {tab === "album" && (
               <TourGuiado
                 seccion="album-creativos"
+                listo={tutorialListoAlbum}
                 pasos={[
                   { selector: '[data-tour="album-subir"]', titulo: "Sube tus propios creativos", texto: "Aquí puedes subir imágenes o videos que ya tengas — luego los podrás usar directo en cualquier estrategia sin generar de nuevo con IA." },
                 ]}
@@ -668,9 +675,10 @@ export default function Home() {
                 <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 6 }}>
                   <span style={{ fontSize: 12, fontWeight: 600, color: "#666" }}>Tu API key de OpenAI</span>
                   <div style={{ display: "flex", gap: 6 }}>
-                    <TutorialVideo seccion="integraciones-openai" />
+                    <TutorialVideo seccion="integraciones-openai" onListo={() => setTutorialListoOpenai(true)} />
                     <TourGuiado
                       seccion="integraciones-openai"
+                      listo={tutorialListoOpenai}
                       pasos={[
                         { selector: '[data-tour="openai-input"]', titulo: "Pega tu API key aquí", texto: "Empieza con sk-. La consigues en tu cuenta de platform.openai.com, sección API Keys." },
                         { selector: '[data-tour="openai-conectar"]', titulo: "Conecta tu cuenta", texto: "Con un clic queda guardada y lista para que Quiubot genere estrategia y creativos." },
@@ -698,9 +706,10 @@ export default function Home() {
                 <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 6 }}>
                   <span style={{ fontSize: 12, fontWeight: 600, color: "#666" }}>Tus credenciales de Cloudinary</span>
                   <div style={{ display: "flex", gap: 6 }}>
-                    <TutorialVideo seccion="integraciones-cloudinary" />
+                    <TutorialVideo seccion="integraciones-cloudinary" onListo={() => setTutorialListoCloudinary(true)} />
                     <TourGuiado
                       seccion="integraciones-cloudinary"
+                      listo={tutorialListoCloudinary}
                       pasos={[
                         { selector: '[data-tour="cloudinary-inputs"]', titulo: "Tus 3 credenciales de Cloudinary", texto: "Las encuentras en el Dashboard de tu cuenta de Cloudinary: Cloud Name, API Key y API Secret." },
                         { selector: '[data-tour="cloudinary-guardar"]', titulo: "Guarda y listo", texto: "Con esto Quiubot ya puede almacenar tus creativos generados con IA." },
@@ -739,9 +748,10 @@ export default function Home() {
                     </div>
 
                     <div style={{ display: "flex", justifyContent: "flex-end", alignItems: "center", gap: 6, marginBottom: 8 }}>
-                      <TutorialVideo seccion="integraciones-meta" />
+                      <TutorialVideo seccion="integraciones-meta" onListo={() => setTutorialListoMeta(true)} />
                       <TourGuiado
                         seccion="integraciones-meta"
+                        listo={tutorialListoMeta}
                         pasos={[
                           { selector: '[data-tour="meta-conectar"]', titulo: "Reconecta cuando lo necesites", texto: "Si tu conexión con Meta se cae, aquí la vuelves a autorizar en un clic." },
                         ]}
@@ -761,9 +771,10 @@ export default function Home() {
                     </p>
 
                     <div style={{ display: "flex", justifyContent: "flex-end", alignItems: "center", gap: 6, marginBottom: 8 }}>
-                      <TutorialVideo seccion="integraciones-meta" />
+                      <TutorialVideo seccion="integraciones-meta" onListo={() => setTutorialListoMeta(true)} />
                       <TourGuiado
                         seccion="integraciones-meta"
+                        listo={tutorialListoMeta}
                         pasos={[
                           { selector: '[data-tour="meta-conectar"]', titulo: "Conecta tu cuenta de Meta", texto: "Sin esto, tus campañas no se pueden publicar. Te lleva al login de Facebook para autorizar el acceso." },
                         ]}

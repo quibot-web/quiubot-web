@@ -69,6 +69,7 @@ export default function MarcaPage() {
   const [errorDestino, setErrorDestino] = useState(false);
   const [coloresSeleccionados, setColoresSeleccionados] = useState<string[]>([]);
   const [colorCustom, setColorCustom] = useState("");
+  const [tutorialListo, setTutorialListo] = useState(false);
   const inputRef = useRef<HTMLInputElement | HTMLTextAreaElement | null>(null);
 
   useEffect(() => {
@@ -196,9 +197,10 @@ export default function MarcaPage() {
           quiu<span style={{ color: "#7F77DD" }}>bot</span>
         </a>
         <div style={{ display: "flex", alignItems: "center", gap: 12 }}>
-          <TutorialVideo seccion="mi-marca" />
+          <TutorialVideo seccion="mi-marca" onListo={() => setTutorialListo(true)} />
           <TourGuiado
             seccion="mi-marca"
+            listo={tutorialListo}
             pasos={[
               { selector: '[data-tour="marca-progreso"]', titulo: "Un formulario corto", texto: "Son 11 preguntas rápidas. Esta barra te muestra cuánto te falta." },
               { selector: '[data-tour="marca-siguiente"]', titulo: "Avanza a tu ritmo", texto: "Puedes volver atrás en cualquier momento con \"Anterior\" sin perder lo que ya escribiste." },
