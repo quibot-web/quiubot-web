@@ -2,7 +2,7 @@
 import { useState, useEffect, useRef } from "react";
 import { useSession, signOut } from "next-auth/react";
 import { useRouter } from "next/navigation";
-import { BrainCircuit, Cloud, Radio, ExternalLink, CheckCircle2 } from "lucide-react";
+import { BrainCircuit, Cloud, Radio, ExternalLink, CheckCircle2, AlertTriangle } from "lucide-react";
 import HomeInicio from "@/app/components/HomeInicio";
 import TutorialVideo from "@/app/components/TutorialVideo";
 import TourGuiado from "@/app/components/TourGuiado";
@@ -22,30 +22,38 @@ function EncabezadoIntegracion({
   icono: Icono2,
   nombre,
   conectado,
+  advertencia,
   textoConectado,
   textoNoConectado,
+  textoAdvertencia,
   urlExterna,
   textoUrlExterna,
 }: {
   icono: React.ComponentType<{ size?: number; color?: string; strokeWidth?: number }>;
   nombre: string;
   conectado: boolean;
+  advertencia?: boolean;
   textoConectado: string;
   textoNoConectado: string;
+  textoAdvertencia?: string;
   urlExterna: string;
   textoUrlExterna: string;
 }) {
+  const colorFondo = advertencia ? "#FEF2F2" : conectado ? "#534AB7" : "#F3F2FE";
+  const colorIcono = advertencia ? "#DC2626" : conectado ? "#fff" : "#534AB7";
+  const colorTexto = advertencia ? "#DC2626" : conectado ? "#15803d" : "#999";
+
   return (
     <div style={{ display: "flex", alignItems: "flex-start", justifyContent: "space-between", marginBottom: "1.25rem", gap: 12 }}>
       <div style={{ display: "flex", alignItems: "center", gap: "12px" }}>
-        <div style={{ width: 48, height: 48, borderRadius: "12px", background: conectado ? "#534AB7" : "#F3F2FE", display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0 }}>
-          <Icono2 size={22} color={conectado ? "#fff" : "#534AB7"} strokeWidth={2} />
+        <div style={{ width: 48, height: 48, borderRadius: "12px", background: colorFondo, display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0 }}>
+          {advertencia ? <AlertTriangle size={22} color={colorIcono} strokeWidth={2} /> : <Icono2 size={22} color={colorIcono} strokeWidth={2} />}
         </div>
         <div>
           <h2 style={{ fontSize: "15px", fontWeight: 600, margin: 0, color: "#1a1a1a" }}>{nombre}</h2>
-          <div style={{ display: "flex", alignItems: "center", gap: "5px", fontSize: "12px", color: conectado ? "#15803d" : "#999", marginTop: 2, fontWeight: 500 }}>
-            {conectado ? <CheckCircle2 size={13} strokeWidth={2.5} /> : <span style={{ width: 6, height: 6, borderRadius: "50%", background: "#ccc" }} />}
-            {conectado ? textoConectado : textoNoConectado}
+          <div style={{ display: "flex", alignItems: "center", gap: "5px", fontSize: "12px", color: colorTexto, marginTop: 2, fontWeight: 500 }}>
+            {advertencia ? <AlertTriangle size={13} strokeWidth={2.5} /> : conectado ? <CheckCircle2 size={13} strokeWidth={2.5} /> : <span style={{ width: 6, height: 6, borderRadius: "50%", background: "#ccc" }} />}
+            {advertencia ? (textoAdvertencia || "Credenciales inválidas") : conectado ? textoConectado : textoNoConectado}
           </div>
         </div>
       </div>
@@ -72,7 +80,8 @@ export default function Home() {
   const albumFileRef = useRef<HTMLInputElement>(null);
   const [apiKeyInfo, setApiKeyInfo] = useState<{ hasKey: boolean; preview: string | null } | null>(null);
   const [nuevaApiKey, setNuevaApiKey] = useState("");
-  const [cloudinaryInfo, setCloudinaryInfo] = useState<{ hasConfig: boolean } | null>(null);
+  const [cloudinaryInfo, setCloudinaryInfo] = useState<{ hasConfig: boolean; verificado?: boolean; mensaje?: string } | null>(null);
+  const [verificandoCloud, setVerificandoCloud] = useState(false);
   const [guardandoApiKey, setGuardandoApiKey] = useState(false);
   const [apiKeyGuardada, setApiKeyGuardada] = useState(false);
 
@@ -109,6 +118,17 @@ export default function Home() {
 
   const cargarCloudinaryInfo = async () => {
     fetch("/api/verificar-cloudinary").then(r => r.json()).then(setCloudinaryInfo);
+  };
+
+  const handleVerificarCloudinary = async () => {
+    setVerificandoCloud(true);
+    try {
+      const res = await fetch("/api/verificar-cloudinary");
+      const data = await res.json();
+      setCloudinaryInfo(data);
+    } finally {
+      setVerificandoCloud(false);
+    }
   };
 
   const cargarMetaInfo = () => {
@@ -735,16 +755,23 @@ export default function Home() {
                 <button data-tour="openai-conectar" onClick={handleGuardarApiKey} style={{ width: "100%", padding: "10px", borderRadius: "8px", background: "#534AB7", color: "#fff", border: "none", fontWeight: 600, cursor: "pointer" }}>{guardandoApiKey ? "Guardando..." : apiKeyInfo?.hasKey ? "Actualizar Conexión" : "Conectar OpenAI"}</button>
               </div>
 
-              <div style={{ background: "#fff", padding: "2rem", borderRadius: "16px", border: cloudinaryInfo?.hasConfig ? "1.5px solid #d9d4f7" : "1px solid #e8e8e6", boxShadow: "0 2px 4px rgba(0,0,0,0.05)" }}>
+              <div style={{ background: "#fff", padding: "2rem", borderRadius: "16px", border: cloudinaryInfo?.verificado ? "1.5px solid #d9d4f7" : cloudinaryInfo?.hasConfig ? "1.5px solid #fca5a5" : "1px solid #e8e8e6", boxShadow: "0 2px 4px rgba(0,0,0,0.05)" }}>
                 <EncabezadoIntegracion
                   icono={Cloud}
                   nombre="Cloudinary"
-                  conectado={!!cloudinaryInfo?.hasConfig}
-                  textoConectado="Conectado"
+                  conectado={!!cloudinaryInfo?.verificado}
+                  advertencia={!!cloudinaryInfo?.hasConfig && !cloudinaryInfo?.verificado}
+                  textoConectado="Conectado y verificado"
                   textoNoConectado="Configuración pendiente"
+                  textoAdvertencia="Credenciales guardadas pero inválidas"
                   urlExterna="https://console.cloudinary.com/console"
                   textoUrlExterna="Ver mi Dashboard"
                 />
+                {cloudinaryInfo?.hasConfig && !cloudinaryInfo?.verificado && cloudinaryInfo?.mensaje && (
+                  <div style={{ background: "#FEF2F2", border: "1px solid #FCA5A5", borderRadius: 10, padding: "10px 14px", fontSize: 12, color: "#991B1B", marginBottom: 16, lineHeight: 1.5 }}>
+                    {cloudinaryInfo.mensaje}
+                  </div>
+                )}
                 <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 6 }}>
                   <span style={{ fontSize: 12, fontWeight: 600, color: "#666" }}>Tus credenciales de Cloudinary</span>
                   <div style={{ display: "flex", gap: 6 }}>
@@ -764,7 +791,14 @@ export default function Home() {
                   <input placeholder="API Key" value={cloudinaryData.key} onChange={(e) => setCloudinaryData({...cloudinaryData, key: e.target.value})} style={{ width: "100%", padding: "12px", borderRadius: "8px", border: "1px solid #e0e0e0", boxSizing: "border-box" }} />
                   <input type="password" placeholder="API Secret" value={cloudinaryData.secret} onChange={(e) => setCloudinaryData({...cloudinaryData, secret: e.target.value})} style={{ width: "100%", padding: "12px", borderRadius: "8px", border: "1px solid #e0e0e0", boxSizing: "border-box" }} />
                 </div>
-                <button data-tour="cloudinary-guardar" onClick={handleGuardarCloudinary} style={{ width: "100%", padding: "10px", borderRadius: "8px", background: "#534AB7", color: "#fff", border: "none", marginTop: "15px", fontWeight: 600, cursor: "pointer" }}>{guardandoCloud ? "Guardando..." : "Guardar Credenciales"}</button>
+                <div style={{ display: "flex", gap: 8, marginTop: "15px" }}>
+                  <button data-tour="cloudinary-guardar" onClick={handleGuardarCloudinary} style={{ flex: 1, padding: "10px", borderRadius: "8px", background: "#534AB7", color: "#fff", border: "none", fontWeight: 600, cursor: "pointer" }}>{guardandoCloud ? "Guardando..." : "Guardar Credenciales"}</button>
+                  {cloudinaryInfo?.hasConfig && (
+                    <button onClick={handleVerificarCloudinary} disabled={verificandoCloud} style={{ padding: "10px 16px", borderRadius: "8px", background: "#fff", color: "#534AB7", border: "1px solid #534AB7", fontWeight: 600, cursor: verificandoCloud ? "not-allowed" : "pointer", whiteSpace: "nowrap" }}>
+                    {verificandoCloud ? "Verificando..." : "Verificar conexión"}
+                  </button>
+                  )}
+                </div>
               </div>
 
               <div style={{ background: "#fff", padding: "2rem", borderRadius: "16px", border: metaInfo?.conectado ? "1.5px solid #d9d4f7" : "1px solid #e8e8e6", boxShadow: "0 2px 4px rgba(0,0,0,0.05)" }}>
