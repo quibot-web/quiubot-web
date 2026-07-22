@@ -1,7 +1,7 @@
 "use client";
 import { useState, useRef, useEffect, Suspense } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
-import { ShoppingBag, Target, Camera, Sparkles, Check, Shirt, Smartphone, UtensilsCrossed, Plane, Briefcase, Palmtree, Video, Watch } from "lucide-react";
+import { ShoppingBag, Target, Camera, Sparkles, Check, Shirt, Smartphone, UtensilsCrossed, Plane, Briefcase, Palmtree, Video, Watch, Bot, FolderOpen } from "lucide-react";
 import AdBlueprintExplorer from "@/app/components/AdBlueprintExplorer";
 import TutorialVideo from "@/app/components/TutorialVideo";
 import TourGuiado from "@/app/components/TourGuiado";
@@ -923,7 +923,9 @@ function EstrategiaContent() {
                 <img src={preview} alt="preview" style={{ maxHeight: 200, borderRadius: 8 }} />
               ) : (
                 <>
-                  <div style={{ fontSize: 40, marginBottom: 8 }}>📸</div>
+                  <div style={{ width: 64, height: 64, borderRadius: "50%", background: "#F3F2FE", display: "flex", alignItems: "center", justifyContent: "center", marginBottom: 12 }}>
+                    <Camera size={28} color="#534AB7" strokeWidth={2} aria-hidden="true" />
+                  </div>
                   <div style={{ fontSize: 14, color: "#534AB7", fontWeight: 500 }}>
                     {tipoContenido === "servicio" ? "Subir pieza gráfica del servicio" : "Subir foto del producto"}
                   </div>
@@ -1100,12 +1102,16 @@ function EstrategiaContent() {
             <p style={{ fontSize: 15, fontWeight: 600, color: "#1a1a1a", marginBottom: 16 }}>5. ¿Cómo quieres tus creativos?</p>
             <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 16 }}>
               <div onClick={handleGenerarConIA} style={{ padding: "2rem", borderRadius: 16, border: "1px solid #e8e8e6", background: "#fff", cursor: "pointer", textAlign: "center" }}>
-                <div style={{ fontSize: 36, marginBottom: 10 }}>🤖</div>
+                <div style={{ width: 56, height: 56, borderRadius: "50%", background: "#F3F2FE", display: "flex", alignItems: "center", justifyContent: "center", margin: "0 auto 12px" }}>
+                  <Bot size={26} color="#534AB7" strokeWidth={2} aria-hidden="true" />
+                </div>
                 <div style={{ fontWeight: 600, marginBottom: 6 }}>Generar con IA</div>
                 <div style={{ fontSize: 12, color: "#666" }}>Crea imágenes y copys nuevos automáticamente según tu estrategia.</div>
               </div>
               <div onClick={handleUsarAlbum} style={{ padding: "2rem", borderRadius: 16, border: "1px solid #e8e8e6", background: "#fff", cursor: "pointer", textAlign: "center" }}>
-                <div style={{ fontSize: 36, marginBottom: 10 }}>📁</div>
+                <div style={{ width: 56, height: 56, borderRadius: "50%", background: "#F3F2FE", display: "flex", alignItems: "center", justifyContent: "center", margin: "0 auto 12px" }}>
+                  <FolderOpen size={26} color="#534AB7" strokeWidth={2} aria-hidden="true" />
+                </div>
                 <div style={{ fontWeight: 600, marginBottom: 6 }}>Usar mis creativos del álbum</div>
                 <div style={{ fontSize: 12, color: "#666" }}>Elige imágenes o videos que ya subiste. El sistema evaluará si encajan con la estrategia.</div>
               </div>
