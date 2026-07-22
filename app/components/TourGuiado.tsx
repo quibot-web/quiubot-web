@@ -1,5 +1,6 @@
 "use client"
 import { useEffect, useRef, useState } from "react"
+import { Compass, Check } from "lucide-react"
 
 type PasoTour = {
   selector: string
@@ -10,7 +11,13 @@ type PasoTour = {
 type Props = {
   seccion: string
   pasos: PasoTour[]
-  /** Si la sección carga datos async, pasa un booleano que se vuelva true cuando ya esté lista */
+  /**
+   * Si la sección carga datos async, pasa un booleano que se vuelva true cuando ya esté lista.
+   * También úsalo para esperar a que el TutorialVideo de la misma sección haya terminado su
+   * turno (ver prop onListo de TutorialVideo) — así el tour nunca arranca en automático al
+   * mismo tiempo que el video, solo después. El botón "Ver guía" sigue funcionando manualmente
+   * en cualquier momento, sin importar este prop.
+   */
   listo?: boolean
 }
 
@@ -150,7 +157,8 @@ export default function TourGuiado({ seccion, pasos, listo = true }: Props) {
           cursor: "pointer",
         }}
       >
-        🧭 Ver guía
+        <Compass size={14} strokeWidth={2} aria-hidden="true" />
+        Ver guía
       </button>
     )
   }
@@ -219,11 +227,18 @@ export default function TourGuiado({ seccion, pasos, listo = true }: Props) {
             <button
               onClick={siguiente}
               style={{
+                display: "inline-flex", alignItems: "center", gap: 4,
                 background: "#7F77DD", border: "none", borderRadius: 8, color: "#fff",
                 padding: "6px 14px", fontSize: 12, fontWeight: 600, cursor: "pointer",
               }}
             >
-              {pasoActivo >= pasos.length - 1 ? "Listo ✓" : "Siguiente"}
+              {pasoActivo >= pasos.length - 1 ? (
+                <>
+                  Listo <Check size={13} strokeWidth={2.5} aria-hidden="true" />
+                </>
+              ) : (
+                "Siguiente"
+              )}
             </button>
           </div>
         </div>

@@ -15,6 +15,7 @@ function CampanasContent() {
   const [procesando, setProcesando] = useState<string | null>(null);
   const [modoDemo, setModoDemo] = useState(false);
   const [campanaResaltada, setCampanaResaltada] = useState<string | null>(null);
+  const [tutorialListo, setTutorialListo] = useState(false);
 
   const cardRefs = useRef<Record<string, HTMLDivElement | null>>({});
 
@@ -369,9 +370,10 @@ function CampanasContent() {
         <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 4 }}>
           <h1 style={{ fontSize: 22, fontWeight: 700, margin: 0, color: "rgb(26, 26, 26)" }}>Mis Campanas</h1>
           <div style={{ display: "flex", gap: 6 }}>
-            <TutorialVideo seccion="campanas" />
+            <TutorialVideo seccion="campanas" onListo={() => setTutorialListo(true)} />
             <TourGuiado
               seccion="campanas"
+              listo={tutorialListo}
               pasos={[
                 { selector: '[data-tour="campanas-ejemplo"]', titulo: "¿No tienes campañas todavía?", texto: "Dale clic aquí para ver cómo se ve esta pantalla una vez tengas campañas activas — es solo un ejemplo, no afecta nada real." },
                 { selector: '[data-tour="campanas-lista"]', titulo: "Tus campañas activas", texto: "Aquí ves el estado y la efectividad de cada una. Si aparece una sugerencia, revísala y decide si aplicarla — nunca se aplica sola." },

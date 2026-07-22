@@ -1,5 +1,6 @@
 "use client"
 import { useEffect, useState } from "react"
+import { Play, X } from "lucide-react"
 
 type InfoVideo = {
   configurado: boolean
@@ -29,7 +30,19 @@ function obtenerEmbedUrl(url: string): string | null {
   return null
 }
 
-export default function TutorialVideo({ seccion }: { seccion: string }) {
+type Props = {
+  seccion: string
+  /**
+   * Se dispara una sola vez cuando este componente ya "terminó su turno":
+   * o porque no había video que mostrar automáticamente, o porque el usuario
+   * ya cerró el video que se abrió solo la primera vez. Úsalo para no arrancar
+   * el TourGuiado al mismo tiempo que el video (evita el estrés de ver los dos
+   * a la vez) — pásalo como parte del prop `listo` de TourGuiado.
+   */
+  onListo?: () => void
+}
+
+export default function TutorialVideo({ seccion, onListo }: Props) {
   const [info, setInfo] = useState<InfoVideo | null>(null)
   const [abierto, setAbierto] = useState(false)
   const [marcando, setMarcando] = useState(false)
@@ -41,13 +54,22 @@ export default function TutorialVideo({ seccion }: { seccion: string }) {
         setInfo(data)
         if (data.configurado && !data.visto) {
           setAbierto(true)
+        } else {
+          // No hay video que mostrar automáticamente — el tour puede arrancar ya.
+          onListo?.()
         }
       })
-      .catch(() => setInfo({ configurado: false }))
+      .catch(() => {
+        setInfo({ configurado: false })
+        onListo?.()
+      })
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [seccion])
 
   async function cerrarYMarcarVisto() {
     setAbierto(false)
+    // El video (auto-abierto o abierto a mano) ya se cerró — el tour puede arrancar.
+    onListo?.()
     if (info?.visto || marcando) return
     setMarcando(true)
     try {
@@ -80,7 +102,8 @@ export default function TutorialVideo({ seccion }: { seccion: string }) {
           cursor: "pointer",
         }}
       >
-        ▶ Ver tutorial
+        <Play size={12} fill="currentColor" strokeWidth={0} aria-hidden="true" />
+        Ver tutorial
       </button>
 
       {abierto && (
@@ -123,13 +146,15 @@ export default function TutorialVideo({ seccion }: { seccion: string }) {
                 style={{
                   background: "none",
                   border: "none",
-                  fontSize: 18,
+                  display: "flex",
                   color: "#999",
                   cursor: "pointer",
                   lineHeight: 1,
+                  padding: 0,
                 }}
+                aria-label="Cerrar"
               >
-                ✕
+                <X size={18} aria-hidden="true" />
               </button>
             </div>
 

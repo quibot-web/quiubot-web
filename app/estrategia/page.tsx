@@ -447,6 +447,7 @@ function EstrategiaContent() {
   const [esAdminObjetivos, setEsAdminObjetivos] = useState(false);
   const [planUsuario, setPlanUsuario] = useState<string>("arranque");
   const [planMinimoPorId, setPlanMinimoPorId] = useState<Record<string, string>>({});
+  const [tutorialListo, setTutorialListo] = useState(false);
 
   const fileRef = useRef<HTMLInputElement>(null);
 
@@ -763,9 +764,10 @@ function EstrategiaContent() {
         <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 4 }}>
           <h1 style={{ fontSize: 20, fontWeight: 700, margin: 0, color: "#1a1a1a" }}>Motor de Estrategia Publicitaria</h1>
           <div style={{ display: "flex", gap: 6 }}>
-            <TutorialVideo seccion="motor-estrategia" />
+            <TutorialVideo seccion="motor-estrategia" onListo={() => setTutorialListo(true)} />
             <TourGuiado
               seccion="motor-estrategia"
+              listo={tutorialListo}
               pasos={[
                 { selector: '[data-tour="estrategia-tipo"]', titulo: "Empieza eligiendo qué vas a promocionar", texto: "Producto físico o servicio/infoproducto — la estrategia se adapta según tu elección." },
                 { selector: '[data-tour="estrategia-upload"]', titulo: "Sube tu imagen", texto: "Una foto clara del producto, o una pieza ya diseñada de tu servicio, es todo lo que necesitas para arrancar." },
