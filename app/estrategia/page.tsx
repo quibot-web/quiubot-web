@@ -392,7 +392,7 @@ function TarjetaTipoContenido({
                 top: pos.top,
                 left: pos.left,
                 transform: `rotate(${pos.rot}deg)`,
-                opacity: esServicio ? 0.16 : 0.09,
+                opacity: esServicio ? 0.28 : 0.16,
               }}
             >
               <IconoMosaico size={pos.size} color={esServicio ? "#fff" : colorActivo} strokeWidth={2} />
@@ -400,7 +400,7 @@ function TarjetaTipoContenido({
           );
         })}
         <div style={{ position: "absolute", right: -30, bottom: -30 }}>
-          <LogoQuiubotMark color={esServicio ? "#fff" : colorActivo} opacity={esServicio ? 0.14 : 0.08} size={150} />
+          <LogoQuiubotMark color={esServicio ? "#fff" : colorActivo} opacity={esServicio ? 0.24 : 0.14} size={150} />
         </div>
       </div>
 
@@ -853,7 +853,7 @@ function EstrategiaContent() {
                     </div>
                     <div>
                       <p style={{ margin: "0 0 6px", fontSize: 11, fontWeight: 600, color: "#333", maxWidth: 150, lineHeight: 1.3 }}>{data.headlineEjemplo}</p>
-                      <span style={{ display: "inline-block", background: "#534AB7", color: "#fff", fontSize: 10, fontWeight: 600, padding: "3px 10px", borderRadius: 12 }}>
+                      <span style={{ display: "inline-flex", alignItems: "center", gap: 4, background: "#fff", color: "#1a1a1a", fontSize: 10, fontWeight: 700, padding: "3px 10px", borderRadius: 4, border: "1px solid #ccc" }}>
                         {data.ctaEjemplo}
                       </span>
                     </div>
