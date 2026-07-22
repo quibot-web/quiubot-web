@@ -2,6 +2,7 @@
 import { useState, useEffect, useRef } from "react";
 import { useSession, signOut } from "next-auth/react";
 import { useRouter } from "next/navigation";
+import { BrainCircuit, Cloud, Radio, ExternalLink, CheckCircle2 } from "lucide-react";
 import HomeInicio from "@/app/components/HomeInicio";
 import TutorialVideo from "@/app/components/TutorialVideo";
 import TourGuiado from "@/app/components/TourGuiado";
@@ -11,6 +12,53 @@ function Icono({ children }: { children: React.ReactNode }) {
     <svg viewBox="0 0 24 24" width="17" height="17" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
       {children}
     </svg>
+  );
+}
+
+// Encabezado reutilizable de cada tarjeta de integración: icono de marca,
+// estado de conexión (sin puntos/emoji sueltos, con un icono de check real
+// cuando está conectado) y el enlace directo a la plataforma externa.
+function EncabezadoIntegracion({
+  icono: Icono2,
+  nombre,
+  conectado,
+  textoConectado,
+  textoNoConectado,
+  urlExterna,
+  textoUrlExterna,
+}: {
+  icono: React.ComponentType<{ size?: number; color?: string; strokeWidth?: number }>;
+  nombre: string;
+  conectado: boolean;
+  textoConectado: string;
+  textoNoConectado: string;
+  urlExterna: string;
+  textoUrlExterna: string;
+}) {
+  return (
+    <div style={{ display: "flex", alignItems: "flex-start", justifyContent: "space-between", marginBottom: "1.25rem", gap: 12 }}>
+      <div style={{ display: "flex", alignItems: "center", gap: "12px" }}>
+        <div style={{ width: 48, height: 48, borderRadius: "12px", background: conectado ? "#534AB7" : "#F3F2FE", display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0 }}>
+          <Icono2 size={22} color={conectado ? "#fff" : "#534AB7"} strokeWidth={2} />
+        </div>
+        <div>
+          <h2 style={{ fontSize: "15px", fontWeight: 600, margin: 0, color: "#1a1a1a" }}>{nombre}</h2>
+          <div style={{ display: "flex", alignItems: "center", gap: "5px", fontSize: "12px", color: conectado ? "#15803d" : "#999", marginTop: 2, fontWeight: 500 }}>
+            {conectado ? <CheckCircle2 size={13} strokeWidth={2.5} /> : <span style={{ width: 6, height: 6, borderRadius: "50%", background: "#ccc" }} />}
+            {conectado ? textoConectado : textoNoConectado}
+          </div>
+        </div>
+      </div>
+      <a
+        href={urlExterna}
+        target="_blank"
+        rel="noopener noreferrer"
+        style={{ display: "inline-flex", alignItems: "center", gap: 4, fontSize: 12, color: "#534AB7", fontWeight: 600, textDecoration: "none", whiteSpace: "nowrap", flexShrink: 0, marginTop: 4 }}
+      >
+        {textoUrlExterna}
+        <ExternalLink size={13} strokeWidth={2} />
+      </a>
+    </div>
   );
 }
 
@@ -658,19 +706,16 @@ export default function Home() {
 
           {tab === "integraciones" && (
             <div style={{ maxWidth: "600px", margin: "2rem auto", display: "flex", flexDirection: "column", gap: "2rem" }}>
-              <div style={{ background: "#fff", padding: "2rem", borderRadius: "16px", border: "1px solid #e8e8e6", boxShadow: "0 2px 4px rgba(0,0,0,0.05)" }}>
-                <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: "1.5rem" }}>
-                  <div style={{ display: "flex", alignItems: "center", gap: "12px" }}>
-                    <div style={{ width: 48, height: 48, borderRadius: "12px", background: "#f3f2fe", display: "flex", alignItems: "center", justifyContent: "center", fontSize: "24px" }}>🤖</div>
-                    <div>
-                      <h2 style={{ fontSize: "16px", fontWeight: 600, margin: 0 }}>OpenAI</h2>
-                      <div style={{ display: "flex", alignItems: "center", gap: "6px", fontSize: "12px", color: apiKeyInfo?.hasKey ? "#10b981" : "#6b7280" }}>
-                        <span style={{ width: 8, height: 8, borderRadius: "50%", background: apiKeyInfo?.hasKey ? "#10b981" : "#6b7280" }}></span>
-                        {apiKeyInfo?.hasKey ? "Conectado" : "No configurado"}
-                      </div>
-                    </div>
-                  </div>
-                </div>
+              <div style={{ background: "#fff", padding: "2rem", borderRadius: "16px", border: apiKeyInfo?.hasKey ? "1.5px solid #d9d4f7" : "1px solid #e8e8e6", boxShadow: "0 2px 4px rgba(0,0,0,0.05)" }}>
+                <EncabezadoIntegracion
+                  icono={BrainCircuit}
+                  nombre="OpenAI"
+                  conectado={!!apiKeyInfo?.hasKey}
+                  textoConectado="Conectado"
+                  textoNoConectado="No configurado"
+                  urlExterna="https://platform.openai.com/api-keys"
+                  textoUrlExterna="Obtener API Key"
+                />
                 {apiKeyInfo?.hasKey && <div style={{ background: "#f9fafb", padding: "10px", borderRadius: "8px", fontSize: "12px", color: "#666", marginBottom: "15px", fontFamily: "monospace" }}>{apiKeyInfo.preview}</div>}
                 <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 6 }}>
                   <span style={{ fontSize: 12, fontWeight: 600, color: "#666" }}>Tu API key de OpenAI</span>
@@ -686,23 +731,20 @@ export default function Home() {
                     />
                   </div>
                 </div>
-                <input data-tour="openai-input" type="password" placeholder={apiKeyInfo?.hasKey ? "Actualizar API Key..." : "sk-..."} value={nuevaApiKey} onChange={(e) => setNuevaApiKey(e.target.value)} style={{ width: "100%", padding: "12px", borderRadius: "8px", border: "1px solid #e0e0e0", marginBottom: "10px" }} />
+                <input data-tour="openai-input" type="password" placeholder={apiKeyInfo?.hasKey ? "Actualizar API Key..." : "sk-..."} value={nuevaApiKey} onChange={(e) => setNuevaApiKey(e.target.value)} style={{ width: "100%", padding: "12px", borderRadius: "8px", border: "1px solid #e0e0e0", marginBottom: "10px", boxSizing: "border-box" }} />
                 <button data-tour="openai-conectar" onClick={handleGuardarApiKey} style={{ width: "100%", padding: "10px", borderRadius: "8px", background: "#534AB7", color: "#fff", border: "none", fontWeight: 600, cursor: "pointer" }}>{guardandoApiKey ? "Guardando..." : apiKeyInfo?.hasKey ? "Actualizar Conexión" : "Conectar OpenAI"}</button>
               </div>
 
-              <div style={{ background: "#fff", padding: "2rem", borderRadius: "16px", border: "1px solid #e8e8e6", boxShadow: "0 2px 4px rgba(0,0,0,0.05)" }}>
-                <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: "1.5rem" }}>
-                  <div style={{ display: "flex", alignItems: "center", gap: "12px" }}>
-                    <div style={{ width: 48, height: 48, borderRadius: "12px", background: "#f3f2fe", display: "flex", alignItems: "center", justifyContent: "center", fontSize: "24px" }}>☁️</div>
-                    <div>
-                      <h2 style={{ fontSize: "16px", fontWeight: 600, margin: 0 }}>Cloudinary</h2>
-                      <div style={{ display: "flex", alignItems: "center", gap: "6px", fontSize: "12px", color: cloudinaryInfo?.hasConfig ? "#10b981" : "#6b7280" }}>
-                        <span style={{ width: 8, height: 8, borderRadius: "50%", background: cloudinaryInfo?.hasConfig ? "#10b981" : "#6b7280" }}></span>
-                        {cloudinaryInfo?.hasConfig ? "Conectado" : "Configuración pendiente"}
-                      </div>
-                    </div>
-                  </div>
-                </div>
+              <div style={{ background: "#fff", padding: "2rem", borderRadius: "16px", border: cloudinaryInfo?.hasConfig ? "1.5px solid #d9d4f7" : "1px solid #e8e8e6", boxShadow: "0 2px 4px rgba(0,0,0,0.05)" }}>
+                <EncabezadoIntegracion
+                  icono={Cloud}
+                  nombre="Cloudinary"
+                  conectado={!!cloudinaryInfo?.hasConfig}
+                  textoConectado="Conectado"
+                  textoNoConectado="Configuración pendiente"
+                  urlExterna="https://console.cloudinary.com/console"
+                  textoUrlExterna="Ver mi Dashboard"
+                />
                 <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 6 }}>
                   <span style={{ fontSize: 12, fontWeight: 600, color: "#666" }}>Tus credenciales de Cloudinary</span>
                   <div style={{ display: "flex", gap: 6 }}>
@@ -718,26 +760,23 @@ export default function Home() {
                   </div>
                 </div>
                 <div data-tour="cloudinary-inputs" style={{ display: "flex", flexDirection: "column", gap: "10px" }}>
-                  <input placeholder="Cloud Name" value={cloudinaryData.name} onChange={(e) => setCloudinaryData({...cloudinaryData, name: e.target.value})} style={{ width: "100%", padding: "12px", borderRadius: "8px", border: "1px solid #e0e0e0" }} />
-                  <input placeholder="API Key" value={cloudinaryData.key} onChange={(e) => setCloudinaryData({...cloudinaryData, key: e.target.value})} style={{ width: "100%", padding: "12px", borderRadius: "8px", border: "1px solid #e0e0e0" }} />
-                  <input type="password" placeholder="API Secret" value={cloudinaryData.secret} onChange={(e) => setCloudinaryData({...cloudinaryData, secret: e.target.value})} style={{ width: "100%", padding: "12px", borderRadius: "8px", border: "1px solid #e0e0e0" }} />
+                  <input placeholder="Cloud Name" value={cloudinaryData.name} onChange={(e) => setCloudinaryData({...cloudinaryData, name: e.target.value})} style={{ width: "100%", padding: "12px", borderRadius: "8px", border: "1px solid #e0e0e0", boxSizing: "border-box" }} />
+                  <input placeholder="API Key" value={cloudinaryData.key} onChange={(e) => setCloudinaryData({...cloudinaryData, key: e.target.value})} style={{ width: "100%", padding: "12px", borderRadius: "8px", border: "1px solid #e0e0e0", boxSizing: "border-box" }} />
+                  <input type="password" placeholder="API Secret" value={cloudinaryData.secret} onChange={(e) => setCloudinaryData({...cloudinaryData, secret: e.target.value})} style={{ width: "100%", padding: "12px", borderRadius: "8px", border: "1px solid #e0e0e0", boxSizing: "border-box" }} />
                 </div>
-                <button data-tour="cloudinary-guardar" onClick={handleGuardarCloudinary} style={{ width: "100%", padding: "10px", borderRadius: "8px", background: "#534AB7", color: "#fff", border: "none", marginTop: "15px", fontWeight: 600 }}>{guardandoCloud ? "Guardando..." : "Guardar Credenciales"}</button>
+                <button data-tour="cloudinary-guardar" onClick={handleGuardarCloudinary} style={{ width: "100%", padding: "10px", borderRadius: "8px", background: "#534AB7", color: "#fff", border: "none", marginTop: "15px", fontWeight: 600, cursor: "pointer" }}>{guardandoCloud ? "Guardando..." : "Guardar Credenciales"}</button>
               </div>
 
-              <div style={{ background: "#fff", padding: "2rem", borderRadius: "16px", border: "1px solid #e8e8e6", boxShadow: "0 2px 4px rgba(0,0,0,0.05)" }}>
-                <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: "1.5rem" }}>
-                  <div style={{ display: "flex", alignItems: "center", gap: "12px" }}>
-                    <div style={{ width: 48, height: 48, borderRadius: "12px", background: "#f3f2fe", display: "flex", alignItems: "center", justifyContent: "center", fontSize: "24px" }}>📣</div>
-                    <div>
-                      <h2 style={{ fontSize: "16px", fontWeight: 600, margin: 0 }}>Meta Ads</h2>
-                      <div style={{ display: "flex", alignItems: "center", gap: "6px", fontSize: "12px", color: metaInfo?.conectado ? "#10b981" : "#6b7280" }}>
-                        <span style={{ width: 8, height: 8, borderRadius: "50%", background: metaInfo?.conectado ? "#10b981" : "#6b7280" }}></span>
-                        {metaInfo?.conectado ? "Conectado" : "No conectado"}
-                      </div>
-                    </div>
-                  </div>
-                </div>
+              <div style={{ background: "#fff", padding: "2rem", borderRadius: "16px", border: metaInfo?.conectado ? "1.5px solid #d9d4f7" : "1px solid #e8e8e6", boxShadow: "0 2px 4px rgba(0,0,0,0.05)" }}>
+                <EncabezadoIntegracion
+                  icono={Radio}
+                  nombre="Meta Ads"
+                  conectado={!!metaInfo?.conectado}
+                  textoConectado="Conectado"
+                  textoNoConectado="No conectado"
+                  urlExterna="https://business.facebook.com/adsmanager"
+                  textoUrlExterna="Ir a Meta Business"
+                />
 
                 {metaInfo?.conectado ? (
                   <div>
