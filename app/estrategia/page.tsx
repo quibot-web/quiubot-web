@@ -190,6 +190,33 @@ const TARJETAS_TIPO: Record<
   },
 };
 
+// Trazo vectorial del logo de Quiubot (círculo con apertura + diagonal),
+// para poder usarlo como marca de agua en cualquier color según el fondo.
+function LogoQuiubotMark({ color, opacity, size }: { color: string; opacity: number; size: number }) {
+  return (
+    <svg width={size} height={size} viewBox="0 0 100 100" style={{ opacity }} aria-hidden="true">
+      <circle cx="50" cy="45" r="30" fill="none" stroke={color} strokeWidth="10" strokeDasharray="160 30" />
+      <line x1="68" y1="63" x2="85" y2="80" stroke={color} strokeWidth="10" strokeLinecap="round" />
+    </svg>
+  );
+}
+
+// Posiciones fijas del mosaico de íconos de fondo — mismo layout para ambas
+// tarjetas, solo cambia el set de íconos (data.chips) y el color.
+const POSICIONES_MOSAICO = [
+  { top: "6%", left: "8%", size: 18, rot: -12, idx: 0 },
+  { top: "4%", left: "38%", size: 22, rot: 8, idx: 1 },
+  { top: "10%", left: "68%", size: 16, rot: -6, idx: 2 },
+  { top: "28%", left: "20%", size: 20, rot: 10, idx: 3 },
+  { top: "24%", left: "82%", size: 18, rot: -8, idx: 0 },
+  { top: "48%", left: "6%", size: 16, rot: 6, idx: 1 },
+  { top: "44%", left: "50%", size: 22, rot: -10, idx: 2 },
+  { top: "62%", left: "74%", size: 18, rot: 8, idx: 3 },
+  { top: "68%", left: "30%", size: 16, rot: -6, idx: 0 },
+  { top: "84%", left: "10%", size: 20, rot: 10, idx: 1 },
+  { top: "80%", left: "56%", size: 18, rot: -8, idx: 2 },
+  { top: "92%", left: "84%", size: 16, rot: 6, idx: 3 },
+];
 // Tarjeta seleccionable del Paso 1 (Producto vs Servicio), con estados de
 // hover, selección y foco por teclado. Vive fuera del componente principal
 // porque no depende de ningún estado que no reciba por props.
@@ -213,7 +240,6 @@ function TarjetaTipoContenido({
   const colorActivoClaro = "#7F77DD";
   const fondoActivo = "#F3F2FE";
   const esServicio = tipo === "servicio";
-  const [collageHover, setCollageHover] = useState(false);
 
   const colorTexto = seleccionado ? colorActivo : "#1a1a1a";
   const colorBorde = seleccionado ? colorActivo : enHover ? "#bbb" : "#e8e8e6";
@@ -246,6 +272,7 @@ function TarjetaTipoContenido({
         background: seleccionado ? fondoActivo : "#fff",
         padding: "1.25rem",
         position: "relative",
+        overflow: "hidden",
         transition: "border-color .18s ease, background-color .18s ease, transform .12s ease, opacity .18s ease",
         transform: enHover && !seleccionado ? "scale(1.008)" : seleccionado ? "scale(1.01)" : "scale(1)",
         opacity: atenuada ? 0.5 : 1,
@@ -350,45 +377,31 @@ function TarjetaTipoContenido({
         })}
       </div>
 
-      {/* Collage decorativo: los mismos iconos de categoría, como si "salieran" de la
-          esquina de la tarjeta. Al pasar el mouse, se separan y agrandan (efecto burbuja)
-          para que cada uno se identifique sin ambigüedad. */}
-      <div
-        onMouseEnter={() => setCollageHover(true)}
-        onMouseLeave={() => setCollageHover(false)}
-        style={{
-          position: "absolute",
-          bottom: -10,
-          right: 18,
-          display: "flex",
-        }}
-      >
-        {data.chips.map((chip, i) => {
-          const IconoFloat = chip.icono;
-          const rotaciones = [-10, 6, -4, 9];
+      {/* Mosaico de fondo: íconos de categoría dispersos + logo de marca como
+          marca de agua, tono sobre tono, cubriendo toda la tarjeta. Se dibuja
+          antes que el contenido y con pointerEvents:none para no interferir
+          con los clics ni con la lectura del texto encima. */}
+      <div style={{ position: "absolute", inset: 0, overflow: "hidden", pointerEvents: "none", zIndex: -1 }}>
+        {POSICIONES_MOSAICO.map((pos, i) => {
+          const IconoMosaico = data.chips[pos.idx % data.chips.length].icono;
           return (
             <div
               key={i}
               style={{
-                width: collageHover ? 30 : 26,
-                height: collageHover ? 30 : 26,
-                borderRadius: "50%",
-                background: esServicio ? colorActivo : "#fff",
-                border: `1.5px solid ${esServicio ? "#fff" : fondoActivo}`,
-                display: "flex",
-                alignItems: "center",
-                justifyContent: "center",
-                marginLeft: i === 0 ? 0 : collageHover ? 5 : -8,
-                transform: collageHover ? "rotate(0deg) scale(1.08)" : `rotate(${rotaciones[i % rotaciones.length]}deg) scale(1)`,
-                transition: "all .28s cubic-bezier(.34,1.56,.64,1)",
-                transitionDelay: collageHover ? `${i * 0.035}s` : "0s",
-                zIndex: 10 - i,
+                position: "absolute",
+                top: pos.top,
+                left: pos.left,
+                transform: `rotate(${pos.rot}deg)`,
+                opacity: esServicio ? 0.16 : 0.09,
               }}
             >
-              <IconoFloat size={collageHover ? 14 : 12} color={esServicio ? "#fff" : colorActivo} strokeWidth={2} aria-hidden="true" />
+              <IconoMosaico size={pos.size} color={esServicio ? "#fff" : colorActivo} strokeWidth={2} />
             </div>
           );
         })}
+        <div style={{ position: "absolute", right: -30, bottom: -30 }}>
+          <LogoQuiubotMark color={esServicio ? "#fff" : colorActivo} opacity={esServicio ? 0.14 : 0.08} size={150} />
+        </div>
       </div>
 
       <div style={{ background: fondoActivo, borderRadius: 10, padding: 10, display: "flex", alignItems: "center", gap: 8 }}>
