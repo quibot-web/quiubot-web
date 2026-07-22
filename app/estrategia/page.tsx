@@ -392,15 +392,15 @@ function TarjetaTipoContenido({
                 top: pos.top,
                 left: pos.left,
                 transform: `rotate(${pos.rot}deg)`,
-                opacity: esServicio ? 0.28 : 0.16,
+                opacity: 0.2,
               }}
             >
-              <IconoMosaico size={pos.size} color={esServicio ? "#fff" : colorActivo} strokeWidth={2} />
+              <IconoMosaico size={pos.size} color={colorActivo} strokeWidth={2} />
             </div>
           );
         })}
         <div style={{ position: "absolute", right: -30, bottom: -30 }}>
-          <LogoQuiubotMark color={esServicio ? "#fff" : colorActivo} opacity={esServicio ? 0.24 : 0.14} size={150} />
+          <LogoQuiubotMark color={colorActivo} opacity={0.16} size={150} />
         </div>
       </div>
 
@@ -828,8 +828,8 @@ function EstrategiaContent() {
                     display: "flex",
                     alignItems: "center",
                     gap: 14,
-                    background: bloqueado ? (esServicioPreview ? "#534AB7" : "#F3F2FE") : "#fff",
-                    border: bloqueado ? "none" : "1.5px dashed #ddd",
+                    background: bloqueado ? "#F3F2FE" : "#fff",
+                    border: bloqueado ? "1.5px solid #E4E1FA" : "1.5px dashed #ddd",
                     borderRadius: 14,
                     padding: "14px 16px",
                     animation: "quiubot-banner-in .2s ease",
@@ -860,10 +860,10 @@ function EstrategiaContent() {
                   </div>
 
                   <div style={{ flex: 1 }}>
-                    <p style={{ margin: 0, fontSize: 13, fontWeight: 700, color: bloqueado ? (esServicioPreview ? "#fff" : "#534AB7") : "#666" }}>
+                    <p style={{ margin: 0, fontSize: 13, fontWeight: 700, color: bloqueado ? "#534AB7" : "#666" }}>
                       {bloqueado ? `Modo ${data.titulo} activado` : `Así se vería tu anuncio de ${data.titulo.toLowerCase()}`}
                     </p>
-                    <p style={{ margin: "2px 0 0", fontSize: 11, color: bloqueado ? (esServicioPreview ? "rgba(255,255,255,0.8)" : "#534AB7") : "#999" }}>
+                    <p style={{ margin: "2px 0 0", fontSize: 11, color: bloqueado ? "#534AB7" : "#999" }}>
                       {bloqueado ? "Ejemplo ilustrativo — puedes cambiar de opción arriba cuando quieras." : "Haz clic en la tarjeta para elegir este modo."}
                     </p>
                   </div>
