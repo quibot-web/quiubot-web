@@ -104,48 +104,38 @@ function posicionesNodos(n: number) {
   return ys;
 }
 
-// Fondo decorativo tipo "red de datos": puntos dispersos con líneas de
-// conexión entre los más cercanos, en tonos morados de marca. Se genera
-// solo en el cliente después de montar (nunca durante el render del
-// servidor) para no causar diferencias de hidratación — es puramente
-// decorativo, un pequeño retraso al aparecer no afecta nada.
-function FondoInmersivoADN() {
+// Ambiente decorativo claro, tipo "esfera suave": un halo circular difuso
+// detrás del contenido, con unos pocos puntos flotando dentro — la misma
+// idea visual que ya usas en otros loaders de la app, adaptada al morado
+// de marca. Los puntos se generan solo en el cliente para no causar
+// diferencias de hidratación.
+function GlowAmbienteADN() {
   const [puntos, setPuntos] = useState<{ x: number; y: number; r: number; o: number }[] | null>(null);
 
   useEffect(() => {
-    const n = 46;
-    const nuevos = Array.from({ length: n }, () => ({
-      x: Math.random() * 100,
-      y: Math.random() * 100,
-      r: 1 + Math.random() * 2.5,
-      o: 0.15 + Math.random() * 0.45,
-    }));
+    const n = 16;
+    const nuevos = Array.from({ length: n }, () => {
+      const ang = Math.random() * Math.PI * 2;
+      const dist = Math.random() * 0.42;
+      return {
+        x: 50 + Math.cos(ang) * dist * 100,
+        y: 50 + Math.sin(ang) * dist * 100,
+        r: 1.5 + Math.random() * 3,
+        o: 0.15 + Math.random() * 0.35,
+      };
+    });
     setPuntos(nuevos);
   }, []);
 
-  if (!puntos) return null;
-
-  const lineas: { a: typeof puntos[0]; b: typeof puntos[0] }[] = [];
-  puntos.forEach((a, i) => {
-    puntos.slice(i + 1).forEach((b) => {
-      const d = Math.hypot(a.x - b.x, a.y - b.y);
-      if (d < 16) lineas.push({ a, b });
-    });
-  });
-
   return (
-    <div style={{ position: "absolute", inset: 0, overflow: "hidden", pointerEvents: "none" }}>
-      <svg width="100%" height="100%" style={{ position: "absolute", inset: 0 }} preserveAspectRatio="none">
-        {lineas.map((l, i) => (
-          <line
-            key={i}
-            x1={`${l.a.x}%`} y1={`${l.a.y}%`}
-            x2={`${l.b.x}%`} y2={`${l.b.y}%`}
-            stroke="#7F77DD" strokeWidth={0.5} opacity={0.12}
-          />
-        ))}
-      </svg>
-      {puntos.map((p, i) => (
+    <div style={{ position: "absolute", inset: 0, overflow: "hidden", pointerEvents: "none", display: "flex", alignItems: "center", justifyContent: "center" }}>
+      <div
+        style={{
+          width: 820, height: 820, borderRadius: "50%",
+          background: "radial-gradient(circle, rgba(127,119,221,0.16) 0%, rgba(127,119,221,0.07) 45%, rgba(127,119,221,0) 72%)",
+        }}
+      />
+      {puntos && puntos.map((p, i) => (
         <div
           key={i}
           style={{
@@ -153,9 +143,8 @@ function FondoInmersivoADN() {
             left: `${p.x}%`, top: `${p.y}%`,
             width: p.r * 2, height: p.r * 2,
             borderRadius: "50%",
-            background: "#AFA9EC",
+            background: "#7F77DD",
             opacity: p.o,
-            boxShadow: "0 0 6px 1px rgba(127,119,221,0.5)",
           }}
         />
       ))}
@@ -281,12 +270,12 @@ export default function MarcaPage() {
   const construyendoOListo = analizando || mostrandoHeliceFinal;
 
   return (
-    <div style={{ minHeight: "100vh", background: construyendoOListo ? "#14101F" : "#f9f9f8", fontFamily: "system-ui, sans-serif", display: "flex", flexDirection: "column", transition: "background-color .4s ease" }}>
-      <div style={{ background: construyendoOListo ? "#1B1830" : "#fff", borderBottom: construyendoOListo ? "1px solid #2E2850" : "1px solid #e8e8e6", padding: "1rem 1.5rem", display: "flex", alignItems: "center", justifyContent: "space-between", transition: "background-color .4s ease" }}>
-        <a href="/" style={{ fontSize: 18, fontWeight: 700, textDecoration: "none", color: construyendoOListo ? "#fff" : "#1a1a1a" }}>
+    <div style={{ minHeight: "100vh", background: "#f9f9f8", fontFamily: "system-ui, sans-serif", display: "flex", flexDirection: "column" }}>
+      <div style={{ background: "#fff", borderBottom: "1px solid #e8e8e6", padding: "1rem 1.5rem", display: "flex", alignItems: "center", justifyContent: "space-between" }}>
+        <a href="/" style={{ fontSize: 18, fontWeight: 700, textDecoration: "none", color: "#1a1a1a" }}>
           quiu<span style={{ color: "#7F77DD" }}>bot</span>
         </a>
-        <div style={{ fontSize: 13, color: construyendoOListo ? "#9992D6" : "#999" }}>ADN de marca</div>
+        <div style={{ fontSize: 13, color: "#999" }}>ADN de marca</div>
       </div>
 
       {!construyendoOListo && (
@@ -368,14 +357,14 @@ export default function MarcaPage() {
       )}
 
       {construyendoOListo && (
-        <div style={{ position: "relative", flex: 1, overflow: "hidden", display: "flex", alignItems: "center", justifyContent: "center", padding: "2.5rem 1.5rem" }}>
-          <FondoInmersivoADN />
-          <div style={{ position: "relative", zIndex: 1, maxWidth: 900, width: "100%", display: "flex", gap: 32, alignItems: "center", flexWrap: "wrap", justifyContent: "center" }}>
-            <div style={{ display: "flex", gap: 32, alignItems: "flex-start", flexWrap: "wrap" }}>
+        <div style={{ position: "relative", flex: 1, overflow: "hidden", display: "flex", alignItems: "center", justifyContent: "center", padding: "2rem 1.5rem" }}>
+          <GlowAmbienteADN />
+          <div style={{ position: "relative", zIndex: 1, maxWidth: 1200, width: "100%", display: "flex", gap: 40, alignItems: "center", flexWrap: "wrap", justifyContent: "center" }}>
+            <div style={{ display: "flex", gap: 40, alignItems: "center", flexWrap: "wrap", justifyContent: "center", width: "100%" }}>
               {analizando ? (
                 <EscenaParticulasADN3D faseActual={faseAnimacion} />
               ) : (
-                <svg width="220" height="440" viewBox="0 0 220 440" style={{ flexShrink: 0, margin: "0 auto" }}>
+                <svg width="100%" viewBox="0 0 220 440" style={{ flexShrink: 0, maxWidth: 420, height: "auto", margin: "0 auto", display: "block" }}>
                   <defs>
                     <filter id="glowADN" x="-60%" y="-60%" width="220%" height="220%">
                       <feGaussianBlur stdDeviation="4" result="blur" />
@@ -385,20 +374,20 @@ export default function MarcaPage() {
                       </feMerge>
                     </filter>
                   </defs>
-                  <path d={trazoHebra(0)} fill="none" stroke="#7F77DD" strokeWidth={2.5} opacity={0.7} filter="url(#glowADN)" />
-                  <path d={trazoHebra(Math.PI)} fill="none" stroke="#7F77DD" strokeWidth={2.5} opacity={0.7} filter="url(#glowADN)" />
+                  <path d={trazoHebra(0)} fill="none" stroke={COLOR_ACTIVO} strokeWidth={2.5} opacity={0.55} filter="url(#glowADN)" />
+                  <path d={trazoHebra(Math.PI)} fill="none" stroke={COLOR_ACTIVO} strokeWidth={2.5} opacity={0.55} filter="url(#glowADN)" />
                   {nodeYs.map((y, i) => {
                     const xa = xEnY(y, 0);
                     const xb = xEnY(y, Math.PI);
                     const seleccionado = nodoSeleccionado === i;
                     return (
                       <g key={i} filter="url(#glowADN)">
-                        <line x1={xa} y1={y} x2={xb} y2={y} stroke="#AFA9EC" strokeWidth={2.5} opacity={0.8} />
+                        <line x1={xa} y1={y} x2={xb} y2={y} stroke={COLOR_CLARO} strokeWidth={2.5} opacity={0.6} />
                         <circle
                           cx={xa} cy={y}
                           r={seleccionado ? 13 : 9}
-                          fill={seleccionado ? "#fff" : COLOR_CLARO}
-                          stroke="#EEEDFE"
+                          fill={COLOR_ACTIVO}
+                          stroke="#fff"
                           strokeWidth={seleccionado ? 4 : 2.5}
                           style={{ cursor: "pointer", transition: "all .3s cubic-bezier(.34,1.56,.64,1)" }}
                           onClick={() => setNodoSeleccionado(i)}
@@ -409,38 +398,38 @@ export default function MarcaPage() {
                 </svg>
               )}
 
-              <div style={{ flex: 1, minWidth: 280 }}>
+              <div style={{ flex: "1 1 320px", minWidth: 280, maxWidth: 420 }}>
                 {analizando && (
                   <div>
                     <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 6 }}>
-                      <span style={{ width: 7, height: 7, borderRadius: "50%", background: "#AFA9EC", animation: "adn-pulse 1s ease-in-out infinite" }} />
-                      <span style={{ fontFamily: "ui-monospace, monospace", fontSize: 11, color: "#C9C4F5" }}>
+                      <span style={{ width: 7, height: 7, borderRadius: "50%", background: COLOR_CLARO, animation: "adn-pulse 1s ease-in-out infinite" }} />
+                      <span style={{ fontFamily: "ui-monospace, monospace", fontSize: 11, color: COLOR_ACTIVO }}>
                         {faseAnimacion < CATEGORIAS.length
                           ? `Analizando ${CATEGORIAS[Math.min(faseAnimacion, CATEGORIAS.length - 1)].titulo.toLowerCase()}...`
                           : "Sintetizando el ADN completo..."}
                       </span>
                     </div>
-                    <p style={{ fontSize: 13, color: "#7A76A8" }}>Esto puede tardar unos segundos. No cierres esta pestaña.</p>
+                    <p style={{ fontSize: 13, color: "#999" }}>Esto puede tardar unos segundos. No cierres esta pestaña.</p>
                   </div>
                 )}
 
                 {mostrandoHeliceFinal && nodoSeleccionado === null && (
                   <div>
                     <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 6 }}>
-                      <Check size={14} color="#C9C4F5" strokeWidth={3} />
-                      <span style={{ fontFamily: "ui-monospace, monospace", fontSize: 11, color: "#C9C4F5" }}>ADN DE MARCA COMPLETO</span>
+                      <Check size={14} color={COLOR_ACTIVO} strokeWidth={3} />
+                      <span style={{ fontFamily: "ui-monospace, monospace", fontSize: 11, color: COLOR_ACTIVO }}>ADN DE MARCA COMPLETO</span>
                     </div>
-                    <div style={{ background: "rgba(127,119,221,0.12)", border: "1px solid rgba(127,119,221,0.25)", borderRadius: 14, padding: 16, marginBottom: 16 }}>
-                      <p style={{ fontSize: 13, color: "#E4E1FA", lineHeight: 1.6, margin: 0 }}>{resumen}</p>
+                    <div style={{ background: "#F3F2FE", borderRadius: 14, padding: 16, marginBottom: 16 }}>
+                      <p style={{ fontSize: 13, color: "#3C3489", lineHeight: 1.6, margin: 0 }}>{resumen}</p>
                     </div>
-                    <p style={{ fontSize: 13, color: "#7A76A8", marginBottom: 20 }}>
+                    <p style={{ fontSize: 13, color: "#999", marginBottom: 20 }}>
                       Haz clic en cualquier punto de la hélice para ver ese fragmento en detalle.
                     </p>
                     <div style={{ display: "flex", gap: 10 }}>
-                      <button onClick={handleVolverAAnalizar} style={{ flex: 1, background: "transparent", border: "1px solid #3A3466", color: "#C9C4F5", padding: "12px", borderRadius: 10, fontSize: 13, fontWeight: 600, cursor: "pointer" }}>
+                      <button onClick={handleVolverAAnalizar} style={{ flex: 1, background: "#fff", border: "1px solid #e0e0e0", color: "#666", padding: "12px", borderRadius: 10, fontSize: 13, fontWeight: 600, cursor: "pointer" }}>
                         Volver a analizar
                       </button>
-                      <a href="/" style={{ flex: 1, textAlign: "center", background: "#534AB7", color: "#fff", padding: "12px", borderRadius: 10, fontSize: 13, fontWeight: 600, textDecoration: "none" }}>
+                      <a href="/" style={{ flex: 1, textAlign: "center", background: COLOR_ACTIVO, color: "#fff", padding: "12px", borderRadius: 10, fontSize: 13, fontWeight: 600, textDecoration: "none" }}>
                         Continuar al panel
                       </a>
                     </div>
@@ -449,29 +438,29 @@ export default function MarcaPage() {
 
                 {mostrandoHeliceFinal && nodoSeleccionado !== null && adn && (
                   <div>
-                    <span style={{ fontFamily: "ui-monospace, monospace", fontSize: 10, color: "#C9C4F5" }}>
+                    <span style={{ fontFamily: "ui-monospace, monospace", fontSize: 10, color: COLOR_ACTIVO }}>
                       FRAGMENTO {String(nodoSeleccionado + 1).padStart(2, "0")}/07
                     </span>
-                    <p style={{ fontSize: 17, fontWeight: 600, color: "#fff", margin: "4px 0 14px" }}>
+                    <p style={{ fontSize: 17, fontWeight: 600, color: "#1a1a1a", margin: "4px 0 14px" }}>
                       {CATEGORIAS[nodoSeleccionado].titulo}
                     </p>
-                    <div style={{ background: "rgba(127,119,221,0.12)", border: "1px solid rgba(127,119,221,0.25)", borderRadius: 14, padding: 16, display: "flex", flexDirection: "column", gap: 10, marginBottom: 16 }}>
+                    <div style={{ background: "#F3F2FE", borderRadius: 14, padding: 16, display: "flex", flexDirection: "column", gap: 10, marginBottom: 16 }}>
                       {Object.entries(adn[CATEGORIAS[nodoSeleccionado].key] || {}).map(([campo, valor]) => (
                         <div key={campo} style={{ display: "flex", justifyContent: "space-between", gap: 12, alignItems: "flex-start" }}>
-                          <span style={{ fontSize: 12, color: "#8B86BD", flexShrink: 0, minWidth: 130 }}>{ETIQUETAS[campo] || campo}</span>
+                          <span style={{ fontSize: 12, color: "#666", flexShrink: 0, minWidth: 130 }}>{ETIQUETAS[campo] || campo}</span>
                           {campo === "colores_acento_hex" || campo === "color_primario_hex" || campo === "color_secundario_hex" ? (
                             <div style={{ display: "flex", gap: 4, flexWrap: "wrap", justifyContent: "flex-end" }}>
                               {(Array.isArray(valor) ? valor : [valor]).filter(Boolean).map((hex: string, i: number) => (
-                                <span key={i} title={hex} style={{ width: 18, height: 18, borderRadius: 5, background: hex, border: "1px solid rgba(255,255,255,0.15)", display: "inline-block" }} />
+                                <span key={i} title={hex} style={{ width: 18, height: 18, borderRadius: 5, background: hex, border: "1px solid rgba(0,0,0,0.08)", display: "inline-block" }} />
                               ))}
                             </div>
                           ) : (
-                            <span style={{ fontSize: 13, color: "#E4E1FA", fontWeight: 500, textAlign: "right" }}>{formatearValor(valor)}</span>
+                            <span style={{ fontSize: 13, color: "#3C3489", fontWeight: 500, textAlign: "right" }}>{formatearValor(valor)}</span>
                           )}
                         </div>
                       ))}
                     </div>
-                    <button onClick={() => setNodoSeleccionado(null)} style={{ width: "100%", background: "transparent", border: "1px solid #3A3466", color: "#C9C4F5", padding: "10px", borderRadius: 10, fontSize: 13, fontWeight: 600, cursor: "pointer" }}>
+                    <button onClick={() => setNodoSeleccionado(null)} style={{ width: "100%", background: "#fff", border: "1px solid #e0e0e0", color: COLOR_ACTIVO, padding: "10px", borderRadius: 10, fontSize: 13, fontWeight: 600, cursor: "pointer" }}>
                       Ver toda la hélice
                     </button>
                   </div>

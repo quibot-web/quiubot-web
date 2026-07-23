@@ -64,8 +64,8 @@ export default function EscenaParticulasADN3D({ faseActual }: Props) {
       contenedor.innerHTML = "";
       contenedor.appendChild(renderer.domElement);
 
-      scene.add(new THREE.AmbientLight(0xffffff, 0.35));
-      const luz = new THREE.PointLight(0xffffff, 1.6, 30);
+      scene.add(new THREE.AmbientLight(0xffffff, 0.75));
+      const luz = new THREE.PointLight(0xffffff, 0.9, 30);
       luz.position.set(4, 4, 6);
       scene.add(luz);
 
@@ -83,23 +83,23 @@ export default function EscenaParticulasADN3D({ faseActual }: Props) {
 
         const geoNucleo = new THREE.TubeGeometry(curva, 220, 0.075, 8, false);
         const matNucleo = new THREE.MeshStandardMaterial({
-          color: 0xd8d4f8,
+          color: COLOR_PRIMARIO,
           emissive: COLOR_CLARO,
-          emissiveIntensity: 0.9,
-          roughness: 0.3,
-          metalness: 0.15,
+          emissiveIntensity: 0.35,
+          roughness: 0.35,
+          metalness: 0.1,
         });
         const nucleo = new THREE.Mesh(geoNucleo, matNucleo);
 
-        // Halo: un tubo más grueso y muy transparente encima, con blending
-        // aditivo — es lo que simula el brillo/glow sin necesitar un motor
-        // de post-procesado completo.
-        const geoHalo = new THREE.TubeGeometry(curva, 140, 0.22, 8, false);
+        // Halo: un tubo más grueso y muy transparente encima. Sobre fondo
+        // blanco usamos mezcla normal (no aditiva — la aditiva se pierde
+        // contra blanco) para lograr un halo lila suave alrededor de cada
+        // hebra, sin necesitar un motor de post-procesado completo.
+        const geoHalo = new THREE.TubeGeometry(curva, 140, 0.16, 8, false);
         const matHalo = new THREE.MeshBasicMaterial({
           color: COLOR_CLARO,
           transparent: true,
-          opacity: 0.18,
-          blending: THREE.AdditiveBlending,
+          opacity: 0.15,
           depthWrite: false,
         });
         const halo = new THREE.Mesh(geoHalo, matHalo);
@@ -118,7 +118,7 @@ export default function EscenaParticulasADN3D({ faseActual }: Props) {
       const nodoMat = new THREE.MeshStandardMaterial({
         color: COLOR_PRIMARIO,
         emissive: COLOR_CLARO,
-        emissiveIntensity: 0.9,
+        emissiveIntensity: 0.45,
         roughness: 0.25,
       });
       const nodoGeo = new THREE.SphereGeometry(0.22, 16, 16);
@@ -245,5 +245,5 @@ export default function EscenaParticulasADN3D({ faseActual }: Props) {
     };
   }, []);
 
-  return <div ref={contenedorRef} style={{ width: "100%", maxWidth: 340, height: 440, margin: "0 auto" }} />;
+  return <div ref={contenedorRef} style={{ width: "100%", maxWidth: 720, height: 480, margin: "0 auto" }} />;
 }
