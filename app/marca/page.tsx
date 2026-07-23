@@ -357,14 +357,14 @@ export default function MarcaPage() {
       )}
 
       {construyendoOListo && (
-        <div style={{ position: "relative", flex: 1, overflow: "hidden", display: "flex", alignItems: "center", justifyContent: "center", padding: "2rem 1.5rem" }}>
+        <div style={{ position: "relative", flex: 1, overflow: "auto", display: "flex", alignItems: "center", justifyContent: "center", padding: "2rem 1.5rem" }}>
           <GlowAmbienteADN />
           <div style={{ position: "relative", zIndex: 1, maxWidth: 1200, width: "100%", display: "flex", gap: 40, alignItems: "center", flexWrap: "wrap", justifyContent: "center" }}>
             <div style={{ display: "flex", gap: 40, alignItems: "center", flexWrap: "wrap", justifyContent: "center", width: "100%" }}>
               {analizando ? (
                 <EscenaParticulasADN3D faseActual={faseAnimacion} />
               ) : (
-                <svg width="100%" viewBox="0 0 220 440" style={{ flexShrink: 0, maxWidth: 420, height: "auto", margin: "0 auto", display: "block" }}>
+                <svg width="100%" viewBox="0 0 220 440" style={{ flexShrink: 0, maxWidth: 240, height: "auto", margin: "0 auto", display: "block" }}>
                   <defs>
                     <filter id="glowADN" x="-60%" y="-60%" width="220%" height="220%">
                       <feGaussianBlur stdDeviation="4" result="blur" />

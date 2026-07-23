@@ -54,7 +54,7 @@ export default function EscenaParticulasADN3D({ faseActual }: Props) {
 
       const contenedor = contenedorRef.current;
       const ancho = contenedor.clientWidth || 320;
-      const alto = 440;
+      const alto = contenedor.clientHeight || 440;
 
       const scene = new THREE.Scene();
       const camera = new THREE.PerspectiveCamera(45, ancho / alto, 0.1, 100);
@@ -245,5 +245,5 @@ export default function EscenaParticulasADN3D({ faseActual }: Props) {
     };
   }, []);
 
-  return <div ref={contenedorRef} style={{ width: "100%", maxWidth: 720, height: 480, margin: "0 auto" }} />;
+  return <div ref={contenedorRef} style={{ width: "100%", maxWidth: 720, height: "min(62vh, 480px)", margin: "0 auto" }} />;
 }
