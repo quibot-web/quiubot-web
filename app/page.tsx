@@ -2,7 +2,7 @@
 import { useState, useEffect, useRef } from "react";
 import { useSession, signOut } from "next-auth/react";
 import { useRouter } from "next/navigation";
-import { BrainCircuit, Cloud, Radio, ExternalLink, CheckCircle2, AlertTriangle } from "lucide-react";
+import { BrainCircuit, Cloud, Radio, ExternalLink, CheckCircle2, AlertTriangle, Link2 } from "lucide-react";
 import HomeInicio from "@/app/components/HomeInicio";
 import TutorialVideo from "@/app/components/TutorialVideo";
 import TourGuiado from "@/app/components/TourGuiado";
@@ -82,6 +82,11 @@ export default function Home() {
   const [nuevaApiKey, setNuevaApiKey] = useState("");
   const [cloudinaryInfo, setCloudinaryInfo] = useState<{ hasConfig: boolean; verificado?: boolean; mensaje?: string } | null>(null);
   const [verificandoCloud, setVerificandoCloud] = useState(false);
+  const [destinoVenta, setDestinoVenta] = useState<{ sitio_web: string | null; whatsapp_numero: string | null } | null>(null);
+  const [sitioWebInput, setSitioWebInput] = useState("");
+  const [whatsappInput, setWhatsappInput] = useState("");
+  const [guardandoDestino, setGuardandoDestino] = useState(false);
+  const [destinoGuardado, setDestinoGuardado] = useState(false);
   const [guardandoApiKey, setGuardandoApiKey] = useState(false);
   const [apiKeyGuardada, setApiKeyGuardada] = useState(false);
 
@@ -128,6 +133,34 @@ export default function Home() {
       setCloudinaryInfo(data);
     } finally {
       setVerificandoCloud(false);
+    }
+  };
+
+  const cargarDestinoVenta = () => {
+    fetch("/api/marca")
+      .then((r) => r.json())
+      .then((data) => {
+        setDestinoVenta(data);
+        setSitioWebInput(data?.sitio_web || "");
+        setWhatsappInput(data?.whatsapp_numero || "");
+      });
+  };
+
+  const handleGuardarDestino = async () => {
+    setGuardandoDestino(true);
+    setDestinoGuardado(false);
+    try {
+      const res = await fetch("/api/marca", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ sitio_web: sitioWebInput, whatsapp_numero: whatsappInput }),
+      });
+      if (res.ok) {
+        setDestinoGuardado(true);
+        cargarDestinoVenta();
+      }
+    } finally {
+      setGuardandoDestino(false);
     }
   };
 
@@ -236,6 +269,7 @@ export default function Home() {
   useEffect(() => {
     cargarApiKeyInfo();
     cargarCloudinaryInfo();
+    cargarDestinoVenta();
     cargarAlbum();
     cargarNotificaciones();
     cargarMetaInfo();
@@ -726,6 +760,53 @@ export default function Home() {
 
           {tab === "integraciones" && (
             <div style={{ maxWidth: "600px", margin: "2rem auto", display: "flex", flexDirection: "column", gap: "2rem" }}>
+              <div style={{ background: "#fff", padding: "2rem", borderRadius: "16px", border: (destinoVenta?.sitio_web || destinoVenta?.whatsapp_numero) ? "1.5px solid #d9d4f7" : "1px solid #e8e8e6", boxShadow: "0 2px 4px rgba(0,0,0,0.05)" }}>
+                <div style={{ display: "flex", alignItems: "flex-start", justifyContent: "space-between", marginBottom: "1.25rem", gap: 12 }}>
+                  <div style={{ display: "flex", alignItems: "center", gap: "12px" }}>
+                    <div style={{ width: 48, height: 48, borderRadius: "12px", background: (destinoVenta?.sitio_web || destinoVenta?.whatsapp_numero) ? "#534AB7" : "#F3F2FE", display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0 }}>
+                      <Link2 size={22} color={(destinoVenta?.sitio_web || destinoVenta?.whatsapp_numero) ? "#fff" : "#534AB7"} strokeWidth={2} />
+                    </div>
+                    <div>
+                      <h2 style={{ fontSize: "15px", fontWeight: 600, margin: 0, color: "#1a1a1a" }}>Destino de venta</h2>
+                      <div style={{ display: "flex", alignItems: "center", gap: "5px", fontSize: "12px", color: (destinoVenta?.sitio_web || destinoVenta?.whatsapp_numero) ? "#15803d" : "#999", marginTop: 2, fontWeight: 500 }}>
+                        {(destinoVenta?.sitio_web || destinoVenta?.whatsapp_numero) ? <CheckCircle2 size={13} strokeWidth={2.5} /> : <span style={{ width: 6, height: 6, borderRadius: "50%", background: "#ccc" }} />}
+                        {(destinoVenta?.sitio_web || destinoVenta?.whatsapp_numero) ? "Configurado" : "Sin configurar"}
+                      </div>
+                    </div>
+                  </div>
+                </div>
+                <p style={{ fontSize: 13, color: "#666", marginBottom: 16, lineHeight: 1.5 }}>
+                  Cuando alguien toque tu anuncio en Facebook o Instagram, llegará aquí. Completa uno de los dos, o ambos si vendes por los dos canales — sin al menos uno, tus campañas no podrán publicarse.
+                </p>
+                <div style={{ display: "flex", flexDirection: "column", gap: "12px" }}>
+                  <div>
+                    <label style={{ fontSize: 12, fontWeight: 600, color: "#666", display: "block", marginBottom: 6 }}>Sitio web o tienda online</label>
+                    <input
+                      placeholder="Ej: tienda.miempresa.com"
+                      value={sitioWebInput}
+                      onChange={(e) => setSitioWebInput(e.target.value)}
+                      style={{ width: "100%", padding: "12px", borderRadius: "8px", border: "1px solid #e0e0e0", boxSizing: "border-box" }}
+                    />
+                  </div>
+                  <div>
+                    <label style={{ fontSize: 12, fontWeight: 600, color: "#666", display: "block", marginBottom: 6 }}>WhatsApp de ventas</label>
+                    <input
+                      placeholder="Ej: 573001234567 (con indicativo)"
+                      value={whatsappInput}
+                      onChange={(e) => setWhatsappInput(e.target.value)}
+                      style={{ width: "100%", padding: "12px", borderRadius: "8px", border: "1px solid #e0e0e0", boxSizing: "border-box" }}
+                    />
+                  </div>
+                </div>
+                <button
+                  onClick={handleGuardarDestino}
+                  disabled={guardandoDestino || (!sitioWebInput.trim() && !whatsappInput.trim())}
+                  style={{ width: "100%", padding: "10px", borderRadius: "8px", background: (!sitioWebInput.trim() && !whatsappInput.trim()) ? "#eee" : "#534AB7", color: (!sitioWebInput.trim() && !whatsappInput.trim()) ? "#aaa" : "#fff", border: "none", marginTop: "15px", fontWeight: 600, cursor: (guardandoDestino || (!sitioWebInput.trim() && !whatsappInput.trim())) ? "not-allowed" : "pointer" }}
+                >
+                  {guardandoDestino ? "Guardando..." : destinoGuardado ? "Guardado ✓" : "Guardar destino de venta"}
+                </button>
+              </div>
+
               <div style={{ background: "#fff", padding: "2rem", borderRadius: "16px", border: apiKeyInfo?.hasKey ? "1.5px solid #d9d4f7" : "1px solid #e8e8e6", boxShadow: "0 2px 4px rgba(0,0,0,0.05)" }}>
                 <EncabezadoIntegracion
                   icono={BrainCircuit}
