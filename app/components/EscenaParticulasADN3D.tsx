@@ -138,7 +138,7 @@ export default function EscenaParticulasADN3D({ faseActual }: Props) {
       const ambientPos = new Float32Array(ambientCount * 3);
       const ambientVel: number[][] = [];
       for (let i = 0; i < ambientCount; i++) {
-        const r = 3.5 + Math.random() * 2.5;
+        const r = 3 + Math.random() * 1.8;
         const ang = Math.random() * Math.PI * 2;
         const y = (Math.random() - 0.5) * altura * 1.1;
         ambientPos[i * 3] = Math.cos(ang) * r;
@@ -182,7 +182,7 @@ export default function EscenaParticulasADN3D({ faseActual }: Props) {
         }
       };
 
-      camera.position.set(0, 0, 9);
+      camera.position.set(0, 0, 6.2);
 
       let inicio = performance.now();
 
@@ -191,9 +191,9 @@ export default function EscenaParticulasADN3D({ faseActual }: Props) {
         const dt = ahora - inicio;
 
         const anguloCam = dt * 0.00025;
-        camera.position.x = Math.sin(anguloCam) * 9;
-        camera.position.z = Math.cos(anguloCam) * 9;
-        camera.position.y = Math.sin(dt * 0.0001) * 1.2;
+        camera.position.x = Math.sin(anguloCam) * 6.2;
+        camera.position.z = Math.cos(anguloCam) * 6.2;
+        camera.position.y = Math.sin(dt * 0.0001) * 1.0;
         camera.lookAt(0, 0, 0);
 
         const posAmb = ambientGeo.attributes.position.array as Float32Array;
