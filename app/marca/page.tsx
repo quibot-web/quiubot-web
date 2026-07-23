@@ -1,6 +1,7 @@
 "use client";
 import { useState, useRef, useEffect } from "react";
 import { Upload, X, Check, Sparkles } from "lucide-react";
+import EscenaParticulasADN3D from "@/app/components/EscenaParticulasADN3D";
 
 const MIN_IMAGENES = 3;
 const MAX_IMAGENES = 5;
@@ -27,8 +28,6 @@ const CATEGORIAS: { key: CategoriaKey; titulo: string }[] = [
   { key: "estilo_comunicacion", titulo: "Estilo de comunicación" },
 ];
 
-// Etiquetas legibles para cada campo dentro de cada categoría — así el
-// detalle no muestra nombres técnicos como "color_primario_hex".
 const ETIQUETAS: Record<string, string> = {
   color_primario_hex: "Color primario",
   color_secundario_hex: "Color secundario",
@@ -83,10 +82,9 @@ function formatearValor(v: any): string {
   return String(v);
 }
 
-// Posiciones de los 7 nodos a lo largo de una hélice vertical de doble
-// hebra — mismo cálculo tanto para dibujar las hebras como para ubicar
-// cada nodo exactamente sobre una de ellas.
-const HELICE = { cx: 110, amp: 45, top: 30, bottom: 410, turns: 2.5 };
+// Geometría de la hélice — usada tanto por el canvas de partículas (durante
+// el análisis) como por el SVG final interactivo (después).
+const HELICE = { cx: 130, amp: 45, top: 30, bottom: 410, turns: 2.5, w: 260, h: 440 };
 function xEnY(y: number, fase: number) {
   const t = (y - HELICE.top) / (HELICE.bottom - HELICE.top);
   return HELICE.cx + HELICE.amp * Math.sin(t * HELICE.turns * Math.PI * 2 + fase);
@@ -118,7 +116,7 @@ export default function MarcaPage() {
   const fileRef = useRef<HTMLInputElement>(null);
 
   const [analizando, setAnalizando] = useState(false);
-  const [faseAnimacion, setFaseAnimacion] = useState(-1); // -1 = sin empezar, 7 = completo
+  const [faseAnimacion, setFaseAnimacion] = useState(-1);
   const [errorMsg, setErrorMsg] = useState<string | null>(null);
   const [nodoSeleccionado, setNodoSeleccionado] = useState<number | null>(null);
 
@@ -163,9 +161,6 @@ export default function MarcaPage() {
     setErrorMsg(null);
     setFaseAnimacion(0);
 
-    // Corre la animación de construcción (una categoría a la vez) en paralelo
-    // a la llamada real al backend — si la respuesta real tarda más que la
-    // animación, la animación simplemente espera en el último paso.
     const avanzarAnimacion = new Promise<void>((resolve) => {
       let i = 0;
       const intervalo = setInterval(() => {
@@ -175,7 +170,7 @@ export default function MarcaPage() {
           clearInterval(intervalo);
           resolve();
         }
-      }, 650);
+      }, 750);
     });
 
     try {
@@ -314,36 +309,33 @@ export default function MarcaPage() {
 
           {construyendoOListo && (
             <div style={{ display: "flex", gap: 32, alignItems: "flex-start", flexWrap: "wrap" }}>
-              <svg width="220" height="440" viewBox="0 0 220 440" style={{ flexShrink: 0, margin: "0 auto" }}>
-                <path d={trazoHebra(0)} fill="none" stroke="#EEEDFE" strokeWidth={3} />
-                <path d={trazoHebra(Math.PI)} fill="none" stroke="#EEEDFE" strokeWidth={3} />
-                {nodeYs.map((y, i) => {
-                  const xa = xEnY(y, 0);
-                  const xb = xEnY(y, Math.PI);
-                  const activado = analizando ? i < faseAnimacion : true;
-                  const construyendoEste = analizando && i === faseAnimacion;
-                  const seleccionado = mostrandoHeliceFinal && nodoSeleccionado === i;
-                  return (
-                    <g key={i}>
-                      <line
-                        x1={xa} y1={y} x2={xb} y2={y}
-                        stroke={activado ? "#CECBF6" : "#F3F2FE"}
-                        strokeWidth={3}
-                        style={{ transition: "stroke .3s ease" }}
-                      />
-                      <circle
-                        cx={xa} cy={y}
-                        r={seleccionado ? 13 : construyendoEste ? 11 : 9}
-                        fill={activado ? COLOR_ACTIVO : "#fff"}
-                        stroke={construyendoEste ? COLOR_CLARO : activado ? "#fff" : "#EEEDFE"}
-                        strokeWidth={construyendoEste ? 3 : seleccionado ? 4 : 3}
-                        style={{ cursor: mostrandoHeliceFinal ? "pointer" : "default", transition: "all .3s cubic-bezier(.34,1.56,.64,1)" }}
-                        onClick={() => mostrandoHeliceFinal && setNodoSeleccionado(i)}
-                      />
-                    </g>
-                  );
-                })}
-              </svg>
+              {analizando ? (
+                <EscenaParticulasADN3D faseActual={faseAnimacion} />
+              ) : (
+                <svg width="220" height="440" viewBox="0 0 220 440" style={{ flexShrink: 0, margin: "0 auto" }}>
+                  <path d={trazoHebra(0)} fill="none" stroke="#EEEDFE" strokeWidth={3} />
+                  <path d={trazoHebra(Math.PI)} fill="none" stroke="#EEEDFE" strokeWidth={3} />
+                  {nodeYs.map((y, i) => {
+                    const xa = xEnY(y, 0);
+                    const xb = xEnY(y, Math.PI);
+                    const seleccionado = nodoSeleccionado === i;
+                    return (
+                      <g key={i}>
+                        <line x1={xa} y1={y} x2={xb} y2={y} stroke="#CECBF6" strokeWidth={3} />
+                        <circle
+                          cx={xa} cy={y}
+                          r={seleccionado ? 13 : 9}
+                          fill={COLOR_ACTIVO}
+                          stroke="#fff"
+                          strokeWidth={seleccionado ? 4 : 3}
+                          style={{ cursor: "pointer", transition: "all .3s cubic-bezier(.34,1.56,.64,1)" }}
+                          onClick={() => setNodoSeleccionado(i)}
+                        />
+                      </g>
+                    );
+                  })}
+                </svg>
+              )}
 
               <div style={{ flex: 1, minWidth: 280 }}>
                 {analizando && (
