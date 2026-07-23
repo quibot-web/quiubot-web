@@ -64,8 +64,8 @@ export default function EscenaParticulasADN3D({ faseActual }: Props) {
       contenedor.innerHTML = "";
       contenedor.appendChild(renderer.domElement);
 
-      scene.add(new THREE.AmbientLight(0xffffff, 0.55));
-      const luz = new THREE.PointLight(0xffffff, 1.2, 30);
+      scene.add(new THREE.AmbientLight(0xffffff, 0.35));
+      const luz = new THREE.PointLight(0xffffff, 1.6, 30);
       luz.position.set(4, 4, 6);
       scene.add(luz);
 
@@ -80,17 +80,33 @@ export default function EscenaParticulasADN3D({ faseActual }: Props) {
           puntos.push(new THREE.Vector3(p.x, p.y, p.z));
         }
         const curva = new THREE.CatmullRomCurve3(puntos);
-        const geo = new THREE.TubeGeometry(curva, 220, 0.08, 8, false);
-        const mat = new THREE.MeshStandardMaterial({
-          color: COLOR_CLARO,
-          emissive: COLOR_PRIMARIO,
-          emissiveIntensity: 0.15,
-          roughness: 0.4,
-          metalness: 0.1,
-          transparent: true,
-          opacity: 0.35,
+
+        const geoNucleo = new THREE.TubeGeometry(curva, 220, 0.075, 8, false);
+        const matNucleo = new THREE.MeshStandardMaterial({
+          color: 0xd8d4f8,
+          emissive: COLOR_CLARO,
+          emissiveIntensity: 0.9,
+          roughness: 0.3,
+          metalness: 0.15,
         });
-        return new THREE.Mesh(geo, mat);
+        const nucleo = new THREE.Mesh(geoNucleo, matNucleo);
+
+        // Halo: un tubo más grueso y muy transparente encima, con blending
+        // aditivo — es lo que simula el brillo/glow sin necesitar un motor
+        // de post-procesado completo.
+        const geoHalo = new THREE.TubeGeometry(curva, 140, 0.22, 8, false);
+        const matHalo = new THREE.MeshBasicMaterial({
+          color: COLOR_CLARO,
+          transparent: true,
+          opacity: 0.18,
+          blending: THREE.AdditiveBlending,
+          depthWrite: false,
+        });
+        const halo = new THREE.Mesh(geoHalo, matHalo);
+
+        const grupo = new THREE.Group();
+        grupo.add(halo, nucleo);
+        return grupo;
       }
 
       const hebraA = construirHebra(0);
@@ -101,9 +117,9 @@ export default function EscenaParticulasADN3D({ faseActual }: Props) {
       scene.add(nodosGroup);
       const nodoMat = new THREE.MeshStandardMaterial({
         color: COLOR_PRIMARIO,
-        emissive: COLOR_PRIMARIO,
-        emissiveIntensity: 0.4,
-        roughness: 0.3,
+        emissive: COLOR_CLARO,
+        emissiveIntensity: 0.9,
+        roughness: 0.25,
       });
       const nodoGeo = new THREE.SphereGeometry(0.22, 16, 16);
       const nodosMeshes: any[] = [];
