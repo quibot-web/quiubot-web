@@ -7,11 +7,11 @@ import { OBJETIVOS_INFO } from "@/app/lib/objetivosInfo"
 
 const TU_WHATSAPP = "573122462312"
 
-const LINKS_WOMPI: Record<string, string> = {
-  crecimiento: "https://checkout.wompi.co/l/zIDoEZ",
-  escala: "https://checkout.wompi.co/l/zTDsWF",
-  crecimiento_anual: "https://checkout.wompi.co/l/Bhqrus",
-  escala_anual: "https://checkout.wompi.co/l/Zqip25",
+const LINKS_BOLD: Record<string, string> = {
+  crecimiento: "https://checkout.bold.co/payment/LNK_W16HQK2G1S",
+  escala: "https://checkout.bold.co/payment/LNK_U0T5X4HS21",
+  crecimiento_anual: "https://checkout.bold.co/payment/LNK_QZY9XAQRCN",
+  escala_anual: "https://checkout.bold.co/payment/LNK_2D59ZTOHNA",
 }
 
 const DESCUENTO_ANUAL = 0.15
@@ -134,7 +134,7 @@ export default function BillingPage() {
   }
 
   const handlePagarMensual = (planId: "crecimiento" | "escala", planNombre: string) => {
-    window.open(LINKS_WOMPI[planId], "_blank")
+    window.open(LINKS_BOLD[planId], "_blank")
     const mensaje = encodeURIComponent(
       `Hola, ya voy a pagar el plan ${planNombre} (mensual) de Quiubot. Mi correo es ${session?.user?.email || ""}`
     )
@@ -142,7 +142,7 @@ export default function BillingPage() {
   }
 
   const handlePagarAnual = (planId: "crecimiento" | "escala", planNombre: string, totalAnual: number) => {
-    window.open(LINKS_WOMPI[`${planId}_anual`], "_blank")
+    window.open(LINKS_BOLD[`${planId}_anual`], "_blank")
     const mensaje = encodeURIComponent(
       `Hola, ya voy a pagar el plan ${planNombre} ANUAL de Quiubot (con 15% de descuento), por $${totalAnual.toLocaleString("es-CO")} facturado una vez al año. Mi correo es ${session?.user?.email || ""}`
     )
@@ -360,7 +360,7 @@ export default function BillingPage() {
                 )}
                 {esAnual && !esPlanActual && plan.id !== "arranque" && (
                   <p style={{ fontSize: 10.5, color: "#bbb", textAlign: "center", marginTop: 8 }}>
-                    Pago anual único, sin reembolsos — te llevará a la pasarela de pago segura de Wompi.
+                    Pago anual único, sin reembolsos — te llevará a la pasarela de pago segura de Bold.
                   </p>
                 )}
               </div>

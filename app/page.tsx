@@ -2,7 +2,7 @@
 import { useState, useEffect, useRef } from "react";
 import { useSession, signOut } from "next-auth/react";
 import { useRouter } from "next/navigation";
-import { BrainCircuit, Cloud, Radio, ExternalLink, CheckCircle2 } from "lucide-react";
+import { ExternalLink, Globe, Dna } from "lucide-react";
 import HomeInicio from "@/app/components/HomeInicio";
 import TutorialVideo from "@/app/components/TutorialVideo";
 import TourGuiado from "@/app/components/TourGuiado";
@@ -15,49 +15,224 @@ function Icono({ children }: { children: React.ReactNode }) {
   );
 }
 
-// Encabezado reutilizable de cada tarjeta de integración: icono de marca,
-// estado de conexión (sin puntos/emoji sueltos, con un icono de check real
-// cuando está conectado) y el enlace directo a la plataforma externa.
+// Badge de estado flotante, estilo "pill", con color semántico (verde =
+// conectado, gris = desconectado, ámbar = opcional, rojo = error) — estos
+// colores son universales para estado y no compiten con el morado de marca,
+// que se reserva para botones y acentos interactivos.
+function BadgeEstadoIntegracion({ tono, texto }: { tono: "verde" | "gris" | "rojo" | "ambar"; texto: string }) {
+  const paleta = {
+    verde: { bg: "#DCFCE7", color: "#15803D", punto: "#22C55E" },
+    gris: { bg: "#F3F4F6", color: "#6B7280", punto: "#9CA3AF" },
+    rojo: { bg: "#FEF2F2", color: "#DC2626", punto: "#DC2626" },
+    ambar: { bg: "#FEF3C7", color: "#92400E", punto: "#F59E0B" },
+  }[tono];
+  return (
+    <span style={{ display: "inline-flex", alignItems: "center", gap: 5, background: paleta.bg, color: paleta.color, fontSize: 11, fontWeight: 700, padding: "4px 10px 4px 8px", borderRadius: 999 }}>
+      <span style={{ width: 6, height: 6, borderRadius: "50%", background: paleta.punto }} />
+      {texto}
+    </span>
+  );
+}
+
+// Cada logo tiene 2 fuentes de respaldo: si la primera (cdn.simpleicons.org)
+// falla — como pasó con el de OpenAI —, prueba automáticamente con la
+// segunda (jsdelivr, sirve el mismo paquete Simple Icons pero desde otro
+// CDN). Si ambas fallan, se ve una inicial en vez de un ícono roto.
+const FUENTES_LOGO: Record<string, string[]> = {
+  whatsapp: ["https://cdn.simpleicons.org/whatsapp", "https://cdn.jsdelivr.net/npm/simple-icons@latest/icons/whatsapp.svg"],
+  openai: ["https://cdn.simpleicons.org/openai", "https://cdn.jsdelivr.net/npm/simple-icons@latest/icons/openai.svg"],
+  cloudinary: ["https://cdn.simpleicons.org/cloudinary", "https://cdn.jsdelivr.net/npm/simple-icons@latest/icons/cloudinary.svg"],
+  meta: ["https://cdn.simpleicons.org/meta", "https://cdn.jsdelivr.net/npm/simple-icons@latest/icons/meta.svg"],
+  facebook: ["https://cdn.simpleicons.org/facebook", "https://cdn.jsdelivr.net/npm/simple-icons@latest/icons/facebook.svg"],
+  instagram: ["https://cdn.simpleicons.org/instagram", "https://cdn.jsdelivr.net/npm/simple-icons@latest/icons/instagram.svg"],
+};
+
+// Logo de marca con cadena de respaldo: intenta la primera fuente, si falla
+// (onError) pasa a la siguiente, y si se agotan todas muestra la inicial
+// del nombre en vez de dejar un ícono roto en pantalla.
+function LogoMarca({ marca, nombre, tamano = 28 }: { marca: keyof typeof FUENTES_LOGO; nombre: string; tamano?: number }) {
+  const [intento, setIntento] = useState(0);
+  const fuentes = FUENTES_LOGO[marca] || [];
+  const agotado = intento >= fuentes.length;
+
+  if (agotado) {
+    return (
+      <span style={{ fontSize: tamano * 0.6, fontWeight: 800, color: "#534AB7" }}>{nombre[0]?.toUpperCase()}</span>
+    );
+  }
+  return (
+    <img
+      key={intento}
+      src={fuentes[intento]}
+      alt={nombre}
+      width={tamano}
+      height={tamano}
+      style={{ display: "block" }}
+      onError={() => setIntento((n) => n + 1)}
+    />
+  );
+}
+
+// Caja cuadrada redondeada que envuelve un logo (o cualquier ícono) — misma
+// pieza visual reutilizada tanto para una integración de un solo logo como
+// para las de dos logos combinados (como Destino de venta).
+function CajaLogo({ children, fondo, tamanoCaja = 60 }: { children: React.ReactNode; fondo: string; tamanoCaja?: number }) {
+  return (
+    <div style={{ width: tamanoCaja, height: tamanoCaja, borderRadius: 16, background: fondo, display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0 }}>
+      {children}
+    </div>
+  );
+}
+
+// Par de logos lado a lado (usado por Destino de venta: WhatsApp + sitio
+// web) — mismo alto que una caja de logo individual, para que el resto del
+// encabezado no salte de tamaño entre integraciones de 1 o 2 logos.
+function ParDeLogos({ children, tamanoCaja = 52 }: { children: React.ReactNode; tamanoCaja?: number }) {
+  return (
+    <div style={{ display: "flex", justifyContent: "center", gap: 10, margin: "0 auto 14px" }}>
+      {children}
+    </div>
+  );
+}
+
+// Encabezado reutilizable de cada tarjeta de integración: logo REAL de la
+// marca (Simple Icons — SVG oficial de cada plataforma en su color propio,
+// no un ícono genérico dibujado por nosotros), estado como badge flotante
+// arriba a la izquierda, todo centrado como una tarjeta de catálogo. El
+// contenido del formulario de cada integración queda exactamente igual
+// debajo — solo cambia esta cabecera visual.
 function EncabezadoIntegracion({
-  icono: Icono2,
+  logoSrc,
+  logoFondo = "#F3F2FE",
+  logos,
   nombre,
+  descripcion,
   conectado,
+  advertencia,
+  opcional,
   textoConectado,
   textoNoConectado,
+  textoAdvertencia,
   urlExterna,
   textoUrlExterna,
+  extra,
 }: {
-  icono: React.ComponentType<{ size?: number; color?: string; strokeWidth?: number }>;
+  logoSrc?: string;
+  logoFondo?: string;
+  logos?: React.ReactNode;
   nombre: string;
+  descripcion: string;
   conectado: boolean;
+  advertencia?: boolean;
+  opcional?: boolean;
   textoConectado: string;
   textoNoConectado: string;
+  textoAdvertencia?: string;
   urlExterna: string;
   textoUrlExterna: string;
+  extra?: React.ReactNode;
 }) {
+  const tono: "verde" | "gris" | "rojo" | "ambar" = advertencia ? "rojo" : conectado ? "verde" : opcional ? "ambar" : "gris";
+  const texto = advertencia ? (textoAdvertencia || "Credenciales inválidas") : conectado ? textoConectado : opcional ? "Opcional" : textoNoConectado;
+
   return (
-    <div style={{ display: "flex", alignItems: "flex-start", justifyContent: "space-between", marginBottom: "1.25rem", gap: 12 }}>
-      <div style={{ display: "flex", alignItems: "center", gap: "12px" }}>
-        <div style={{ width: 48, height: 48, borderRadius: "12px", background: conectado ? "#534AB7" : "#F3F2FE", display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0 }}>
-          <Icono2 size={22} color={conectado ? "#fff" : "#534AB7"} strokeWidth={2} />
-        </div>
-        <div>
-          <h2 style={{ fontSize: "15px", fontWeight: 600, margin: 0, color: "#1a1a1a" }}>{nombre}</h2>
-          <div style={{ display: "flex", alignItems: "center", gap: "5px", fontSize: "12px", color: conectado ? "#15803d" : "#999", marginTop: 2, fontWeight: 500 }}>
-            {conectado ? <CheckCircle2 size={13} strokeWidth={2.5} /> : <span style={{ width: 6, height: 6, borderRadius: "50%", background: "#ccc" }} />}
-            {conectado ? textoConectado : textoNoConectado}
-          </div>
-        </div>
+    <div style={{ position: "relative", textAlign: "center", paddingTop: 22, marginBottom: "1.5rem" }}>
+      <div style={{ position: "absolute", top: 0, left: 0 }}>
+        <BadgeEstadoIntegracion tono={tono} texto={texto} />
       </div>
+      {logos ? logos : (
+        <div style={{ margin: "0 auto 14px", width: 60 }}>
+          <CajaLogo fondo={logoFondo}>
+            {logoSrc && <img src={logoSrc} alt={nombre} width={30} height={30} style={{ display: "block" }} />}
+          </CajaLogo>
+        </div>
+      )}
+      <h2 style={{ fontSize: 16, fontWeight: 700, margin: "0 0 5px", color: "#1a1a1a" }}>{nombre}</h2>
+      <p style={{ fontSize: 12.5, color: "#888", margin: "0 auto 8px", lineHeight: 1.5, maxWidth: 270 }}>{descripcion}</p>
+      {extra}
       <a
         href={urlExterna}
         target="_blank"
         rel="noopener noreferrer"
-        style={{ display: "inline-flex", alignItems: "center", gap: 4, fontSize: 12, color: "#534AB7", fontWeight: 600, textDecoration: "none", whiteSpace: "nowrap", flexShrink: 0, marginTop: 4 }}
+        style={{ display: "inline-flex", alignItems: "center", gap: 4, fontSize: 12, color: "#534AB7", fontWeight: 600, textDecoration: "none", marginTop: 4 }}
       >
         {textoUrlExterna}
         <ExternalLink size={13} strokeWidth={2} />
       </a>
+    </div>
+  );
+}
+
+// Tarjeta compacta tipo catálogo (la vista principal de la pestaña
+// Integraciones): logo real, badge de estado, nombre, descripción corta y
+// un botón que abre el modal con el formulario real. El borde cambia de
+// color según el estado, igual que la referencia que compartió el usuario.
+function TarjetaIntegracion({
+  logoSrc,
+  logoFondo = "#F3F2FE",
+  logos,
+  nombre,
+  descripcionCorta,
+  tono,
+  textoBadge,
+  children,
+}: {
+  logoSrc?: string;
+  logoFondo?: string;
+  logos?: React.ReactNode;
+  nombre: string;
+  descripcionCorta: string;
+  tono: "verde" | "gris" | "rojo" | "ambar";
+  textoBadge: string;
+  children: React.ReactNode;
+}) {
+  const colorBorde = { verde: "#86EFAC", gris: "#e8e8e6", rojo: "#FCA5A5", ambar: "#FCD34D" }[tono];
+  return (
+    <div style={{ position: "relative", background: "#fff", borderRadius: 16, border: `1.5px solid ${colorBorde}`, padding: "1.75rem 1.5rem 1.5rem", display: "flex", flexDirection: "column", alignItems: "center", textAlign: "center", boxShadow: "0 2px 4px rgba(0,0,0,0.04)" }}>
+      <div style={{ position: "absolute", top: 12, left: 12 }}>
+        <BadgeEstadoIntegracion tono={tono} texto={textoBadge} />
+      </div>
+      {logos ? (
+        <div style={{ marginTop: 14 }}>{logos}</div>
+      ) : (
+        <div style={{ margin: "14px 0 12px" }}>
+          <CajaLogo fondo={logoFondo} tamanoCaja={56}>
+            {logoSrc && <img src={logoSrc} alt={nombre} width={28} height={28} style={{ display: "block" }} />}
+          </CajaLogo>
+        </div>
+      )}
+      <h3 style={{ fontSize: 15, fontWeight: 700, margin: "0 0 6px", color: "#1a1a1a" }}>{nombre}</h3>
+      <p style={{ fontSize: 12.5, color: "#888", lineHeight: 1.5, margin: "0 0 18px", minHeight: 34 }}>{descripcionCorta}</p>
+      <div style={{ display: "flex", gap: 8, width: "100%", marginTop: "auto" }}>{children}</div>
+    </div>
+  );
+}
+
+// Modal genérico que envuelve el formulario real de cada integración. Se
+// abre al darle "Configurar"/"Editar" en la tarjeta compacta — así la
+// vista principal queda limpia tipo catálogo, pero toda la lógica de
+// guardado/verificación de cada integración sigue funcionando exactamente
+// igual, solo que ahora vive dentro de esta ventana.
+function ModalIntegracion({ abierto, onCerrar, children }: { abierto: boolean; onCerrar: () => void; children: React.ReactNode }) {
+  if (!abierto) return null;
+  return (
+    <div
+      onClick={onCerrar}
+      style={{ position: "fixed", inset: 0, background: "rgba(26,26,26,0.5)", display: "flex", alignItems: "center", justifyContent: "center", zIndex: 100, padding: "1.5rem" }}
+    >
+      <div
+        onClick={(e) => e.stopPropagation()}
+        style={{ background: "#fff", borderRadius: 20, padding: "2rem", maxWidth: 440, width: "100%", maxHeight: "88vh", overflowY: "auto", position: "relative", boxShadow: "0 20px 60px rgba(0,0,0,0.25)" }}
+      >
+        <button
+          onClick={onCerrar}
+          aria-label="Cerrar"
+          style={{ position: "absolute", top: 14, right: 14, width: 30, height: 30, borderRadius: "50%", border: "none", background: "#F3F2FE", color: "#534AB7", fontSize: 15, cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center" }}
+        >
+          ✕
+        </button>
+        {children}
+      </div>
     </div>
   );
 }
@@ -72,7 +247,13 @@ export default function Home() {
   const albumFileRef = useRef<HTMLInputElement>(null);
   const [apiKeyInfo, setApiKeyInfo] = useState<{ hasKey: boolean; preview: string | null } | null>(null);
   const [nuevaApiKey, setNuevaApiKey] = useState("");
-  const [cloudinaryInfo, setCloudinaryInfo] = useState<{ hasConfig: boolean } | null>(null);
+  const [cloudinaryInfo, setCloudinaryInfo] = useState<{ hasConfig: boolean; verificado?: boolean; mensaje?: string } | null>(null);
+  const [verificandoCloud, setVerificandoCloud] = useState(false);
+  const [destinoVenta, setDestinoVenta] = useState<{ sitio_web: string | null; whatsapp_numero: string | null } | null>(null);
+  const [sitioWebInput, setSitioWebInput] = useState("");
+  const [whatsappInput, setWhatsappInput] = useState("");
+  const [guardandoDestino, setGuardandoDestino] = useState(false);
+  const [destinoGuardado, setDestinoGuardado] = useState(false);
   const [guardandoApiKey, setGuardandoApiKey] = useState(false);
   const [apiKeyGuardada, setApiKeyGuardada] = useState(false);
 
@@ -87,6 +268,7 @@ export default function Home() {
   const conteoPendientesPrevio = useRef<number | null>(null);
 
   const [metaInfo, setMetaInfo] = useState<{ conectado: boolean; nombre: string | null; cuentaPublicitaria: string | null; pagina: string | null } | null>(null);
+  const [modalAbierto, setModalAbierto] = useState<"destino" | "openai" | "cloudinary" | "meta" | null>(null);
 
   const [rol, setRol] = useState<string | null>(null);
   const [colapsado, setColapsado] = useState(false);
@@ -109,6 +291,45 @@ export default function Home() {
 
   const cargarCloudinaryInfo = async () => {
     fetch("/api/verificar-cloudinary").then(r => r.json()).then(setCloudinaryInfo);
+  };
+
+  const handleVerificarCloudinary = async () => {
+    setVerificandoCloud(true);
+    try {
+      const res = await fetch("/api/verificar-cloudinary");
+      const data = await res.json();
+      setCloudinaryInfo(data);
+    } finally {
+      setVerificandoCloud(false);
+    }
+  };
+
+  const cargarDestinoVenta = () => {
+    fetch("/api/marca")
+      .then((r) => r.json())
+      .then((data) => {
+        setDestinoVenta(data);
+        setSitioWebInput(data?.sitio_web || "");
+        setWhatsappInput(data?.whatsapp_numero || "");
+      });
+  };
+
+  const handleGuardarDestino = async () => {
+    setGuardandoDestino(true);
+    setDestinoGuardado(false);
+    try {
+      const res = await fetch("/api/marca", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ sitio_web: sitioWebInput, whatsapp_numero: whatsappInput }),
+      });
+      if (res.ok) {
+        setDestinoGuardado(true);
+        cargarDestinoVenta();
+      }
+    } finally {
+      setGuardandoDestino(false);
+    }
   };
 
   const cargarMetaInfo = () => {
@@ -216,6 +437,7 @@ export default function Home() {
   useEffect(() => {
     cargarApiKeyInfo();
     cargarCloudinaryInfo();
+    cargarDestinoVenta();
     cargarAlbum();
     cargarNotificaciones();
     cargarMetaInfo();
@@ -393,7 +615,7 @@ export default function Home() {
         </div>
 
         <a href="/marca" className="qb-nav-item">
-          <span className="qb-nav-icon"><Icono><path d="M20.59 13.41L11 3.83A2 2 0 009.57 3H4a1 1 0 00-1 1v5.57a2 2 0 00.59 1.41l9.58 9.59a2 2 0 002.83 0l4.59-4.59a2 2 0 000-2.83z" /><circle cx="7.5" cy="7.5" r="1.2" /></Icono></span>
+          <span className="qb-nav-icon"><Dna size={17} strokeWidth={2} /></span>
           <span className="qb-nav-label">Mi marca</span>
           <span className="qb-tooltip">Mi marca</span>
         </a>
@@ -705,11 +927,158 @@ export default function Home() {
           )}
 
           {tab === "integraciones" && (
-            <div style={{ maxWidth: "600px", margin: "2rem auto", display: "flex", flexDirection: "column", gap: "2rem" }}>
-              <div style={{ background: "#fff", padding: "2rem", borderRadius: "16px", border: apiKeyInfo?.hasKey ? "1.5px solid #d9d4f7" : "1px solid #e8e8e6", boxShadow: "0 2px 4px rgba(0,0,0,0.05)" }}>
-                <EncabezadoIntegracion
-                  icono={BrainCircuit}
+            <>
+              <div style={{ maxWidth: "1100px", margin: "2rem auto", display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(230px, 1fr))", gap: "1.25rem" }}>
+                <TarjetaIntegracion
+                  logos={
+                    <ParDeLogos tamanoCaja={48}>
+                      <CajaLogo fondo="#DCFCE7" tamanoCaja={48}>
+                        <LogoMarca marca="whatsapp" nombre="WhatsApp" tamano={24} />
+                      </CajaLogo>
+                      <CajaLogo fondo="#EFF6FF" tamanoCaja={48}>
+                        <Globe size={22} color="#3B82F6" strokeWidth={2} />
+                      </CajaLogo>
+                    </ParDeLogos>
+                  }
+                  nombre="Destino de venta"
+                  descripcionCorta="A dónde llega la gente cuando toca tu anuncio."
+                  tono={(destinoVenta?.sitio_web || destinoVenta?.whatsapp_numero) ? "verde" : "gris"}
+                  textoBadge={(destinoVenta?.sitio_web || destinoVenta?.whatsapp_numero) ? "Configurado" : "Sin configurar"}
+                >
+                  <button
+                    onClick={() => setModalAbierto("destino")}
+                    style={{ flex: 1, padding: "10px", borderRadius: 8, background: "#534AB7", color: "#fff", border: "none", fontWeight: 600, fontSize: 13, cursor: "pointer" }}
+                  >
+                    {(destinoVenta?.sitio_web || destinoVenta?.whatsapp_numero) ? "Editar" : "Configurar"}
+                  </button>
+                </TarjetaIntegracion>
+
+                <TarjetaIntegracion
+                  logos={
+                    <CajaLogo fondo="#F3F2FE" tamanoCaja={56}>
+                      <LogoMarca marca="openai" nombre="OpenAI" tamano={28} />
+                    </CajaLogo>
+                  }
                   nombre="OpenAI"
+                  descripcionCorta="Motor de IA que genera tu estrategia y creativos."
+                  tono={apiKeyInfo?.hasKey ? "verde" : "gris"}
+                  textoBadge={apiKeyInfo?.hasKey ? "Conectado" : "No configurado"}
+                >
+                  <button
+                    onClick={() => setModalAbierto("openai")}
+                    style={{ flex: 1, padding: "10px", borderRadius: 8, background: "#534AB7", color: "#fff", border: "none", fontWeight: 600, fontSize: 13, cursor: "pointer" }}
+                  >
+                    {apiKeyInfo?.hasKey ? "Editar" : "Configurar"}
+                  </button>
+                </TarjetaIntegracion>
+
+                <TarjetaIntegracion
+                  logos={
+                    <CajaLogo fondo="#EAF2FF" tamanoCaja={56}>
+                      <LogoMarca marca="cloudinary" nombre="Cloudinary" tamano={28} />
+                    </CajaLogo>
+                  }
+                  nombre="Cloudinary"
+                  descripcionCorta="Almacena las imágenes y videos generados por Quiubot."
+                  tono={cloudinaryInfo?.verificado ? "verde" : cloudinaryInfo?.hasConfig ? "rojo" : "gris"}
+                  textoBadge={cloudinaryInfo?.verificado ? "Conectado" : cloudinaryInfo?.hasConfig ? "Credenciales inválidas" : "Sin configurar"}
+                >
+                  <button
+                    onClick={() => setModalAbierto("cloudinary")}
+                    style={{ flex: 1, padding: "10px", borderRadius: 8, background: "#534AB7", color: "#fff", border: "none", fontWeight: 600, fontSize: 13, cursor: "pointer" }}
+                  >
+                    {cloudinaryInfo?.hasConfig ? "Editar" : "Configurar"}
+                  </button>
+                </TarjetaIntegracion>
+
+                <TarjetaIntegracion
+                  logos={
+                    <CajaLogo fondo="#EAF2FF" tamanoCaja={56}>
+                      <LogoMarca marca="meta" nombre="Meta" tamano={28} />
+                    </CajaLogo>
+                  }
+                  nombre="Meta Ads"
+                  descripcionCorta="Publica campañas en Facebook e Instagram."
+                  tono={metaInfo?.conectado ? "verde" : "gris"}
+                  textoBadge={metaInfo?.conectado ? "Conectado" : "No conectado"}
+                >
+                  <button
+                    onClick={() => setModalAbierto("meta")}
+                    style={{
+                      flex: 1, padding: "10px", borderRadius: 8, fontWeight: 600, fontSize: 13, cursor: "pointer",
+                      background: metaInfo?.conectado ? "#fff" : "#534AB7",
+                      color: metaInfo?.conectado ? "#534AB7" : "#fff",
+                      border: metaInfo?.conectado ? "1px solid #534AB7" : "none",
+                    }}
+                  >
+                    {metaInfo?.conectado ? "Ver detalles" : "Conectar"}
+                  </button>
+                </TarjetaIntegracion>
+              </div>
+
+              {/* --- Modal Destino de venta --- */}
+              <ModalIntegracion abierto={modalAbierto === "destino"} onCerrar={() => setModalAbierto(null)}>
+                <EncabezadoIntegracion
+                  logos={
+                    <ParDeLogos tamanoCaja={52}>
+                      <CajaLogo fondo="#DCFCE7" tamanoCaja={52}>
+                        <LogoMarca marca="whatsapp" nombre="WhatsApp" tamano={26} />
+                      </CajaLogo>
+                      <CajaLogo fondo="#EFF6FF" tamanoCaja={52}>
+                        <Globe size={24} color="#3B82F6" strokeWidth={2} />
+                      </CajaLogo>
+                    </ParDeLogos>
+                  }
+                  nombre="Destino de venta"
+                  descripcion="A dónde llega la gente cuando toca tu anuncio: tu sitio web, o directo a un chat de WhatsApp."
+                  conectado={!!(destinoVenta?.sitio_web || destinoVenta?.whatsapp_numero)}
+                  textoConectado="Configurado"
+                  textoNoConectado="Sin configurar"
+                  urlExterna="https://web.whatsapp.com"
+                  textoUrlExterna="Abrir WhatsApp Web"
+                />
+                <p style={{ fontSize: 13, color: "#666", marginBottom: 16, lineHeight: 1.5 }}>
+                  Cuando alguien toque tu anuncio en Facebook o Instagram, llegará aquí. Completa uno de los dos, o ambos si vendes por los dos canales — sin al menos uno, tus campañas no podrán publicarse.
+                </p>
+                <div style={{ display: "flex", flexDirection: "column", gap: "12px" }}>
+                  <div>
+                    <label style={{ fontSize: 12, fontWeight: 600, color: "#666", display: "block", marginBottom: 6 }}>Sitio web o tienda online</label>
+                    <input
+                      placeholder="Ej: tienda.miempresa.com"
+                      value={sitioWebInput}
+                      onChange={(e) => setSitioWebInput(e.target.value)}
+                      style={{ width: "100%", padding: "12px", borderRadius: "8px", border: "1px solid #e0e0e0", boxSizing: "border-box" }}
+                    />
+                  </div>
+                  <div>
+                    <label style={{ fontSize: 12, fontWeight: 600, color: "#666", display: "block", marginBottom: 6 }}>WhatsApp de ventas</label>
+                    <input
+                      placeholder="Ej: 573001234567 (con indicativo)"
+                      value={whatsappInput}
+                      onChange={(e) => setWhatsappInput(e.target.value)}
+                      style={{ width: "100%", padding: "12px", borderRadius: "8px", border: "1px solid #e0e0e0", boxSizing: "border-box" }}
+                    />
+                  </div>
+                </div>
+                <button
+                  onClick={handleGuardarDestino}
+                  disabled={guardandoDestino || (!sitioWebInput.trim() && !whatsappInput.trim())}
+                  style={{ width: "100%", padding: "10px", borderRadius: "8px", background: (!sitioWebInput.trim() && !whatsappInput.trim()) ? "#eee" : "#534AB7", color: (!sitioWebInput.trim() && !whatsappInput.trim()) ? "#aaa" : "#fff", border: "none", marginTop: "15px", fontWeight: 600, cursor: (guardandoDestino || (!sitioWebInput.trim() && !whatsappInput.trim())) ? "not-allowed" : "pointer" }}
+                >
+                  {guardandoDestino ? "Guardando..." : destinoGuardado ? "Guardado ✓" : "Guardar destino de venta"}
+                </button>
+              </ModalIntegracion>
+
+              {/* --- Modal OpenAI --- */}
+              <ModalIntegracion abierto={modalAbierto === "openai"} onCerrar={() => setModalAbierto(null)}>
+                <EncabezadoIntegracion
+                  logos={
+                    <CajaLogo fondo="#F3F2FE">
+                      <LogoMarca marca="openai" nombre="OpenAI" tamano={30} />
+                    </CajaLogo>
+                  }
+                  nombre="OpenAI"
+                  descripcion="Motor de IA que genera tu estrategia, textos y creativos."
                   conectado={!!apiKeyInfo?.hasKey}
                   textoConectado="Conectado"
                   textoNoConectado="No configurado"
@@ -733,18 +1102,36 @@ export default function Home() {
                 </div>
                 <input data-tour="openai-input" type="password" placeholder={apiKeyInfo?.hasKey ? "Actualizar API Key..." : "sk-..."} value={nuevaApiKey} onChange={(e) => setNuevaApiKey(e.target.value)} style={{ width: "100%", padding: "12px", borderRadius: "8px", border: "1px solid #e0e0e0", marginBottom: "10px", boxSizing: "border-box" }} />
                 <button data-tour="openai-conectar" onClick={handleGuardarApiKey} style={{ width: "100%", padding: "10px", borderRadius: "8px", background: "#534AB7", color: "#fff", border: "none", fontWeight: 600, cursor: "pointer" }}>{guardandoApiKey ? "Guardando..." : apiKeyInfo?.hasKey ? "Actualizar Conexión" : "Conectar OpenAI"}</button>
-              </div>
+              </ModalIntegracion>
 
-              <div style={{ background: "#fff", padding: "2rem", borderRadius: "16px", border: cloudinaryInfo?.hasConfig ? "1.5px solid #d9d4f7" : "1px solid #e8e8e6", boxShadow: "0 2px 4px rgba(0,0,0,0.05)" }}>
+              {/* --- Modal Cloudinary --- */}
+              <ModalIntegracion abierto={modalAbierto === "cloudinary"} onCerrar={() => setModalAbierto(null)}>
                 <EncabezadoIntegracion
-                  icono={Cloud}
+                  logos={
+                    <CajaLogo fondo="#EAF2FF">
+                      <LogoMarca marca="cloudinary" nombre="Cloudinary" tamano={30} />
+                    </CajaLogo>
+                  }
                   nombre="Cloudinary"
-                  conectado={!!cloudinaryInfo?.hasConfig}
-                  textoConectado="Conectado"
+                  descripcion="Almacena y sirve todas las imágenes y videos que genera Quiubot."
+                  conectado={!!cloudinaryInfo?.verificado}
+                  advertencia={!!cloudinaryInfo?.hasConfig && !cloudinaryInfo?.verificado}
+                  textoConectado="Conectado y verificado"
                   textoNoConectado="Configuración pendiente"
+                  textoAdvertencia="Credenciales guardadas pero inválidas"
                   urlExterna="https://console.cloudinary.com/console"
                   textoUrlExterna="Ver mi Dashboard"
                 />
+                {cloudinaryInfo?.hasConfig && (
+                  <div style={{ background: "#f9fafb", padding: "10px", borderRadius: "8px", fontSize: "12px", color: "#666", marginBottom: "15px", display: "flex", alignItems: "center", gap: 6 }}>
+                    <span style={{ color: "#15803d" }}>✓</span> Ya tienes credenciales guardadas — los campos están vacíos por seguridad, solo complétalos si quieres reemplazarlas.
+                  </div>
+                )}
+                {cloudinaryInfo?.hasConfig && !cloudinaryInfo?.verificado && cloudinaryInfo?.mensaje && (
+                  <div style={{ background: "#FEF2F2", border: "1px solid #FCA5A5", borderRadius: 10, padding: "10px 14px", fontSize: 12, color: "#991B1B", marginBottom: 16, lineHeight: 1.5 }}>
+                    {cloudinaryInfo.mensaje}
+                  </div>
+                )}
                 <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 6 }}>
                   <span style={{ fontSize: 12, fontWeight: 600, color: "#666" }}>Tus credenciales de Cloudinary</span>
                   <div style={{ display: "flex", gap: 6 }}>
@@ -764,18 +1151,41 @@ export default function Home() {
                   <input placeholder="API Key" value={cloudinaryData.key} onChange={(e) => setCloudinaryData({...cloudinaryData, key: e.target.value})} style={{ width: "100%", padding: "12px", borderRadius: "8px", border: "1px solid #e0e0e0", boxSizing: "border-box" }} />
                   <input type="password" placeholder="API Secret" value={cloudinaryData.secret} onChange={(e) => setCloudinaryData({...cloudinaryData, secret: e.target.value})} style={{ width: "100%", padding: "12px", borderRadius: "8px", border: "1px solid #e0e0e0", boxSizing: "border-box" }} />
                 </div>
-                <button data-tour="cloudinary-guardar" onClick={handleGuardarCloudinary} style={{ width: "100%", padding: "10px", borderRadius: "8px", background: "#534AB7", color: "#fff", border: "none", marginTop: "15px", fontWeight: 600, cursor: "pointer" }}>{guardandoCloud ? "Guardando..." : "Guardar Credenciales"}</button>
-              </div>
+                <div style={{ display: "flex", gap: 8, marginTop: "15px" }}>
+                  <button data-tour="cloudinary-guardar" onClick={handleGuardarCloudinary} style={{ flex: 1, padding: "10px", borderRadius: "8px", background: "#534AB7", color: "#fff", border: "none", fontWeight: 600, cursor: "pointer" }}>{guardandoCloud ? "Guardando..." : "Guardar Credenciales"}</button>
+                  {cloudinaryInfo?.hasConfig && (
+                    <button onClick={handleVerificarCloudinary} disabled={verificandoCloud} style={{ padding: "10px 16px", borderRadius: "8px", background: "#fff", color: "#534AB7", border: "1px solid #534AB7", fontWeight: 600, cursor: verificandoCloud ? "not-allowed" : "pointer", whiteSpace: "nowrap" }}>
+                    {verificandoCloud ? "Verificando..." : "Verificar conexión"}
+                  </button>
+                  )}
+                </div>
+              </ModalIntegracion>
 
-              <div style={{ background: "#fff", padding: "2rem", borderRadius: "16px", border: metaInfo?.conectado ? "1.5px solid #d9d4f7" : "1px solid #e8e8e6", boxShadow: "0 2px 4px rgba(0,0,0,0.05)" }}>
+              {/* --- Modal Meta Ads --- */}
+              <ModalIntegracion abierto={modalAbierto === "meta"} onCerrar={() => setModalAbierto(null)}>
                 <EncabezadoIntegracion
-                  icono={Radio}
+                  logos={
+                    <CajaLogo fondo="#EAF2FF">
+                      <LogoMarca marca="meta" nombre="Meta" tamano={30} />
+                    </CajaLogo>
+                  }
                   nombre="Meta Ads"
+                  descripcion="Publica tus campañas directo en Facebook e Instagram."
                   conectado={!!metaInfo?.conectado}
                   textoConectado="Conectado"
                   textoNoConectado="No conectado"
                   urlExterna="https://business.facebook.com/adsmanager"
                   textoUrlExterna="Ir a Meta Business"
+                  extra={
+                    <div style={{ display: "flex", justifyContent: "center", gap: 8, marginBottom: 6 }}>
+                      <span style={{ display: "inline-flex", alignItems: "center", gap: 5, background: "#EFF6FF", color: "#1877F2", fontSize: 11, fontWeight: 600, padding: "3px 9px 3px 7px", borderRadius: 999 }}>
+                        <LogoMarca marca="facebook" nombre="Facebook" tamano={12} /> Facebook
+                      </span>
+                      <span style={{ display: "inline-flex", alignItems: "center", gap: 5, background: "#FDF2F8", color: "#C13584", fontSize: 11, fontWeight: 600, padding: "3px 9px 3px 7px", borderRadius: 999 }}>
+                        <LogoMarca marca="instagram" nombre="Instagram" tamano={12} /> Instagram
+                      </span>
+                    </div>
+                  }
                 />
 
                 {metaInfo?.conectado ? (
@@ -827,8 +1237,8 @@ export default function Home() {
                     </a>
                   </div>
                 )}
-              </div>
-            </div>
+              </ModalIntegracion>
+            </>
           )}
         </div>
       </div>
