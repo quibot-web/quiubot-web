@@ -28,7 +28,7 @@ export default function PagoExitosoPage() {
           ¡Gracias por tu pago!
         </h1>
         <p style={{ fontSize: 14, color: "#666", lineHeight: 1.6, margin: "0 0 4px" }}>
-          Ya recibimos tu confirmación de Wompi.
+          Ya recibimos tu confirmación de pago.
         </p>
         <p style={{ fontSize: 14, color: "#666", lineHeight: 1.6, margin: "0 0 24px" }}>
           Tu acceso se activa manualmente en menos de <strong>24 horas hábiles</strong> — te avisamos por WhatsApp en cuanto esté listo.
