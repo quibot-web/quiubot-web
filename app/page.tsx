@@ -2,7 +2,7 @@
 import { useState, useEffect, useRef } from "react";
 import { useSession, signOut } from "next-auth/react";
 import { useRouter } from "next/navigation";
-import { BrainCircuit, Cloud, Radio, ExternalLink, CheckCircle2, AlertTriangle, Link2 } from "lucide-react";
+import { ExternalLink } from "lucide-react";
 import HomeInicio from "@/app/components/HomeInicio";
 import TutorialVideo from "@/app/components/TutorialVideo";
 import TourGuiado from "@/app/components/TourGuiado";
@@ -15,57 +15,149 @@ function Icono({ children }: { children: React.ReactNode }) {
   );
 }
 
-// Encabezado reutilizable de cada tarjeta de integración: icono de marca,
-// estado de conexión (sin puntos/emoji sueltos, con un icono de check real
-// cuando está conectado) y el enlace directo a la plataforma externa.
+// Badge de estado flotante, estilo "pill", con color semántico (verde =
+// conectado, gris = desconectado, ámbar = opcional, rojo = error) — estos
+// colores son universales para estado y no compiten con el morado de marca,
+// que se reserva para botones y acentos interactivos.
+function BadgeEstadoIntegracion({ tono, texto }: { tono: "verde" | "gris" | "rojo" | "ambar"; texto: string }) {
+  const paleta = {
+    verde: { bg: "#DCFCE7", color: "#15803D", punto: "#22C55E" },
+    gris: { bg: "#F3F4F6", color: "#6B7280", punto: "#9CA3AF" },
+    rojo: { bg: "#FEF2F2", color: "#DC2626", punto: "#DC2626" },
+    ambar: { bg: "#FEF3C7", color: "#92400E", punto: "#F59E0B" },
+  }[tono];
+  return (
+    <span style={{ display: "inline-flex", alignItems: "center", gap: 5, background: paleta.bg, color: paleta.color, fontSize: 11, fontWeight: 700, padding: "4px 10px 4px 8px", borderRadius: 999 }}>
+      <span style={{ width: 6, height: 6, borderRadius: "50%", background: paleta.punto }} />
+      {texto}
+    </span>
+  );
+}
+
+// Encabezado reutilizable de cada tarjeta de integración: logo REAL de la
+// marca (Simple Icons — SVG oficial de cada plataforma en su color propio,
+// no un ícono genérico dibujado por nosotros), estado como badge flotante
+// arriba a la izquierda, todo centrado como una tarjeta de catálogo. El
+// contenido del formulario de cada integración queda exactamente igual
+// debajo — solo cambia esta cabecera visual.
 function EncabezadoIntegracion({
-  icono: Icono2,
+  logoSrc,
+  logoFondo = "#F3F2FE",
   nombre,
+  descripcion,
   conectado,
   advertencia,
+  opcional,
   textoConectado,
   textoNoConectado,
   textoAdvertencia,
   urlExterna,
   textoUrlExterna,
+  extra,
 }: {
-  icono: React.ComponentType<{ size?: number; color?: string; strokeWidth?: number }>;
+  logoSrc: string;
+  logoFondo?: string;
   nombre: string;
+  descripcion: string;
   conectado: boolean;
   advertencia?: boolean;
+  opcional?: boolean;
   textoConectado: string;
   textoNoConectado: string;
   textoAdvertencia?: string;
   urlExterna: string;
   textoUrlExterna: string;
+  extra?: React.ReactNode;
 }) {
-  const colorFondo = advertencia ? "#FEF2F2" : conectado ? "#534AB7" : "#F3F2FE";
-  const colorIcono = advertencia ? "#DC2626" : conectado ? "#fff" : "#534AB7";
-  const colorTexto = advertencia ? "#DC2626" : conectado ? "#15803d" : "#999";
+  const tono: "verde" | "gris" | "rojo" | "ambar" = advertencia ? "rojo" : conectado ? "verde" : opcional ? "ambar" : "gris";
+  const texto = advertencia ? (textoAdvertencia || "Credenciales inválidas") : conectado ? textoConectado : opcional ? "Opcional" : textoNoConectado;
 
   return (
-    <div style={{ display: "flex", alignItems: "flex-start", justifyContent: "space-between", marginBottom: "1.25rem", gap: 12 }}>
-      <div style={{ display: "flex", alignItems: "center", gap: "12px" }}>
-        <div style={{ width: 48, height: 48, borderRadius: "12px", background: colorFondo, display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0 }}>
-          {advertencia ? <AlertTriangle size={22} color={colorIcono} strokeWidth={2} /> : <Icono2 size={22} color={colorIcono} strokeWidth={2} />}
-        </div>
-        <div>
-          <h2 style={{ fontSize: "15px", fontWeight: 600, margin: 0, color: "#1a1a1a" }}>{nombre}</h2>
-          <div style={{ display: "flex", alignItems: "center", gap: "5px", fontSize: "12px", color: colorTexto, marginTop: 2, fontWeight: 500 }}>
-            {advertencia ? <AlertTriangle size={13} strokeWidth={2.5} /> : conectado ? <CheckCircle2 size={13} strokeWidth={2.5} /> : <span style={{ width: 6, height: 6, borderRadius: "50%", background: "#ccc" }} />}
-            {advertencia ? (textoAdvertencia || "Credenciales inválidas") : conectado ? textoConectado : textoNoConectado}
-          </div>
-        </div>
+    <div style={{ position: "relative", textAlign: "center", paddingTop: 22, marginBottom: "1.5rem" }}>
+      <div style={{ position: "absolute", top: 0, left: 0 }}>
+        <BadgeEstadoIntegracion tono={tono} texto={texto} />
       </div>
+      <div style={{ width: 60, height: 60, borderRadius: 16, background: logoFondo, display: "flex", alignItems: "center", justifyContent: "center", margin: "0 auto 14px" }}>
+        <img src={logoSrc} alt={nombre} width={30} height={30} style={{ display: "block" }} />
+      </div>
+      <h2 style={{ fontSize: 16, fontWeight: 700, margin: "0 0 5px", color: "#1a1a1a" }}>{nombre}</h2>
+      <p style={{ fontSize: 12.5, color: "#888", margin: "0 auto 8px", lineHeight: 1.5, maxWidth: 270 }}>{descripcion}</p>
+      {extra}
       <a
         href={urlExterna}
         target="_blank"
         rel="noopener noreferrer"
-        style={{ display: "inline-flex", alignItems: "center", gap: 4, fontSize: 12, color: "#534AB7", fontWeight: 600, textDecoration: "none", whiteSpace: "nowrap", flexShrink: 0, marginTop: 4 }}
+        style={{ display: "inline-flex", alignItems: "center", gap: 4, fontSize: 12, color: "#534AB7", fontWeight: 600, textDecoration: "none", marginTop: 4 }}
       >
         {textoUrlExterna}
         <ExternalLink size={13} strokeWidth={2} />
       </a>
+    </div>
+  );
+}
+
+// Tarjeta compacta tipo catálogo (la vista principal de la pestaña
+// Integraciones): logo real, badge de estado, nombre, descripción corta y
+// un botón que abre el modal con el formulario real. El borde cambia de
+// color según el estado, igual que la referencia que compartió el usuario.
+function TarjetaIntegracion({
+  logoSrc,
+  logoFondo = "#F3F2FE",
+  nombre,
+  descripcionCorta,
+  tono,
+  textoBadge,
+  children,
+}: {
+  logoSrc: string;
+  logoFondo?: string;
+  nombre: string;
+  descripcionCorta: string;
+  tono: "verde" | "gris" | "rojo" | "ambar";
+  textoBadge: string;
+  children: React.ReactNode;
+}) {
+  const colorBorde = { verde: "#86EFAC", gris: "#e8e8e6", rojo: "#FCA5A5", ambar: "#FCD34D" }[tono];
+  return (
+    <div style={{ position: "relative", background: "#fff", borderRadius: 16, border: `1.5px solid ${colorBorde}`, padding: "1.75rem 1.5rem 1.5rem", display: "flex", flexDirection: "column", alignItems: "center", textAlign: "center", boxShadow: "0 2px 4px rgba(0,0,0,0.04)" }}>
+      <div style={{ position: "absolute", top: 12, left: 12 }}>
+        <BadgeEstadoIntegracion tono={tono} texto={textoBadge} />
+      </div>
+      <div style={{ width: 56, height: 56, borderRadius: 14, background: logoFondo, display: "flex", alignItems: "center", justifyContent: "center", margin: "14px 0 12px" }}>
+        <img src={logoSrc} alt={nombre} width={28} height={28} style={{ display: "block" }} />
+      </div>
+      <h3 style={{ fontSize: 15, fontWeight: 700, margin: "0 0 6px", color: "#1a1a1a" }}>{nombre}</h3>
+      <p style={{ fontSize: 12.5, color: "#888", lineHeight: 1.5, margin: "0 0 18px", minHeight: 34 }}>{descripcionCorta}</p>
+      <div style={{ display: "flex", gap: 8, width: "100%", marginTop: "auto" }}>{children}</div>
+    </div>
+  );
+}
+
+// Modal genérico que envuelve el formulario real de cada integración. Se
+// abre al darle "Configurar"/"Editar" en la tarjeta compacta — así la
+// vista principal queda limpia tipo catálogo, pero toda la lógica de
+// guardado/verificación de cada integración sigue funcionando exactamente
+// igual, solo que ahora vive dentro de esta ventana.
+function ModalIntegracion({ abierto, onCerrar, children }: { abierto: boolean; onCerrar: () => void; children: React.ReactNode }) {
+  if (!abierto) return null;
+  return (
+    <div
+      onClick={onCerrar}
+      style={{ position: "fixed", inset: 0, background: "rgba(26,26,26,0.5)", display: "flex", alignItems: "center", justifyContent: "center", zIndex: 100, padding: "1.5rem" }}
+    >
+      <div
+        onClick={(e) => e.stopPropagation()}
+        style={{ background: "#fff", borderRadius: 20, padding: "2rem", maxWidth: 440, width: "100%", maxHeight: "88vh", overflowY: "auto", position: "relative", boxShadow: "0 20px 60px rgba(0,0,0,0.25)" }}
+      >
+        <button
+          onClick={onCerrar}
+          aria-label="Cerrar"
+          style={{ position: "absolute", top: 14, right: 14, width: 30, height: 30, borderRadius: "50%", border: "none", background: "#F3F2FE", color: "#534AB7", fontSize: 15, cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center" }}
+        >
+          ✕
+        </button>
+        {children}
+      </div>
     </div>
   );
 }
@@ -101,6 +193,7 @@ export default function Home() {
   const conteoPendientesPrevio = useRef<number | null>(null);
 
   const [metaInfo, setMetaInfo] = useState<{ conectado: boolean; nombre: string | null; cuentaPublicitaria: string | null; pagina: string | null } | null>(null);
+  const [modalAbierto, setModalAbierto] = useState<"destino" | "openai" | "cloudinary" | "meta" | null>(null);
 
   const [rol, setRol] = useState<string | null>(null);
   const [colapsado, setColapsado] = useState(false);
@@ -759,22 +852,91 @@ export default function Home() {
           )}
 
           {tab === "integraciones" && (
-            <div style={{ maxWidth: "600px", margin: "2rem auto", display: "flex", flexDirection: "column", gap: "2rem" }}>
-              <div style={{ background: "#fff", padding: "2rem", borderRadius: "16px", border: (destinoVenta?.sitio_web || destinoVenta?.whatsapp_numero) ? "1.5px solid #d9d4f7" : "1px solid #e8e8e6", boxShadow: "0 2px 4px rgba(0,0,0,0.05)" }}>
-                <div style={{ display: "flex", alignItems: "flex-start", justifyContent: "space-between", marginBottom: "1.25rem", gap: 12 }}>
-                  <div style={{ display: "flex", alignItems: "center", gap: "12px" }}>
-                    <div style={{ width: 48, height: 48, borderRadius: "12px", background: (destinoVenta?.sitio_web || destinoVenta?.whatsapp_numero) ? "#534AB7" : "#F3F2FE", display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0 }}>
-                      <Link2 size={22} color={(destinoVenta?.sitio_web || destinoVenta?.whatsapp_numero) ? "#fff" : "#534AB7"} strokeWidth={2} />
-                    </div>
-                    <div>
-                      <h2 style={{ fontSize: "15px", fontWeight: 600, margin: 0, color: "#1a1a1a" }}>Destino de venta</h2>
-                      <div style={{ display: "flex", alignItems: "center", gap: "5px", fontSize: "12px", color: (destinoVenta?.sitio_web || destinoVenta?.whatsapp_numero) ? "#15803d" : "#999", marginTop: 2, fontWeight: 500 }}>
-                        {(destinoVenta?.sitio_web || destinoVenta?.whatsapp_numero) ? <CheckCircle2 size={13} strokeWidth={2.5} /> : <span style={{ width: 6, height: 6, borderRadius: "50%", background: "#ccc" }} />}
-                        {(destinoVenta?.sitio_web || destinoVenta?.whatsapp_numero) ? "Configurado" : "Sin configurar"}
-                      </div>
-                    </div>
-                  </div>
-                </div>
+            <>
+              <div style={{ maxWidth: "1100px", margin: "2rem auto", display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(230px, 1fr))", gap: "1.25rem" }}>
+                <TarjetaIntegracion
+                  logoSrc="https://cdn.simpleicons.org/whatsapp"
+                  logoFondo="#DCFCE7"
+                  nombre="Destino de venta"
+                  descripcionCorta="A dónde llega la gente cuando toca tu anuncio."
+                  tono={(destinoVenta?.sitio_web || destinoVenta?.whatsapp_numero) ? "verde" : "gris"}
+                  textoBadge={(destinoVenta?.sitio_web || destinoVenta?.whatsapp_numero) ? "Configurado" : "Sin configurar"}
+                >
+                  <button
+                    onClick={() => setModalAbierto("destino")}
+                    style={{ flex: 1, padding: "10px", borderRadius: 8, background: "#534AB7", color: "#fff", border: "none", fontWeight: 600, fontSize: 13, cursor: "pointer" }}
+                  >
+                    {(destinoVenta?.sitio_web || destinoVenta?.whatsapp_numero) ? "Editar" : "Configurar"}
+                  </button>
+                </TarjetaIntegracion>
+
+                <TarjetaIntegracion
+                  logoSrc="https://cdn.simpleicons.org/openai"
+                  logoFondo="#F3F2FE"
+                  nombre="OpenAI"
+                  descripcionCorta="Motor de IA que genera tu estrategia y creativos."
+                  tono={apiKeyInfo?.hasKey ? "verde" : "gris"}
+                  textoBadge={apiKeyInfo?.hasKey ? "Conectado" : "No configurado"}
+                >
+                  <button
+                    onClick={() => setModalAbierto("openai")}
+                    style={{ flex: 1, padding: "10px", borderRadius: 8, background: "#534AB7", color: "#fff", border: "none", fontWeight: 600, fontSize: 13, cursor: "pointer" }}
+                  >
+                    {apiKeyInfo?.hasKey ? "Editar" : "Configurar"}
+                  </button>
+                </TarjetaIntegracion>
+
+                <TarjetaIntegracion
+                  logoSrc="https://cdn.simpleicons.org/cloudinary"
+                  logoFondo="#EAF2FF"
+                  nombre="Cloudinary"
+                  descripcionCorta="Almacena las imágenes y videos generados por Quiubot."
+                  tono={cloudinaryInfo?.verificado ? "verde" : cloudinaryInfo?.hasConfig ? "rojo" : "gris"}
+                  textoBadge={cloudinaryInfo?.verificado ? "Conectado" : cloudinaryInfo?.hasConfig ? "Credenciales inválidas" : "Sin configurar"}
+                >
+                  <button
+                    onClick={() => setModalAbierto("cloudinary")}
+                    style={{ flex: 1, padding: "10px", borderRadius: 8, background: "#534AB7", color: "#fff", border: "none", fontWeight: 600, fontSize: 13, cursor: "pointer" }}
+                  >
+                    {cloudinaryInfo?.hasConfig ? "Editar" : "Configurar"}
+                  </button>
+                </TarjetaIntegracion>
+
+                <TarjetaIntegracion
+                  logoSrc="https://cdn.simpleicons.org/meta"
+                  logoFondo="#EAF2FF"
+                  nombre="Meta Ads"
+                  descripcionCorta="Publica campañas en Facebook e Instagram."
+                  tono={metaInfo?.conectado ? "verde" : "gris"}
+                  textoBadge={metaInfo?.conectado ? "Conectado" : "No conectado"}
+                >
+                  <button
+                    onClick={() => setModalAbierto("meta")}
+                    style={{
+                      flex: 1, padding: "10px", borderRadius: 8, fontWeight: 600, fontSize: 13, cursor: "pointer",
+                      background: metaInfo?.conectado ? "#fff" : "#534AB7",
+                      color: metaInfo?.conectado ? "#534AB7" : "#fff",
+                      border: metaInfo?.conectado ? "1px solid #534AB7" : "none",
+                    }}
+                  >
+                    {metaInfo?.conectado ? "Ver detalles" : "Conectar"}
+                  </button>
+                </TarjetaIntegracion>
+              </div>
+
+              {/* --- Modal Destino de venta --- */}
+              <ModalIntegracion abierto={modalAbierto === "destino"} onCerrar={() => setModalAbierto(null)}>
+                <EncabezadoIntegracion
+                  logoSrc="https://cdn.simpleicons.org/whatsapp"
+                  logoFondo="#DCFCE7"
+                  nombre="Destino de venta"
+                  descripcion="A dónde llega la gente cuando toca tu anuncio: tu sitio web, o directo a un chat de WhatsApp."
+                  conectado={!!(destinoVenta?.sitio_web || destinoVenta?.whatsapp_numero)}
+                  textoConectado="Configurado"
+                  textoNoConectado="Sin configurar"
+                  urlExterna="https://web.whatsapp.com"
+                  textoUrlExterna="Abrir WhatsApp Web"
+                />
                 <p style={{ fontSize: 13, color: "#666", marginBottom: 16, lineHeight: 1.5 }}>
                   Cuando alguien toque tu anuncio en Facebook o Instagram, llegará aquí. Completa uno de los dos, o ambos si vendes por los dos canales — sin al menos uno, tus campañas no podrán publicarse.
                 </p>
@@ -805,12 +967,15 @@ export default function Home() {
                 >
                   {guardandoDestino ? "Guardando..." : destinoGuardado ? "Guardado ✓" : "Guardar destino de venta"}
                 </button>
-              </div>
+              </ModalIntegracion>
 
-              <div style={{ background: "#fff", padding: "2rem", borderRadius: "16px", border: apiKeyInfo?.hasKey ? "1.5px solid #d9d4f7" : "1px solid #e8e8e6", boxShadow: "0 2px 4px rgba(0,0,0,0.05)" }}>
+              {/* --- Modal OpenAI --- */}
+              <ModalIntegracion abierto={modalAbierto === "openai"} onCerrar={() => setModalAbierto(null)}>
                 <EncabezadoIntegracion
-                  icono={BrainCircuit}
+                  logoSrc="https://cdn.simpleicons.org/openai"
+                  logoFondo="#F3F2FE"
                   nombre="OpenAI"
+                  descripcion="Motor de IA que genera tu estrategia, textos y creativos."
                   conectado={!!apiKeyInfo?.hasKey}
                   textoConectado="Conectado"
                   textoNoConectado="No configurado"
@@ -834,12 +999,15 @@ export default function Home() {
                 </div>
                 <input data-tour="openai-input" type="password" placeholder={apiKeyInfo?.hasKey ? "Actualizar API Key..." : "sk-..."} value={nuevaApiKey} onChange={(e) => setNuevaApiKey(e.target.value)} style={{ width: "100%", padding: "12px", borderRadius: "8px", border: "1px solid #e0e0e0", marginBottom: "10px", boxSizing: "border-box" }} />
                 <button data-tour="openai-conectar" onClick={handleGuardarApiKey} style={{ width: "100%", padding: "10px", borderRadius: "8px", background: "#534AB7", color: "#fff", border: "none", fontWeight: 600, cursor: "pointer" }}>{guardandoApiKey ? "Guardando..." : apiKeyInfo?.hasKey ? "Actualizar Conexión" : "Conectar OpenAI"}</button>
-              </div>
+              </ModalIntegracion>
 
-              <div style={{ background: "#fff", padding: "2rem", borderRadius: "16px", border: cloudinaryInfo?.verificado ? "1.5px solid #d9d4f7" : cloudinaryInfo?.hasConfig ? "1.5px solid #fca5a5" : "1px solid #e8e8e6", boxShadow: "0 2px 4px rgba(0,0,0,0.05)" }}>
+              {/* --- Modal Cloudinary --- */}
+              <ModalIntegracion abierto={modalAbierto === "cloudinary"} onCerrar={() => setModalAbierto(null)}>
                 <EncabezadoIntegracion
-                  icono={Cloud}
+                  logoSrc="https://cdn.simpleicons.org/cloudinary"
+                  logoFondo="#EAF2FF"
                   nombre="Cloudinary"
+                  descripcion="Almacena y sirve todas las imágenes y videos que genera Quiubot."
                   conectado={!!cloudinaryInfo?.verificado}
                   advertencia={!!cloudinaryInfo?.hasConfig && !cloudinaryInfo?.verificado}
                   textoConectado="Conectado y verificado"
@@ -880,17 +1048,30 @@ export default function Home() {
                   </button>
                   )}
                 </div>
-              </div>
+              </ModalIntegracion>
 
-              <div style={{ background: "#fff", padding: "2rem", borderRadius: "16px", border: metaInfo?.conectado ? "1.5px solid #d9d4f7" : "1px solid #e8e8e6", boxShadow: "0 2px 4px rgba(0,0,0,0.05)" }}>
+              {/* --- Modal Meta Ads --- */}
+              <ModalIntegracion abierto={modalAbierto === "meta"} onCerrar={() => setModalAbierto(null)}>
                 <EncabezadoIntegracion
-                  icono={Radio}
+                  logoSrc="https://cdn.simpleicons.org/meta"
+                  logoFondo="#EAF2FF"
                   nombre="Meta Ads"
+                  descripcion="Publica tus campañas directo en Facebook e Instagram."
                   conectado={!!metaInfo?.conectado}
                   textoConectado="Conectado"
                   textoNoConectado="No conectado"
                   urlExterna="https://business.facebook.com/adsmanager"
                   textoUrlExterna="Ir a Meta Business"
+                  extra={
+                    <div style={{ display: "flex", justifyContent: "center", gap: 8, marginBottom: 6 }}>
+                      <span style={{ display: "inline-flex", alignItems: "center", gap: 5, background: "#EFF6FF", color: "#1877F2", fontSize: 11, fontWeight: 600, padding: "3px 9px 3px 7px", borderRadius: 999 }}>
+                        <img src="https://cdn.simpleicons.org/facebook" width={12} height={12} alt="" /> Facebook
+                      </span>
+                      <span style={{ display: "inline-flex", alignItems: "center", gap: 5, background: "#FDF2F8", color: "#C13584", fontSize: 11, fontWeight: 600, padding: "3px 9px 3px 7px", borderRadius: 999 }}>
+                        <img src="https://cdn.simpleicons.org/instagram" width={12} height={12} alt="" /> Instagram
+                      </span>
+                    </div>
+                  }
                 />
 
                 {metaInfo?.conectado ? (
@@ -942,8 +1123,8 @@ export default function Home() {
                     </a>
                   </div>
                 )}
-              </div>
-            </div>
+              </ModalIntegracion>
+            </>
           )}
         </div>
       </div>
