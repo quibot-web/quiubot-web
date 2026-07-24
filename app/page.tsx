@@ -2,7 +2,7 @@
 import { useState, useEffect, useRef } from "react";
 import { useSession, signOut } from "next-auth/react";
 import { useRouter } from "next/navigation";
-import { ExternalLink } from "lucide-react";
+import { ExternalLink, Globe } from "lucide-react";
 import HomeInicio from "@/app/components/HomeInicio";
 import TutorialVideo from "@/app/components/TutorialVideo";
 import TourGuiado from "@/app/components/TourGuiado";
@@ -34,6 +34,67 @@ function BadgeEstadoIntegracion({ tono, texto }: { tono: "verde" | "gris" | "roj
   );
 }
 
+// Cada logo tiene 2 fuentes de respaldo: si la primera (cdn.simpleicons.org)
+// falla — como pasó con el de OpenAI —, prueba automáticamente con la
+// segunda (jsdelivr, sirve el mismo paquete Simple Icons pero desde otro
+// CDN). Si ambas fallan, se ve una inicial en vez de un ícono roto.
+const FUENTES_LOGO: Record<string, string[]> = {
+  whatsapp: ["https://cdn.simpleicons.org/whatsapp", "https://cdn.jsdelivr.net/npm/simple-icons@latest/icons/whatsapp.svg"],
+  openai: ["https://cdn.simpleicons.org/openai", "https://cdn.jsdelivr.net/npm/simple-icons@latest/icons/openai.svg"],
+  cloudinary: ["https://cdn.simpleicons.org/cloudinary", "https://cdn.jsdelivr.net/npm/simple-icons@latest/icons/cloudinary.svg"],
+  meta: ["https://cdn.simpleicons.org/meta", "https://cdn.jsdelivr.net/npm/simple-icons@latest/icons/meta.svg"],
+  facebook: ["https://cdn.simpleicons.org/facebook", "https://cdn.jsdelivr.net/npm/simple-icons@latest/icons/facebook.svg"],
+  instagram: ["https://cdn.simpleicons.org/instagram", "https://cdn.jsdelivr.net/npm/simple-icons@latest/icons/instagram.svg"],
+};
+
+// Logo de marca con cadena de respaldo: intenta la primera fuente, si falla
+// (onError) pasa a la siguiente, y si se agotan todas muestra la inicial
+// del nombre en vez de dejar un ícono roto en pantalla.
+function LogoMarca({ marca, nombre, tamano = 28 }: { marca: keyof typeof FUENTES_LOGO; nombre: string; tamano?: number }) {
+  const [intento, setIntento] = useState(0);
+  const fuentes = FUENTES_LOGO[marca] || [];
+  const agotado = intento >= fuentes.length;
+
+  if (agotado) {
+    return (
+      <span style={{ fontSize: tamano * 0.6, fontWeight: 800, color: "#534AB7" }}>{nombre[0]?.toUpperCase()}</span>
+    );
+  }
+  return (
+    <img
+      key={intento}
+      src={fuentes[intento]}
+      alt={nombre}
+      width={tamano}
+      height={tamano}
+      style={{ display: "block" }}
+      onError={() => setIntento((n) => n + 1)}
+    />
+  );
+}
+
+// Caja cuadrada redondeada que envuelve un logo (o cualquier ícono) — misma
+// pieza visual reutilizada tanto para una integración de un solo logo como
+// para las de dos logos combinados (como Destino de venta).
+function CajaLogo({ children, fondo, tamanoCaja = 60 }: { children: React.ReactNode; fondo: string; tamanoCaja?: number }) {
+  return (
+    <div style={{ width: tamanoCaja, height: tamanoCaja, borderRadius: 16, background: fondo, display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0 }}>
+      {children}
+    </div>
+  );
+}
+
+// Par de logos lado a lado (usado por Destino de venta: WhatsApp + sitio
+// web) — mismo alto que una caja de logo individual, para que el resto del
+// encabezado no salte de tamaño entre integraciones de 1 o 2 logos.
+function ParDeLogos({ children, tamanoCaja = 52 }: { children: React.ReactNode; tamanoCaja?: number }) {
+  return (
+    <div style={{ display: "flex", justifyContent: "center", gap: 10, margin: "0 auto 14px" }}>
+      {children}
+    </div>
+  );
+}
+
 // Encabezado reutilizable de cada tarjeta de integración: logo REAL de la
 // marca (Simple Icons — SVG oficial de cada plataforma en su color propio,
 // no un ícono genérico dibujado por nosotros), estado como badge flotante
@@ -43,6 +104,7 @@ function BadgeEstadoIntegracion({ tono, texto }: { tono: "verde" | "gris" | "roj
 function EncabezadoIntegracion({
   logoSrc,
   logoFondo = "#F3F2FE",
+  logos,
   nombre,
   descripcion,
   conectado,
@@ -55,8 +117,9 @@ function EncabezadoIntegracion({
   textoUrlExterna,
   extra,
 }: {
-  logoSrc: string;
+  logoSrc?: string;
   logoFondo?: string;
+  logos?: React.ReactNode;
   nombre: string;
   descripcion: string;
   conectado: boolean;
@@ -77,9 +140,13 @@ function EncabezadoIntegracion({
       <div style={{ position: "absolute", top: 0, left: 0 }}>
         <BadgeEstadoIntegracion tono={tono} texto={texto} />
       </div>
-      <div style={{ width: 60, height: 60, borderRadius: 16, background: logoFondo, display: "flex", alignItems: "center", justifyContent: "center", margin: "0 auto 14px" }}>
-        <img src={logoSrc} alt={nombre} width={30} height={30} style={{ display: "block" }} />
-      </div>
+      {logos ? logos : (
+        <div style={{ margin: "0 auto 14px", width: 60 }}>
+          <CajaLogo fondo={logoFondo}>
+            {logoSrc && <img src={logoSrc} alt={nombre} width={30} height={30} style={{ display: "block" }} />}
+          </CajaLogo>
+        </div>
+      )}
       <h2 style={{ fontSize: 16, fontWeight: 700, margin: "0 0 5px", color: "#1a1a1a" }}>{nombre}</h2>
       <p style={{ fontSize: 12.5, color: "#888", margin: "0 auto 8px", lineHeight: 1.5, maxWidth: 270 }}>{descripcion}</p>
       {extra}
@@ -103,14 +170,16 @@ function EncabezadoIntegracion({
 function TarjetaIntegracion({
   logoSrc,
   logoFondo = "#F3F2FE",
+  logos,
   nombre,
   descripcionCorta,
   tono,
   textoBadge,
   children,
 }: {
-  logoSrc: string;
+  logoSrc?: string;
   logoFondo?: string;
+  logos?: React.ReactNode;
   nombre: string;
   descripcionCorta: string;
   tono: "verde" | "gris" | "rojo" | "ambar";
@@ -123,9 +192,15 @@ function TarjetaIntegracion({
       <div style={{ position: "absolute", top: 12, left: 12 }}>
         <BadgeEstadoIntegracion tono={tono} texto={textoBadge} />
       </div>
-      <div style={{ width: 56, height: 56, borderRadius: 14, background: logoFondo, display: "flex", alignItems: "center", justifyContent: "center", margin: "14px 0 12px" }}>
-        <img src={logoSrc} alt={nombre} width={28} height={28} style={{ display: "block" }} />
-      </div>
+      {logos ? (
+        <div style={{ marginTop: 14 }}>{logos}</div>
+      ) : (
+        <div style={{ margin: "14px 0 12px" }}>
+          <CajaLogo fondo={logoFondo} tamanoCaja={56}>
+            {logoSrc && <img src={logoSrc} alt={nombre} width={28} height={28} style={{ display: "block" }} />}
+          </CajaLogo>
+        </div>
+      )}
       <h3 style={{ fontSize: 15, fontWeight: 700, margin: "0 0 6px", color: "#1a1a1a" }}>{nombre}</h3>
       <p style={{ fontSize: 12.5, color: "#888", lineHeight: 1.5, margin: "0 0 18px", minHeight: 34 }}>{descripcionCorta}</p>
       <div style={{ display: "flex", gap: 8, width: "100%", marginTop: "auto" }}>{children}</div>
@@ -855,8 +930,16 @@ export default function Home() {
             <>
               <div style={{ maxWidth: "1100px", margin: "2rem auto", display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(230px, 1fr))", gap: "1.25rem" }}>
                 <TarjetaIntegracion
-                  logoSrc="https://cdn.simpleicons.org/whatsapp"
-                  logoFondo="#DCFCE7"
+                  logos={
+                    <ParDeLogos tamanoCaja={48}>
+                      <CajaLogo fondo="#DCFCE7" tamanoCaja={48}>
+                        <LogoMarca marca="whatsapp" nombre="WhatsApp" tamano={24} />
+                      </CajaLogo>
+                      <CajaLogo fondo="#EFF6FF" tamanoCaja={48}>
+                        <Globe size={22} color="#3B82F6" strokeWidth={2} />
+                      </CajaLogo>
+                    </ParDeLogos>
+                  }
                   nombre="Destino de venta"
                   descripcionCorta="A dónde llega la gente cuando toca tu anuncio."
                   tono={(destinoVenta?.sitio_web || destinoVenta?.whatsapp_numero) ? "verde" : "gris"}
@@ -871,8 +954,11 @@ export default function Home() {
                 </TarjetaIntegracion>
 
                 <TarjetaIntegracion
-                  logoSrc="https://cdn.simpleicons.org/openai"
-                  logoFondo="#F3F2FE"
+                  logos={
+                    <CajaLogo fondo="#F3F2FE" tamanoCaja={56}>
+                      <LogoMarca marca="openai" nombre="OpenAI" tamano={28} />
+                    </CajaLogo>
+                  }
                   nombre="OpenAI"
                   descripcionCorta="Motor de IA que genera tu estrategia y creativos."
                   tono={apiKeyInfo?.hasKey ? "verde" : "gris"}
@@ -887,8 +973,11 @@ export default function Home() {
                 </TarjetaIntegracion>
 
                 <TarjetaIntegracion
-                  logoSrc="https://cdn.simpleicons.org/cloudinary"
-                  logoFondo="#EAF2FF"
+                  logos={
+                    <CajaLogo fondo="#EAF2FF" tamanoCaja={56}>
+                      <LogoMarca marca="cloudinary" nombre="Cloudinary" tamano={28} />
+                    </CajaLogo>
+                  }
                   nombre="Cloudinary"
                   descripcionCorta="Almacena las imágenes y videos generados por Quiubot."
                   tono={cloudinaryInfo?.verificado ? "verde" : cloudinaryInfo?.hasConfig ? "rojo" : "gris"}
@@ -903,8 +992,11 @@ export default function Home() {
                 </TarjetaIntegracion>
 
                 <TarjetaIntegracion
-                  logoSrc="https://cdn.simpleicons.org/meta"
-                  logoFondo="#EAF2FF"
+                  logos={
+                    <CajaLogo fondo="#EAF2FF" tamanoCaja={56}>
+                      <LogoMarca marca="meta" nombre="Meta" tamano={28} />
+                    </CajaLogo>
+                  }
                   nombre="Meta Ads"
                   descripcionCorta="Publica campañas en Facebook e Instagram."
                   tono={metaInfo?.conectado ? "verde" : "gris"}
@@ -927,8 +1019,16 @@ export default function Home() {
               {/* --- Modal Destino de venta --- */}
               <ModalIntegracion abierto={modalAbierto === "destino"} onCerrar={() => setModalAbierto(null)}>
                 <EncabezadoIntegracion
-                  logoSrc="https://cdn.simpleicons.org/whatsapp"
-                  logoFondo="#DCFCE7"
+                  logos={
+                    <ParDeLogos tamanoCaja={52}>
+                      <CajaLogo fondo="#DCFCE7" tamanoCaja={52}>
+                        <LogoMarca marca="whatsapp" nombre="WhatsApp" tamano={26} />
+                      </CajaLogo>
+                      <CajaLogo fondo="#EFF6FF" tamanoCaja={52}>
+                        <Globe size={24} color="#3B82F6" strokeWidth={2} />
+                      </CajaLogo>
+                    </ParDeLogos>
+                  }
                   nombre="Destino de venta"
                   descripcion="A dónde llega la gente cuando toca tu anuncio: tu sitio web, o directo a un chat de WhatsApp."
                   conectado={!!(destinoVenta?.sitio_web || destinoVenta?.whatsapp_numero)}
@@ -972,8 +1072,11 @@ export default function Home() {
               {/* --- Modal OpenAI --- */}
               <ModalIntegracion abierto={modalAbierto === "openai"} onCerrar={() => setModalAbierto(null)}>
                 <EncabezadoIntegracion
-                  logoSrc="https://cdn.simpleicons.org/openai"
-                  logoFondo="#F3F2FE"
+                  logos={
+                    <CajaLogo fondo="#F3F2FE">
+                      <LogoMarca marca="openai" nombre="OpenAI" tamano={30} />
+                    </CajaLogo>
+                  }
                   nombre="OpenAI"
                   descripcion="Motor de IA que genera tu estrategia, textos y creativos."
                   conectado={!!apiKeyInfo?.hasKey}
@@ -1004,8 +1107,11 @@ export default function Home() {
               {/* --- Modal Cloudinary --- */}
               <ModalIntegracion abierto={modalAbierto === "cloudinary"} onCerrar={() => setModalAbierto(null)}>
                 <EncabezadoIntegracion
-                  logoSrc="https://cdn.simpleicons.org/cloudinary"
-                  logoFondo="#EAF2FF"
+                  logos={
+                    <CajaLogo fondo="#EAF2FF">
+                      <LogoMarca marca="cloudinary" nombre="Cloudinary" tamano={30} />
+                    </CajaLogo>
+                  }
                   nombre="Cloudinary"
                   descripcion="Almacena y sirve todas las imágenes y videos que genera Quiubot."
                   conectado={!!cloudinaryInfo?.verificado}
@@ -1016,6 +1122,11 @@ export default function Home() {
                   urlExterna="https://console.cloudinary.com/console"
                   textoUrlExterna="Ver mi Dashboard"
                 />
+                {cloudinaryInfo?.hasConfig && (
+                  <div style={{ background: "#f9fafb", padding: "10px", borderRadius: "8px", fontSize: "12px", color: "#666", marginBottom: "15px", display: "flex", alignItems: "center", gap: 6 }}>
+                    <span style={{ color: "#15803d" }}>✓</span> Ya tienes credenciales guardadas — los campos están vacíos por seguridad, solo complétalos si quieres reemplazarlas.
+                  </div>
+                )}
                 {cloudinaryInfo?.hasConfig && !cloudinaryInfo?.verificado && cloudinaryInfo?.mensaje && (
                   <div style={{ background: "#FEF2F2", border: "1px solid #FCA5A5", borderRadius: 10, padding: "10px 14px", fontSize: 12, color: "#991B1B", marginBottom: 16, lineHeight: 1.5 }}>
                     {cloudinaryInfo.mensaje}
@@ -1053,8 +1164,11 @@ export default function Home() {
               {/* --- Modal Meta Ads --- */}
               <ModalIntegracion abierto={modalAbierto === "meta"} onCerrar={() => setModalAbierto(null)}>
                 <EncabezadoIntegracion
-                  logoSrc="https://cdn.simpleicons.org/meta"
-                  logoFondo="#EAF2FF"
+                  logos={
+                    <CajaLogo fondo="#EAF2FF">
+                      <LogoMarca marca="meta" nombre="Meta" tamano={30} />
+                    </CajaLogo>
+                  }
                   nombre="Meta Ads"
                   descripcion="Publica tus campañas directo en Facebook e Instagram."
                   conectado={!!metaInfo?.conectado}
@@ -1065,10 +1179,10 @@ export default function Home() {
                   extra={
                     <div style={{ display: "flex", justifyContent: "center", gap: 8, marginBottom: 6 }}>
                       <span style={{ display: "inline-flex", alignItems: "center", gap: 5, background: "#EFF6FF", color: "#1877F2", fontSize: 11, fontWeight: 600, padding: "3px 9px 3px 7px", borderRadius: 999 }}>
-                        <img src="https://cdn.simpleicons.org/facebook" width={12} height={12} alt="" /> Facebook
+                        <LogoMarca marca="facebook" nombre="Facebook" tamano={12} /> Facebook
                       </span>
                       <span style={{ display: "inline-flex", alignItems: "center", gap: 5, background: "#FDF2F8", color: "#C13584", fontSize: 11, fontWeight: 600, padding: "3px 9px 3px 7px", borderRadius: 999 }}>
-                        <img src="https://cdn.simpleicons.org/instagram" width={12} height={12} alt="" /> Instagram
+                        <LogoMarca marca="instagram" nombre="Instagram" tamano={12} /> Instagram
                       </span>
                     </div>
                   }
