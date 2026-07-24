@@ -2,7 +2,7 @@
 import { useState, useEffect, useRef } from "react";
 import { useSession, signOut } from "next-auth/react";
 import { useRouter } from "next/navigation";
-import { ExternalLink, Globe } from "lucide-react";
+import { ExternalLink, Globe, Dna } from "lucide-react";
 import HomeInicio from "@/app/components/HomeInicio";
 import TutorialVideo from "@/app/components/TutorialVideo";
 import TourGuiado from "@/app/components/TourGuiado";
@@ -615,7 +615,7 @@ export default function Home() {
         </div>
 
         <a href="/marca" className="qb-nav-item">
-          <span className="qb-nav-icon"><Icono><path d="M20.59 13.41L11 3.83A2 2 0 009.57 3H4a1 1 0 00-1 1v5.57a2 2 0 00.59 1.41l9.58 9.59a2 2 0 002.83 0l4.59-4.59a2 2 0 000-2.83z" /><circle cx="7.5" cy="7.5" r="1.2" /></Icono></span>
+          <span className="qb-nav-icon"><Dna size={17} strokeWidth={2} /></span>
           <span className="qb-nav-label">Mi marca</span>
           <span className="qb-tooltip">Mi marca</span>
         </a>
