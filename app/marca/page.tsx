@@ -1,6 +1,6 @@
 "use client";
 import { useState, useRef, useEffect } from "react";
-import { Upload, X, Check, Sparkles } from "lucide-react";
+import { Upload, X, Check, Sparkles, Loader2 } from "lucide-react";
 import EscenaParticulasADN3D from "@/app/components/EscenaParticulasADN3D";
 
 const MIN_IMAGENES = 3;
@@ -166,6 +166,24 @@ export default function MarcaPage() {
   const [faseAnimacion, setFaseAnimacion] = useState(-1);
   const [errorMsg, setErrorMsg] = useState<string | null>(null);
   const [nodoSeleccionado, setNodoSeleccionado] = useState<number | null>(null);
+  const [puntosSuspensivos, setPuntosSuspensivos] = useState(".");
+
+  // Todas las categorías ya quedaron marcadas, pero el backend puede seguir
+  // trabajando varios segundos más (la API real no termina exactamente
+  // cuando termina la animación de 750ms por categoría). Sin esto, el
+  // checklist se ve "congelado" en ese tramo — psicológicamente da la
+  // sensación de que el sistema se colgó, no de que sigue trabajando.
+  // Ciclamos los puntos suspensivos como único indicador que sigue vivo.
+  useEffect(() => {
+    if (!analizando || faseAnimacion < CATEGORIAS.length) return;
+    const secuencia = [".", "..", "..."];
+    let i = 0;
+    const id = setInterval(() => {
+      i = (i + 1) % secuencia.length;
+      setPuntosSuspensivos(secuencia[i]);
+    }, 450);
+    return () => clearInterval(id);
+  }, [analizando, faseAnimacion]);
 
   useEffect(() => {
     fetch("/api/marca-adn")
@@ -412,14 +430,25 @@ export default function MarcaPage() {
               <div style={{ flex: "1 1 320px", minWidth: 280, maxWidth: 420, alignSelf: "center" }}>
                 {analizando && (
                   <div>
-                    <div style={{ fontFamily: "ui-monospace, monospace", fontSize: 11, color: COLOR_ACTIVO, textTransform: "uppercase", letterSpacing: 0.5, marginBottom: 16 }}>
-                      {faseAnimacion < CATEGORIAS.length ? "Analizando tu ADN de marca" : "Sintetizando el ADN completo..."}
+                    <div style={{ display: "flex", alignItems: "center", gap: 7, marginBottom: 16 }}>
+                      {faseAnimacion >= CATEGORIAS.length && (
+                        <Loader2 size={12} color={COLOR_ACTIVO} strokeWidth={2.5} className="adn-spin" />
+                      )}
+                      <span style={{ fontFamily: "ui-monospace, monospace", fontSize: 11, color: COLOR_ACTIVO, textTransform: "uppercase", letterSpacing: 0.5 }}>
+                        {faseAnimacion < CATEGORIAS.length
+                          ? "Analizando tu ADN de marca"
+                          : `Sintetizando el ADN completo${puntosSuspensivos}`}
+                      </span>
                     </div>
-                    <div style={{ display: "flex", flexDirection: "column", gap: 11, marginBottom: 18 }}>
+                    <div
+                      className={faseAnimacion >= CATEGORIAS.length ? "adn-checklist-vivo" : undefined}
+                      style={{ display: "flex", flexDirection: "column", gap: 11, marginBottom: 18, borderRadius: 14 }}
+                    >
                       {CATEGORIAS.map((cat, i) => {
                         const completada = i < faseAnimacion || faseAnimacion >= CATEGORIAS.length;
                         const actual = i === faseAnimacion && faseAnimacion < CATEGORIAS.length;
                         const visible = completada || actual;
+                        const sintetizando = faseAnimacion >= CATEGORIAS.length;
                         return (
                           <div
                             key={cat.key}
@@ -437,6 +466,7 @@ export default function MarcaPage() {
                                 background: completada ? COLOR_ACTIVO : "#fff",
                                 border: `1.5px solid ${visible ? COLOR_ACTIVO : "#ddd"}`,
                                 transition: "background .3s ease, border-color .3s ease",
+                                animation: sintetizando ? `adn-ola 2.4s ease-in-out ${i * 0.12}s infinite` : undefined,
                               }}
                             >
                               {completada && <Check size={11} color="#fff" strokeWidth={3} />}
@@ -515,6 +545,25 @@ export default function MarcaPage() {
 
       <style>{`
         @keyframes adn-pulse { 0%, 100% { opacity: 1; } 50% { opacity: .3; } }
+
+        /* Spinner del ícono junto a "Sintetizando el ADN completo..." */
+        @keyframes adn-spin { to { transform: rotate(360deg); } }
+        .adn-spin { animation: adn-spin 0.9s linear infinite; }
+
+        /* Brillo que respira alrededor del checklist ya completo — la
+           señal principal de "sigue trabajando", sin volver a mover ni
+           re-marcar ningún ítem (eso ya está confirmado y no debe dar
+           marcha atrás visualmente). */
+        @keyframes adn-respirar {
+          0%, 100% { box-shadow: 0 0 0 0 rgba(83,74,183,0); }
+          50% { box-shadow: 0 0 28px 6px rgba(83,74,183,0.14); }
+        }
+        .adn-checklist-vivo { animation: adn-respirar 2.6s ease-in-out infinite; }
+
+        /* Ola muy sutil que recorre los círculos ya marcados, uno tras
+           otro (delay escalonado por índice) — da sensación de revisión
+           continua sin sugerir que algo quedó incompleto. */
+        @keyframes adn-ola { 0%, 100% { opacity: 1; } 50% { opacity: .55; } }
 
         /* Lado a lado siempre que haya espacio: la hélice/animación a un
            lado, el texto al otro, sin que el texto se caiga hacia abajo.
