@@ -42,8 +42,15 @@ export default function EscenaParticulasADN3D({ faseActual }: Props) {
 
   useEffect(() => {
     let renderer: any;
+    let camera: any;
     let cancelado = false;
     let rafId: number;
+    let resizeObserver: ResizeObserver | null = null;
+
+    // Radio y altura reales de la hélice, usados tanto para construir la
+    // geometría como para calcular cuánto hay que alejar la cámara.
+    const radio = 1.4;
+    const altura = 9;
 
     async function iniciar() {
       // Carga diferida: Three.js solo se descarga cuando este componente
@@ -53,24 +60,22 @@ export default function EscenaParticulasADN3D({ faseActual }: Props) {
       if (cancelado || !contenedorRef.current) return;
 
       const contenedor = contenedorRef.current;
-      const ancho = contenedor.clientWidth || 320;
-      const alto = contenedor.clientHeight || 440;
 
       const scene = new THREE.Scene();
-      const camera = new THREE.PerspectiveCamera(45, ancho / alto, 0.1, 100);
+      camera = new THREE.PerspectiveCamera(45, 1, 0.1, 100);
       renderer = new THREE.WebGLRenderer({ antialias: true, alpha: true });
-      renderer.setSize(ancho, alto);
       renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
       contenedor.innerHTML = "";
       contenedor.appendChild(renderer.domElement);
+      renderer.domElement.style.width = "100%";
+      renderer.domElement.style.height = "100%";
+      renderer.domElement.style.display = "block";
 
       scene.add(new THREE.AmbientLight(0xffffff, 0.75));
       const luz = new THREE.PointLight(0xffffff, 0.9, 30);
       luz.position.set(4, 4, 6);
       scene.add(luz);
 
-      const radio = 1.4;
-      const altura = 9;
       const segmentos = 220;
 
       function construirHebra(fase: number) {
@@ -182,7 +187,43 @@ export default function EscenaParticulasADN3D({ faseActual }: Props) {
         }
       };
 
-      camera.position.set(0, 0, 6.2);
+      // --- Encuadre dinámico de cámara -------------------------------
+      // En vez de una distancia fija (que se corta en cualquier tamaño
+      // de pantalla distinto al que se probó), calculamos la distancia
+      // mínima necesaria para que TODA la hélice (radio + altura) quepa
+      // dentro del frustum de la cámara, tanto en el eje vertical como
+      // en el horizontal (que depende del aspect ratio del contenedor).
+      const MARGEN = 1.18; // aire extra alrededor de la hélice, evita que toque los bordes
+      let distanciaActual = 6.2;
+
+      function distanciaParaEncuadrar(ancho: number, alto: number) {
+        const aspect = Math.max(ancho / Math.max(alto, 1), 0.0001);
+        const vFov = (camera.fov * Math.PI) / 180;
+
+        // Media altura visible = altura de la hélice/2 (+halo) * margen
+        const mitadAlturaObjetivo = (altura / 2 + 0.3) * MARGEN;
+        const distV = mitadAlturaObjetivo / Math.tan(vFov / 2);
+
+        // Media anchura visible = radio de la hélice (+halo) * margen
+        const hFov = 2 * Math.atan(Math.tan(vFov / 2) * aspect);
+        const mitadAnchoObjetivo = (radio + 0.3) * MARGEN;
+        const distH = mitadAnchoObjetivo / Math.tan(hFov / 2);
+
+        return Math.max(distV, distH);
+      }
+
+      function ajustarTamano() {
+        const ancho = contenedor.clientWidth || 320;
+        const alto = contenedor.clientHeight || 440;
+        camera.aspect = ancho / Math.max(alto, 1);
+        distanciaActual = distanciaParaEncuadrar(ancho, alto);
+        camera.updateProjectionMatrix();
+        renderer.setSize(ancho, alto);
+      }
+
+      ajustarTamano();
+      resizeObserver = new ResizeObserver(() => ajustarTamano());
+      resizeObserver.observe(contenedor);
 
       let inicio = performance.now();
 
@@ -191,9 +232,9 @@ export default function EscenaParticulasADN3D({ faseActual }: Props) {
         const dt = ahora - inicio;
 
         const anguloCam = dt * 0.00025;
-        camera.position.x = Math.sin(anguloCam) * 6.2;
-        camera.position.z = Math.cos(anguloCam) * 6.2;
-        camera.position.y = Math.sin(dt * 0.0001) * 1.0;
+        camera.position.x = Math.sin(anguloCam) * distanciaActual;
+        camera.position.z = Math.cos(anguloCam) * distanciaActual;
+        camera.position.y = Math.sin(dt * 0.0001) * (distanciaActual * 0.16);
         camera.lookAt(0, 0, 0);
 
         const posAmb = ambientGeo.attributes.position.array as Float32Array;
@@ -239,11 +280,17 @@ export default function EscenaParticulasADN3D({ faseActual }: Props) {
     return () => {
       cancelado = true;
       if (rafId) cancelAnimationFrame(rafId);
+      if (resizeObserver) resizeObserver.disconnect();
       if (renderer) {
         renderer.dispose();
       }
     };
   }, []);
 
-  return <div ref={contenedorRef} style={{ width: "100%", maxWidth: 720, height: "min(62vh, 480px)", margin: "0 auto" }} />;
+  // Sin altura tope en vh/px: el componente ahora ocupa el 100% del alto
+  // y ancho que le dé su contenedor padre. Si en la página sigue viéndose
+  // corto, hay que darle a ESE contenedor padre un alto real (por ejemplo
+  // `h-full` o `flex-1` dentro de un layout con `h-screen`/`h-[calc(100vh-Npx)]`),
+  // porque un div sin altura definida por CSS colapsa a la altura de su contenido.
+  return <div ref={contenedorRef} style={{ width: "100%", height: "100%" }} />;
 }
