@@ -357,14 +357,25 @@ export default function MarcaPage() {
       )}
 
       {construyendoOListo && (
-        <div style={{ position: "relative", flex: 1, overflow: "auto", display: "flex", alignItems: "center", justifyContent: "center", padding: "2rem 1.5rem" }}>
+        // OJO: alignItems pasó de "center" a "stretch" en toda esta cadena
+        // (fila principal -> fila de 1200px -> fila interna) para que la
+        // altura real disponible (flex:1 de la columna raíz) llegue hasta
+        // el wrapper de la escena 3D. Con "center" los hijos solo tomaban
+        // el alto de su contenido y la escena se quedaba pequeña/cortada.
+        // Los minHeight:0 evitan el bug clásico de flexbox donde un item
+        // con contenido "alto" (el canvas) empuja a sus padres a crecer
+        // más allá del alto disponible en vez de recibir el alto que le
+        // corresponde.
+        <div style={{ position: "relative", flex: 1, minHeight: 0, overflow: "auto", display: "flex", alignItems: "center", justifyContent: "center", padding: "2rem 1.5rem" }}>
           <GlowAmbienteADN />
-          <div style={{ position: "relative", zIndex: 1, maxWidth: 1200, width: "100%", display: "flex", gap: 40, alignItems: "center", flexWrap: "wrap", justifyContent: "center" }}>
-            <div style={{ display: "flex", gap: 40, alignItems: "center", flexWrap: "wrap", justifyContent: "center", width: "100%" }}>
+          <div style={{ position: "relative", zIndex: 1, maxWidth: 1200, width: "100%", minHeight: 0, display: "flex", gap: 40, alignItems: "center", justifyContent: "center" }}>
+            <div className="adn-fila-visual" style={{ display: "flex", gap: 40, alignItems: "center", justifyContent: "center", width: "100%", minHeight: 0 }}>
               {analizando ? (
-                <EscenaParticulasADN3D faseActual={faseAnimacion} />
+                <div className="adn-anim-wrap" style={{ flex: "0 1 480px", minWidth: 300 }}>
+                  <EscenaParticulasADN3D faseActual={faseAnimacion} />
+                </div>
               ) : (
-                <svg width="100%" viewBox="0 0 220 440" style={{ flexShrink: 0, maxWidth: 240, height: "auto", margin: "0 auto", display: "block" }}>
+                <svg width="100%" viewBox="0 0 220 440" style={{ flexShrink: 0, maxWidth: 240, height: "auto", margin: "0 auto", alignSelf: "center", display: "block" }}>
                   <defs>
                     <filter id="glowADN" x="-60%" y="-60%" width="220%" height="220%">
                       <feGaussianBlur stdDeviation="4" result="blur" />
@@ -398,16 +409,47 @@ export default function MarcaPage() {
                 </svg>
               )}
 
-              <div style={{ flex: "1 1 320px", minWidth: 280, maxWidth: 420 }}>
+              <div style={{ flex: "1 1 320px", minWidth: 280, maxWidth: 420, alignSelf: "center" }}>
                 {analizando && (
                   <div>
-                    <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 6 }}>
-                      <span style={{ width: 7, height: 7, borderRadius: "50%", background: COLOR_CLARO, animation: "adn-pulse 1s ease-in-out infinite" }} />
-                      <span style={{ fontFamily: "ui-monospace, monospace", fontSize: 11, color: COLOR_ACTIVO }}>
-                        {faseAnimacion < CATEGORIAS.length
-                          ? `Analizando ${CATEGORIAS[Math.min(faseAnimacion, CATEGORIAS.length - 1)].titulo.toLowerCase()}...`
-                          : "Sintetizando el ADN completo..."}
-                      </span>
+                    <div style={{ fontFamily: "ui-monospace, monospace", fontSize: 11, color: COLOR_ACTIVO, textTransform: "uppercase", letterSpacing: 0.5, marginBottom: 16 }}>
+                      {faseAnimacion < CATEGORIAS.length ? "Analizando tu ADN de marca" : "Sintetizando el ADN completo..."}
+                    </div>
+                    <div style={{ display: "flex", flexDirection: "column", gap: 11, marginBottom: 18 }}>
+                      {CATEGORIAS.map((cat, i) => {
+                        const completada = i < faseAnimacion || faseAnimacion >= CATEGORIAS.length;
+                        const actual = i === faseAnimacion && faseAnimacion < CATEGORIAS.length;
+                        const visible = completada || actual;
+                        return (
+                          <div
+                            key={cat.key}
+                            style={{
+                              display: "flex", alignItems: "center", gap: 10,
+                              opacity: visible ? 1 : 0.3,
+                              transform: visible ? "translateX(0)" : "translateX(-8px)",
+                              transition: "opacity .45s ease, transform .45s ease",
+                            }}
+                          >
+                            <span
+                              style={{
+                                width: 18, height: 18, borderRadius: "50%", flexShrink: 0,
+                                display: "flex", alignItems: "center", justifyContent: "center",
+                                background: completada ? COLOR_ACTIVO : "#fff",
+                                border: `1.5px solid ${visible ? COLOR_ACTIVO : "#ddd"}`,
+                                transition: "background .3s ease, border-color .3s ease",
+                              }}
+                            >
+                              {completada && <Check size={11} color="#fff" strokeWidth={3} />}
+                              {actual && (
+                                <span style={{ width: 6, height: 6, borderRadius: "50%", background: COLOR_ACTIVO, animation: "adn-pulse 1s ease-in-out infinite" }} />
+                              )}
+                            </span>
+                            <span style={{ fontSize: 13, color: completada ? "#1a1a1a" : actual ? COLOR_ACTIVO : "#999", fontWeight: actual ? 600 : 500 }}>
+                              {cat.titulo}
+                            </span>
+                          </div>
+                        );
+                      })}
                     </div>
                     <p style={{ fontSize: 13, color: "#999" }}>Esto puede tardar unos segundos. No cierres esta pestaña.</p>
                   </div>
@@ -473,6 +515,22 @@ export default function MarcaPage() {
 
       <style>{`
         @keyframes adn-pulse { 0%, 100% { opacity: 1; } 50% { opacity: .3; } }
+
+        /* Lado a lado siempre que haya espacio: la hélice/animación a un
+           lado, el texto al otro, sin que el texto se caiga hacia abajo.
+           Solo en pantallas angostas (celular/tablet) se permite apilar. */
+        .adn-fila-visual { flex-wrap: nowrap; }
+        @media (max-width: 860px) {
+          .adn-fila-visual { flex-wrap: wrap; }
+        }
+
+        /* Altura fija (en vh, con techo) en vez de "estirarse hasta donde
+           alcance" — así la fila completa siempre cabe en el viewport sin
+           forzar scroll, sin importar el alto de la ventana. */
+        .adn-anim-wrap { height: min(58vh, 520px); }
+        @media (max-width: 860px) {
+          .adn-anim-wrap { height: 42vh; }
+        }
       `}</style>
     </div>
   );
