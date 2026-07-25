@@ -43,8 +43,11 @@ export default function EsperaCreativos({ completados, total, creativosListos }:
             <span>{completados} de {total} anuncios listos</span>
             <span>{porcentaje}%</span>
           </div>
-          <div style={{ height: 8, borderRadius: 4, background: "#f0f0f0", overflow: "hidden" }}>
+          <div style={{ height: 8, borderRadius: 4, background: "#f0f0f0", overflow: "hidden", position: "relative" }}>
             <div style={{ height: "100%", width: `${porcentaje}%`, background: "#534AB7", borderRadius: 4, transition: "width .6s ease" }} />
+            {completados === 0 && (
+              <div className="espera-shimmer" style={{ position: "absolute", top: 0, left: 0, height: "100%", width: "40%", background: "linear-gradient(90deg, transparent, rgba(83,74,183,0.35), transparent)" }} />
+            )}
           </div>
         </div>
       ) : (
@@ -87,6 +90,8 @@ export default function EsperaCreativos({ completados, total, creativosListos }:
         @keyframes espera-sparkle-pulse { 0%, 100% { opacity: 1; transform: scale(1); } 50% { opacity: .6; transform: scale(1.08); } }
         .espera-sparkle { animation: espera-sparkle-pulse 1.8s ease-in-out infinite; }
         @keyframes espera-aparecer { from { opacity: 0; transform: scale(.85); } to { opacity: 1; transform: scale(1); } }
+        @keyframes espera-shimmer-mover { from { left: -40%; } to { left: 100%; } }
+        .espera-shimmer { animation: espera-shimmer-mover 1.3s ease-in-out infinite; }
       `}</style>
     </div>
   );
