@@ -5,6 +5,7 @@ import { ShoppingBag, Target, Camera, Sparkles, Check, Shirt, Smartphone, Utensi
 import AdBlueprintExplorer from "@/app/components/AdBlueprintExplorer";
 import TutorialVideo from "@/app/components/TutorialVideo";
 import TourGuiado from "@/app/components/TourGuiado";
+import ProgresoPasos from "@/app/components/ProgresoPasos";
 
 function IconoWhatsApp() {
   return (
@@ -1092,11 +1093,18 @@ function EstrategiaContent() {
               )}
             </div>
             {cargandoEstrategia && (
-              <div style={{ display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", padding: "3rem" }}>
-                <div className="spinner-estrategia"></div>
-                <p style={{ marginTop: "1rem", color: "#534AB7", fontWeight: 600 }}>Diseñando tu estrategia con IA...</p>
-                <p style={{ marginTop: 4, color: "#999", fontSize: 12 }}>Esto puede tardar hasta 30 segundos</p>
-              </div>
+              <ProgresoPasos
+                activo={cargandoEstrategia}
+                duracionEstimadaMs={24000}
+                tituloEnCurso="Diseñando tu estrategia"
+                pasos={[
+                  "Leyendo tu producto y tu marca",
+                  "Aplicando las reglas del playbook de Meta Ads",
+                  "Diseñando la segmentación de público",
+                  "Redactando el copy de cada anuncio",
+                  "Calculando la efectividad estimada",
+                ]}
+              />
             )}
             {!cargandoEstrategia && (
               <div style={{ display: "flex", gap: 10 }}>
@@ -1262,11 +1270,18 @@ function EstrategiaContent() {
             </div>
 
             {cargandoCreativos && (
-              <div style={{ display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", padding: "3rem" }}>
-                <div className="spinner-estrategia"></div>
-                <p style={{ marginTop: "1rem", color: "#534AB7", fontWeight: 600 }}>Generando creativos e imágenes...</p>
-                <p style={{ marginTop: 4, color: "#999", fontSize: 12 }}>Esto puede tardar varios minutos — estamos planificando, generando y auditando cada imagen. No cierres esta pestaña.</p>
-              </div>
+              <ProgresoPasos
+                activo={cargandoCreativos}
+                duracionEstimadaMs={70000}
+                tituloEnCurso="Generando tus creativos"
+                nota="Esto puede tardar varios minutos — no cierres esta pestaña. Si sales, te avisamos por notificación cuando estén listos."
+                pasos={[
+                  "Planificando el concepto de cada anuncio",
+                  "Generando las imágenes con IA",
+                  "Verificando que tu marca y tu logo se vean bien",
+                  "Subiendo todo a tu álbum",
+                ]}
+              />
             )}
 
             {!cargandoCreativos && creativos && creativos.length === 0 && (
@@ -1338,9 +1353,23 @@ function EstrategiaContent() {
                 </div>
 
                 <div style={{ marginTop: 24 }}>
-                  <button onClick={handlePublicarEnMeta} disabled={publicando || publicado || algunaRegenerando} style={{ width: "100%", background: publicado ? "#10b981" : (publicando || algunaRegenerando) ? "#aaa" : "#534AB7", color: "#fff", border: "none", padding: 16, borderRadius: 10, fontSize: 16, fontWeight: 600, cursor: (publicando || publicado || algunaRegenerando) ? "not-allowed" : "pointer" }}>
-                    {publicado ? "✅ Campaña publicada en Meta" : publicando ? "📤 Publicando en Meta..." : algunaRegenerando ? "⏳ Espera a que termine la regeneración" : "📤 Publicar estrategia en Meta"}
-                  </button>
+                  {publicando ? (
+                    <ProgresoPasos
+                      activo={publicando}
+                      duracionEstimadaMs={16000}
+                      tituloEnCurso="Publicando tu campaña"
+                      pasos={[
+                        "Creando la campaña en Meta",
+                        "Armando los conjuntos de anuncios",
+                        "Subiendo tus creativos",
+                        "Activando los anuncios",
+                      ]}
+                    />
+                  ) : (
+                    <button onClick={handlePublicarEnMeta} disabled={publicado || algunaRegenerando} style={{ width: "100%", background: publicado ? "#10b981" : algunaRegenerando ? "#aaa" : "#534AB7", color: "#fff", border: "none", padding: 16, borderRadius: 10, fontSize: 16, fontWeight: 600, cursor: (publicado || algunaRegenerando) ? "not-allowed" : "pointer" }}>
+                      {publicado ? "✅ Campaña publicada en Meta" : algunaRegenerando ? "⏳ Espera a que termine la regeneración" : "📤 Publicar estrategia en Meta"}
+                    </button>
+                  )}
                   {errorMsg && <ErrorConAccion mensaje={errorMsg} />}
                 </div>
               </div>
