@@ -6,6 +6,7 @@ import AdBlueprintExplorer from "@/app/components/AdBlueprintExplorer";
 import TutorialVideo from "@/app/components/TutorialVideo";
 import TourGuiado from "@/app/components/TourGuiado";
 import ProgresoPasos from "@/app/components/ProgresoPasos";
+import EsperaCreativos from "@/app/components/EsperaCreativos";
 
 function IconoWhatsApp() {
   return (
@@ -77,11 +78,26 @@ function fileToBase64(file: File): Promise<string> {
 // Consulta /api/creativos-jobs/[id] cada 5s hasta que el job quede "listo" o "error".
 // Se usa tanto para generar todos los creativos como para regenerar uno solo,
 // y también para retomar un job desde el link de una notificación.
-async function pollJobHasta(jobId: string, maxMs = 10 * 60 * 1000): Promise<any[]> {
+// El proceso real puede tardar entre segundos y ~15 minutos según cuántos
+// anuncios haya que generar, así que onProgress reporta el avance real
+// (cuántos anuncios ya están listos, de cuántos en total) en cada consulta,
+// en vez de simular un tiempo fijo.
+type ProgresoJob = { creativos: any[]; total_creativos: number | null; estado: string };
+
+async function pollJobHasta(
+  jobId: string,
+  onProgress?: (data: ProgresoJob) => void,
+  maxMs = 20 * 60 * 1000
+): Promise<any[]> {
   const inicio = Date.now();
   while (Date.now() - inicio < maxMs) {
     const res = await fetch(`/api/creativos-jobs/${jobId}`);
     const data = await res.json().catch(() => ({}));
+    onProgress?.({
+      creativos: data.creativos || [],
+      total_creativos: data.total_creativos ?? null,
+      estado: data.estado,
+    });
     if (data.estado === "listo") {
       return data.creativos || [];
     }
@@ -434,6 +450,11 @@ function EstrategiaContent() {
   const [descripcionVisual, setDescripcionVisual] = useState<string>("");
   const [imagenBase64Persistida, setImagenBase64Persistida] = useState<string | null>(null);
   const [creativos, setCreativos] = useState<any[] | null>(null);
+  const [progresoCreativos, setProgresoCreativos] = useState<{ completados: number; total: number | null; parciales: any[] }>({
+    completados: 0,
+    total: null,
+    parciales: [],
+  });
   const [regenerandoIndices, setRegenerandoIndices] = useState<Record<number, boolean>>({});
   const [imagenAmpliada, setImagenAmpliada] = useState<string | null>(null);
 
@@ -479,7 +500,7 @@ function EstrategiaContent() {
     setStep("creativos");
     setErrorMsg(null);
 
-    pollJobHasta(jobId)
+    pollJobHasta(jobId, (p) => setProgresoCreativos({ completados: p.creativos.length, total: p.total_creativos, parciales: p.creativos }))
       .then((creativosListos) => {
         localStorage.removeItem("quiubot_job_creativos_activo");
 
@@ -590,6 +611,7 @@ function EstrategiaContent() {
     setCargandoCreativos(true);
     setStep("creativos");
     setErrorMsg(null);
+    setProgresoCreativos({ completados: 0, total: null, parciales: [] });
     // Un lote completo nuevo nunca es una regeneración parcial — limpiamos cualquier
     // marca vieja de "regenerando el índice X" que pudiera haber quedado de antes.
     localStorage.removeItem("quiubot_creativos_lote");
@@ -620,7 +642,9 @@ function EstrategiaContent() {
         return;
       }
       localStorage.setItem("quiubot_job_creativos_activo", data.job_id);
-      const creativosListos = await pollJobHasta(data.job_id);
+      const creativosListos = await pollJobHasta(data.job_id, (p) =>
+        setProgresoCreativos({ completados: p.creativos.length, total: p.total_creativos, parciales: p.creativos })
+      );
       localStorage.removeItem("quiubot_job_creativos_activo");
       setCreativos(creativosListos);
     } catch (e: any) {
@@ -1270,17 +1294,10 @@ function EstrategiaContent() {
             </div>
 
             {cargandoCreativos && (
-              <ProgresoPasos
-                activo={cargandoCreativos}
-                duracionEstimadaMs={70000}
-                tituloEnCurso="Generando tus creativos"
-                nota="Esto puede tardar varios minutos — no cierres esta pestaña. Si sales, te avisamos por notificación cuando estén listos."
-                pasos={[
-                  "Planificando el concepto de cada anuncio",
-                  "Generando las imágenes con IA",
-                  "Verificando que tu marca y tu logo se vean bien",
-                  "Subiendo todo a tu álbum",
-                ]}
+              <EsperaCreativos
+                completados={progresoCreativos.completados}
+                total={progresoCreativos.total}
+                creativosListos={progresoCreativos.parciales}
               />
             )}
 
