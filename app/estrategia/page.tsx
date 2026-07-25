@@ -5,6 +5,8 @@ import { ShoppingBag, Target, Camera, Sparkles, Check, Shirt, Smartphone, Utensi
 import AdBlueprintExplorer from "@/app/components/AdBlueprintExplorer";
 import TutorialVideo from "@/app/components/TutorialVideo";
 import TourGuiado from "@/app/components/TourGuiado";
+import ProgresoPasos from "@/app/components/ProgresoPasos";
+import EsperaCreativos from "@/app/components/EsperaCreativos";
 
 function IconoWhatsApp() {
   return (
@@ -76,11 +78,26 @@ function fileToBase64(file: File): Promise<string> {
 // Consulta /api/creativos-jobs/[id] cada 5s hasta que el job quede "listo" o "error".
 // Se usa tanto para generar todos los creativos como para regenerar uno solo,
 // y también para retomar un job desde el link de una notificación.
-async function pollJobHasta(jobId: string, maxMs = 10 * 60 * 1000): Promise<any[]> {
+// El proceso real puede tardar entre segundos y ~15 minutos según cuántos
+// anuncios haya que generar, así que onProgress reporta el avance real
+// (cuántos anuncios ya están listos, de cuántos en total) en cada consulta,
+// en vez de simular un tiempo fijo.
+type ProgresoJob = { creativos: any[]; total_creativos: number | null; estado: string };
+
+async function pollJobHasta(
+  jobId: string,
+  onProgress?: (data: ProgresoJob) => void,
+  maxMs = 20 * 60 * 1000
+): Promise<any[]> {
   const inicio = Date.now();
   while (Date.now() - inicio < maxMs) {
     const res = await fetch(`/api/creativos-jobs/${jobId}`);
     const data = await res.json().catch(() => ({}));
+    onProgress?.({
+      creativos: data.creativos || [],
+      total_creativos: data.total_creativos ?? null,
+      estado: data.estado,
+    });
     if (data.estado === "listo") {
       return data.creativos || [];
     }
@@ -433,6 +450,11 @@ function EstrategiaContent() {
   const [descripcionVisual, setDescripcionVisual] = useState<string>("");
   const [imagenBase64Persistida, setImagenBase64Persistida] = useState<string | null>(null);
   const [creativos, setCreativos] = useState<any[] | null>(null);
+  const [progresoCreativos, setProgresoCreativos] = useState<{ completados: number; total: number | null; parciales: any[] }>({
+    completados: 0,
+    total: null,
+    parciales: [],
+  });
   const [regenerandoIndices, setRegenerandoIndices] = useState<Record<number, boolean>>({});
   const [imagenAmpliada, setImagenAmpliada] = useState<string | null>(null);
 
@@ -478,7 +500,7 @@ function EstrategiaContent() {
     setStep("creativos");
     setErrorMsg(null);
 
-    pollJobHasta(jobId)
+    pollJobHasta(jobId, (p) => setProgresoCreativos({ completados: p.creativos.length, total: p.total_creativos, parciales: p.creativos }))
       .then((creativosListos) => {
         localStorage.removeItem("quiubot_job_creativos_activo");
 
@@ -589,6 +611,7 @@ function EstrategiaContent() {
     setCargandoCreativos(true);
     setStep("creativos");
     setErrorMsg(null);
+    setProgresoCreativos({ completados: 0, total: null, parciales: [] });
     // Un lote completo nuevo nunca es una regeneración parcial — limpiamos cualquier
     // marca vieja de "regenerando el índice X" que pudiera haber quedado de antes.
     localStorage.removeItem("quiubot_creativos_lote");
@@ -619,7 +642,9 @@ function EstrategiaContent() {
         return;
       }
       localStorage.setItem("quiubot_job_creativos_activo", data.job_id);
-      const creativosListos = await pollJobHasta(data.job_id);
+      const creativosListos = await pollJobHasta(data.job_id, (p) =>
+        setProgresoCreativos({ completados: p.creativos.length, total: p.total_creativos, parciales: p.creativos })
+      );
       localStorage.removeItem("quiubot_job_creativos_activo");
       setCreativos(creativosListos);
     } catch (e: any) {
@@ -1092,11 +1117,18 @@ function EstrategiaContent() {
               )}
             </div>
             {cargandoEstrategia && (
-              <div style={{ display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", padding: "3rem" }}>
-                <div className="spinner-estrategia"></div>
-                <p style={{ marginTop: "1rem", color: "#534AB7", fontWeight: 600 }}>Diseñando tu estrategia con IA...</p>
-                <p style={{ marginTop: 4, color: "#999", fontSize: 12 }}>Esto puede tardar hasta 30 segundos</p>
-              </div>
+              <ProgresoPasos
+                activo={cargandoEstrategia}
+                duracionEstimadaMs={24000}
+                tituloEnCurso="Diseñando tu estrategia"
+                pasos={[
+                  "Leyendo tu producto y tu marca",
+                  "Aplicando las reglas del playbook de Meta Ads",
+                  "Diseñando la segmentación de público",
+                  "Redactando el copy de cada anuncio",
+                  "Calculando la efectividad estimada",
+                ]}
+              />
             )}
             {!cargandoEstrategia && (
               <div style={{ display: "flex", gap: 10 }}>
@@ -1262,11 +1294,11 @@ function EstrategiaContent() {
             </div>
 
             {cargandoCreativos && (
-              <div style={{ display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", padding: "3rem" }}>
-                <div className="spinner-estrategia"></div>
-                <p style={{ marginTop: "1rem", color: "#534AB7", fontWeight: 600 }}>Generando creativos e imágenes...</p>
-                <p style={{ marginTop: 4, color: "#999", fontSize: 12 }}>Esto puede tardar varios minutos — estamos planificando, generando y auditando cada imagen. No cierres esta pestaña.</p>
-              </div>
+              <EsperaCreativos
+                completados={progresoCreativos.completados}
+                total={progresoCreativos.total}
+                creativosListos={progresoCreativos.parciales}
+              />
             )}
 
             {!cargandoCreativos && creativos && creativos.length === 0 && (
@@ -1338,9 +1370,23 @@ function EstrategiaContent() {
                 </div>
 
                 <div style={{ marginTop: 24 }}>
-                  <button onClick={handlePublicarEnMeta} disabled={publicando || publicado || algunaRegenerando} style={{ width: "100%", background: publicado ? "#10b981" : (publicando || algunaRegenerando) ? "#aaa" : "#534AB7", color: "#fff", border: "none", padding: 16, borderRadius: 10, fontSize: 16, fontWeight: 600, cursor: (publicando || publicado || algunaRegenerando) ? "not-allowed" : "pointer" }}>
-                    {publicado ? "✅ Campaña publicada en Meta" : publicando ? "📤 Publicando en Meta..." : algunaRegenerando ? "⏳ Espera a que termine la regeneración" : "📤 Publicar estrategia en Meta"}
-                  </button>
+                  {publicando ? (
+                    <ProgresoPasos
+                      activo={publicando}
+                      duracionEstimadaMs={16000}
+                      tituloEnCurso="Publicando tu campaña"
+                      pasos={[
+                        "Creando la campaña en Meta",
+                        "Armando los conjuntos de anuncios",
+                        "Subiendo tus creativos",
+                        "Activando los anuncios",
+                      ]}
+                    />
+                  ) : (
+                    <button onClick={handlePublicarEnMeta} disabled={publicado || algunaRegenerando} style={{ width: "100%", background: publicado ? "#10b981" : algunaRegenerando ? "#aaa" : "#534AB7", color: "#fff", border: "none", padding: 16, borderRadius: 10, fontSize: 16, fontWeight: 600, cursor: (publicado || algunaRegenerando) ? "not-allowed" : "pointer" }}>
+                      {publicado ? "✅ Campaña publicada en Meta" : algunaRegenerando ? "⏳ Espera a que termine la regeneración" : "📤 Publicar estrategia en Meta"}
+                    </button>
+                  )}
                   {errorMsg && <ErrorConAccion mensaje={errorMsg} />}
                 </div>
               </div>

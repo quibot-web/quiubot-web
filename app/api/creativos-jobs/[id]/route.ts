@@ -25,7 +25,7 @@ export async function GET(
 
   const { data: job, error } = await supabaseAdmin
     .from("creativos_jobs")
-    .select("id, estado, creativos, error_mensaje, user_id")
+    .select("id, estado, creativos, total_creativos, error_mensaje, user_id")
     .eq("id", id)
     .single();
 
@@ -37,6 +37,10 @@ export async function GET(
     ok: true,
     estado: job.estado,
     creativos: job.creativos || [],
+    // Cuántos anuncios se espera generar en total -- null mientras el
+    // primer paso del workflow todavía no lo haya guardado (se actualiza
+    // apenas arranca el loop, así que solo dura null una fracción de segundo).
+    total_creativos: job.total_creativos ?? null,
     error_mensaje: job.error_mensaje,
   });
 }
