@@ -462,6 +462,17 @@ function EstrategiaContent() {
     const imgGuardada = localStorage.getItem("quiubot_imagen_producto_base64");
     if (imgGuardada) setImagenBase64Persistida(imgGuardada);
 
+    // La estrategia seleccionada también vive solo en memoria -- sin esto,
+    // al volver por la notificación (que recarga la página desde cero) se
+    // pierde, y "Publicar estrategia en Meta" falla con "Falta la
+    // estrategia a publicar" aunque los creativos sí se vean bien.
+    const estrategiaGuardada = localStorage.getItem("quiubot_estrategia_seleccionada");
+    if (estrategiaGuardada) {
+      try {
+        setEstrategiaSeleccionada(JSON.parse(estrategiaGuardada));
+      } catch {}
+    }
+
     setFuenteCreativos("ia");
     setCargandoCreativos(true);
     setStep("creativos");
@@ -561,6 +572,14 @@ function EstrategiaContent() {
 
   const handleSeleccionarEstrategia = (estrategia: any) => {
     setEstrategiaSeleccionada(estrategia);
+    // Persistimos la estrategia elegida: la generación de creativos con IA
+    // puede tardar varios minutos, así que es normal que el usuario salga
+    // de la página y vuelva por la notificación "creativos listos". Sin
+    // esto, al volver se pierde el estado (vive solo en memoria) y
+    // "Publicar estrategia en Meta" falla más adelante.
+    try {
+      localStorage.setItem("quiubot_estrategia_seleccionada", JSON.stringify(estrategia));
+    } catch {}
     setStep("fuente");
   };
 
@@ -742,6 +761,12 @@ function EstrategiaContent() {
         return;
       }
       setPublicado(true);
+      // Ya se publicó -- limpiamos el estado persistido para que la próxima
+      // vez que se retome un job (de otra campaña distinta) no arrastre
+      // esta estrategia vieja por error.
+      try {
+        localStorage.removeItem("quiubot_estrategia_seleccionada");
+      } catch {}
     } catch (e) {
       setErrorMsg("No se pudo conectar con el servidor.");
     } finally {
