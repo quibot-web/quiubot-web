@@ -1,7 +1,7 @@
 "use client";
 import { useState, useRef, useEffect, Suspense } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
-import { ShoppingBag, Target, Camera, Sparkles, Check, Shirt, Smartphone, UtensilsCrossed, Plane, Briefcase, Palmtree, Video, Watch, Bot, FolderOpen } from "lucide-react";
+import { ShoppingBag, Target, Camera, Sparkles, Check, Shirt, Smartphone, UtensilsCrossed, Plane, Briefcase, Palmtree, Video, Watch, Bot, FolderOpen, Dna } from "lucide-react";
 import AdBlueprintExplorer from "@/app/components/AdBlueprintExplorer";
 import TutorialVideo from "@/app/components/TutorialVideo";
 import TourGuiado from "@/app/components/TourGuiado";
@@ -420,6 +420,11 @@ function TarjetaTipoContenido({
 function EstrategiaContent() {
   const router = useRouter();
   const searchParams = useSearchParams();
+  // null = todavía cargando, true/false = ya sabemos si tiene ADN de marca.
+  // El Motor de Estrategia usa esos datos para generar campañas y creativos
+  // "hechos a la medida" en vez de genéricos -- por eso es un requisito
+  // previo, no un simple detalle opcional.
+  const [tieneAdn, setTieneAdn] = useState<boolean | null>(null);
   const [step, setStep] = useState<EstrategiaStep>("tipo");
   const [tipoContenido, setTipoContenido] = useState<TipoContenido | null>(null);
   const [hoverTipo, setHoverTipo] = useState<TipoContenido | null>(null);
@@ -466,6 +471,16 @@ function EstrategiaContent() {
   const [tutorialListo, setTutorialListo] = useState(false);
 
   const fileRef = useRef<HTMLInputElement>(null);
+
+  // Requisito previo: sin ADN de marca sintetizado, no se puede usar el
+  // Motor de Estrategia -- se verifica apenas se monta la página, antes
+  // de dejar avanzar cualquier otra cosa.
+  useEffect(() => {
+    fetch("/api/marca-adn")
+      .then((r) => r.json())
+      .then((data) => setTieneAdn(!!data.tieneAdn))
+      .catch(() => setTieneAdn(false));
+  }, []);
 
   // Si el usuario llega desde la notificación "creativos_listos" (?job=<id>),
   // retoma el polling en vez de arrancar el wizard desde el paso 1.
@@ -864,6 +879,49 @@ function EstrategiaContent() {
     fuenteCreativos === "album" ? analisisResultado?.score ?? estrategiaSeleccionada?.efectividad : estrategiaSeleccionada?.efectividad;
 
   const algunaRegenerando = Object.values(regenerandoIndices).some(Boolean);
+
+  // Mientras se confirma si tiene ADN de marca, no mostramos ni el wizard
+  // ni el bloqueo -- evita el parpadeo de "bloqueado" por una fracción de
+  // segundo a alguien que sí puede usarlo.
+  if (tieneAdn === null) {
+    return (
+      <div style={{ minHeight: "100vh", background: "#f9f9f8", display: "flex", alignItems: "center", justifyContent: "center" }}>
+        <p style={{ color: "#999", fontSize: 14 }}>Cargando...</p>
+      </div>
+    );
+  }
+
+  if (tieneAdn === false) {
+    return (
+      <div style={{ minHeight: "100vh", background: "#f9f9f8", fontFamily: "system-ui, sans-serif", display: "flex", alignItems: "center", justifyContent: "center", padding: "2rem" }}>
+        <div style={{ maxWidth: 480, width: "100%", background: "#fff", borderRadius: 20, border: "1px solid #e8e8e6", padding: "2.5rem 2rem", textAlign: "center", boxShadow: "0 8px 30px rgba(0,0,0,0.06)" }}>
+          <div style={{ width: 64, height: 64, borderRadius: "50%", background: "#F3F2FE", display: "flex", alignItems: "center", justifyContent: "center", margin: "0 auto 1.25rem" }}>
+            <Dna size={28} color="#534AB7" strokeWidth={2} aria-hidden="true" />
+          </div>
+          <h1 style={{ fontSize: 20, fontWeight: 700, color: "#1a1a1a", margin: "0 0 10px" }}>
+            Primero, sintetiza el ADN de tu marca
+          </h1>
+          <p style={{ fontSize: 14, color: "#666", lineHeight: 1.6, margin: "0 0 24px" }}>
+            El Motor de Estrategia usa tu ADN de marca (paleta, tipografía, tono, estilo visual) para que cada
+            campaña y cada creativo se sientan hechos por ti — no genéricos. Es un paso único de unos minutos, y
+            después queda listo para siempre.
+          </p>
+          <a
+            href="/marca"
+            style={{ display: "block", width: "100%", padding: "13px", borderRadius: 10, background: "#534AB7", color: "#fff", fontSize: 14, fontWeight: 700, textDecoration: "none", boxSizing: "border-box" }}
+          >
+            Sintetizar mi ADN de marca
+          </a>
+          <button
+            onClick={() => router.push("/")}
+            style={{ display: "block", width: "100%", padding: "12px", borderRadius: 10, border: "1px solid #e8e8e6", background: "#fff", color: "#666", fontSize: 13, fontWeight: 600, marginTop: 10, cursor: "pointer" }}
+          >
+            Volver al panel principal
+          </button>
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div style={{ minHeight: "100vh", background: "#f9f9f8", fontFamily: "system-ui, sans-serif", padding: "2rem" }}>
