@@ -1,5 +1,6 @@
 "use client"
 import { useEffect, useState } from "react"
+import { ChevronDown, ChevronRight } from "lucide-react"
 import { SECCIONES_TUTORIALES } from "@/app/lib/seccionesTutoriales"
 
 type VideoGuardado = {
@@ -10,6 +11,8 @@ type VideoGuardado = {
   descripcion: string | null
   actualizado_en: string
 }
+
+type SeccionTutorial = { key: string; label: string; grupo?: string }
 
 export default function AdminTutorialesClient() {
   const [videos, setVideos] = useState<VideoGuardado[]>([])
@@ -22,6 +25,9 @@ export default function AdminTutorialesClient() {
   const [descForm, setDescForm] = useState("")
   const [guardando, setGuardando] = useState(false)
   const [borrandoId, setBorrandoId] = useState<string | null>(null)
+
+  // Qué grupos (ej. "Motor de Estrategia") están desplegados.
+  const [gruposAbiertos, setGruposAbiertos] = useState<Record<string, boolean>>({})
 
   async function cargar() {
     setCargando(true)
@@ -106,6 +112,190 @@ export default function AdminTutorialesClient() {
     }
   }
 
+  function alternarGrupo(nombre: string) {
+    setGruposAbiertos((prev) => ({ ...prev, [nombre]: !prev[nombre] }))
+  }
+
+  // Fila individual de una sección — se usa tanto para secciones sueltas
+  // como para cada paso dentro de una tarjeta de grupo. `indentada` le
+  // baja el peso visual cuando vive dentro de un grupo, para que se note
+  // la jerarquía.
+  function FilaSeccion({ s, indentada }: { s: SeccionTutorial; indentada?: boolean }) {
+    const existente = videoDeSeccion(s.key)
+    const enEdicion = editandoSeccion === s.key
+
+    return (
+      <div
+        style={{
+          background: indentada ? "#fafafa" : "#fff",
+          border: "1px solid #e8e8e6",
+          borderRadius: 14,
+          padding: "16px 20px",
+          boxShadow: indentada ? "none" : "0 2px 10px rgba(0,0,0,0.03)",
+        }}
+      >
+        <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", gap: 12 }}>
+          <div>
+            <div style={{ fontSize: 15, fontWeight: 600, color: "#1a1a1a" }}>{s.label}</div>
+            {existente ? (
+              <div style={{ fontSize: 12, color: "#1FA97C", marginTop: 2 }}>
+                ✓ Configurado — {existente.titulo}
+              </div>
+            ) : (
+              <div style={{ fontSize: 12, color: "#999", marginTop: 2 }}>Sin video todavía</div>
+            )}
+          </div>
+          <div style={{ display: "flex", gap: 8, flexShrink: 0 }}>
+            <button
+              onClick={() => iniciarEdicion(s.key)}
+              style={{
+                background: "#fff", border: "1px solid #e0e0e0", borderRadius: 8,
+                padding: "6px 12px", fontSize: 13, fontWeight: 600, color: "#444", cursor: "pointer",
+              }}
+            >
+              {existente ? "Editar" : "Agregar video"}
+            </button>
+            {existente && (
+              <button
+                onClick={() => quitarVideo(existente.id)}
+                disabled={borrandoId === existente.id}
+                style={{
+                  background: "#fff", border: "1px solid #f5c2bf", borderRadius: 8,
+                  padding: "6px 12px", fontSize: 13, fontWeight: 600, color: "#b3261e",
+                  cursor: borrandoId === existente.id ? "default" : "pointer",
+                  opacity: borrandoId === existente.id ? 0.6 : 1,
+                }}
+              >
+                {borrandoId === existente.id ? "Quitando..." : "Quitar"}
+              </button>
+            )}
+          </div>
+        </div>
+
+        {enEdicion && (
+          <div style={{ marginTop: 16, borderTop: "1px solid #f0f0f0", paddingTop: 16 }}>
+            <label style={{ fontSize: 13, fontWeight: 600, color: "#444", display: "block", marginBottom: 6 }}>
+              Título del video
+            </label>
+            <input
+              value={tituloForm}
+              onChange={(e) => setTituloForm(e.target.value)}
+              placeholder='Ej: "Cómo generar tu primera estrategia"'
+              style={{
+                width: "100%", border: "1px solid #e0e0e0", borderRadius: 10,
+                padding: "10px 12px", fontSize: 14, marginBottom: 12, boxSizing: "border-box",
+              }}
+            />
+
+            <label style={{ fontSize: 13, fontWeight: 600, color: "#444", display: "block", marginBottom: 6 }}>
+              URL del video
+            </label>
+            <input
+              value={urlForm}
+              onChange={(e) => setUrlForm(e.target.value)}
+              placeholder="https://youtube.com/watch?v=... o link directo a .mp4"
+              style={{
+                width: "100%", border: "1px solid #e0e0e0", borderRadius: 10,
+                padding: "10px 12px", fontSize: 14, marginBottom: 12, boxSizing: "border-box",
+              }}
+            />
+
+            <label style={{ fontSize: 13, fontWeight: 600, color: "#444", display: "block", marginBottom: 6 }}>
+              Descripción (opcional)
+            </label>
+            <textarea
+              value={descForm}
+              onChange={(e) => setDescForm(e.target.value)}
+              rows={2}
+              style={{
+                width: "100%", border: "1px solid #e0e0e0", borderRadius: 10,
+                padding: "10px 12px", fontSize: 14, marginBottom: 14, boxSizing: "border-box",
+                fontFamily: "inherit", resize: "vertical",
+              }}
+            />
+
+            <div style={{ display: "flex", gap: 10 }}>
+              <button
+                onClick={guardar}
+                disabled={guardando}
+                style={{
+                  background: "#7F77DD", color: "#fff", border: "none", borderRadius: 10,
+                  padding: "9px 16px", fontWeight: 600, fontSize: 14,
+                  cursor: guardando ? "default" : "pointer", opacity: guardando ? 0.7 : 1,
+                }}
+              >
+                {guardando ? "Guardando..." : "Guardar"}
+              </button>
+              <button
+                onClick={cancelar}
+                disabled={guardando}
+                style={{
+                  background: "#fff", color: "#444", border: "1px solid #e0e0e0", borderRadius: 10,
+                  padding: "9px 16px", fontWeight: 600, fontSize: 14, cursor: "pointer",
+                }}
+              >
+                Cancelar
+              </button>
+            </div>
+          </div>
+        )}
+      </div>
+    )
+  }
+
+  // Tarjeta desplegable que envuelve todas las secciones de un mismo grupo
+  // (ej. los 6 pasos de "Motor de Estrategia"). Muestra cuántas de esas
+  // secciones ya tienen video configurado, de un vistazo, sin desplegar.
+  function TarjetaGrupo({ nombre, items }: { nombre: string; items: SeccionTutorial[] }) {
+    const abierto = !!gruposAbiertos[nombre]
+    const configuradas = items.filter((s) => !!videoDeSeccion(s.key)).length
+
+    return (
+      <div
+        style={{
+          background: "#fff", border: "1px solid #e8e8e6", borderRadius: 14,
+          boxShadow: "0 2px 10px rgba(0,0,0,0.03)", overflow: "hidden",
+        }}
+      >
+        <button
+          onClick={() => alternarGrupo(nombre)}
+          style={{
+            width: "100%", display: "flex", alignItems: "center", justifyContent: "space-between",
+            gap: 12, padding: "16px 20px", background: "none", border: "none", cursor: "pointer", textAlign: "left",
+          }}
+        >
+          <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
+            {abierto ? <ChevronDown size={16} color="#666" /> : <ChevronRight size={16} color="#666" />}
+            <div>
+              <div style={{ fontSize: 15, fontWeight: 600, color: "#1a1a1a" }}>{nombre}</div>
+              <div style={{ fontSize: 12, color: configuradas === items.length ? "#1FA97C" : "#999", marginTop: 2 }}>
+                {configuradas} de {items.length} pasos configurados
+              </div>
+            </div>
+          </div>
+          <span
+            style={{
+              fontSize: 11, fontWeight: 700, color: "#4A3FAE", background: "#F1EFFB",
+              borderRadius: 20, padding: "3px 10px", flexShrink: 0,
+            }}
+          >
+            {items.length} pasos
+          </span>
+        </button>
+
+        {abierto && (
+          <div style={{ padding: "0 20px 20px", display: "flex", flexDirection: "column", gap: 10 }}>
+            {items.map((s) => (
+              <FilaSeccion key={s.key} s={s} indentada />
+            ))}
+          </div>
+        )}
+      </div>
+    )
+  }
+
+  const gruposYaRenderizados = new Set<string>()
+
   return (
     <div style={{ minHeight: "100vh", background: "#f9f9f8", fontFamily: "system-ui, sans-serif", padding: "2.5rem" }}>
       <div style={{ maxWidth: 820, margin: "0 auto" }}>
@@ -130,124 +320,14 @@ export default function AdminTutorialesClient() {
         ) : (
           <div style={{ display: "flex", flexDirection: "column", gap: 12 }}>
             {SECCIONES_TUTORIALES.map((s) => {
-              const existente = videoDeSeccion(s.key)
-              const enEdicion = editandoSeccion === s.key
-
-              return (
-                <div
-                  key={s.key}
-                  style={{
-                    background: "#fff", border: "1px solid #e8e8e6", borderRadius: 14,
-                    padding: "16px 20px", boxShadow: "0 2px 10px rgba(0,0,0,0.03)",
-                  }}
-                >
-                  <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", gap: 12 }}>
-                    <div>
-                      <div style={{ fontSize: 15, fontWeight: 600, color: "#1a1a1a" }}>{s.label}</div>
-                      {existente ? (
-                        <div style={{ fontSize: 12, color: "#1FA97C", marginTop: 2 }}>
-                          ✓ Configurado — {existente.titulo}
-                        </div>
-                      ) : (
-                        <div style={{ fontSize: 12, color: "#999", marginTop: 2 }}>Sin video todavía</div>
-                      )}
-                    </div>
-                    <div style={{ display: "flex", gap: 8, flexShrink: 0 }}>
-                      <button
-                        onClick={() => iniciarEdicion(s.key)}
-                        style={{
-                          background: "#fff", border: "1px solid #e0e0e0", borderRadius: 8,
-                          padding: "6px 12px", fontSize: 13, fontWeight: 600, color: "#444", cursor: "pointer",
-                        }}
-                      >
-                        {existente ? "Editar" : "Agregar video"}
-                      </button>
-                      {existente && (
-                        <button
-                          onClick={() => quitarVideo(existente.id)}
-                          disabled={borrandoId === existente.id}
-                          style={{
-                            background: "#fff", border: "1px solid #f5c2bf", borderRadius: 8,
-                            padding: "6px 12px", fontSize: 13, fontWeight: 600, color: "#b3261e",
-                            cursor: borrandoId === existente.id ? "default" : "pointer",
-                            opacity: borrandoId === existente.id ? 0.6 : 1,
-                          }}
-                        >
-                          {borrandoId === existente.id ? "Quitando..." : "Quitar"}
-                        </button>
-                      )}
-                    </div>
-                  </div>
-
-                  {enEdicion && (
-                    <div style={{ marginTop: 16, borderTop: "1px solid #f0f0f0", paddingTop: 16 }}>
-                      <label style={{ fontSize: 13, fontWeight: 600, color: "#444", display: "block", marginBottom: 6 }}>
-                        Título del video
-                      </label>
-                      <input
-                        value={tituloForm}
-                        onChange={(e) => setTituloForm(e.target.value)}
-                        placeholder='Ej: "Cómo generar tu primera estrategia"'
-                        style={{
-                          width: "100%", border: "1px solid #e0e0e0", borderRadius: 10,
-                          padding: "10px 12px", fontSize: 14, marginBottom: 12, boxSizing: "border-box",
-                        }}
-                      />
-
-                      <label style={{ fontSize: 13, fontWeight: 600, color: "#444", display: "block", marginBottom: 6 }}>
-                        URL del video
-                      </label>
-                      <input
-                        value={urlForm}
-                        onChange={(e) => setUrlForm(e.target.value)}
-                        placeholder="https://youtube.com/watch?v=... o link directo a .mp4"
-                        style={{
-                          width: "100%", border: "1px solid #e0e0e0", borderRadius: 10,
-                          padding: "10px 12px", fontSize: 14, marginBottom: 12, boxSizing: "border-box",
-                        }}
-                      />
-
-                      <label style={{ fontSize: 13, fontWeight: 600, color: "#444", display: "block", marginBottom: 6 }}>
-                        Descripción (opcional)
-                      </label>
-                      <textarea
-                        value={descForm}
-                        onChange={(e) => setDescForm(e.target.value)}
-                        rows={2}
-                        style={{
-                          width: "100%", border: "1px solid #e0e0e0", borderRadius: 10,
-                          padding: "10px 12px", fontSize: 14, marginBottom: 14, boxSizing: "border-box",
-                          fontFamily: "inherit", resize: "vertical",
-                        }}
-                      />
-
-                      <div style={{ display: "flex", gap: 10 }}>
-                        <button
-                          onClick={guardar}
-                          disabled={guardando}
-                          style={{
-                            background: "#7F77DD", color: "#fff", border: "none", borderRadius: 10,
-                            padding: "9px 16px", fontWeight: 600, fontSize: 14,
-                            cursor: guardando ? "default" : "pointer", opacity: guardando ? 0.7 : 1,
-                          }}
-                        >
-                          {guardando ? "Guardando..." : "Guardar"}
-                        </button>
-                        <button
-                          onClick={cancelar}
-                          disabled={guardando}
-                          style={{
-                            background: "#fff", color: "#444", border: "1px solid #e0e0e0", borderRadius: 10,
-                            padding: "9px 16px", fontWeight: 600, fontSize: 14, cursor: "pointer",
-                          }}
-                        >
-                          Cancelar
-                        </button>
-                      </div>
-                    </div>
-                  )}
-                </div>
-              )
+              const grupo = (s as SeccionTutorial).grupo
+              if (grupo) {
+                if (gruposYaRenderizados.has(grupo)) return null
+                gruposYaRenderizados.add(grupo)
+                const items = (SECCIONES_TUTORIALES as readonly SeccionTutorial[]).filter((x) => x.grupo === grupo)
+                return <TarjetaGrupo key={grupo} nombre={grupo} items={items} />
+              }
+              return <FilaSeccion key={s.key} s={s} />
             })}
           </div>
         )}
