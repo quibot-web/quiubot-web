@@ -6,6 +6,7 @@ import { ExternalLink, Globe, Dna } from "lucide-react";
 import HomeInicio from "@/app/components/HomeInicio";
 import TutorialVideo from "@/app/components/TutorialVideo";
 import TourGuiado from "@/app/components/TourGuiado";
+import NotificacionIcono from "@/app/components/NotificacionIcono";
 
 function Icono({ children }: { children: React.ReactNode }) {
   return (
@@ -824,8 +825,9 @@ export default function Home() {
                     onMouseLeave={(e) => { e.currentTarget.style.background = "transparent"; }}
                   >
                     <div style={{ display: "flex", alignItems: "flex-start", justifyContent: "space-between", gap: 6 }}>
-                      <div style={{ display: "flex", alignItems: "center", gap: 6, fontSize: 12, fontWeight: 600, color: n.tipo === "alerta" ? "#dc2626" : n.tipo === "sugerencia" ? "#534AB7" : "#666" }}>
-                        {n.tipo === "alerta" ? "🚨" : n.tipo === "sugerencia" ? "💡" : n.tipo === "playbook_pendiente" ? "📘" : n.tipo === "creativos_listos" ? "🎨" : "ℹ️"} {n.titulo}
+                      <div style={{ display: "flex", alignItems: "center", gap: 8, fontSize: 12, fontWeight: 600, color: n.tipo === "alerta" ? "#dc2626" : n.tipo === "sugerencia" ? "#534AB7" : "#666" }}>
+                        <NotificacionIcono tipo={n.tipo} size={22} />
+                        {n.titulo}
                       </div>
                       <button
                         onClick={(e) => { e.stopPropagation(); handleEliminarNoti(n.id); }}

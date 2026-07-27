@@ -1,6 +1,7 @@
 "use client";
 import { useEffect, useState, useRef } from "react";
 import { useRouter } from "next/navigation";
+import NotificacionIcono from "@/app/components/NotificacionIcono";
 
 function useContarHasta(valorFinal: number, activo: boolean) {
   const [valor, setValor] = useState(0);
@@ -104,7 +105,7 @@ export default function HomeInicio({ nombreUsuario }: { nombreUsuario: string })
                 transition: `opacity 0.35s ease ${i * 70}ms, transform 0.35s ease ${i * 70}ms`,
               }}
             >
-              <span style={{ fontSize: 18 }}>{n.tipo === "alerta" ? "🚨" : "💡"}</span>
+              <NotificacionIcono tipo={n.tipo} size={32} />
               <div>
                 <p style={{ fontSize: 13, fontWeight: 600, margin: 0, color: "#1a1a1a" }}>{n.titulo}</p>
                 <p style={{ fontSize: 12, color: "#666", margin: "2px 0 0" }}>{n.mensaje}</p>

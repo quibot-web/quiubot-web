@@ -62,7 +62,10 @@ export async function POST(req: NextRequest) {
         await supabaseAdmin.from("notificaciones").insert({
           user_id: usuario.id,
           campana_id: campana.id,
-          tipo: "info",
+          // Tipo especifico (antes "info" generico) -- asi el frontend
+          // puede mostrarle al usuario el logo real de Meta en vez de un
+          // icono generico, ya que esto ocurrio de verdad en Meta.
+          tipo: "campana_publicada",
           titulo: "Campaña publicada",
           mensaje: `Tu campaña "${campana.nombre}" fue publicada correctamente en Meta.`,
           estado: "pendiente",
