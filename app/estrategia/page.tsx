@@ -29,43 +29,6 @@ const OBJETIVOS = [
   { id: "trafico_mensajes", label: "Tráfico / Mensajes", icon: "💬", desc: "Lleva visitas a tu web o inicia conversaciones.", meta_objective: "OUTCOME_TRAFFIC", destino: "sitio_web" },
 ];
 
-function analizarCreativosConEstrategia(items: any[], estrategia: any) {
-  const objetivoCampana = (estrategia?.campana?.objetivo_meta || "").toLowerCase();
-  const efectividadBase = estrategia?.efectividad ?? 80;
-  let ajusteTotal = 0;
-
-  const detalle = items.map((it) => {
-    let cumple = true;
-    let comentario = "";
-
-    if (it.tipo === "video") {
-      cumple = true;
-      comentario = "El formato video suele generar más interacción para este objetivo.";
-      ajusteTotal += 4;
-    } else if (objetivoCampana.includes("venta") || objetivoCampana.includes("sales")) {
-      cumple = true;
-      comentario = "Una imagen clara del producto funciona bien en campañas de venta directa.";
-      ajusteTotal += 2;
-    } else if (objetivoCampana.includes("reconoc") || objetivoCampana.includes("awareness")) {
-      cumple = false;
-      comentario = "Para reconocimiento de marca, un video suele generar más alcance que una imagen estática.";
-      ajusteTotal -= 6;
-    } else {
-      cumple = true;
-      comentario = "El formato es compatible con la estrategia planteada.";
-      ajusteTotal += 1;
-    }
-
-    return { id: it.id, tipo: it.tipo, url_imagen: it.url_imagen, cumple, comentario };
-  });
-
-  const promedioAjuste = items.length > 0 ? ajusteTotal / items.length : 0;
-  let score = Math.round(efectividadBase + promedioAjuste);
-  score = Math.max(40, Math.min(98, score));
-
-  return { score, detalle };
-}
-
 function fileToBase64(file: File): Promise<string> {
   return new Promise((resolve, reject) => {
     const reader = new FileReader();
@@ -485,6 +448,7 @@ function EstrategiaContent() {
 
   const [fuenteCreativos, setFuenteCreativos] = useState<"ia" | "album" | null>(null);
   const [analisisResultado, setAnalisisResultado] = useState<{ score: number; detalle: any[] } | null>(null);
+  const [analizandoAlbum, setAnalizandoAlbum] = useState(false);
 
   const [albumItems, setAlbumItems] = useState<{ url_imagen: string; tipo: string; public_id: string }[]>([]);
   const [cargandoAlbum, setCargandoAlbum] = useState(false);
@@ -770,7 +734,7 @@ function EstrategiaContent() {
     setSeleccionAlbum((prev) => (prev.includes(id) ? prev.filter((itemId) => itemId !== id) : [...prev, id]));
   };
 
-  const handleConfirmarSeleccionAlbum = () => {
+  const handleConfirmarSeleccionAlbum = async () => {
     const seleccionados = albumItems.filter((it) => seleccionAlbum.includes(it.public_id || it.url_imagen));
     const nuevosCreativos = seleccionados.map((it, i) => ({
       id: it.public_id || `album_${i}`,
@@ -781,9 +745,32 @@ function EstrategiaContent() {
       cta: "Comprar ahora",
     }));
     setCreativos(nuevosCreativos);
-    const resultado = analizarCreativosConEstrategia(nuevosCreativos, estrategiaSeleccionada);
-    setAnalisisResultado(resultado);
+    setAnalisisResultado(null);
+    setErrorMsg(null);
+    setAnalizandoAlbum(true);
     setStep("analisis");
+    try {
+      const res = await fetch("/api/analizar-creativos-album", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          estrategia: estrategiaSeleccionada,
+          creativos_album: nuevosCreativos.map((c) => ({ id: c.id, tipo: c.tipo, url_imagen: c.url_imagen })),
+        }),
+      });
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok || data.ok === false) {
+        setErrorMsg(data.error || "No se pudieron analizar tus creativos. Intenta de nuevo.");
+        setStep("album-selector");
+        return;
+      }
+      setAnalisisResultado({ score: data.score, detalle: data.detalle || [] });
+    } catch (e) {
+      setErrorMsg("No se pudo conectar con el servidor.");
+      setStep("album-selector");
+    } finally {
+      setAnalizandoAlbum(false);
+    }
   };
 
   const actualizarCreativo = (id: string, campo: string, valor: string) => {
@@ -1235,51 +1222,80 @@ function EstrategiaContent() {
                     );
                   })}
                 </div>
-                <button onClick={handleConfirmarSeleccionAlbum} disabled={seleccionAlbum.length === 0} style={{ width: "100%", background: seleccionAlbum.length === 0 ? "#ccc" : "#534AB7", color: "#fff", border: "none", padding: 16, borderRadius: 10, fontSize: 16, fontWeight: 600, cursor: seleccionAlbum.length === 0 ? "not-allowed" : "pointer" }}>
-                  Analizar {seleccionAlbum.length} creativo{seleccionAlbum.length !== 1 ? "s" : ""}
+                <button onClick={handleConfirmarSeleccionAlbum} disabled={seleccionAlbum.length === 0 || analizandoAlbum} style={{ width: "100%", background: (seleccionAlbum.length === 0 || analizandoAlbum) ? "#ccc" : "#534AB7", color: "#fff", border: "none", padding: 16, borderRadius: 10, fontSize: 16, fontWeight: 600, cursor: (seleccionAlbum.length === 0 || analizandoAlbum) ? "not-allowed" : "pointer" }}>
+                  {analizandoAlbum ? "Analizando..." : `Analizar ${seleccionAlbum.length} creativo${seleccionAlbum.length !== 1 ? "s" : ""}`}
                 </button>
               </>
             )}
           </div>
         )}
 
-        {step === "analisis" && analisisResultado && (
+        {step === "analisis" && (
           <div>
-            <button onClick={() => setStep("album-selector")} style={{ marginBottom: 16, background: "none", border: "none", color: "#7F77DD", cursor: "pointer", fontSize: 13 }}>
+            <button
+              onClick={() => !analizandoAlbum && setStep("album-selector")}
+              disabled={analizandoAlbum}
+              style={{ marginBottom: 16, background: "none", border: "none", color: analizandoAlbum ? "#bbb" : "#7F77DD", cursor: analizandoAlbum ? "not-allowed" : "pointer", fontSize: 13 }}
+            >
               ← Ajustar selección
             </button>
-            <div style={{ display: "flex", alignItems: "center", gap: "2rem", background: "#fff", padding: "2rem", borderRadius: 16, border: "1px solid #e8e8e6", marginBottom: 20 }}>
-              <div style={{ position: "relative", width: 100, height: 100, display: "flex", alignItems: "center", justifyContent: "center", borderRadius: "50%", background: `conic-gradient(#534AB7 ${analisisResultado.score}%, #f0f0f0 0)` }}>
-                <div style={{ background: "#fff", width: 85, height: 85, borderRadius: "50%", display: "flex", alignItems: "center", justifyContent: "center", fontWeight: 700, fontSize: 18 }}>{analisisResultado.score}%</div>
-              </div>
-              <div>
-                <h2 style={{ margin: 0, fontSize: 16 }}>Efectividad estimada con tus creativos</h2>
-                <p style={{ color: "#666", fontSize: 13, margin: "4px 0 0" }}>
-                  Estrategia original: {estrategiaSeleccionada?.efectividad}% · Recalculada con tu contenido: {analisisResultado.score}%
-                </p>
-              </div>
-            </div>
-            <p style={{ fontSize: 14, fontWeight: 600, color: "#1a1a1a", marginBottom: 10 }}>Detalle por creativo</p>
-            <div style={{ display: "flex", flexDirection: "column", gap: 10, marginBottom: 20 }}>
-              {analisisResultado.detalle.map((d, i) => (
-                <div key={d.id || i} style={{ display: "flex", gap: 12, alignItems: "center", background: "#fff", border: "1px solid #e8e8e6", borderRadius: 10, padding: 12 }}>
-                  {d.tipo === "video" ? (
-                    <video src={d.url_imagen} style={{ width: 60, height: 60, borderRadius: 8, objectFit: "cover", background: "#000" }} muted />
-                  ) : (
-                    <img src={d.url_imagen} alt="" style={{ width: 60, height: 60, borderRadius: 8, objectFit: "cover" }} />
-                  )}
-                  <div style={{ flex: 1 }}>
-                    <div style={{ fontSize: 13, fontWeight: 600, color: d.cumple ? "#15803d" : "#b45309" }}>
-                      {d.cumple ? "✅ Cumple con la estrategia" : "⚠️ No es ideal para esta estrategia"}
-                    </div>
-                    <div style={{ fontSize: 12, color: "#666", marginTop: 2 }}>{d.comentario}</div>
+
+            {analizandoAlbum && (
+              <ProgresoPasos
+                activo={analizandoAlbum}
+                duracionEstimadaMs={8000 * Math.max(1, creativos?.length || 1)}
+                tituloEnCurso="Analizando tus creativos contra la estrategia"
+                pasos={[
+                  "Comparando cada imagen con los ángulos que recomendó la IA",
+                  "Evaluando qué tan bien encaja cada una, con honestidad",
+                  "Recalculando la efectividad real de tu campaña",
+                ]}
+              />
+            )}
+
+            {!analizandoAlbum && analisisResultado && (
+              <>
+                <div style={{ display: "flex", alignItems: "center", gap: "2rem", background: "#fff", padding: "2rem", borderRadius: 16, border: "1px solid #e8e8e6", marginBottom: 20 }}>
+                  <div style={{ position: "relative", width: 100, height: 100, display: "flex", alignItems: "center", justifyContent: "center", borderRadius: "50%", background: `conic-gradient(#534AB7 ${analisisResultado.score}%, #f0f0f0 0)` }}>
+                    <div style={{ background: "#fff", width: 85, height: 85, borderRadius: "50%", display: "flex", alignItems: "center", justifyContent: "center", fontWeight: 700, fontSize: 18 }}>{analisisResultado.score}%</div>
+                  </div>
+                  <div>
+                    <h2 style={{ margin: 0, fontSize: 16 }}>Efectividad estimada con tus creativos</h2>
+                    <p style={{ color: "#666", fontSize: 13, margin: "4px 0 0" }}>
+                      Estrategia original: {estrategiaSeleccionada?.efectividad}% · Recalculada con IA analizando tus imágenes reales: {analisisResultado.score}%
+                    </p>
                   </div>
                 </div>
-              ))}
-            </div>
-            <button onClick={() => setStep("creativos")} style={{ width: "100%", background: "#534AB7", color: "#fff", border: "none", padding: 16, borderRadius: 10, fontSize: 16, fontWeight: 600, cursor: "pointer" }}>
-              Continuar y editar copys →
-            </button>
+                <p style={{ fontSize: 14, fontWeight: 600, color: "#1a1a1a", marginBottom: 4 }}>Detalle por creativo</p>
+                <p style={{ fontSize: 12, color: "#999", marginBottom: 10 }}>
+                  Este análisis es una guía, no una garantía — la decisión final de usar cada creativo es tuya.
+                </p>
+                <div style={{ display: "flex", flexDirection: "column", gap: 10, marginBottom: 20 }}>
+                  {analisisResultado.detalle.map((d, i) => (
+                    <div key={d.id || i} style={{ display: "flex", gap: 12, alignItems: "flex-start", background: "#fff", border: "1px solid #e8e8e6", borderRadius: 10, padding: 12 }}>
+                      {d.tipo === "video" ? (
+                        <video src={d.url_imagen} style={{ width: 60, height: 60, borderRadius: 8, objectFit: "cover", background: "#000", flexShrink: 0 }} muted />
+                      ) : (
+                        <img src={d.url_imagen} alt="" style={{ width: 60, height: 60, borderRadius: 8, objectFit: "cover", flexShrink: 0 }} />
+                      )}
+                      <div style={{ flex: 1, minWidth: 0 }}>
+                        <div style={{ fontSize: 13, fontWeight: 600, color: d.cumple ? "#15803d" : "#b45309" }}>
+                          {d.cumple ? "✅ Cumple con la estrategia" : "⚠️ No es ideal para esta estrategia"}
+                          {d.cumple_score != null && ` · ${d.cumple_score}%`}
+                        </div>
+                        {d.angulo_elegido && (
+                          <div style={{ fontSize: 11, color: "#999", marginTop: 2 }}>Ángulo más cercano: {d.angulo_elegido}</div>
+                        )}
+                        <div style={{ fontSize: 12, color: "#666", marginTop: 2 }}>{d.comentario}</div>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+                <button onClick={() => setStep("creativos")} style={{ width: "100%", background: "#534AB7", color: "#fff", border: "none", padding: 16, borderRadius: 10, fontSize: 16, fontWeight: 600, cursor: "pointer" }}>
+                  Continuar y editar copys →
+                </button>
+              </>
+            )}
           </div>
         )}
 
