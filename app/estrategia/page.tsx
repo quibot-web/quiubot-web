@@ -161,9 +161,11 @@ const NUMERO_DE_PASO: Record<EstrategiaStep, number> = {
 // app/lib/seccionesTutoriales.ts, grupo "Motor de Estrategia"). Los pasos
 // 6.x (fuente/album-selector/analisis/creativos) comparten el mismo video
 // del paso 6, ya que visualmente son sub-pantallas del mismo paso.
-const SECCION_TUTORIAL_POR_PASO: Record<EstrategiaStep, string> = {
+// El paso 2 es especial: el video cambia según si se eligió "producto" o
+// "servicio" en el paso 1, porque las instrucciones son distintas (subir
+// una foto de producto vs. subir una pieza ya diseñada con contexto extra).
+const SECCION_TUTORIAL_POR_PASO: Record<Exclude<EstrategiaStep, "imagen">, string> = {
   tipo: "motor-estrategia-paso1",
-  imagen: "motor-estrategia-paso2",
   objetivo: "motor-estrategia-paso3",
   presupuesto: "motor-estrategia-paso4",
   resultado: "motor-estrategia-paso5",
@@ -172,6 +174,13 @@ const SECCION_TUTORIAL_POR_PASO: Record<EstrategiaStep, string> = {
   analisis: "motor-estrategia-paso6",
   creativos: "motor-estrategia-paso6",
 };
+
+function seccionTutorialActual(step: EstrategiaStep, tipoContenido: TipoContenido | null): string {
+  if (step === "imagen") {
+    return tipoContenido === "servicio" ? "motor-estrategia-paso2-servicio" : "motor-estrategia-paso2-producto";
+  }
+  return SECCION_TUTORIAL_POR_PASO[step];
+}
 
 // Contenido fijo de cada tarjeta del selector de tipo — se separa en un
 // objeto para no repetir textos/íconos entre el render y la lógica de estilos.
@@ -830,7 +839,7 @@ function EstrategiaContent() {
         <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 4 }}>
           <h1 style={{ fontSize: 20, fontWeight: 700, margin: 0, color: "#1a1a1a" }}>Motor de Estrategia Publicitaria</h1>
           <div style={{ display: "flex", gap: 6 }}>
-            <TutorialVideo seccion={SECCION_TUTORIAL_POR_PASO[step]} onListo={() => setTutorialListo(true)} />
+            <TutorialVideo seccion={seccionTutorialActual(step, tipoContenido)} onListo={() => setTutorialListo(true)} />
             <TourGuiado
               seccion="motor-estrategia"
               listo={tutorialListo}
