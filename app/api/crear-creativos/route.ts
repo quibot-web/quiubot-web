@@ -3,6 +3,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { supabaseAdmin } from "@/lib/supabase";
 import { desencriptarSiHaceFalta } from "@/lib/crypto";
 import { verificarLimite } from "@/lib/rateLimit";
+import { PLANES, type PlanId } from "@/app/lib/planesConfig";
 
 export async function POST(req: NextRequest) {
   const session = await auth();
@@ -43,12 +44,41 @@ export async function POST(req: NextRequest) {
 
   const { data: usuario } = await supabaseAdmin
     .from("usuarios")
-    .select("openai_key, cloudinary_name, cloudinary_key, cloudinary_secret")
+    .select("id, plan, openai_key, cloudinary_name, cloudinary_key, cloudinary_secret")
     .eq("email", emailBusqueda)
     .single();
 
   if (!usuario) {
     return NextResponse.json({ error: "Usuario no encontrado" }, { status: 404 });
+  }
+
+  // Limite real por plan -- antes solo existia el rate-limit anti-spam de
+  // arriba (3 cada 5 min), que no distingue plan ni pone techo mensual.
+  // Cada llamada aqui (lote completo, "regenerar todos", o "regenerar un
+  // anuncio") crea una fila en creativos_jobs, y eso es lo que se cuenta.
+  const plan = (usuario.plan as PlanId) || "arranque";
+  const limiteJobs = PLANES[plan].creativosJobsPorMes;
+
+  if (limiteJobs !== null) {
+    const inicioMes = new Date();
+    inicioMes.setDate(1);
+    inicioMes.setHours(0, 0, 0, 0);
+
+    const { count } = await supabaseAdmin
+      .from("creativos_jobs")
+      .select("*", { count: "exact", head: true })
+      .eq("user_id", usuario.id)
+      .gte("creado_en", inicioMes.toISOString());
+
+    if ((count ?? 0) >= limiteJobs) {
+      return NextResponse.json(
+        {
+          error: `Ya usaste tus ${limiteJobs} generaciones de creativos de este mes en el plan ${PLANES[plan].nombre}. Mejora tu plan para seguir generando, o espera al próximo mes.`,
+          limite_alcanzado: true,
+        },
+        { status: 403 }
+      );
+    }
   }
 
   if (!usuario.openai_key) {
