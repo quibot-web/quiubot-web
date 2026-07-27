@@ -30,6 +30,11 @@ function obtenerEmbedUrl(url: string): string | null {
   return null
 }
 
+// Por encima de este largo, la descripción se muestra recortada con un
+// "Ver más" — evita que una descripción larga empuje el video hacia arriba
+// y ocupe toda la pantalla del modal.
+const LARGO_DESCRIPCION_CORTA = 160
+
 type Props = {
   seccion: string
   /**
@@ -46,6 +51,7 @@ export default function TutorialVideo({ seccion, onListo }: Props) {
   const [info, setInfo] = useState<InfoVideo | null>(null)
   const [abierto, setAbierto] = useState(false)
   const [marcando, setMarcando] = useState(false)
+  const [descripcionExpandida, setDescripcionExpandida] = useState(false)
 
   useEffect(() => {
     fetch(`/api/tutoriales/${seccion}`)
@@ -66,6 +72,12 @@ export default function TutorialVideo({ seccion, onListo }: Props) {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [seccion])
 
+  // Cada vez que se abre un video nuevo (o cambia de sección), arranca con
+  // la descripción colapsada otra vez.
+  useEffect(() => {
+    if (abierto) setDescripcionExpandida(false)
+  }, [abierto, seccion])
+
   async function cerrarYMarcarVisto() {
     setAbierto(false)
     // El video (auto-abierto o abierto a mano) ya se cerró — el tour puede arrancar.
@@ -83,6 +95,10 @@ export default function TutorialVideo({ seccion, onListo }: Props) {
   if (!info?.configurado) return null
 
   const embedUrl = info.url_video ? obtenerEmbedUrl(info.url_video) : null
+  const descripcion = info.descripcion || ""
+  const esLarga = descripcion.length > LARGO_DESCRIPCION_CORTA
+  const descripcionMostrada =
+    esLarga && !descripcionExpandida ? descripcion.slice(0, LARGO_DESCRIPCION_CORTA).trimEnd() + "…" : descripcion
 
   return (
     <>
@@ -127,7 +143,9 @@ export default function TutorialVideo({ seccion, onListo }: Props) {
               borderRadius: 18,
               width: "100%",
               maxWidth: 720,
-              overflow: "hidden",
+              maxHeight: "90vh",
+              overflowY: "auto",
+              overflowX: "hidden",
               boxShadow: "0 24px 60px rgba(0,0,0,0.3)",
             }}
           >
@@ -138,6 +156,10 @@ export default function TutorialVideo({ seccion, onListo }: Props) {
                 justifyContent: "space-between",
                 padding: "14px 18px",
                 borderBottom: "1px solid #eee",
+                position: "sticky",
+                top: 0,
+                background: "#fff",
+                zIndex: 1,
               }}
             >
               <div style={{ fontWeight: 600, fontSize: 14, color: "#17152B" }}>{info.titulo}</div>
@@ -176,9 +198,27 @@ export default function TutorialVideo({ seccion, onListo }: Props) {
               )}
             </div>
 
-            {info.descripcion && (
+            {descripcion && (
               <div style={{ padding: "14px 18px", fontSize: 13, color: "#666", lineHeight: 1.5 }}>
-                {info.descripcion}
+                <span style={{ whiteSpace: "pre-wrap" }}>{descripcionMostrada}</span>
+                {esLarga && (
+                  <button
+                    onClick={() => setDescripcionExpandida((v) => !v)}
+                    style={{
+                      display: "block",
+                      marginTop: 6,
+                      background: "none",
+                      border: "none",
+                      padding: 0,
+                      color: "#4A3FAE",
+                      fontWeight: 600,
+                      fontSize: 13,
+                      cursor: "pointer",
+                    }}
+                  >
+                    {descripcionExpandida ? "Ver menos" : "Ver más"}
+                  </button>
+                )}
               </div>
             )}
 
