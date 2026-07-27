@@ -452,7 +452,12 @@ function EstrategiaContent() {
 
   const [albumItems, setAlbumItems] = useState<{ url_imagen: string; tipo: string; public_id: string }[]>([]);
   const [cargandoAlbum, setCargandoAlbum] = useState(false);
-  const [seleccionAlbum, setSeleccionAlbum] = useState<string[]>([]);
+  // Un "hueco" por cada anuncio que recomendó la estrategia (con su copy
+  // real: título, texto, cta) -- el usuario no elige libremente cuántos
+  // creativos usar, elige QUÉ imagen de su álbum va en cada hueco recomendado.
+  const [angulosRecomendados, setAngulosRecomendados] = useState<any[]>([]);
+  const [asignaciones, setAsignaciones] = useState<({ url_imagen: string; tipo: string; public_id: string } | null)[]>([]);
+  const [slotEligiendo, setSlotEligiendo] = useState<number | null>(null);
 
   const [objetivosActivos, setObjetivosActivos] = useState<string[] | null>(null);
   const [esAdminObjetivos, setEsAdminObjetivos] = useState(false);
@@ -719,6 +724,26 @@ function EstrategiaContent() {
     setFuenteCreativos("album");
     setCargandoAlbum(true);
     setStep("album-selector");
+
+    // Aplanamos los anuncios que recomendó la estrategia -- exactamente uno
+    // por conjunto/anuncio, con su copy real. Este número es el que manda:
+    // el usuario no puede seleccionar más ni menos huecos que estos.
+    const angulos: any[] = [];
+    for (const conjunto of estrategiaSeleccionada?.conjuntos || []) {
+      for (const anuncio of conjunto.anuncios || []) {
+        angulos.push({
+          conjunto_nombre: conjunto.nombre,
+          anuncio_nombre: anuncio.nombre,
+          titulo: anuncio.copy?.titulo || "",
+          texto: anuncio.copy?.texto || "",
+          cta: anuncio.copy?.cta || "Comprar ahora",
+          argumentacion: anuncio.argumentacion || "",
+        });
+      }
+    }
+    setAngulosRecomendados(angulos);
+    setAsignaciones(new Array(angulos.length).fill(null));
+
     try {
       const res = await fetch("/api/album");
       const data = await res.json();
@@ -730,20 +755,44 @@ function EstrategiaContent() {
     }
   };
 
-  const toggleSeleccionAlbum = (id: string) => {
-    setSeleccionAlbum((prev) => (prev.includes(id) ? prev.filter((itemId) => itemId !== id) : [...prev, id]));
+  const abrirPickerParaSlot = (idx: number) => setSlotEligiendo(idx);
+  const cerrarPicker = () => setSlotEligiendo(null);
+
+  const elegirImagenParaSlot = (item: { url_imagen: string; tipo: string; public_id: string }) => {
+    if (slotEligiendo === null) return;
+    setAsignaciones((prev) => {
+      const nuevo = [...prev];
+      nuevo[slotEligiendo] = item;
+      return nuevo;
+    });
+    setSlotEligiendo(null);
+  };
+
+  const quitarAsignacion = (idx: number) => {
+    setAsignaciones((prev) => {
+      const nuevo = [...prev];
+      nuevo[idx] = null;
+      return nuevo;
+    });
   };
 
   const handleConfirmarSeleccionAlbum = async () => {
-    const seleccionados = albumItems.filter((it) => seleccionAlbum.includes(it.public_id || it.url_imagen));
-    const nuevosCreativos = seleccionados.map((it, i) => ({
-      id: it.public_id || `album_${i}`,
-      tipo: it.tipo,
-      url_imagen: it.url_imagen,
-      titulo: "",
-      texto: "",
-      cta: "Comprar ahora",
-    }));
+    if (asignaciones.some((a) => !a)) return; // guarda extra, el botón ya está deshabilitado en ese caso
+
+    const nuevosCreativos = angulosRecomendados.map((ang, i) => {
+      const it = asignaciones[i]!;
+      return {
+        id: it.public_id || `album_${i}`,
+        tipo: it.tipo,
+        url_imagen: it.url_imagen,
+        titulo: ang.titulo,
+        texto: ang.texto,
+        cta: ang.cta,
+        conjunto_nombre: ang.conjunto_nombre,
+        anuncio_nombre: ang.anuncio_nombre,
+        argumentacion: ang.argumentacion,
+      };
+    });
     setCreativos(nuevosCreativos);
     setAnalisisResultado(null);
     setErrorMsg(null);
@@ -755,7 +804,7 @@ function EstrategiaContent() {
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           estrategia: estrategiaSeleccionada,
-          creativos_album: nuevosCreativos.map((c) => ({ id: c.id, tipo: c.tipo, url_imagen: c.url_imagen })),
+          creativos_album: nuevosCreativos,
         }),
       });
       const data = await res.json().catch(() => ({}));
@@ -773,8 +822,8 @@ function EstrategiaContent() {
     }
   };
 
-  const actualizarCreativo = (id: string, campo: string, valor: string) => {
-    setCreativos((prev) => prev?.map((c) => (c.id === id ? { ...c, [campo]: valor } : c)) ?? null);
+  const actualizarCreativo = (idx: number, campo: string, valor: string) => {
+    setCreativos((prev) => prev?.map((c, i) => (i === idx ? { ...c, [campo]: valor } : c)) ?? null);
   };
 
   const handlePublicarEnMeta = async () => {
@@ -1193,9 +1242,13 @@ function EstrategiaContent() {
             <button onClick={() => setStep("fuente")} style={{ marginBottom: 16, background: "none", border: "none", color: "#7F77DD", cursor: "pointer", fontSize: 13 }}>
               ← Atrás
             </button>
-            <p style={{ fontSize: 15, fontWeight: 600, color: "#1a1a1a", marginBottom: 16 }}>
-              Selecciona los creativos que quieres usar ({seleccionAlbum.length} seleccionados)
+            <p style={{ fontSize: 15, fontWeight: 600, color: "#1a1a1a", marginBottom: 4 }}>
+              Usa tus creativos para los {angulosRecomendados.length} anuncio{angulosRecomendados.length !== 1 ? "s" : ""} que recomendó la estrategia
             </p>
+            <p style={{ fontSize: 13, color: "#666", marginBottom: 16 }}>
+              Cada anuncio ya tiene su copy listo — solo elige qué imagen de tu álbum va en cada uno.
+            </p>
+
             {cargandoAlbum && <p style={{ color: "#666", fontSize: 13 }}>Cargando álbum...</p>}
             {!cargandoAlbum && albumItems.length === 0 && (
               <p style={{ color: "#666", fontSize: 13 }}>
@@ -1204,28 +1257,115 @@ function EstrategiaContent() {
             )}
             {!cargandoAlbum && albumItems.length > 0 && (
               <>
-                <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(150px, 1fr))", gap: 12, marginBottom: 20 }}>
-                  {albumItems.map((item, i) => {
-                    const itemId = item.public_id || item.url_imagen;
-                    const seleccionado = seleccionAlbum.includes(itemId);
+                <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(260px, 1fr))", gap: 16, marginBottom: 20 }}>
+                  {angulosRecomendados.map((ang, idx) => {
+                    const asignado = asignaciones[idx];
                     return (
-                      <div key={itemId || i} onClick={() => toggleSeleccionAlbum(itemId)} style={{ position: "relative", borderRadius: 10, overflow: "hidden", cursor: "pointer", border: seleccionado ? "3px solid #534AB7" : "1px solid #e8e8e6" }}>
-                        {item.tipo === "video" ? (
-                          <video src={item.url_imagen} style={{ width: "100%", height: 120, objectFit: "cover", background: "#000" }} muted />
+                      <div key={idx} style={{ background: "#fff", border: asignado ? "1px solid #e8e8e6" : "1.5px dashed #d9d4f7", borderRadius: 12, overflow: "hidden" }}>
+                        {asignado ? (
+                          <div style={{ position: "relative" }}>
+                            {asignado.tipo === "video" ? (
+                              <video src={asignado.url_imagen} style={{ width: "100%", height: 160, objectFit: "cover", background: "#000", display: "block" }} muted />
+                            ) : (
+                              <img src={asignado.url_imagen} alt="" style={{ width: "100%", height: 160, objectFit: "cover", display: "block" }} />
+                            )}
+                            <button
+                              onClick={() => quitarAsignacion(idx)}
+                              title="Quitar imagen"
+                              style={{ position: "absolute", top: 8, right: 8, width: 26, height: 26, borderRadius: "50%", border: "none", background: "rgba(0,0,0,0.55)", color: "#fff", fontSize: 13, cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center" }}
+                            >
+                              ✕
+                            </button>
+                          </div>
                         ) : (
-                          <img src={item.url_imagen} alt="" style={{ width: "100%", height: 120, objectFit: "cover" }} />
+                          <div
+                            onClick={() => abrirPickerParaSlot(idx)}
+                            style={{ height: 160, background: "#fcfcff", display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", gap: 8, cursor: "pointer" }}
+                          >
+                            <FolderOpen size={24} color="#7F77DD" strokeWidth={2} aria-hidden="true" />
+                            <span style={{ fontSize: 12.5, color: "#534AB7", fontWeight: 600 }}>Elegir imagen de tu álbum</span>
+                          </div>
                         )}
-                        {seleccionado && (
-                          <div style={{ position: "absolute", top: 6, right: 6, background: "#534AB7", color: "#fff", borderRadius: "50%", width: 22, height: 22, display: "flex", alignItems: "center", justifyContent: "center", fontSize: 12 }}>✓</div>
-                        )}
+
+                        <div style={{ padding: "1rem", display: "flex", flexDirection: "column", gap: 6 }}>
+                          <div style={{ fontSize: 10, color: "#999", fontFamily: "ui-monospace, monospace", textTransform: "uppercase", letterSpacing: 0.4 }}>
+                            {ang.conjunto_nombre}
+                          </div>
+                          <div style={{ fontWeight: 600, fontSize: 14, color: "#1a1a1a" }}>{ang.titulo}</div>
+                          <div style={{ fontSize: 12, color: "#666" }}>{ang.texto}</div>
+                          <span style={{ display: "inline-block", background: "#f3f2fe", color: "#534AB7", fontSize: 12, fontWeight: 600, padding: "4px 10px", borderRadius: 20, width: "fit-content" }}>{ang.cta}</span>
+                          {asignado && (
+                            <button
+                              onClick={() => abrirPickerParaSlot(idx)}
+                              style={{ marginTop: 4, background: "#fff", border: "1px solid #e0e0e0", color: "#534AB7", fontSize: 12, fontWeight: 600, padding: "8px 10px", borderRadius: 8, cursor: "pointer" }}
+                            >
+                              Cambiar imagen
+                            </button>
+                          )}
+                        </div>
                       </div>
                     );
                   })}
                 </div>
-                <button onClick={handleConfirmarSeleccionAlbum} disabled={seleccionAlbum.length === 0 || analizandoAlbum} style={{ width: "100%", background: (seleccionAlbum.length === 0 || analizandoAlbum) ? "#ccc" : "#534AB7", color: "#fff", border: "none", padding: 16, borderRadius: 10, fontSize: 16, fontWeight: 600, cursor: (seleccionAlbum.length === 0 || analizandoAlbum) ? "not-allowed" : "pointer" }}>
-                  {analizandoAlbum ? "Analizando..." : `Analizar ${seleccionAlbum.length} creativo${seleccionAlbum.length !== 1 ? "s" : ""}`}
+                <button
+                  onClick={handleConfirmarSeleccionAlbum}
+                  disabled={asignaciones.some((a) => !a) || analizandoAlbum}
+                  style={{
+                    width: "100%",
+                    background: (asignaciones.some((a) => !a) || analizandoAlbum) ? "#ccc" : "#534AB7",
+                    color: "#fff", border: "none", padding: 16, borderRadius: 10, fontSize: 16, fontWeight: 600,
+                    cursor: (asignaciones.some((a) => !a) || analizandoAlbum) ? "not-allowed" : "pointer",
+                  }}
+                >
+                  {analizandoAlbum
+                    ? "Analizando..."
+                    : asignaciones.some((a) => !a)
+                    ? `Falta asignar imagen a ${asignaciones.filter((a) => !a).length} anuncio${asignaciones.filter((a) => !a).length !== 1 ? "s" : ""}`
+                    : `Analizar ${angulosRecomendados.length} creativo${angulosRecomendados.length !== 1 ? "s" : ""}`}
                 </button>
               </>
+            )}
+
+            {/* Modal selector: elegir qué imagen del álbum va en el hueco actual */}
+            {slotEligiendo !== null && (
+              <div
+                onClick={cerrarPicker}
+                style={{ position: "fixed", inset: 0, background: "rgba(23,21,43,0.6)", zIndex: 2000, display: "flex", alignItems: "center", justifyContent: "center", padding: 24 }}
+              >
+                <div
+                  onClick={(e) => e.stopPropagation()}
+                  style={{ background: "#fff", borderRadius: 16, width: "100%", maxWidth: 640, maxHeight: "80vh", overflowY: "auto", padding: "1.5rem" }}
+                >
+                  <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 14 }}>
+                    <p style={{ fontSize: 14, fontWeight: 600, color: "#1a1a1a", margin: 0 }}>
+                      Elige la imagen para "{angulosRecomendados[slotEligiendo]?.titulo}"
+                    </p>
+                    <button onClick={cerrarPicker} style={{ background: "none", border: "none", color: "#999", cursor: "pointer", fontSize: 16 }}>✕</button>
+                  </div>
+                  <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(120px, 1fr))", gap: 10 }}>
+                    {albumItems.map((item, i) => {
+                      const itemId = item.public_id || item.url_imagen;
+                      return (
+                        <div
+                          key={itemId || i}
+                          onClick={() => elegirImagenParaSlot(item)}
+                          style={{
+                            position: "relative", borderRadius: 8, overflow: "hidden",
+                            cursor: "pointer",
+                            border: "1px solid #e8e8e6",
+                          }}
+                        >
+                          {item.tipo === "video" ? (
+                            <video src={item.url_imagen} style={{ width: "100%", height: 90, objectFit: "cover", background: "#000", display: "block" }} muted />
+                          ) : (
+                            <img src={item.url_imagen} alt="" style={{ width: "100%", height: 90, objectFit: "cover", display: "block" }} />
+                          )}
+                        </div>
+                      );
+                    })}
+                  </div>
+                </div>
+              </div>
             )}
           </div>
         )}
@@ -1272,7 +1412,7 @@ function EstrategiaContent() {
                 </p>
                 <div style={{ display: "flex", flexDirection: "column", gap: 10, marginBottom: 20 }}>
                   {analisisResultado.detalle.map((d, i) => (
-                    <div key={d.id || i} style={{ display: "flex", gap: 12, alignItems: "flex-start", background: "#fff", border: "1px solid #e8e8e6", borderRadius: 10, padding: 12 }}>
+                    <div key={`${d.id || "x"}-${i}`} style={{ display: "flex", gap: 12, alignItems: "flex-start", background: "#fff", border: "1px solid #e8e8e6", borderRadius: 10, padding: 12 }}>
                       {d.tipo === "video" ? (
                         <video src={d.url_imagen} style={{ width: 60, height: 60, borderRadius: 8, objectFit: "cover", background: "#000", flexShrink: 0 }} muted />
                       ) : (
@@ -1352,7 +1492,7 @@ function EstrategiaContent() {
                   {creativos.map((c, idx) => {
                     const regenerando = !!regenerandoIndices[idx];
                     return (
-                      <div key={c.public_id || c.id || idx} style={{ background: "#fff", border: "1px solid #e8e8e6", borderRadius: 12, overflow: "hidden", position: "relative" }}>
+                      <div key={`${c.public_id || c.id || "x"}-${idx}`} style={{ background: "#fff", border: "1px solid #e8e8e6", borderRadius: 12, overflow: "hidden", position: "relative" }}>
                         {/* Botón eliminar */}
                         <button
                           onClick={() => handleEliminarCreativo(idx)}
@@ -1386,9 +1526,9 @@ function EstrategiaContent() {
                         <div style={{ padding: "1rem", display: "flex", flexDirection: "column", gap: 8 }}>
                           {fuenteCreativos === "album" ? (
                             <>
-                              <input placeholder="Título del anuncio" value={c.titulo} onChange={(e) => actualizarCreativo(c.id, "titulo", e.target.value)} style={{ padding: 8, borderRadius: 6, border: "1px solid #e0e0e0", fontSize: 13, fontWeight: 600 }} />
-                              <textarea placeholder="Texto / descripción" value={c.texto} onChange={(e) => actualizarCreativo(c.id, "texto", e.target.value)} style={{ padding: 8, borderRadius: 6, border: "1px solid #e0e0e0", fontSize: 12, resize: "none", minHeight: 50 }} />
-                              <input placeholder="Texto del botón (CTA)" value={c.cta} onChange={(e) => actualizarCreativo(c.id, "cta", e.target.value)} style={{ padding: 8, borderRadius: 6, border: "1px solid #e0e0e0", fontSize: 12 }} />
+                              <input placeholder="Título del anuncio" value={c.titulo} onChange={(e) => actualizarCreativo(idx, "titulo", e.target.value)} style={{ padding: 8, borderRadius: 6, border: "1px solid #e0e0e0", fontSize: 13, fontWeight: 600 }} />
+                              <textarea placeholder="Texto / descripción" value={c.texto} onChange={(e) => actualizarCreativo(idx, "texto", e.target.value)} style={{ padding: 8, borderRadius: 6, border: "1px solid #e0e0e0", fontSize: 12, resize: "none", minHeight: 50 }} />
+                              <input placeholder="Texto del botón (CTA)" value={c.cta} onChange={(e) => actualizarCreativo(idx, "cta", e.target.value)} style={{ padding: 8, borderRadius: 6, border: "1px solid #e0e0e0", fontSize: 12 }} />
                             </>
                           ) : (
                             <>
