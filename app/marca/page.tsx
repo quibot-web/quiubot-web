@@ -2,6 +2,8 @@
 import { useState, useRef, useEffect } from "react";
 import { Upload, X, Check, Sparkles, Loader2 } from "lucide-react";
 import EscenaParticulasADN3D from "@/app/components/EscenaParticulasADN3D";
+import TutorialVideo from "@/app/components/TutorialVideo";
+import TourGuiado from "@/app/components/TourGuiado";
 
 const MIN_IMAGENES = 3;
 const MAX_IMAGENES = 5;
@@ -226,6 +228,7 @@ export default function MarcaPage() {
   const [tieneAdn, setTieneAdn] = useState(false);
   const [adn, setAdn] = useState<Record<string, any> | null>(null);
   const [resumen, setResumen] = useState<string>("");
+  const [tutorialListo, setTutorialListo] = useState(false);
 
   const [imagenes, setImagenes] = useState<File[]>([]);
   const [previews, setPreviews] = useState<string[]>([]);
@@ -362,7 +365,18 @@ export default function MarcaPage() {
         <a href="/" style={{ fontSize: 18, fontWeight: 700, textDecoration: "none", color: "#1a1a1a" }}>
           quiu<span style={{ color: "#7F77DD" }}>bot</span>
         </a>
-        <div style={{ fontSize: 13, color: "#999" }}>ADN de marca</div>
+        <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
+          <div style={{ fontSize: 13, color: "#999" }}>ADN de marca</div>
+          <TutorialVideo seccion="mi-marca" onListo={() => setTutorialListo(true)} />
+          <TourGuiado
+            seccion="mi-marca"
+            listo={tutorialListo}
+            pasos={[
+              { selector: '[data-tour="marca-subir"]', titulo: "Sube tus mejores creativos", texto: "Elige entre 4 y 8 piezas ya publicadas con las que estés conforme — colores, tipografía, tono. Entre más representativas, mejor sale tu ADN." },
+              { selector: '[data-tour="marca-analizar"]', titulo: "Analiza y listo", texto: "Con el mínimo de imágenes subidas, dale clic aquí. El sistema arma tu ADN de marca una sola vez — después lo usan automáticamente el Motor de Estrategia y la generación de creativos." },
+            ]}
+          />
+        </div>
       </div>
 
       <CoberturaCiudades />
@@ -383,7 +397,7 @@ export default function MarcaPage() {
                 </p>
               </div>
 
-              <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(130px, 1fr))", gap: 12, marginBottom: 20 }}>
+              <div data-tour="marca-subir" style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(130px, 1fr))", gap: 12, marginBottom: 20 }}>
                 {previews.map((src, idx) => (
                   <div key={idx} style={{ position: "relative", aspectRatio: "1" }}>
                     <img src={src} alt={`Creativo ${idx + 1}`} style={{ width: "100%", height: "100%", objectFit: "cover", borderRadius: 12, border: "1px solid #e0e0e0" }} />
@@ -419,6 +433,7 @@ export default function MarcaPage() {
               )}
 
               <button
+                data-tour="marca-analizar"
                 onClick={handleAnalizar}
                 disabled={imagenes.length < MIN_IMAGENES}
                 style={{

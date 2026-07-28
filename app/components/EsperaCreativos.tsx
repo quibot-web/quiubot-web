@@ -45,9 +45,7 @@ export default function EsperaCreativos({ completados, total, creativosListos }:
           </div>
           <div style={{ height: 8, borderRadius: 4, background: "#f0f0f0", overflow: "hidden", position: "relative" }}>
             <div style={{ height: "100%", width: `${porcentaje}%`, background: "#534AB7", borderRadius: 4, transition: "width .6s ease" }} />
-            {completados === 0 && (
-              <div className="espera-shimmer" style={{ position: "absolute", top: 0, left: 0, height: "100%", width: "40%", background: "linear-gradient(90deg, transparent, rgba(83,74,183,0.35), transparent)" }} />
-            )}
+            <div className="espera-shimmer" style={{ position: "absolute", top: 0, left: 0, height: "100%", width: "40%", background: "linear-gradient(90deg, transparent, rgba(83,74,183,0.35), transparent)" }} />
           </div>
         </div>
       ) : (
