@@ -195,10 +195,13 @@ function ConjuntoCard({ conjunto }) {
             <SpecTag><Wallet className="w-3 h-3" />{fmtCOP(conjunto.presupuesto_diario_cop)}/día</SpecTag>
           )}
         </div>
-        <div className="flex flex-wrap gap-1 mt-2">
-          {conjunto.segmentacion.intereses.map((i) => (
-            <span key={i} className="text-[10px] px-1.5 py-0.5 rounded-full bg-teal-50 text-teal-700">{i}</span>
-          ))}
+        <div className="mt-2">
+          <p className="text-[9px] uppercase tracking-wide text-slate-400 mb-1">Ideas de ángulo creativo</p>
+          <div className="flex flex-wrap gap-1">
+            {conjunto.segmentacion.intereses.map((i) => (
+              <span key={i} className="text-[10px] px-1.5 py-0.5 rounded-full bg-teal-50 text-teal-700">{i}</span>
+            ))}
+          </div>
         </div>
       </div>
 
