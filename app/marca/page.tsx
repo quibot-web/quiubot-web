@@ -152,6 +152,75 @@ function GlowAmbienteADN() {
   );
 }
 
+// Bloque independiente del flujo de ADN -- se guarda solo, con su propio
+// endpoint, y queda visible siempre (haya o no ADN generado ya). A
+// propósito no vive dentro de la sección de ADN, que es intencionalmente
+// de solo lectura.
+function CoberturaCiudades() {
+  const [valor, setValor] = useState("");
+  const [cargando, setCargando] = useState(true);
+  const [guardando, setGuardando] = useState(false);
+  const [guardado, setGuardado] = useState(false);
+
+  useEffect(() => {
+    fetch("/api/marca/cobertura")
+      .then((r) => r.json())
+      .then((data) => setValor((data.ciudades_cobertura || []).join(", ")))
+      .catch(() => {})
+      .finally(() => setCargando(false));
+  }, []);
+
+  const handleGuardar = async () => {
+    setGuardando(true);
+    setGuardado(false);
+    try {
+      const ciudades = valor.split(",").map((c) => c.trim()).filter(Boolean);
+      await fetch("/api/marca/cobertura", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ ciudades_cobertura: ciudades }),
+      });
+      setGuardado(true);
+    } finally {
+      setGuardando(false);
+    }
+  };
+
+  if (cargando) return null;
+
+  return (
+    <div style={{ maxWidth: 760, margin: "1.5rem auto 0", padding: "0 1.5rem" }}>
+      <div style={{ background: "#fff", border: "1px solid #e8e8e6", borderRadius: 14, padding: "1.25rem 1.5rem" }}>
+        <p style={{ fontSize: 14, fontWeight: 600, color: "#1a1a1a", margin: "0 0 4px" }}>
+          ¿En qué ciudades entrega o atiende tu negocio?
+        </p>
+        <p style={{ fontSize: 12.5, color: "#666", margin: "0 0 12px" }}>
+          Opcional — si lo dejas vacío, tus campañas se segmentan a nivel nacional. Escribe las ciudades separadas por coma.
+        </p>
+        <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
+          <input
+            value={valor}
+            onChange={(e) => { setValor(e.target.value); setGuardado(false); }}
+            placeholder="Bogotá, Medellín, Cali"
+            style={{ flex: "1 1 240px", padding: "10px 12px", borderRadius: 8, border: "1px solid #e0e0e0", fontSize: 13 }}
+          />
+          <button
+            onClick={handleGuardar}
+            disabled={guardando}
+            style={{
+              background: guardado ? "#10b981" : "#534AB7",
+              color: "#fff", border: "none", padding: "10px 18px", borderRadius: 8,
+              fontSize: 13, fontWeight: 600, cursor: guardando ? "not-allowed" : "pointer", whiteSpace: "nowrap",
+            }}
+          >
+            {guardando ? "Guardando..." : guardado ? "✓ Guardado" : "Guardar"}
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
 export default function MarcaPage() {
   const [cargandoInicial, setCargandoInicial] = useState(true);
   const [tieneAdn, setTieneAdn] = useState(false);
@@ -295,6 +364,8 @@ export default function MarcaPage() {
         </a>
         <div style={{ fontSize: 13, color: "#999" }}>ADN de marca</div>
       </div>
+
+      <CoberturaCiudades />
 
       {!construyendoOListo && (
         <div style={{ flex: 1, padding: "2.5rem 1.5rem" }}>
