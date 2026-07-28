@@ -1,6 +1,6 @@
 "use client"
 
-const TU_WHATSAPP = "573122462312"
+const TU_WHATSAPP = "573243490766"
 
 export default function PagoExitosoPage() {
   return (

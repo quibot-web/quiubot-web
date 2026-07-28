@@ -5,7 +5,7 @@ import { useRouter } from "next/navigation"
 
 import { OBJETIVOS_INFO } from "@/app/lib/objetivosInfo"
 
-const TU_WHATSAPP = "573122462312"
+const TU_WHATSAPP = "573243490766"
 
 const LINKS_BOLD: Record<string, string> = {
   crecimiento: "https://checkout.bold.co/payment/LNK_W16HQK2G1S",
@@ -25,7 +25,32 @@ type BillingInfo = {
   fecha_pago: string | null
 }
 
-const PLANES = [
+// Explicación del Playbook, compartida entre Crecimiento y Escala (el
+// texto corto de cada plan cambia el alcance -- "hasta 2" vs "todas" --
+// pero la explicación de qué hace es la misma). "Playbook" solo es un
+// nombre interno; lo que vende es la promesa concreta + ejemplos reales,
+// no el nombre de la función.
+const PLAYBOOK_EXPANDIBLE = {
+  titulo: "Playbook — tu copiloto de campañas",
+  parrafo:
+    "Cada día revisamos el rendimiento real de tus campañas activas y te avisamos apenas hay algo que decidir. Tú siempre tienes la última palabra — nosotros solo vigilamos para que no tengas que estar entrando a Meta Ads Manager todos los días.",
+  ejemplos: [
+    "🔥 \"Este anuncio está funcionando muy bien — te recomendamos subirle presupuesto\"",
+    "⚠️ \"Este conjunto lleva 3 días sin resultados — te recomendamos pausarlo\"",
+    "📈 \"Notamos que puedes escalar esta campaña sin perder rendimiento\"",
+  ],
+}
+
+type FeaturePlan = string | { texto: string; expandible: typeof PLAYBOOK_EXPANDIBLE }
+
+const PLANES: {
+  id: string
+  nombre: string
+  tagline: string
+  precio: number
+  masElegido?: boolean
+  features: FeaturePlan[]
+}[] = [
   {
     id: "arranque",
     nombre: "Arranque",
@@ -44,7 +69,7 @@ const PLANES = [
     precio: 149900,
     features: [
       "4 estrategias nuevas por mes",
-      "Playbook vigilando 2 campañas",
+      { texto: "Revisamos tus campañas y te decimos qué subir, pausar o escalar (hasta 2 a la vez)", expandible: PLAYBOOK_EXPANDIBLE },
       "Alertas y sugerencias inteligentes",
     ],
   },
@@ -56,7 +81,7 @@ const PLANES = [
     masElegido: true,
     features: [
       "Estrategias nuevas ilimitadas",
-      "Playbook vigilando todas tus campañas",
+      { texto: "Revisamos tus campañas y te decimos qué subir, pausar o escalar (todas, sin límite)", expandible: PLAYBOOK_EXPANDIBLE },
       "Alertas y sugerencias con prioridad",
     ],
   },
@@ -97,6 +122,9 @@ export default function BillingPage() {
   const [ciclo, setCiclo] = useState<"mensual" | "anual">("mensual")
   const [objetivosActivos, setObjetivosActivos] = useState<string[]>([])
   const [planMinimoPorId, setPlanMinimoPorId] = useState<Record<string, string>>({})
+  // Qué tarjeta de plan tiene el "¿Qué es esto?" del Playbook desplegado
+  // -- una por tarjeta, independiente entre Crecimiento y Escala.
+  const [playbookExpandido, setPlaybookExpandido] = useState<Record<string, boolean>>({})
 
   useEffect(() => {
     fetch("/api/billing")
@@ -244,6 +272,7 @@ export default function BillingPage() {
             const ahorroAnual = plan.precio * 12 - totalAnual
             const precioMostrado = esAnual ? mensualEquivalente : plan.precio
             const objetivosIncluidos = objetivosDelPlan(plan.id)
+            const playbookAbierto = !!playbookExpandido[plan.id]
 
             return (
               <div
@@ -314,12 +343,51 @@ export default function BillingPage() {
                       </span>
                     </div>
                   )}
-                  {plan.features.map((f) => (
-                    <div key={f} style={{ display: "flex", alignItems: "flex-start", gap: 8, fontSize: 13, color: "#333" }}>
-                      <span style={{ color: "#10b981", fontWeight: 700, flexShrink: 0 }}>✓</span>
-                      {f}
-                    </div>
-                  ))}
+                  {plan.features.map((f, i) => {
+                    const esObjeto = typeof f !== "string"
+                    const texto = esObjeto ? (f as Exclude<FeaturePlan, string>).texto : f
+                    const expandible = esObjeto ? (f as Exclude<FeaturePlan, string>).expandible : null
+
+                    return (
+                      <div key={i} style={{ display: "flex", flexDirection: "column", gap: 6 }}>
+                        <div style={{ display: "flex", alignItems: "flex-start", gap: 8, fontSize: 13, color: "#333" }}>
+                          <span style={{ color: "#10b981", fontWeight: 700, flexShrink: 0 }}>✓</span>
+                          <span>
+                            {texto}
+                            {expandible && (
+                              <button
+                                onClick={() => setPlaybookExpandido((prev) => ({ ...prev, [plan.id]: !prev[plan.id] }))}
+                                style={{
+                                  marginLeft: 6,
+                                  background: "none",
+                                  border: "none",
+                                  padding: 0,
+                                  color: "#534AB7",
+                                  fontWeight: 600,
+                                  fontSize: 12,
+                                  cursor: "pointer",
+                                  textDecoration: "underline",
+                                }}
+                              >
+                                {playbookAbierto ? "Ver menos" : "¿Qué es esto?"}
+                              </button>
+                            )}
+                          </span>
+                        </div>
+                        {expandible && playbookAbierto && (
+                          <div style={{ background: "#F3F2FE", borderRadius: 10, padding: "10px 12px", fontSize: 12, color: "#3C3489", lineHeight: 1.5 }}>
+                            <p style={{ margin: "0 0 6px", fontWeight: 700 }}>{expandible.titulo}</p>
+                            <p style={{ margin: "0 0 8px" }}>{expandible.parrafo}</p>
+                            <div style={{ display: "flex", flexDirection: "column", gap: 4 }}>
+                              {expandible.ejemplos.map((ej, j) => (
+                                <p key={j} style={{ margin: 0 }}>{ej}</p>
+                              ))}
+                            </div>
+                          </div>
+                        )}
+                      </div>
+                    )
+                  })}
                   {esAnual && (
                     <div style={{ display: "flex", alignItems: "flex-start", gap: 8, fontSize: 13, color: "#333" }}>
                       <span style={{ color: "#534AB7", fontWeight: 700, flexShrink: 0 }}>🔒</span>
