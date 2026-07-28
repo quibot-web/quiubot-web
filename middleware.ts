@@ -21,6 +21,7 @@ export default auth(async (req) => {
   const isActivarRoute = pathname === "/api/activar"
 
   if (isActivarRoute) return NextResponse.next()
+
   if (!isLoggedIn && !isLoginPage && !isBienvenidaPage && !isTerminosPage) {
     return NextResponse.redirect(new URL("/login", req.nextUrl))
   }
@@ -37,7 +38,6 @@ export default auth(async (req) => {
 
   if (esRutaAdmin && !esRutaDesbloqueo) {
     const secreto = process.env.ADMIN_PANEL_PASSWORD
-
     if (!secreto) {
       // Si no hay contraseña configurada en el servidor, no se deja pasar
       // por seguridad — mejor bloquear el panel que dejarlo sin candado.
@@ -63,6 +63,6 @@ export default auth(async (req) => {
 
 export const config = {
   matcher: [
-    "/((?!api/auth|_next/static|_next/image|favicon.ico|.*\\.(?:svg|png|jpg|jpeg|gif|webp|ico|css|js|map)$).*)",
+    "/((?!api/auth|api/internal|_next/static|_next/image|favicon.ico|.*\\.(?:svg|png|jpg|jpeg|gif|webp|ico|css|js|map)$).*)",
   ],
 }
