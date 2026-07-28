@@ -32,7 +32,7 @@ export default function TerminosPage() {
             </p>
             <p>
               Correo de contacto: <a href="mailto:admin@quiubot.site" style={linkStyle}>admin@quiubot.site</a><br />
-              Teléfono de contacto: <strong>+57 312 246 2312</strong>
+              Teléfono de contacto: <strong>+57 324 349 0766</strong>
             </p>
           </section>
 
