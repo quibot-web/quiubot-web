@@ -22,7 +22,7 @@ function IconoWhatsApp() {
 
 const OBJETIVOS = [
   { id: "venta_directa_web", label: "Venta Directa", icon: "🛒", desc: "Ventas inmediatas en tu sitio web.", meta_objective: "OUTCOME_SALES", destino: "sitio_web" },
-  { id: "venta_directa_whatsapp", label: "Venta Directa (WhatsApp)", icon: <IconoWhatsApp />, desc: "Ventas por conversación directa en WhatsApp.", meta_objective: "OUTCOME_SALES", destino: "whatsapp" },
+  { id: "venta_directa_whatsapp", label: "Venta Directa (WhatsApp)", icon: <IconoWhatsApp />, desc: "Ventas por conversación directa en WhatsApp.", meta_objective: "OUTCOME_ENGAGEMENT", destino: "whatsapp" },
   { id: "reconocimiento", label: "Reconocimiento", icon: "📢", desc: "Más personas conocerán tu marca.", meta_objective: "OUTCOME_AWARENESS", destino: "pagina" },
   { id: "retargeting", label: "Retargeting", icon: "🔄", desc: "Impacta a quienes ya te conocen.", meta_objective: "OUTCOME_TRAFFIC", destino: "sitio_web" },
   { id: "leads", label: "Generación de Leads", icon: "🎯", desc: "Captura contactos interesados en tu producto.", meta_objective: "OUTCOME_LEADS", destino: "formulario" },
