@@ -184,13 +184,167 @@ const PAISES_COBERTURA: { codigo: string; nombre: string }[] = [
   { codigo: "GB", nombre: "Reino Unido" },
 ];
 
+// Menú desplegable personalizado con la bandera real de cada país (un
+// <select> nativo de HTML no puede mostrar imágenes dentro de sus
+// opciones, solo texto -- por eso este es un dropdown construido a mano
+// en vez del <select> que había antes). Las banderas vienen de flagcdn.com
+// en tamaño chico (20x15), con una letra de respaldo si la imagen falla.
+function BanderaPais({ codigo, tamano = 20 }: { codigo: string; tamano?: number }) {
+  const [fallo, setFallo] = useState(false);
+  const alto = Math.round((tamano * 15) / 20);
+  if (fallo) {
+    return (
+      <span style={{ width: tamano, height: alto, borderRadius: 3, background: "#e8e8e6", display: "inline-flex", alignItems: "center", justifyContent: "center", fontSize: 8, fontWeight: 700, color: "#999", flexShrink: 0 }}>
+        {codigo}
+      </span>
+    );
+  }
+  return (
+    <img
+      src={`https://flagcdn.com/${tamano}x${alto}/${codigo.toLowerCase()}.png`}
+      alt={codigo}
+      width={tamano}
+      height={alto}
+      style={{ borderRadius: 3, display: "block", flexShrink: 0, objectFit: "cover" }}
+      onError={() => setFallo(true)}
+    />
+  );
+}
+
+function SelectorPais({ valor, onChange }: { valor: string; onChange: (codigo: string) => void }) {
+  const [abierto, setAbierto] = useState(false);
+  const wrapRef = useRef<HTMLDivElement>(null);
+  const paisActual = PAISES_COBERTURA.find((p) => p.codigo === valor) || PAISES_COBERTURA[0];
+
+  useEffect(() => {
+    if (!abierto) return;
+    const cerrarSiAfuera = (e: MouseEvent) => {
+      if (wrapRef.current && !wrapRef.current.contains(e.target as Node)) setAbierto(false);
+    };
+    document.addEventListener("mousedown", cerrarSiAfuera);
+    return () => document.removeEventListener("mousedown", cerrarSiAfuera);
+  }, [abierto]);
+
+  return (
+    <div ref={wrapRef} style={{ position: "relative" }}>
+      <button
+        type="button"
+        onClick={() => setAbierto((v) => !v)}
+        style={{ width: "100%", display: "flex", alignItems: "center", gap: 8, padding: "10px 12px", borderRadius: 8, border: "1px solid #e0e0e0", background: "#fff", fontSize: 13, cursor: "pointer", boxSizing: "border-box", textAlign: "left" }}
+      >
+        <BanderaPais codigo={paisActual.codigo} />
+        <span style={{ flex: 1, color: "#1a1a1a" }}>{paisActual.nombre}</span>
+        <span style={{ color: "#999", fontSize: 11, transform: abierto ? "rotate(180deg)" : "none", transition: "transform .15s ease" }}>▾</span>
+      </button>
+      {abierto && (
+        <div style={{ position: "absolute", top: "calc(100% + 4px)", left: 0, right: 0, zIndex: 20, background: "#fff", border: "1px solid #e0e0e0", borderRadius: 10, boxShadow: "0 8px 24px rgba(0,0,0,0.12)", maxHeight: 260, overflowY: "auto", padding: 4 }}>
+          {PAISES_COBERTURA.map((p) => (
+            <div
+              key={p.codigo}
+              onClick={() => { onChange(p.codigo); setAbierto(false); }}
+              style={{
+                display: "flex", alignItems: "center", gap: 8, padding: "8px 10px", borderRadius: 6, cursor: "pointer",
+                background: p.codigo === valor ? "#F3F2FE" : "transparent",
+                fontSize: 13, color: p.codigo === valor ? "#534AB7" : "#1a1a1a", fontWeight: p.codigo === valor ? 600 : 400,
+              }}
+              onMouseEnter={(e) => { if (p.codigo !== valor) e.currentTarget.style.background = "#f9f9f8"; }}
+              onMouseLeave={(e) => { if (p.codigo !== valor) e.currentTarget.style.background = "transparent"; }}
+            >
+              <BanderaPais codigo={p.codigo} />
+              <span>{p.nombre}</span>
+            </div>
+          ))}
+        </div>
+      )}
+    </div>
+  );
+}
+
+// Input de "chips": el usuario escribe una ciudad, presiona Enter (o coma)
+// y aparece como pastilla removible -- mucho más claro que pedirle que
+// escriba texto separado por comas a mano, y elimina errores de formato
+// (espacios de más, comas dobles, etc.) porque cada ciudad ya queda
+// guardada como un elemento propio de la lista, no como texto libre.
+function InputChipsCiudades({ ciudades, onChange }: { ciudades: string[]; onChange: (nuevas: string[]) => void }) {
+  const [borrador, setBorrador] = useState("");
+
+  const agregarCiudad = () => {
+    const limpia = borrador.trim();
+    if (!limpia) return;
+    const yaExiste = ciudades.some((c) => c.toLowerCase() === limpia.toLowerCase());
+    if (!yaExiste) onChange([...ciudades, limpia]);
+    setBorrador("");
+  };
+
+  const quitarCiudad = (idx: number) => {
+    onChange(ciudades.filter((_, i) => i !== idx));
+  };
+
+  const handleKeyDown = (e: React.KeyboardEvent<HTMLInputElement>) => {
+    if (e.key === "Enter" || e.key === ",") {
+      e.preventDefault();
+      agregarCiudad();
+    } else if (e.key === "Backspace" && borrador === "" && ciudades.length > 0) {
+      // Borrar la última pastilla con Backspace cuando el campo de texto
+      // ya está vacío -- comportamiento esperado en este tipo de input.
+      onChange(ciudades.slice(0, -1));
+    }
+  };
+
+  return (
+    <div
+      onClick={(e) => {
+        const input = (e.currentTarget.querySelector("input") as HTMLInputElement | null);
+        input?.focus();
+      }}
+      style={{
+        display: "flex", flexWrap: "wrap", gap: 6, alignItems: "center",
+        padding: "8px 10px", borderRadius: 8, border: "1px solid #e0e0e0", background: "#fff",
+        cursor: "text", boxSizing: "border-box", minHeight: 42,
+      }}
+    >
+      {ciudades.map((ciudad, idx) => (
+        <span
+          key={`${ciudad}-${idx}`}
+          style={{
+            display: "inline-flex", alignItems: "center", gap: 5,
+            background: "#F3F2FE", color: "#534AB7", fontSize: 12.5, fontWeight: 600,
+            padding: "4px 6px 4px 10px", borderRadius: 20,
+          }}
+        >
+          {ciudad}
+          <button
+            type="button"
+            onClick={(e) => { e.stopPropagation(); quitarCiudad(idx); }}
+            title={`Quitar ${ciudad}`}
+            style={{
+              width: 16, height: 16, borderRadius: "50%", border: "none", background: "#534AB7", color: "#fff",
+              fontSize: 10, lineHeight: 1, cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0,
+            }}
+          >
+            ✕
+          </button>
+        </span>
+      ))}
+      <input
+        value={borrador}
+        onChange={(e) => setBorrador(e.target.value)}
+        onKeyDown={handleKeyDown}
+        onBlur={agregarCiudad}
+        placeholder={ciudades.length === 0 ? "Escribe una ciudad y presiona Enter..." : "Agregar otra..."}
+        style={{ flex: "1 1 140px", minWidth: 120, border: "none", outline: "none", fontSize: 13, padding: "4px 2px" }}
+      />
+    </div>
+  );
+}
+
 // Bloque independiente del flujo de ADN -- se guarda solo, con su propio
 // endpoint, y queda visible siempre (haya o no ADN generado ya). A
 // propósito no vive dentro de la sección de ADN, que es intencionalmente
 // de solo lectura.
 function CoberturaCiudades() {
   const [pais, setPais] = useState("CO");
-  const [valor, setValor] = useState("");
+  const [ciudades, setCiudades] = useState<string[]>([]);
   const [cargando, setCargando] = useState(true);
   const [guardando, setGuardando] = useState(false);
   const [guardado, setGuardado] = useState(false);
@@ -199,7 +353,7 @@ function CoberturaCiudades() {
     fetch("/api/marca/cobertura")
       .then((r) => r.json())
       .then((data) => {
-        setValor((data.ciudades_cobertura || []).join(", "));
+        setCiudades(data.ciudades_cobertura || []);
         setPais(data.pais_cobertura || "CO");
       })
       .catch(() => {})
@@ -210,7 +364,6 @@ function CoberturaCiudades() {
     setGuardando(true);
     setGuardado(false);
     try {
-      const ciudades = valor.split(",").map((c) => c.trim()).filter(Boolean);
       await fetch("/api/marca/cobertura", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
@@ -231,45 +384,36 @@ function CoberturaCiudades() {
           ¿Dónde entrega o atiende tu negocio?
         </p>
         <p style={{ fontSize: 12.5, color: "#666", margin: "0 0 12px" }}>
-          Elige el país. Si además escribes ciudades, tus campañas se limitan solo a esas ciudades — si dejas las ciudades vacías, se segmentan a nivel nacional en ese país.
+          Elige el país. Si además agregas ciudades, tus campañas se limitan solo a esas ciudades — si no agregas ninguna, se segmentan a nivel nacional en ese país.
         </p>
         <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
           <div>
             <label style={{ fontSize: 12, fontWeight: 600, color: "#666", display: "block", marginBottom: 4 }}>País</label>
-            <select
-              value={pais}
-              onChange={(e) => { setPais(e.target.value); setGuardado(false); }}
-              style={{ width: "100%", padding: "10px 12px", borderRadius: 8, border: "1px solid #e0e0e0", fontSize: 13, background: "#fff", boxSizing: "border-box" }}
-            >
-              {PAISES_COBERTURA.map((p) => (
-                <option key={p.codigo} value={p.codigo}>{p.nombre}</option>
-              ))}
-            </select>
+            <SelectorPais valor={pais} onChange={(codigo) => { setPais(codigo); setGuardado(false); }} />
           </div>
           <div>
             <label style={{ fontSize: 12, fontWeight: 600, color: "#666", display: "block", marginBottom: 4 }}>
-              Ciudades <span style={{ fontWeight: 400, color: "#999" }}>(opcional — vacío = todo el país)</span>
+              Ciudades <span style={{ fontWeight: 400, color: "#999" }}>(opcional — sin ninguna = todo el país)</span>
             </label>
-            <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
-              <input
-                value={valor}
-                onChange={(e) => { setValor(e.target.value); setGuardado(false); }}
-                placeholder="Bogotá, Medellín, Cali"
-                style={{ flex: "1 1 240px", padding: "10px 12px", borderRadius: 8, border: "1px solid #e0e0e0", fontSize: 13, boxSizing: "border-box" }}
-              />
-              <button
-                onClick={handleGuardar}
-                disabled={guardando}
-                style={{
-                  background: guardado ? "#10b981" : "#534AB7",
-                  color: "#fff", border: "none", padding: "10px 18px", borderRadius: 8,
-                  fontSize: 13, fontWeight: 600, cursor: guardando ? "not-allowed" : "pointer", whiteSpace: "nowrap",
-                }}
-              >
-                {guardando ? "Guardando..." : guardado ? "✓ Guardado" : "Guardar"}
-              </button>
-            </div>
+            <InputChipsCiudades
+              ciudades={ciudades}
+              onChange={(nuevas) => { setCiudades(nuevas); setGuardado(false); }}
+            />
+            <p style={{ fontSize: 11, color: "#999", margin: "6px 0 0" }}>
+              Escribe el nombre de una ciudad y presiona <strong>Enter</strong> para agregarla como pastilla. Repite para cada ciudad. Haz clic en la ✕ de una pastilla para quitarla.
+            </p>
           </div>
+          <button
+            onClick={handleGuardar}
+            disabled={guardando}
+            style={{
+              background: guardado ? "#10b981" : "#534AB7",
+              color: "#fff", border: "none", padding: "10px 18px", borderRadius: 8,
+              fontSize: 13, fontWeight: 600, cursor: guardando ? "not-allowed" : "pointer", alignSelf: "flex-start", marginTop: 4,
+            }}
+          >
+            {guardando ? "Guardando..." : guardado ? "✓ Guardado" : "Guardar"}
+          </button>
         </div>
       </div>
     </div>
