@@ -10,7 +10,7 @@ export async function GET() {
 
   const { data } = await supabaseAdmin
     .from("usuarios")
-    .select("meta_ad_account_id, meta_user_name, meta_token_expira, meta_page_id, meta_page_name")
+    .select("meta_ad_account_id, meta_user_name, meta_token_expira, meta_page_id, meta_page_name, meta_pixel_id, meta_pixel_nombre")
     .eq("email", session.user.email.trim().toLowerCase())
     .single();
 
@@ -22,5 +22,7 @@ export async function GET() {
     cuentaPublicitaria: data ? data.meta_ad_account_id : null,
     pagina: data ? data.meta_page_name : null,
     expira: data ? data.meta_token_expira : null,
+    pixelId: data ? data.meta_pixel_id : null,
+    pixelNombre: data ? data.meta_pixel_nombre : null,
   });
 }
