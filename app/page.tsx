@@ -268,8 +268,13 @@ export default function Home() {
   const [campanaShaking, setCampanaShaking] = useState(false);
   const conteoPendientesPrevio = useRef<number | null>(null);
 
-  const [metaInfo, setMetaInfo] = useState<{ conectado: boolean; nombre: string | null; cuentaPublicitaria: string | null; pagina: string | null } | null>(null);
+  const [metaInfo, setMetaInfo] = useState<{ conectado: boolean; nombre: string | null; cuentaPublicitaria: string | null; pagina: string | null; pixelId: string | null; pixelNombre: string | null } | null>(null);
   const [modalAbierto, setModalAbierto] = useState<"destino" | "openai" | "cloudinary" | "meta" | null>(null);
+  const [pixelesDisponibles, setPixelesDisponibles] = useState<{ id: string; name: string }[]>([]);
+  const [cargandoPixeles, setCargandoPixeles] = useState(false);
+  const [errorPixeles, setErrorPixeles] = useState<string | null>(null);
+  const [pixelSeleccionado, setPixelSeleccionado] = useState("");
+  const [guardandoPixel, setGuardandoPixel] = useState(false);
 
   const [rol, setRol] = useState<string | null>(null);
   const [colapsado, setColapsado] = useState(false);
@@ -335,6 +340,57 @@ export default function Home() {
 
   const cargarMetaInfo = () => {
     fetch("/api/meta/estado").then(r => r.json()).then(setMetaInfo);
+  };
+
+  const cargarPixeles = async () => {
+    setCargandoPixeles(true);
+    setErrorPixeles(null);
+    try {
+      const res = await fetch("/api/meta/pixeles");
+      const data = await res.json();
+      if (res.ok) {
+        setPixelesDisponibles(data.pixeles || []);
+      } else {
+        setErrorPixeles(data.error || "No se pudieron cargar los pixeles.");
+      }
+    } catch {
+      setErrorPixeles("No se pudo conectar con Meta.");
+    } finally {
+      setCargandoPixeles(false);
+    }
+  };
+
+  const handleGuardarPixel = async () => {
+    if (!pixelSeleccionado) return;
+    setGuardandoPixel(true);
+    try {
+      const pixel = pixelesDisponibles.find((p) => p.id === pixelSeleccionado);
+      const res = await fetch("/api/meta/pixel", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ pixelId: pixelSeleccionado, pixelNombre: pixel?.name || null }),
+      });
+      if (res.ok) {
+        cargarMetaInfo();
+      } else {
+        alert("No se pudo guardar el pixel.");
+      }
+    } finally {
+      setGuardandoPixel(false);
+    }
+  };
+
+  const handleDesconectarPixel = async () => {
+    if (!confirm("¿Dejar de usar este pixel para optimizar tus campañas?")) return;
+    const res = await fetch("/api/meta/pixel", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ pixelId: null }),
+    });
+    if (res.ok) {
+      setPixelSeleccionado("");
+      cargarMetaInfo();
+    }
   };
 
   const handleGuardarApiKey = async () => {
@@ -474,6 +530,15 @@ export default function Home() {
 
     conteoPendientesPrevio.current = pendientes;
   }, [notificaciones]);
+
+  // Trae la lista real de pixeles de Meta apenas se abre el modal de Meta
+  // Ads, siempre que la cuenta ya esté conectada — así el dropdown llega
+  // listo sin que el usuario tenga que pedirlo aparte.
+  useEffect(() => {
+    if (modalAbierto === "meta" && metaInfo?.conectado) {
+      cargarPixeles();
+    }
+  }, [modalAbierto, metaInfo?.conectado]);
 
   const handleGuardarCloudinary = async () => {
     setGuardandoCloud(true);
@@ -1196,6 +1261,67 @@ export default function Home() {
                       <div><strong>Cuenta:</strong> {metaInfo.nombre || "—"}</div>
                       <div style={{ marginTop: 4 }}><strong>Cuenta publicitaria:</strong> {metaInfo.cuentaPublicitaria || "—"}</div>
                       <div style={{ marginTop: 4 }}><strong>Página de Facebook:</strong> {metaInfo.pagina || "—"}</div>
+                    </div>
+
+                    <div style={{ borderTop: "1px solid #f0f0f0", paddingTop: 14, marginBottom: 14 }}>
+                      <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 8 }}>
+                        <span style={{ fontSize: 12, fontWeight: 600, color: "#666" }}>Pixel de Meta (opcional)</span>
+                        {metaInfo.pixelId && (
+                          <span style={{ display: "inline-flex", alignItems: "center", gap: 5, background: "#DCFCE7", color: "#15803D", fontSize: 11, fontWeight: 700, padding: "3px 9px", borderRadius: 999 }}>
+                            <span style={{ width: 6, height: 6, borderRadius: "50%", background: "#22C55E" }} />
+                            Conectado
+                          </span>
+                        )}
+                      </div>
+
+                      <p style={{ fontSize: 12, color: "#888", lineHeight: 1.5, marginBottom: 10 }}>
+                        Si conectas un pixel, tus campañas de venta podrán optimizarse por conversiones reales en vez de solo clics.
+                      </p>
+
+                      {metaInfo.pixelId && (
+                        <div style={{ background: "#f9fafb", padding: "10px 12px", borderRadius: "8px", fontSize: 13, color: "#333", marginBottom: 10, display: "flex", alignItems: "center", justifyContent: "space-between" }}>
+                          <span><strong>Pixel activo:</strong> {metaInfo.pixelNombre || metaInfo.pixelId}</span>
+                          <button
+                            onClick={handleDesconectarPixel}
+                            style={{ background: "none", border: "none", color: "#DC2626", fontSize: 12, cursor: "pointer", fontWeight: 600 }}
+                          >
+                            Quitar
+                          </button>
+                        </div>
+                      )}
+
+                      {cargandoPixeles ? (
+                        <p style={{ fontSize: 12, color: "#888" }}>Cargando pixeles de tu cuenta de Meta...</p>
+                      ) : errorPixeles ? (
+                        <div>
+                          <p style={{ fontSize: 12, color: "#DC2626", marginBottom: 8 }}>{errorPixeles}</p>
+                          <button onClick={cargarPixeles} style={{ fontSize: 12, color: "#534AB7", background: "none", border: "1px solid #534AB7", borderRadius: 6, padding: "6px 10px", cursor: "pointer" }}>
+                            Reintentar
+                          </button>
+                        </div>
+                      ) : pixelesDisponibles.length === 0 ? (
+                        <p style={{ fontSize: 12, color: "#888" }}>No encontramos pixeles en tu cuenta publicitaria de Meta. Crea uno en Meta Events Manager y vuelve a abrir este panel.</p>
+                      ) : (
+                        <div style={{ display: "flex", gap: 8 }}>
+                          <select
+                            value={pixelSeleccionado}
+                            onChange={(e) => setPixelSeleccionado(e.target.value)}
+                            style={{ flex: 1, padding: "10px", borderRadius: 8, border: "1px solid #e0e0e0", fontSize: 13, boxSizing: "border-box" }}
+                          >
+                            <option value="">Selecciona un pixel...</option>
+                            {pixelesDisponibles.map((p) => (
+                              <option key={p.id} value={p.id}>{p.name} ({p.id})</option>
+                            ))}
+                          </select>
+                          <button
+                            onClick={handleGuardarPixel}
+                            disabled={!pixelSeleccionado || guardandoPixel}
+                            style={{ padding: "10px 14px", borderRadius: 8, background: !pixelSeleccionado ? "#eee" : "#534AB7", color: !pixelSeleccionado ? "#aaa" : "#fff", border: "none", fontWeight: 600, fontSize: 13, cursor: !pixelSeleccionado ? "not-allowed" : "pointer", whiteSpace: "nowrap" }}
+                          >
+                            {guardandoPixel ? "Guardando..." : "Guardar"}
+                          </button>
+                        </div>
+                      )}
                     </div>
 
                     <div style={{ display: "flex", justifyContent: "flex-end", alignItems: "center", gap: 6, marginBottom: 8 }}>
