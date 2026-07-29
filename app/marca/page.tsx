@@ -154,11 +154,42 @@ function GlowAmbienteADN() {
   );
 }
 
+// Lista curada de países soportados por Meta Ads, cubriendo Latinoamérica
+// (mercado principal de Quiubot) más los mercados internacionales más
+// comunes -- no es la lista completa de países que soporta Meta (son casi
+// 200), pero cubre el caso real de "vendo en Colombia y también fuera".
+const PAISES_COBERTURA: { codigo: string; nombre: string }[] = [
+  { codigo: "CO", nombre: "Colombia" },
+  { codigo: "MX", nombre: "México" },
+  { codigo: "AR", nombre: "Argentina" },
+  { codigo: "CL", nombre: "Chile" },
+  { codigo: "PE", nombre: "Perú" },
+  { codigo: "EC", nombre: "Ecuador" },
+  { codigo: "VE", nombre: "Venezuela" },
+  { codigo: "BO", nombre: "Bolivia" },
+  { codigo: "PY", nombre: "Paraguay" },
+  { codigo: "UY", nombre: "Uruguay" },
+  { codigo: "PA", nombre: "Panamá" },
+  { codigo: "CR", nombre: "Costa Rica" },
+  { codigo: "GT", nombre: "Guatemala" },
+  { codigo: "HN", nombre: "Honduras" },
+  { codigo: "SV", nombre: "El Salvador" },
+  { codigo: "NI", nombre: "Nicaragua" },
+  { codigo: "DO", nombre: "República Dominicana" },
+  { codigo: "PR", nombre: "Puerto Rico" },
+  { codigo: "ES", nombre: "España" },
+  { codigo: "US", nombre: "Estados Unidos" },
+  { codigo: "CA", nombre: "Canadá" },
+  { codigo: "BR", nombre: "Brasil" },
+  { codigo: "GB", nombre: "Reino Unido" },
+];
+
 // Bloque independiente del flujo de ADN -- se guarda solo, con su propio
 // endpoint, y queda visible siempre (haya o no ADN generado ya). A
 // propósito no vive dentro de la sección de ADN, que es intencionalmente
 // de solo lectura.
 function CoberturaCiudades() {
+  const [pais, setPais] = useState("CO");
   const [valor, setValor] = useState("");
   const [cargando, setCargando] = useState(true);
   const [guardando, setGuardando] = useState(false);
@@ -167,7 +198,10 @@ function CoberturaCiudades() {
   useEffect(() => {
     fetch("/api/marca/cobertura")
       .then((r) => r.json())
-      .then((data) => setValor((data.ciudades_cobertura || []).join(", ")))
+      .then((data) => {
+        setValor((data.ciudades_cobertura || []).join(", "));
+        setPais(data.pais_cobertura || "CO");
+      })
       .catch(() => {})
       .finally(() => setCargando(false));
   }, []);
@@ -180,7 +214,7 @@ function CoberturaCiudades() {
       await fetch("/api/marca/cobertura", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ ciudades_cobertura: ciudades }),
+        body: JSON.stringify({ ciudades_cobertura: ciudades, pais_cobertura: pais }),
       });
       setGuardado(true);
     } finally {
@@ -194,29 +228,48 @@ function CoberturaCiudades() {
     <div style={{ maxWidth: 760, margin: "1.5rem auto 0", padding: "0 1.5rem" }}>
       <div style={{ background: "#fff", border: "1px solid #e8e8e6", borderRadius: 14, padding: "1.25rem 1.5rem" }}>
         <p style={{ fontSize: 14, fontWeight: 600, color: "#1a1a1a", margin: "0 0 4px" }}>
-          ¿En qué ciudades entrega o atiende tu negocio?
+          ¿Dónde entrega o atiende tu negocio?
         </p>
         <p style={{ fontSize: 12.5, color: "#666", margin: "0 0 12px" }}>
-          Opcional — si lo dejas vacío, tus campañas se segmentan a nivel nacional. Escribe las ciudades separadas por coma.
+          Elige el país. Si además escribes ciudades, tus campañas se limitan solo a esas ciudades — si dejas las ciudades vacías, se segmentan a nivel nacional en ese país.
         </p>
-        <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
-          <input
-            value={valor}
-            onChange={(e) => { setValor(e.target.value); setGuardado(false); }}
-            placeholder="Bogotá, Medellín, Cali"
-            style={{ flex: "1 1 240px", padding: "10px 12px", borderRadius: 8, border: "1px solid #e0e0e0", fontSize: 13 }}
-          />
-          <button
-            onClick={handleGuardar}
-            disabled={guardando}
-            style={{
-              background: guardado ? "#10b981" : "#534AB7",
-              color: "#fff", border: "none", padding: "10px 18px", borderRadius: 8,
-              fontSize: 13, fontWeight: 600, cursor: guardando ? "not-allowed" : "pointer", whiteSpace: "nowrap",
-            }}
-          >
-            {guardando ? "Guardando..." : guardado ? "✓ Guardado" : "Guardar"}
-          </button>
+        <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
+          <div>
+            <label style={{ fontSize: 12, fontWeight: 600, color: "#666", display: "block", marginBottom: 4 }}>País</label>
+            <select
+              value={pais}
+              onChange={(e) => { setPais(e.target.value); setGuardado(false); }}
+              style={{ width: "100%", padding: "10px 12px", borderRadius: 8, border: "1px solid #e0e0e0", fontSize: 13, background: "#fff", boxSizing: "border-box" }}
+            >
+              {PAISES_COBERTURA.map((p) => (
+                <option key={p.codigo} value={p.codigo}>{p.nombre}</option>
+              ))}
+            </select>
+          </div>
+          <div>
+            <label style={{ fontSize: 12, fontWeight: 600, color: "#666", display: "block", marginBottom: 4 }}>
+              Ciudades <span style={{ fontWeight: 400, color: "#999" }}>(opcional — vacío = todo el país)</span>
+            </label>
+            <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
+              <input
+                value={valor}
+                onChange={(e) => { setValor(e.target.value); setGuardado(false); }}
+                placeholder="Bogotá, Medellín, Cali"
+                style={{ flex: "1 1 240px", padding: "10px 12px", borderRadius: 8, border: "1px solid #e0e0e0", fontSize: 13, boxSizing: "border-box" }}
+              />
+              <button
+                onClick={handleGuardar}
+                disabled={guardando}
+                style={{
+                  background: guardado ? "#10b981" : "#534AB7",
+                  color: "#fff", border: "none", padding: "10px 18px", borderRadius: 8,
+                  fontSize: 13, fontWeight: 600, cursor: guardando ? "not-allowed" : "pointer", whiteSpace: "nowrap",
+                }}
+              >
+                {guardando ? "Guardando..." : guardado ? "✓ Guardado" : "Guardar"}
+              </button>
+            </div>
+          </div>
         </div>
       </div>
     </div>
