@@ -93,6 +93,35 @@ function ErrorConAccion({ mensaje }: { mensaje: string }) {
   );
 }
 
+// Logo real de Meta (mismo CDN que usa Integraciones), con texto de
+// respaldo si el ícono no carga -- nunca deja un ícono roto en pantalla.
+function LogoMetaInline({ size = 18 }: { size?: number }) {
+  const [fallo, setFallo] = useState(false);
+  if (fallo) return <span style={{ fontWeight: 800 }}>Meta</span>;
+  return (
+    <img
+      src="https://cdn.simpleicons.org/meta/ffffff"
+      alt="Meta"
+      width={size}
+      height={size}
+      style={{ display: "block" }}
+      onError={() => setFallo(true)}
+    />
+  );
+}
+
+// Link directo a la campaña específica en Meta Ads Manager (no solo al
+// dashboard genérico) -- esto es la prueba social más fuerte: el usuario
+// puede verificar él mismo, en la fuente oficial, que su campaña sí quedó
+// publicada, en vez de solo confiar en el texto de Quiubot.
+function linkMetaAdsManager(campaignId: string | null, adAccountId: string | null) {
+  if (!campaignId) return "https://adsmanager.facebook.com/adsmanager";
+  const params = new URLSearchParams();
+  if (adAccountId) params.set("act", adAccountId.replace(/^act_/, ""));
+  params.set("selected_campaign_ids", campaignId);
+  return `https://adsmanager.facebook.com/adsmanager/manage/campaigns?${params.toString()}`;
+}
+
 type TipoContenido = "producto" | "servicio";
 
 type EstrategiaStep =
@@ -437,6 +466,8 @@ function EstrategiaContent() {
   const [cargandoCreativos, setCargandoCreativos] = useState(false);
   const [publicando, setPublicando] = useState(false);
   const [publicado, setPublicado] = useState(false);
+  const [metaCampaignId, setMetaCampaignId] = useState<string | null>(null);
+  const [metaAdAccountId, setMetaAdAccountId] = useState<string | null>(null);
   const [errorMsg, setErrorMsg] = useState<string | null>(null);
   const [estrategiaSeleccionada, setEstrategiaSeleccionada] = useState<any | null>(null);
   const [estrategiasGeneradas, setEstrategiasGeneradas] = useState<any[] | null>(null);
@@ -480,6 +511,14 @@ function EstrategiaContent() {
       .then((r) => r.json())
       .then((data) => setTieneAdn(!!data.tieneAdn))
       .catch(() => setTieneAdn(false));
+
+    // Cuenta publicitaria de Meta -- solo se usa para armar el link directo
+    // a la campaña en Ads Manager una vez publicada, no bloquea nada si
+    // Meta todavía no está conectado (el link cae a un fallback genérico).
+    fetch("/api/meta/estado")
+      .then((r) => r.json())
+      .then((data) => setMetaAdAccountId(data?.cuentaPublicitaria || null))
+      .catch(() => setMetaAdAccountId(null));
   }, []);
 
   // Si el usuario llega desde la notificación "creativos_listos" (?job=<id>),
@@ -861,6 +900,7 @@ function EstrategiaContent() {
         setErrorMsg(data.error || "No se pudo publicar la estrategia en Meta.");
         return;
       }
+      setMetaCampaignId(data.meta_campaign_id || null);
       setPublicado(true);
       // Ya se publicó -- limpiamos el estado persistido para que la próxima
       // vez que se retome un job (de otra campaña distinta) no arrastre
@@ -1621,9 +1661,41 @@ function EstrategiaContent() {
                         "Activando los anuncios",
                       ]}
                     />
+                  ) : publicado ? (
+                    <div style={{ background: "#F0FDF4", border: "1px solid #86EFAC", borderRadius: 12, padding: "1.25rem", display: "flex", flexDirection: "column", alignItems: "center", textAlign: "center", gap: 10 }}>
+                      <div style={{ width: 44, height: 44, borderRadius: "50%", background: "#10b981", display: "flex", alignItems: "center", justifyContent: "center" }}>
+                        <Check size={22} color="#fff" strokeWidth={3} aria-hidden="true" />
+                      </div>
+                      <div>
+                        <div style={{ fontSize: 15, fontWeight: 700, color: "#15803D" }}>Campaña publicada en Meta</div>
+                        <div style={{ fontSize: 12.5, color: "#3f6d54", marginTop: 2 }}>
+                          Ya está creada directamente en tu cuenta de Meta Ads Manager, en pausa para que la revises antes de activarla.
+                        </div>
+                      </div>
+                      <a
+                        href={linkMetaAdsManager(metaCampaignId, metaAdAccountId)}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        style={{ display: "inline-flex", alignItems: "center", gap: 8, background: "#1877F2", color: "#fff", textDecoration: "none", padding: "10px 18px", borderRadius: 8, fontSize: 13.5, fontWeight: 600, marginTop: 4 }}
+                      >
+                        <LogoMetaInline size={16} />
+                        Ver campaña en Meta Ads Manager
+                      </a>
+                    </div>
                   ) : (
-                    <button onClick={handlePublicarEnMeta} disabled={publicado || algunaRegenerando} style={{ width: "100%", background: publicado ? "#10b981" : algunaRegenerando ? "#aaa" : "#534AB7", color: "#fff", border: "none", padding: 16, borderRadius: 10, fontSize: 16, fontWeight: 600, cursor: (publicado || algunaRegenerando) ? "not-allowed" : "pointer" }}>
-                      {publicado ? "✅ Campaña publicada en Meta" : algunaRegenerando ? "⏳ Espera a que termine la regeneración" : "📤 Publicar estrategia en Meta"}
+                    <button
+                      onClick={handlePublicarEnMeta}
+                      disabled={algunaRegenerando}
+                      style={{ width: "100%", background: algunaRegenerando ? "#aaa" : "#534AB7", color: "#fff", border: "none", padding: 16, borderRadius: 10, fontSize: 16, fontWeight: 600, cursor: algunaRegenerando ? "not-allowed" : "pointer", display: "flex", alignItems: "center", justifyContent: "center", gap: 10 }}
+                    >
+                      {algunaRegenerando ? (
+                        "⏳ Espera a que termine la regeneración"
+                      ) : (
+                        <>
+                          <LogoMetaInline size={18} />
+                          Publicar estrategia en Meta
+                        </>
+                      )}
                     </button>
                   )}
                   {errorMsg && <ErrorConAccion mensaje={errorMsg} />}
