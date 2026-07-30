@@ -5,6 +5,9 @@ import { desencriptarSiHaceFalta } from "@/lib/crypto";
 import { verificarLimite } from "@/lib/rateLimit";
 import { PLANES, type PlanId } from "@/app/lib/planesConfig";
 
+const MIN_IMAGENES = 1;
+const MAX_IMAGENES = 3;
+
 export async function POST(req: NextRequest) {
   const session = await auth();
   if (!session?.user?.email) {
@@ -23,13 +26,16 @@ export async function POST(req: NextRequest) {
   const {
     estrategia,
     descripcion_visual_producto,
-    imagen_producto_base64,
+    imagenes_producto_base64, // array de 1 a 3 imagenes -- antes era imagen_producto_base64 (singular)
     tipo_contenido,       // "producto" | "servicio" — nuevo
     descripcion_servicio, // opcional, solo aplica si tipo_contenido === "servicio"
   } = await req.json();
 
-  if (!estrategia || !descripcion_visual_producto || !imagen_producto_base64) {
-    return NextResponse.json({ error: "Falta la estrategia, la descripción o la foto del producto" }, { status: 400 });
+  if (!estrategia || !descripcion_visual_producto) {
+    return NextResponse.json({ error: "Falta la estrategia o la descripción" }, { status: 400 });
+  }
+  if (!Array.isArray(imagenes_producto_base64) || imagenes_producto_base64.length < MIN_IMAGENES || imagenes_producto_base64.length > MAX_IMAGENES) {
+    return NextResponse.json({ error: `Faltan las fotos del producto/servicio (entre ${MIN_IMAGENES} y ${MAX_IMAGENES})` }, { status: 400 });
   }
 
   // Igual que en generar-estrategia: normalizamos con fallback a "producto"
@@ -118,7 +124,7 @@ export async function POST(req: NextRequest) {
         email: emailBusqueda,
         estrategia,
         descripcion_visual_producto,
-        imagen_producto_base64,
+        imagenes_producto_base64,
         openai_key: openaiKeyDescifrada,
         cloudinary_name: usuario.cloudinary_name,
         cloudinary_key: cloudinaryKeyDescifrada,

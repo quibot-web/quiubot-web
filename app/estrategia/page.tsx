@@ -1,7 +1,7 @@
 "use client";
 import { useState, useRef, useEffect, Suspense } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
-import { ShoppingBag, Target, Camera, Sparkles, Check, Shirt, Smartphone, UtensilsCrossed, Plane, Briefcase, Palmtree, Video, Watch, Bot, FolderOpen, Dna } from "lucide-react";
+import { ShoppingBag, Target, Camera, Sparkles, Check, Shirt, Smartphone, UtensilsCrossed, Plane, Briefcase, Palmtree, Video, Watch, Bot, FolderOpen, Dna, X } from "lucide-react";
 import AdBlueprintExplorer from "@/app/components/AdBlueprintExplorer";
 import TutorialVideo from "@/app/components/TutorialVideo";
 import TourGuiado from "@/app/components/TourGuiado";
@@ -19,6 +19,9 @@ function IconoWhatsApp() {
     </svg>
   );
 }
+
+const MIN_IMAGENES_PRODUCTO = 1;
+const MAX_IMAGENES_PRODUCTO = 3;
 
 const OBJETIVOS = [
   { id: "venta_directa_web", label: "Venta Directa", icon: "🛒", desc: "Ventas inmediatas en tu sitio web.", meta_objective: "OUTCOME_SALES", destino: "sitio_web" },
@@ -458,8 +461,8 @@ function EstrategiaContent() {
   const [tipoContenido, setTipoContenido] = useState<TipoContenido | null>(null);
   const [hoverTipo, setHoverTipo] = useState<TipoContenido | null>(null);
   const [descripcionServicio, setDescripcionServicio] = useState<string>("");
-  const [imagen, setImagen] = useState<File | null>(null);
-  const [preview, setPreview] = useState<string | null>(null);
+  const [imagenes, setImagenes] = useState<File[]>([]);
+  const [previews, setPreviews] = useState<string[]>([]);
   const [objetivo, setObjetivo] = useState<typeof OBJETIVOS[number] | null>(null);
   const [presupuestoDiario, setPresupuestoDiario] = useState<number>(50000);
   const [cargandoEstrategia, setCargandoEstrategia] = useState(false);
@@ -472,7 +475,7 @@ function EstrategiaContent() {
   const [estrategiaSeleccionada, setEstrategiaSeleccionada] = useState<any | null>(null);
   const [estrategiasGeneradas, setEstrategiasGeneradas] = useState<any[] | null>(null);
   const [descripcionVisual, setDescripcionVisual] = useState<string>("");
-  const [imagenBase64Persistida, setImagenBase64Persistida] = useState<string | null>(null);
+  const [imagenesBase64Persistidas, setImagenesBase64Persistidas] = useState<string[]>([]);
   const [creativos, setCreativos] = useState<any[] | null>(null);
   const [progresoCreativos, setProgresoCreativos] = useState<{ completados: number; total: number | null; parciales: any[] }>({
     completados: 0,
@@ -529,8 +532,12 @@ function EstrategiaContent() {
 
     const descGuardada = localStorage.getItem("quiubot_descripcion_visual_producto");
     if (descGuardada) setDescripcionVisual(descGuardada);
-    const imgGuardada = localStorage.getItem("quiubot_imagen_producto_base64");
-    if (imgGuardada) setImagenBase64Persistida(imgGuardada);
+    const imgsGuardadas = localStorage.getItem("quiubot_imagenes_producto_base64");
+    if (imgsGuardadas) {
+      try {
+        setImagenesBase64Persistidas(JSON.parse(imgsGuardadas));
+      } catch {}
+    }
 
     // La estrategia seleccionada también vive solo en memoria -- sin esto,
     // al volver por la notificación (que recarga la página desde cero) se
@@ -602,22 +609,28 @@ function EstrategiaContent() {
 
   const handleFile = (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
-    if (!file) return;
-    setImagen(file);
-    setPreview(URL.createObjectURL(file));
+    if (!file || imagenes.length >= MAX_IMAGENES_PRODUCTO) return;
+    setImagenes((prev) => [...prev, file]);
+    setPreviews((prev) => [...prev, URL.createObjectURL(file)]);
+    if (fileRef.current) fileRef.current.value = "";
+  };
+
+  const handleQuitarImagen = (idx: number) => {
+    setImagenes((prev) => prev.filter((_, i) => i !== idx));
+    setPreviews((prev) => prev.filter((_, i) => i !== idx));
   };
 
   const handleGenerarEstrategia = async () => {
-    if (!imagen || !objetivo || presupuestoDiario < 20000 || !tipoContenido) return;
+    if (imagenes.length < MIN_IMAGENES_PRODUCTO || !objetivo || presupuestoDiario < 20000 || !tipoContenido) return;
     setCargandoEstrategia(true);
     setErrorMsg(null);
     try {
-      const imagenBase64 = await fileToBase64(imagen);
+      const imagenesBase64 = await Promise.all(imagenes.map(fileToBase64));
       const res = await fetch("/api/generar-estrategia", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
-          imagen_base64: imagenBase64,
+          imagenes_base64: imagenesBase64,
           objetivo,
           presupuesto_diario_cop: presupuestoDiario,
           tipo_contenido: tipoContenido,
@@ -665,11 +678,11 @@ function EstrategiaContent() {
     localStorage.removeItem("quiubot_creativos_lote");
     localStorage.removeItem("quiubot_job_regenerar_idx");
     try {
-      const imagenBase64 = imagen ? await fileToBase64(imagen) : imagenBase64Persistida;
-      if (imagenBase64 && imagen) {
+      const imagenesBase64 = imagenes.length > 0 ? await Promise.all(imagenes.map(fileToBase64)) : imagenesBase64Persistidas;
+      if (imagenesBase64.length > 0 && imagenes.length > 0) {
         try {
-          localStorage.setItem("quiubot_imagen_producto_base64", imagenBase64);
-          setImagenBase64Persistida(imagenBase64);
+          localStorage.setItem("quiubot_imagenes_producto_base64", JSON.stringify(imagenesBase64));
+          setImagenesBase64Persistidas(imagenesBase64);
         } catch {}
       }
       const res = await fetch("/api/crear-creativos", {
@@ -678,7 +691,7 @@ function EstrategiaContent() {
         body: JSON.stringify({
           estrategia: estrategiaSeleccionada,
           descripcion_visual_producto: descripcionVisual,
-          imagen_producto_base64: imagenBase64,
+          imagenes_producto_base64: imagenesBase64,
           tipo_contenido: tipoContenido,
           descripcion_servicio: tipoContenido === "servicio" ? descripcionServicio : null,
         }),
@@ -710,7 +723,7 @@ function EstrategiaContent() {
     setRegenerandoIndices((prev) => ({ ...prev, [idx]: true }));
     setErrorMsg(null);
     try {
-      const imagenBase64 = imagen ? await fileToBase64(imagen) : imagenBase64Persistida;
+      const imagenesBase64 = imagenes.length > 0 ? await Promise.all(imagenes.map(fileToBase64)) : imagenesBase64Persistidas;
       const estrategiaMini = {
         ...estrategiaSeleccionada,
         conjuntos: [
@@ -732,7 +745,7 @@ function EstrategiaContent() {
         body: JSON.stringify({
           estrategia: estrategiaMini,
           descripcion_visual_producto: descripcionVisual,
-          imagen_producto_base64: imagenBase64,
+          imagenes_producto_base64: imagenesBase64,
           tipo_contenido: tipoContenido,
           descripcion_servicio: tipoContenido === "servicio" ? descripcionServicio : null,
         }),
@@ -979,7 +992,7 @@ function EstrategiaContent() {
               listo={tutorialListo}
               pasos={[
                 { selector: '[data-tour="estrategia-tipo"]', titulo: "Empieza eligiendo qué vas a promocionar", texto: "Producto físico o servicio/infoproducto — la estrategia se adapta según tu elección." },
-                { selector: '[data-tour="estrategia-upload"]', titulo: "Sube tu imagen", texto: "Una foto clara del producto, o una pieza ya diseñada de tu servicio, es todo lo que necesitas para arrancar." },
+                { selector: '[data-tour="estrategia-upload"]', titulo: "Sube tus imágenes", texto: "De 1 a 3 fotos — para producto, distintos ángulos del mismo producto; para servicio, distintas piezas que ayuden a entenderlo. Es todo lo que necesitas para arrancar." },
                 { selector: '[data-tour="estrategia-siguiente"]', titulo: "Avanza paso a paso", texto: "Objetivo, presupuesto, y en segundos tienes la estrategia completa lista." },
               ]}
             />
@@ -1120,29 +1133,46 @@ function EstrategiaContent() {
               ← Cambiar tipo
             </button>
             <p style={{ fontSize: 15, fontWeight: 600, color: "#1a1a1a" }}>
-              2. {tipoContenido === "servicio" ? "Sube la pieza gráfica de tu servicio" : "Sube la foto de tu producto"}
+              2. {tipoContenido === "servicio" ? "Sube la pieza gráfica de tu servicio" : "Sube fotos de tu producto"}
             </p>
-            {tipoContenido === "servicio" && (
-              <p style={{ fontSize: 13, color: "#666", marginTop: -12 }}>
-                Sube la pieza ya diseñada (por ti o con otro editor/IA) que muestra la información de tu servicio: destino, precio, fecha, beneficio principal, etc.
-              </p>
-            )}
-            <div data-tour="estrategia-upload" onClick={() => fileRef.current?.click()} style={{ border: "1.5px dashed #7F77DD", borderRadius: 12, padding: "2rem", display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", cursor: "pointer", background: "#fcfcff", minHeight: 180 }}>
-              {preview ? (
-                <img src={preview} alt="preview" style={{ maxHeight: 200, borderRadius: 8 }} />
-              ) : (
-                <>
-                  <div style={{ width: 64, height: 64, borderRadius: "50%", background: "#F3F2FE", display: "flex", alignItems: "center", justifyContent: "center", marginBottom: 12 }}>
-                    <Camera size={28} color="#534AB7" strokeWidth={2} aria-hidden="true" />
-                  </div>
-                  <div style={{ fontSize: 14, color: "#534AB7", fontWeight: 500 }}>
-                    {tipoContenido === "servicio" ? "Subir pieza gráfica del servicio" : "Subir foto del producto"}
-                  </div>
-                  <div style={{ fontSize: 12, color: "#999", marginTop: 4 }}>Arrastra o haz clic aquí</div>
-                </>
+            <p style={{ fontSize: 13, color: "#666", marginTop: -12 }}>
+              {tipoContenido === "servicio"
+                ? "Sube de 1 a 3 piezas ya diseñadas (por ti o con otro editor/IA) que muestren la información de tu servicio: destino, precio, fecha, beneficio principal, etc. Si subes varias, cada una debe aportar algo distinto para entender mejor tu servicio."
+                : "Sube de 1 a 3 fotos de tu producto — si subes varias, que sean ángulos distintos del mismo producto (frente, detalle, en uso, empaque, etc.) para que la IA lo entienda mejor."}
+            </p>
+
+            <div data-tour="estrategia-upload" style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(130px, 1fr))", gap: 12 }}>
+              {previews.map((src, idx) => (
+                <div key={idx} style={{ position: "relative", aspectRatio: "1" }}>
+                  <img src={src} alt={`Imagen ${idx + 1}`} style={{ width: "100%", height: "100%", objectFit: "cover", borderRadius: 12, border: "1px solid #e0e0e0" }} />
+                  <button
+                    onClick={() => handleQuitarImagen(idx)}
+                    title="Quitar"
+                    style={{ position: "absolute", top: -6, right: -6, width: 24, height: 24, borderRadius: "50%", background: "#1a1a1a", color: "#fff", border: "2px solid #fff", display: "flex", alignItems: "center", justifyContent: "center", cursor: "pointer" }}
+                  >
+                    <X size={12} strokeWidth={3} />
+                  </button>
+                </div>
+              ))}
+              {imagenes.length < MAX_IMAGENES_PRODUCTO && (
+                <div
+                  onClick={() => fileRef.current?.click()}
+                  style={{ aspectRatio: "1", border: "1.5px dashed #7F77DD", borderRadius: 12, display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", cursor: "pointer", background: "#fcfcff", gap: 6 }}
+                >
+                  <Camera size={22} color="#534AB7" strokeWidth={2} aria-hidden="true" />
+                  <span style={{ fontSize: 11, color: "#534AB7", fontWeight: 500, textAlign: "center", padding: "0 8px" }}>
+                    {imagenes.length === 0
+                      ? (tipoContenido === "servicio" ? "Subir pieza gráfica" : "Subir foto del producto")
+                      : "Subir otra"}
+                  </span>
+                </div>
               )}
               <input ref={fileRef} type="file" accept="image/*" style={{ display: "none" }} onChange={handleFile} />
             </div>
+
+            <p style={{ fontSize: 12, color: "#999", marginTop: -12 }}>
+              {imagenes.length}/{MAX_IMAGENES_PRODUCTO} subidas · mínimo {MIN_IMAGENES_PRODUCTO}
+            </p>
 
             {tipoContenido === "servicio" && (
               <div>
@@ -1160,7 +1190,7 @@ function EstrategiaContent() {
               </div>
             )}
 
-            <button data-tour="estrategia-siguiente" onClick={() => setStep("objetivo")} disabled={!imagen} style={{ background: !imagen ? "#ccc" : "#534AB7", color: "#fff", border: "none", padding: "16px", borderRadius: 10, fontSize: 16, fontWeight: 600, cursor: !imagen ? "not-allowed" : "pointer" }}>
+            <button data-tour="estrategia-siguiente" onClick={() => setStep("objetivo")} disabled={imagenes.length < MIN_IMAGENES_PRODUCTO} style={{ background: imagenes.length < MIN_IMAGENES_PRODUCTO ? "#ccc" : "#534AB7", color: "#fff", border: "none", padding: "16px", borderRadius: 10, fontSize: 16, fontWeight: 600, cursor: imagenes.length < MIN_IMAGENES_PRODUCTO ? "not-allowed" : "pointer" }}>
               Siguiente paso
             </button>
           </div>

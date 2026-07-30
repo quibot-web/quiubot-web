@@ -5,6 +5,8 @@ import { PLANES, type PlanId } from "@/app/lib/planesConfig";
 import { desencriptarSiHaceFalta } from "@/lib/crypto";
 
 const ORDEN_PLANES = ["arranque", "crecimiento", "escala"];
+const MIN_IMAGENES = 1;
+const MAX_IMAGENES = 3;
 
 export async function POST(req: NextRequest) {
   const session = await auth();
@@ -14,15 +16,18 @@ export async function POST(req: NextRequest) {
 
   const emailBusqueda = session.user.email.trim().toLowerCase();
   const {
-    imagen_base64,
+    imagenes_base64,       // array de 1 a 3 imagenes -- antes era imagen_base64 (singular)
     objetivo,
     presupuesto_diario_cop,
     tipo_contenido,       // "producto" | "servicio" — nuevo
     descripcion_servicio, // opcional, solo aplica si tipo_contenido === "servicio"
   } = await req.json();
 
-  if (!imagen_base64 || !objetivo?.id) {
-    return NextResponse.json({ error: "Falta la imagen o el objetivo publicitario" }, { status: 400 });
+  if (!Array.isArray(imagenes_base64) || imagenes_base64.length < MIN_IMAGENES || imagenes_base64.length > MAX_IMAGENES) {
+    return NextResponse.json({ error: `Sube entre ${MIN_IMAGENES} y ${MAX_IMAGENES} imágenes` }, { status: 400 });
+  }
+  if (!objetivo?.id) {
+    return NextResponse.json({ error: "Falta el objetivo publicitario" }, { status: 400 });
   }
 
   if (!presupuesto_diario_cop || presupuesto_diario_cop < 20000) {
@@ -129,7 +134,7 @@ export async function POST(req: NextRequest) {
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({
         email: emailBusqueda,
-        imagen_base64,
+        imagenes_base64,
         objetivo,
         presupuesto_diario_cop,
         openai_key: openaiKeyDescifrada,
