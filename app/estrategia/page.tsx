@@ -1180,11 +1180,33 @@ function EstrategiaContent() {
                   ¿Quieres darnos más contexto? <span style={{ fontWeight: 400, color: "#999" }}>(opcional)</span>
                 </label>
                 <textarea
+                  className="quiubot-textarea-servicio"
                   value={descripcionServicio}
-                  onChange={(e) => setDescripcionServicio(e.target.value.slice(0, 500))}
+                  onChange={(e) => {
+                    setDescripcionServicio(e.target.value.slice(0, 500));
+                    // Auto-crece con el contenido en vez de mostrar scroll interno
+                    // desde el principio -- mucho más natural mientras se escribe.
+                    // Al llegar al tope (200px) sí aparece scroll, para que un
+                    // texto muy largo no empuje el resto de la página hacia abajo.
+                    e.target.style.height = "auto";
+                    e.target.style.height = Math.min(e.target.scrollHeight, 200) + "px";
+                  }}
+                  onFocus={(e) => {
+                    // Al volver a hacer foco, recupera el alto que le
+                    // corresponde según el contenido actual (pudo haberse
+                    // "achicado" por el onBlur de la última vez).
+                    e.target.style.height = "auto";
+                    e.target.style.height = Math.min(e.target.scrollHeight, 200) + "px";
+                  }}
+                  onBlur={(e) => {
+                    // Mientras no se está editando, se reduce a un tamaño
+                    // compacto -- ocupa menos espacio en la página y dedica
+                    // el cuadro grande solo al momento de escribir.
+                    e.target.style.height = "42px";
+                  }}
                   placeholder='Ej: "Paquete todo incluido a Cartagena, 4 noches, incluye vuelos"'
                   maxLength={500}
-                  style={{ width: "100%", padding: 10, borderRadius: 8, border: "1px solid #e0e0e0", fontSize: 13, resize: "none", minHeight: 70, fontFamily: "inherit", boxSizing: "border-box" }}
+                  style={{ width: "100%", padding: 12, borderRadius: 10, border: "1.5px solid #e0e0e0", background: "#fcfcff", fontSize: 13, color: "#1a1a1a", resize: "none", height: 42, maxHeight: 200, overflowY: "auto", fontFamily: "inherit", boxSizing: "border-box", outline: "none", transition: "height .18s ease, border-color .15s ease, box-shadow .15s ease" }}
                 />
                 <div style={{ fontSize: 11, color: "#999", textAlign: "right", marginTop: 4 }}>{descripcionServicio.length}/500</div>
               </div>
@@ -1752,6 +1774,8 @@ function EstrategiaContent() {
         @keyframes quiubot-pulse-dot { 0%, 100% { opacity: 1; } 50% { opacity: .25; } }
         @keyframes quiubot-banner-in { from { opacity: 0; transform: translateY(-4px); } to { opacity: 1; transform: translateY(0); } }
         .quiubot-card-tipo:focus-visible { box-shadow: 0 0 0 3px rgba(83, 74, 183, 0.3); }
+        .quiubot-textarea-servicio:focus { border-color: #7F77DD !important; background: #fff !important; box-shadow: 0 0 0 3px rgba(83, 74, 183, 0.12); }
+        .quiubot-textarea-servicio::placeholder { color: #aaa; }
       `}</style>
     </div>
   );
