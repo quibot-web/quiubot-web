@@ -29,7 +29,7 @@ const OBJETIVOS = [
   { id: "reconocimiento", label: "Reconocimiento", icon: "📢", desc: "Más personas conocerán tu marca.", meta_objective: "OUTCOME_AWARENESS", destino: "pagina" },
   { id: "retargeting", label: "Retargeting", icon: "🔄", desc: "Impacta a quienes ya te conocen.", meta_objective: "OUTCOME_TRAFFIC", destino: "sitio_web" },
   { id: "leads", label: "Generación de Leads", icon: "🎯", desc: "Captura contactos interesados en tu producto.", meta_objective: "OUTCOME_LEADS", destino: "formulario" },
-  { id: "trafico_mensajes", label: "Tráfico / Mensajes", icon: "💬", desc: "Lleva visitas a tu web o inicia conversaciones.", meta_objective: "OUTCOME_TRAFFIC", destino: "sitio_web" },
+  { id: "trafico_mensajes", label: "Tráfico", icon: "💬", desc: "Lleva más visitas nuevas a tu sitio web.", meta_objective: "OUTCOME_TRAFFIC", destino: "sitio_web" },
 ];
 
 function fileToBase64(file: File): Promise<string> {
