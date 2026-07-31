@@ -19,8 +19,15 @@ export default auth(async (req) => {
   const isBienvenidaPage = pathname === "/bienvenida"
   const isTerminosPage = pathname === "/terminos"
   const isActivarRoute = pathname === "/api/activar"
+  // Los webhooks (Bold, y cualquier futuro proveedor) los llama un
+  // servidor externo, nunca un usuario con sesion de Quiubot -- por eso
+  // necesitan quedar fuera del candado de login, igual que /api/activar.
+  // La seguridad de estas rutas no depende de sesion sino de su propia
+  // verificacion (firma HMAC en el caso de Bold), hecha dentro de cada
+  // route handler.
+  const isWebhookRoute = pathname.startsWith("/api/webhooks/")
 
-  if (isActivarRoute) return NextResponse.next()
+  if (isActivarRoute || isWebhookRoute) return NextResponse.next()
 
   if (!isLoggedIn && !isLoginPage && !isBienvenidaPage && !isTerminosPage) {
     return NextResponse.redirect(new URL("/login", req.nextUrl))
