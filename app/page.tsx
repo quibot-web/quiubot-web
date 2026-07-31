@@ -268,7 +268,15 @@ export default function Home() {
   const [campanaShaking, setCampanaShaking] = useState(false);
   const conteoPendientesPrevio = useRef<number | null>(null);
 
-  const [metaInfo, setMetaInfo] = useState<{ conectado: boolean; nombre: string | null; cuentaPublicitaria: string | null; pagina: string | null; pixelId: string | null; pixelNombre: string | null } | null>(null);
+  const [metaInfo, setMetaInfo] = useState<{ conectado: boolean; nombre: string | null; cuentaPublicitaria: string | null; cuentaPublicitariaNombre: string | null; pagina: string | null; paginaId: string | null; pixelId: string | null; pixelNombre: string | null } | null>(null);
+  const [cuentasPublicitarias, setCuentasPublicitarias] = useState<{ id: string; nombre: string; businessId: string | null }[]>([]);
+  const [paginasDisponibles, setPaginasDisponibles] = useState<{ id: string; nombre: string }[]>([]);
+  const [cargandoCuentas, setCargandoCuentas] = useState(false);
+  const [errorCuentas, setErrorCuentas] = useState<string | null>(null);
+  const [cuentaSeleccionada, setCuentaSeleccionada] = useState("");
+  const [guardandoCuenta, setGuardandoCuenta] = useState(false);
+  const [paginaSeleccionada, setPaginaSeleccionada] = useState("");
+  const [guardandoPagina, setGuardandoPagina] = useState(false);
   const [modalAbierto, setModalAbierto] = useState<"destino" | "openai" | "cloudinary" | "meta" | null>(null);
   const [pixelesDisponibles, setPixelesDisponibles] = useState<{ id: string; name: string }[]>([]);
   const [cargandoPixeles, setCargandoPixeles] = useState(false);
@@ -340,6 +348,74 @@ export default function Home() {
 
   const cargarMetaInfo = () => {
     fetch("/api/meta/estado").then(r => r.json()).then(setMetaInfo);
+  };
+
+  const cargarCuentasYPaginas = async () => {
+    setCargandoCuentas(true);
+    setErrorCuentas(null);
+    try {
+      const res = await fetch("/api/meta/cuentas");
+      const data = await res.json();
+      if (res.ok) {
+        setCuentasPublicitarias(data.cuentasPublicitarias || []);
+        setPaginasDisponibles(data.paginas || []);
+      } else {
+        setErrorCuentas(data.error || "No se pudieron cargar tus cuentas de Meta.");
+      }
+    } catch {
+      setErrorCuentas("No se pudo conectar con Meta.");
+    } finally {
+      setCargandoCuentas(false);
+    }
+  };
+
+  const handleGuardarCuentaPublicitaria = async () => {
+    if (!cuentaSeleccionada) return;
+    setGuardandoCuenta(true);
+    try {
+      const cuenta = cuentasPublicitarias.find((c) => c.id === cuentaSeleccionada);
+      const res = await fetch("/api/meta/cuenta", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          tipo: "cuenta_publicitaria",
+          adAccountId: cuentaSeleccionada,
+          adAccountNombre: cuenta?.nombre || null,
+          businessId: cuenta?.businessId || null,
+        }),
+      });
+      if (res.ok) {
+        cargarMetaInfo();
+      } else {
+        alert("No se pudo guardar la cuenta publicitaria.");
+      }
+    } finally {
+      setGuardandoCuenta(false);
+    }
+  };
+
+  const handleGuardarPagina = async () => {
+    if (!paginaSeleccionada) return;
+    setGuardandoPagina(true);
+    try {
+      const pagina = paginasDisponibles.find((p) => p.id === paginaSeleccionada);
+      const res = await fetch("/api/meta/cuenta", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          tipo: "pagina",
+          pageId: paginaSeleccionada,
+          pageNombre: pagina?.nombre || null,
+        }),
+      });
+      if (res.ok) {
+        cargarMetaInfo();
+      } else {
+        alert("No se pudo guardar la página.");
+      }
+    } finally {
+      setGuardandoPagina(false);
+    }
   };
 
   const cargarPixeles = async () => {
@@ -537,6 +613,7 @@ export default function Home() {
   useEffect(() => {
     if (modalAbierto === "meta" && metaInfo?.conectado) {
       cargarPixeles();
+      cargarCuentasYPaginas();
     }
   }, [modalAbierto, metaInfo?.conectado]);
 
@@ -1259,8 +1336,74 @@ export default function Home() {
                   <div>
                     <div style={{ background: "#f9fafb", padding: "12px", borderRadius: "8px", fontSize: "13px", color: "#333", marginBottom: "12px" }}>
                       <div><strong>Cuenta:</strong> {metaInfo.nombre || "—"}</div>
-                      <div style={{ marginTop: 4 }}><strong>Cuenta publicitaria:</strong> {metaInfo.cuentaPublicitaria || "—"}</div>
-                      <div style={{ marginTop: 4 }}><strong>Página de Facebook:</strong> {metaInfo.pagina || "—"}</div>
+                    </div>
+
+                    <div style={{ borderTop: "1px solid #f0f0f0", paddingTop: 14, marginBottom: 14 }}>
+                      <span style={{ fontSize: 12, fontWeight: 600, color: "#666", display: "block", marginBottom: 8 }}>Cuenta publicitaria</span>
+                      <div style={{ background: "#f9fafb", padding: "10px 12px", borderRadius: "8px", fontSize: 13, color: "#333", marginBottom: 10 }}>
+                        <strong>Activa:</strong> {metaInfo.cuentaPublicitariaNombre || metaInfo.cuentaPublicitaria || "—"}
+                        {metaInfo.cuentaPublicitariaNombre && <span style={{ color: "#999" }}> ({metaInfo.cuentaPublicitaria})</span>}
+                      </div>
+                      {cargandoCuentas ? (
+                        <p style={{ fontSize: 12, color: "#888" }}>Cargando tus cuentas de Meta...</p>
+                      ) : errorCuentas ? (
+                        <div>
+                          <p style={{ fontSize: 12, color: "#DC2626", marginBottom: 8 }}>{errorCuentas}</p>
+                          <button onClick={cargarCuentasYPaginas} style={{ fontSize: 12, color: "#534AB7", background: "none", border: "1px solid #534AB7", borderRadius: 6, padding: "6px 10px", cursor: "pointer" }}>
+                            Reintentar
+                          </button>
+                        </div>
+                      ) : cuentasPublicitarias.length === 0 ? (
+                        <p style={{ fontSize: 12, color: "#888" }}>No encontramos cuentas publicitarias en tu perfil de Meta.</p>
+                      ) : (
+                        <div style={{ display: "flex", gap: 8 }}>
+                          <select
+                            value={cuentaSeleccionada}
+                            onChange={(e) => setCuentaSeleccionada(e.target.value)}
+                            style={{ flex: 1, padding: "10px", borderRadius: 8, border: "1px solid #e0e0e0", fontSize: 13, boxSizing: "border-box" }}
+                          >
+                            <option value="">Cambiar cuenta publicitaria...</option>
+                            {cuentasPublicitarias.map((c) => (
+                              <option key={c.id} value={c.id}>{c.nombre} ({c.id})</option>
+                            ))}
+                          </select>
+                          <button
+                            onClick={handleGuardarCuentaPublicitaria}
+                            disabled={!cuentaSeleccionada || guardandoCuenta}
+                            style={{ padding: "10px 14px", borderRadius: 8, background: !cuentaSeleccionada ? "#eee" : "#534AB7", color: !cuentaSeleccionada ? "#aaa" : "#fff", border: "none", fontWeight: 600, fontSize: 13, cursor: !cuentaSeleccionada ? "not-allowed" : "pointer", whiteSpace: "nowrap" }}
+                          >
+                            {guardandoCuenta ? "Guardando..." : "Guardar"}
+                          </button>
+                        </div>
+                      )}
+                    </div>
+
+                    <div style={{ borderTop: "1px solid #f0f0f0", paddingTop: 14, marginBottom: 14 }}>
+                      <span style={{ fontSize: 12, fontWeight: 600, color: "#666", display: "block", marginBottom: 8 }}>Página de Facebook</span>
+                      <div style={{ background: "#f9fafb", padding: "10px 12px", borderRadius: "8px", fontSize: 13, color: "#333", marginBottom: 10 }}>
+                        <strong>Activa:</strong> {metaInfo.pagina || "—"}
+                      </div>
+                      {!cargandoCuentas && !errorCuentas && paginasDisponibles.length > 0 && (
+                        <div style={{ display: "flex", gap: 8 }}>
+                          <select
+                            value={paginaSeleccionada}
+                            onChange={(e) => setPaginaSeleccionada(e.target.value)}
+                            style={{ flex: 1, padding: "10px", borderRadius: 8, border: "1px solid #e0e0e0", fontSize: 13, boxSizing: "border-box" }}
+                          >
+                            <option value="">Cambiar página...</option>
+                            {paginasDisponibles.map((p) => (
+                              <option key={p.id} value={p.id}>{p.nombre}</option>
+                            ))}
+                          </select>
+                          <button
+                            onClick={handleGuardarPagina}
+                            disabled={!paginaSeleccionada || guardandoPagina}
+                            style={{ padding: "10px 14px", borderRadius: 8, background: !paginaSeleccionada ? "#eee" : "#534AB7", color: !paginaSeleccionada ? "#aaa" : "#fff", border: "none", fontWeight: 600, fontSize: 13, cursor: !paginaSeleccionada ? "not-allowed" : "pointer", whiteSpace: "nowrap" }}
+                          >
+                            {guardandoPagina ? "Guardando..." : "Guardar"}
+                          </button>
+                        </div>
+                      )}
                     </div>
 
                     <div style={{ borderTop: "1px solid #f0f0f0", paddingTop: 14, marginBottom: 14 }}>

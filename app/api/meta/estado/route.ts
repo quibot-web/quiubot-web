@@ -10,7 +10,7 @@ export async function GET() {
 
   const { data } = await supabaseAdmin
     .from("usuarios")
-    .select("meta_ad_account_id, meta_user_name, meta_token_expira, meta_page_id, meta_page_name, meta_pixel_id, meta_pixel_nombre")
+    .select("meta_ad_account_id, meta_ad_account_nombre, meta_user_name, meta_token_expira, meta_page_id, meta_page_name, meta_pixel_id, meta_pixel_nombre")
     .eq("email", session.user.email.trim().toLowerCase())
     .single();
 
@@ -20,7 +20,9 @@ export async function GET() {
     conectado,
     nombre: data ? data.meta_user_name : null,
     cuentaPublicitaria: data ? data.meta_ad_account_id : null,
+    cuentaPublicitariaNombre: data ? data.meta_ad_account_nombre : null,
     pagina: data ? data.meta_page_name : null,
+    paginaId: data ? data.meta_page_id : null,
     expira: data ? data.meta_token_expira : null,
     pixelId: data ? data.meta_pixel_id : null,
     pixelNombre: data ? data.meta_pixel_nombre : null,
