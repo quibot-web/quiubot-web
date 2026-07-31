@@ -7,13 +7,6 @@ import { OBJETIVOS_INFO } from "@/app/lib/objetivosInfo"
 
 const TU_WHATSAPP = "573243490766"
 
-const LINKS_BOLD: Record<string, string> = {
-  crecimiento: "https://checkout.bold.co/payment/LNK_W16HQK2G1S",
-  escala: "https://checkout.bold.co/payment/LNK_U0T5X4HS21",
-  crecimiento_anual: "https://checkout.bold.co/payment/LNK_QZY9XAQRCN",
-  escala_anual: "https://checkout.bold.co/payment/LNK_2D59ZTOHNA",
-}
-
 const DESCUENTO_ANUAL = 0.15
 const ORDEN_PLANES = ["arranque", "crecimiento", "escala"]
 
@@ -161,20 +154,41 @@ export default function BillingPage() {
     return Math.max(0, Math.ceil(diff / (1000 * 60 * 60 * 24)))
   }
 
-  const handlePagarMensual = (planId: "crecimiento" | "escala", planNombre: string) => {
-    window.open(LINKS_BOLD[planId], "_blank")
-    const mensaje = encodeURIComponent(
-      `Hola, ya voy a pagar el plan ${planNombre} (mensual) de Quiubot. Mi correo es ${session?.user?.email || ""}`
-    )
-    window.open(`https://wa.me/${TU_WHATSAPP}?text=${mensaje}`, "_blank")
+  const [generandoPago, setGenerandoPago] = useState<string | null>(null)
+
+  // Antes esto abria un link ESTATICO identico para todos (uno por plan),
+  // asi que Bold nunca sabia a que usuario correspondia el pago -- por
+  // eso la activacion se hacia a mano. Ahora se le pide al servidor que
+  // genere un link DINAMICO con una referencia unica atada a este usuario
+  // y este plan; cuando Bold confirme el pago, el webhook usa esa
+  // referencia para activar el plan solo, sin intervencion manual.
+  const iniciarPago = async (planId: "crecimiento" | "escala", ciclo: "mensual" | "anual") => {
+    setGenerandoPago(`${planId}_${ciclo}`)
+    try {
+      const res = await fetch("/api/billing/crear-link", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ planId, ciclo }),
+      })
+      const data = await res.json()
+      if (res.ok && data.url) {
+        window.open(data.url, "_blank")
+      } else {
+        alert(data.error || "No se pudo generar el link de pago. Intenta de nuevo.")
+      }
+    } catch {
+      alert("No se pudo conectar con el servidor de pagos.")
+    } finally {
+      setGenerandoPago(null)
+    }
   }
 
-  const handlePagarAnual = (planId: "crecimiento" | "escala", planNombre: string, totalAnual: number) => {
-    window.open(LINKS_BOLD[`${planId}_anual`], "_blank")
-    const mensaje = encodeURIComponent(
-      `Hola, ya voy a pagar el plan ${planNombre} ANUAL de Quiubot (con 15% de descuento), por $${totalAnual.toLocaleString("es-CO")} facturado una vez al año. Mi correo es ${session?.user?.email || ""}`
-    )
-    window.open(`https://wa.me/${TU_WHATSAPP}?text=${mensaje}`, "_blank")
+  const handlePagarMensual = (planId: "crecimiento" | "escala") => {
+    iniciarPago(planId, "mensual")
+  }
+
+  const handlePagarAnual = (planId: "crecimiento" | "escala") => {
+    iniciarPago(planId, "anual")
   }
 
   if (info === null) {
@@ -408,9 +422,10 @@ export default function BillingPage() {
                   <button
                     onClick={() =>
                       esAnual
-                        ? handlePagarAnual(plan.id as "crecimiento" | "escala", plan.nombre, totalAnual)
-                        : handlePagarMensual(plan.id as "crecimiento" | "escala", plan.nombre)
+                        ? handlePagarAnual(plan.id as "crecimiento" | "escala")
+                        : handlePagarMensual(plan.id as "crecimiento" | "escala")
                     }
+                    disabled={generandoPago === `${plan.id}_${esAnual ? "anual" : "mensual"}`}
                     style={{
                       width: "100%",
                       padding: "13px",
@@ -420,10 +435,13 @@ export default function BillingPage() {
                       color: destacarComoPopular ? "#fff" : "#534AB7",
                       fontSize: 14,
                       fontWeight: 700,
-                      cursor: "pointer",
+                      cursor: generandoPago ? "not-allowed" : "pointer",
+                      opacity: generandoPago && generandoPago !== `${plan.id}_${esAnual ? "anual" : "mensual"}` ? 0.6 : 1,
                     }}
                   >
-                    💳 {info.plan === "arranque" ? "Mejorar a" : "Cambiar a"} {plan.nombre}{esAnual ? " · Anual" : ""}
+                    {generandoPago === `${plan.id}_${esAnual ? "anual" : "mensual"}`
+                      ? "Generando link de pago..."
+                      : <>💳 {info.plan === "arranque" ? "Mejorar a" : "Cambiar a"} {plan.nombre}{esAnual ? " · Anual" : ""}</>}
                   </button>
                 )}
                 {esAnual && !esPlanActual && plan.id !== "arranque" && (
@@ -437,7 +455,7 @@ export default function BillingPage() {
         </div>
 
         <p style={{ textAlign: "center", fontSize: 12, color: "#999", marginTop: 20 }}>
-          Tu acceso se activa manualmente en menos de 24 horas hábiles tras confirmar el pago.
+          Tu acceso se activa automáticamente en cuanto Bold confirma el pago — normalmente en segundos.
         </p>
 
         <div style={{ background: "#fff", border: "1px solid #e8e8e6", borderRadius: 16, padding: "1.5rem", marginTop: 32, maxWidth: 500, marginLeft: "auto", marginRight: "auto" }}>
