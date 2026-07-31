@@ -1,7 +1,7 @@
 "use client";
 import { useState, useRef, useEffect, Suspense } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
-import { ShoppingBag, Target, Camera, Sparkles, Check, Shirt, Smartphone, UtensilsCrossed, Plane, Briefcase, Palmtree, Video, Watch, Bot, FolderOpen, Dna, X } from "lucide-react";
+import { ShoppingBag, Target, Camera, Sparkles, Check, Shirt, Smartphone, UtensilsCrossed, Plane, Briefcase, Palmtree, Video, Watch, Bot, FolderOpen, Dna, X, ShoppingCart, Tag, DollarSign, CheckCircle2, MessageCircle, Phone, Send, Megaphone, Eye, Heart, Star, RefreshCw, Repeat, Users, MousePointerClick, TrendingUp, Zap, Globe } from "lucide-react";
 import AdBlueprintExplorer from "@/app/components/AdBlueprintExplorer";
 import TutorialVideo from "@/app/components/TutorialVideo";
 import TourGuiado from "@/app/components/TourGuiado";
@@ -29,8 +29,21 @@ const OBJETIVOS = [
   { id: "reconocimiento", label: "Reconocimiento", icon: "📢", desc: "Más personas conocerán tu marca.", meta_objective: "OUTCOME_AWARENESS", destino: "pagina" },
   { id: "retargeting", label: "Retargeting", icon: "🔄", desc: "Impacta a quienes ya te conocen.", meta_objective: "OUTCOME_TRAFFIC", destino: "sitio_web" },
   { id: "leads", label: "Generación de Leads", icon: "🎯", desc: "Captura contactos interesados en tu producto.", meta_objective: "OUTCOME_LEADS", destino: "formulario" },
-  { id: "trafico_mensajes", label: "Tráfico", icon: "💬", desc: "Lleva más visitas nuevas a tu sitio web.", meta_objective: "OUTCOME_TRAFFIC", destino: "sitio_web" },
+  { id: "trafico_mensajes", label: "Tráfico", icon: "🌐", desc: "Lleva más visitas nuevas a tu sitio web.", meta_objective: "OUTCOME_TRAFFIC", destino: "sitio_web" },
 ];
+
+// Tema visual por objetivo -- color de acento + set de iconos tematicos
+// que se dispersan de fondo cuando el usuario selecciona esa tarjeta
+// (mismo mosaico de POSICIONES_MOSAICO que ya usa el Paso 1, reutilizado
+// aqui con otro set de iconos y color por objetivo).
+const TEMA_OBJETIVO: Record<string, { color: string; colorClaro: string; iconos: any[] }> = {
+  venta_directa_web: { color: "#16A34A", colorClaro: "#DCFCE7", iconos: [ShoppingCart, Tag, DollarSign, CheckCircle2] },
+  venta_directa_whatsapp: { color: "#25D366", colorClaro: "#DCFCE7", iconos: [MessageCircle, Phone, Send, CheckCircle2] },
+  reconocimiento: { color: "#F97316", colorClaro: "#FFEDD5", iconos: [Megaphone, Eye, Heart, Star] },
+  retargeting: { color: "#2563EB", colorClaro: "#DBEAFE", iconos: [RefreshCw, Target, Repeat, Users] },
+  leads: { color: "#D97706", colorClaro: "#FEF3C7", iconos: [Target, Users, Send, CheckCircle2] },
+  trafico_mensajes: { color: "#0891B2", colorClaro: "#CFFAFE", iconos: [MousePointerClick, TrendingUp, Zap, Globe] },
+};
 
 function fileToBase64(file: File): Promise<string> {
   return new Promise((resolve, reject) => {
@@ -444,6 +457,146 @@ function TarjetaTipoContenido({
       <div style={{ background: fondoActivo, borderRadius: 10, padding: 10, display: "flex", alignItems: "center", gap: 8 }}>
         <IconoPreview size={16} color={colorActivoClaro} strokeWidth={2} aria-hidden="true" />
         <span style={{ fontSize: 11, color: colorActivo, fontWeight: 500 }}>{data.beneficio}</span>
+      </div>
+    </div>
+  );
+}
+
+// Tarjeta del Paso 3 (elegir objetivo publicitario). Al seleccionarla, se
+// activa un mosaico de iconos tematicos de fondo (color y set de iconos
+// segun TEMA_OBJETIVO) mas un resplandor de color a juego -- mismo efecto
+// "vivo" que ya usa TarjetaTipoContenido en el Paso 1, con su propio tema
+// por objetivo en vez de un solo color fijo. El icono principal (emoji o
+// el componente de WhatsApp) se mantiene igual que antes; la logica de
+// bloqueo por plan / "proximamente" tampoco cambia, solo la capa visual.
+function TarjetaObjetivo({
+  opt,
+  seleccionado,
+  clicable,
+  grisDelTodo,
+  bloqueadoPorPlan,
+  etiqueta,
+  soloVisualParaAdmin,
+  onSelect,
+}: {
+  opt: { id: string; label: string; icon: React.ReactNode; desc: string };
+  seleccionado: boolean;
+  clicable: boolean;
+  grisDelTodo: boolean;
+  bloqueadoPorPlan: boolean;
+  etiqueta: string | null;
+  soloVisualParaAdmin: boolean;
+  onSelect: () => void;
+}) {
+  const tema = TEMA_OBJETIVO[opt.id] || { color: "#534AB7", colorClaro: "#F3F2FE", iconos: [ShoppingBag, Target, Sparkles, Check] };
+  const esWhatsapp = opt.id === "venta_directa_whatsapp";
+
+  return (
+    <div
+      onClick={onSelect}
+      style={{
+        position: "relative",
+        padding: "1.5rem",
+        borderRadius: 16,
+        border: seleccionado ? `2px solid ${tema.color}` : "1px solid #e8e8e6",
+        background: seleccionado ? tema.colorClaro : "#fff",
+        cursor: clicable ? "pointer" : bloqueadoPorPlan ? "pointer" : "not-allowed",
+        textAlign: "center",
+        overflow: "hidden",
+        opacity: grisDelTodo ? 0.45 : 1,
+        filter: grisDelTodo ? "grayscale(1)" : "none",
+        transform: seleccionado ? "scale(1.015)" : "scale(1)",
+        boxShadow: seleccionado ? `0 10px 26px -10px ${tema.color}88` : "none",
+        transition: "border-color .18s ease, background-color .18s ease, transform .15s ease, box-shadow .2s ease, opacity .18s ease",
+      }}
+    >
+      {/* Mosaico de iconos tematicos + marca de agua, solo visible cuando
+          esta seleccionada -- es el "fondo epico" pedido, sin estorbar la
+          lectura del texto encima. */}
+      {seleccionado && (
+        <div style={{ position: "absolute", inset: 0, overflow: "hidden", pointerEvents: "none" }}>
+          {POSICIONES_MOSAICO.map((pos, i) => {
+            const IconoMosaico = tema.iconos[pos.idx % tema.iconos.length];
+            return (
+              <div key={i} style={{ position: "absolute", top: pos.top, left: pos.left, transform: `rotate(${pos.rot}deg)`, opacity: 0.18 }}>
+                <IconoMosaico size={pos.size} color={tema.color} strokeWidth={2} />
+              </div>
+            );
+          })}
+          <div style={{ position: "absolute", right: -26, bottom: -26 }}>
+            <LogoQuiubotMark color={tema.color} opacity={0.12} size={110} />
+          </div>
+        </div>
+      )}
+
+      {etiqueta && (
+        <span
+          style={{
+            position: "absolute",
+            top: 8,
+            right: 8,
+            zIndex: 1,
+            background: bloqueadoPorPlan ? "#fff" : soloVisualParaAdmin ? "#fef3c7" : "#e5e7eb",
+            color: bloqueadoPorPlan ? tema.color : soloVisualParaAdmin ? "#92400e" : "#666",
+            fontSize: 10,
+            fontWeight: 600,
+            padding: "2px 8px",
+            borderRadius: 10,
+          }}
+        >
+          {etiqueta}
+        </span>
+      )}
+
+      {/* Insignia de check, igual que en el Paso 1 -- aparece con resorte al seleccionar */}
+      <div
+        style={{
+          position: "absolute",
+          top: 10,
+          left: 10,
+          zIndex: 1,
+          width: 20,
+          height: 20,
+          borderRadius: "50%",
+          background: tema.color,
+          display: "flex",
+          alignItems: "center",
+          justifyContent: "center",
+          transform: seleccionado ? "scale(1)" : "scale(0)",
+          opacity: seleccionado ? 1 : 0,
+          transition: "transform .16s cubic-bezier(.34,1.56,.64,1), opacity .16s ease",
+        }}
+      >
+        <Check size={12} color="#fff" strokeWidth={3} aria-hidden="true" />
+      </div>
+
+      <div style={{ position: "relative", zIndex: 1 }}>
+        {esWhatsapp ? (
+          <div style={{ display: "flex", justifyContent: "center", marginBottom: 10 }}>{opt.icon}</div>
+        ) : (
+          <div
+            style={{
+              width: 54,
+              height: 54,
+              borderRadius: "50%",
+              margin: "0 auto 10px",
+              background: seleccionado ? tema.color : tema.colorClaro,
+              display: "flex",
+              alignItems: "center",
+              justifyContent: "center",
+              fontSize: 26,
+              boxShadow: seleccionado ? `0 6px 16px -5px ${tema.color}99` : "none",
+              transition: "background-color .18s ease",
+            }}
+          >
+            {opt.icon}
+          </div>
+        )}
+        <div style={{ fontWeight: 600, marginBottom: 8, color: seleccionado ? tema.color : "#1a1a1a", transition: "color .18s ease" }}>{opt.label}</div>
+        <div style={{ fontSize: 12, color: "#666" }}>{opt.desc}</div>
+        {bloqueadoPorPlan && (
+          <div style={{ fontSize: 11, color: tema.color, fontWeight: 600, marginTop: 8 }}>Mejorar plan →</div>
+        )}
       </div>
     </div>
   );
@@ -1239,49 +1392,20 @@ function EstrategiaContent() {
                   else if (bloqueadoPorPlan) etiqueta = `Plan ${planRequerido === "crecimiento" ? "Crecimiento" : "Escala"}`;
 
                   return (
-                    <div
+                    <TarjetaObjetivo
                       key={opt.id}
-                      onClick={() => {
+                      opt={opt}
+                      seleccionado={objetivo?.id === opt.id}
+                      clicable={clicable}
+                      grisDelTodo={grisDelTodo}
+                      bloqueadoPorPlan={bloqueadoPorPlan}
+                      etiqueta={etiqueta}
+                      soloVisualParaAdmin={soloVisualParaAdmin}
+                      onSelect={() => {
                         if (clicable) setObjetivo(opt);
                         else if (bloqueadoPorPlan) router.push("/pricing");
                       }}
-                      style={{
-                        position: "relative",
-                        padding: "1.5rem",
-                        borderRadius: 16,
-                        border: objetivo?.id === opt.id ? "2px solid #534AB7" : "1px solid #e8e8e6",
-                        background: objetivo?.id === opt.id ? "#f3f2fe" : "#fff",
-                        cursor: clicable ? "pointer" : bloqueadoPorPlan ? "pointer" : "not-allowed",
-                        textAlign: "center",
-                        transition: "all 0.2s",
-                        opacity: grisDelTodo ? 0.45 : 1,
-                        filter: grisDelTodo ? "grayscale(1)" : "none",
-                      }}
-                    >
-                      {etiqueta && (
-                        <span
-                          style={{
-                            position: "absolute",
-                            top: 8,
-                            right: 8,
-                            background: bloqueadoPorPlan ? "#f3f2fe" : soloVisualParaAdmin ? "#fef3c7" : "#e5e7eb",
-                            color: bloqueadoPorPlan ? "#534AB7" : soloVisualParaAdmin ? "#92400e" : "#666",
-                            fontSize: 10,
-                            fontWeight: 600,
-                            padding: "2px 8px",
-                            borderRadius: 10,
-                          }}
-                        >
-                          {etiqueta}
-                        </span>
-                      )}
-                      <div style={{ fontSize: 32, marginBottom: 10, display: "flex", justifyContent: "center" }}>{opt.icon}</div>
-                      <div style={{ fontWeight: 600, marginBottom: 8 }}>{opt.label}</div>
-                      <div style={{ fontSize: 12, color: "#666" }}>{opt.desc}</div>
-                      {bloqueadoPorPlan && (
-                        <div style={{ fontSize: 11, color: "#534AB7", fontWeight: 600, marginTop: 8 }}>Mejorar plan →</div>
-                      )}
-                    </div>
+                    />
                   );
                 })}
               </div>
