@@ -10,26 +10,53 @@ const DIAS_POR_CICLO: Record<string, number> = {
   anual: 365,
 };
 
-function firmaValida(cuerpoCrudo: string, firmaRecibida: string, secreto: string): boolean {
+function calcularFirma(cuerpoCrudo: string, secreto: string): string {
   const codificadoBase64 = Buffer.from(cuerpoCrudo, "utf-8").toString("base64");
-  const hash = createHmac("sha256", secreto).update(codificadoBase64).digest("hex");
+  return createHmac("sha256", secreto).update(codificadoBase64).digest("hex");
+}
 
-  const bufHash = Buffer.from(hash);
-  const bufFirma = Buffer.from(firmaRecibida);
-  if (bufHash.length !== bufFirma.length) return false;
-  return timingSafeEqual(bufHash, bufFirma);
+function coinciden(a: string, b: string): boolean {
+  const bufA = Buffer.from(a);
+  const bufB = Buffer.from(b);
+  if (bufA.length !== bufB.length) return false;
+  return timingSafeEqual(bufA, bufB);
+}
+
+// Bold firma las transacciones de PRODUCCION con la Llave secreta real,
+// pero las transacciones de PRUEBAS (sandbox) las firma con una llave
+// VACIA -- documentado explicitamente por Bold: "en modo pruebas la firma
+// usa una clave vacia". Por eso se prueban las dos posibilidades en vez
+// de asumir una sola, sin necesidad de detectar de antemano si el pago
+// es de pruebas o de produccion.
+function firmaValida(cuerpoCrudo: string, firmaRecibida: string, secretoProduccion: string): boolean {
+  const firmaConSecretoReal = calcularFirma(cuerpoCrudo, secretoProduccion);
+  if (coinciden(firmaConSecretoReal, firmaRecibida)) return true;
+
+  const firmaConSecretoVacio = calcularFirma(cuerpoCrudo, "");
+  return coinciden(firmaConSecretoVacio, firmaRecibida);
 }
 
 export async function POST(req: NextRequest) {
+  // LOG TEMPORAL DE DIAGNOSTICO -- confirma si la peticion de Bold esta
+  // llegando siquiera al servidor, antes de cualquier verificacion. Se
+  // puede quitar una vez confirmemos que el webhook funciona de punta a
+  // punta.
+  console.log("🔔 Webhook de Bold recibido — headers:", Object.fromEntries(req.headers.entries()));
+
   // Bold exige responder 200 en menos de 2 segundos -- todo lo pesado
   // (verificar firma, buscar la orden, activar el plan, mandar 2 correos)
   // tiene que ser rapido. Si algo tarda demasiado, Bold reintenta solo, asi
   // que no pasa nada grave si esta vez no se alcanza a responder a tiempo.
   const cuerpoCrudo = await req.text();
+  console.log("🔔 Cuerpo crudo recibido:", cuerpoCrudo);
   const firmaRecibida = req.headers.get("x-bold-signature") || "";
   const secreto = process.env.BOLD_WEBHOOK_SECRET || "";
 
-  if (!secreto || !firmaValida(cuerpoCrudo, firmaRecibida, secreto)) {
+  console.log("🔔 x-bold-signature recibida:", firmaRecibida || "(vacia)");
+  const firmaOk = firmaValida(cuerpoCrudo, firmaRecibida, secreto);
+  console.log("🔔 ¿Firma valida?:", firmaOk);
+
+  if (!firmaOk) {
     return NextResponse.json({ error: "Firma invalida" }, { status: 400 });
   }
 
