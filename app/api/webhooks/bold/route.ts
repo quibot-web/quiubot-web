@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { createHmac, timingSafeEqual } from "crypto";
 import { supabaseAdmin } from "@/lib/supabase";
-import { enviarCorreoPagoExitoso, enviarCorreoPlanActivado } from "@/lib/email";
+import { enviarCorreoPagoExitoso, enviarCorreoPlanActivado, enviarCorreoConfirmacionPlanCliente } from "@/lib/email";
 
 // Duracion de cada ciclo. El "mes" se cuenta como 30 dias por simplicidad
 // (igual que ya hacia /api/activar con "dias ?? 30").
@@ -9,6 +9,11 @@ const DIAS_POR_CICLO: Record<string, number> = {
   mensual: 30,
   anual: 365,
 };
+const NOMBRE_PLAN: Record<string, string> = {
+  crecimiento: "Crecimiento",
+  escala: "Escala",
+};
+
 
 function calcularFirma(cuerpoCrudo: string, secreto: string): string {
   const codificadoBase64 = Buffer.from(cuerpoCrudo, "utf-8").toString("base64");
@@ -37,26 +42,16 @@ function firmaValida(cuerpoCrudo: string, firmaRecibida: string, secretoProducci
 }
 
 export async function POST(req: NextRequest) {
-  // LOG TEMPORAL DE DIAGNOSTICO -- confirma si la peticion de Bold esta
-  // llegando siquiera al servidor, antes de cualquier verificacion. Se
-  // puede quitar una vez confirmemos que el webhook funciona de punta a
-  // punta.
-  console.log("🔔 Webhook de Bold recibido — headers:", Object.fromEntries(req.headers.entries()));
-
   // Bold exige responder 200 en menos de 2 segundos -- todo lo pesado
-  // (verificar firma, buscar la orden, activar el plan, mandar 2 correos)
-  // tiene que ser rapido. Si algo tarda demasiado, Bold reintenta solo, asi
-  // que no pasa nada grave si esta vez no se alcanza a responder a tiempo.
+  // (verificar firma, buscar la orden, activar el plan, mandar los
+  // correos) tiene que ser rapido. Si algo tarda demasiado, Bold
+  // reintenta solo, asi que no pasa nada grave si esta vez no se alcanza
+  // a responder a tiempo.
   const cuerpoCrudo = await req.text();
-  console.log("🔔 Cuerpo crudo recibido:", cuerpoCrudo);
   const firmaRecibida = req.headers.get("x-bold-signature") || "";
   const secreto = process.env.BOLD_WEBHOOK_SECRET || "";
 
-  console.log("🔔 x-bold-signature recibida:", firmaRecibida || "(vacia)");
-  const firmaOk = firmaValida(cuerpoCrudo, firmaRecibida, secreto);
-  console.log("🔔 ¿Firma valida?:", firmaOk);
-
-  if (!firmaOk) {
+  if (!firmaValida(cuerpoCrudo, firmaRecibida, secreto)) {
     return NextResponse.json({ error: "Firma invalida" }, { status: 400 });
   }
 
@@ -121,6 +116,10 @@ export async function POST(req: NextRequest) {
       activo: true,
       fecha_pago: fechaPago.toISOString(),
       fecha_vencimiento: fechaVencimiento.toISOString(),
+      // Se resetea aqui -- cada renovacion tiene su propia fecha de
+      // vencimiento nueva, asi que el recordatorio debe volver a poder
+      // dispararse para ESTA fecha, no quedar "ya usado" de la vez anterior.
+      recordatorio_vencimiento_enviado: false,
     })
     .eq("email", orden.email);
 
@@ -146,6 +145,19 @@ export async function POST(req: NextRequest) {
     fechaPago: fechaPago.toISOString(),
     fechaVencimiento: fechaVencimiento.toISOString(),
   }).catch((err) => console.error("Error enviando correo de plan activado:", err));
+
+  // Correo 3: confirmacion de cara al CLIENTE (los dos anteriores son
+  // registro interno para el admin) -- aqui es donde se le explica al
+  // cliente que su plan quedo activo, que incluye, y que el cobro NO se
+  // repite solo.
+  await enviarCorreoConfirmacionPlanCliente({
+    email: orden.email,
+    nombre: usuario?.nombre || null,
+    planNombre: NOMBRE_PLAN[orden.plan_id] || orden.plan_id,
+    monto: orden.monto,
+    ciclo: orden.ciclo,
+    fechaVencimiento: fechaVencimiento.toISOString(),
+  }).catch((err) => console.error("Error enviando correo de confirmacion al cliente:", err));
 
   return NextResponse.json({ ok: true });
 }

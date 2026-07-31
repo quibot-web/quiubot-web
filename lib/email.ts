@@ -134,3 +134,151 @@ export async function enviarCorreoPlanActivado(datos: {
     </div>`
   );
 }
+
+// ============================================================
+// Correos de cara al CLIENTE (no al admin) — bienvenida y
+// confirmacion de plan.
+// ============================================================
+
+// Se dispara justo cuando el cliente termina de registrarse (verifica su
+// correo). Explica que ya esta en su prueba gratuita, da los primeros
+// pasos, y deja clarisimos los enlaces legales desde el dia uno.
+export async function enviarCorreoBienvenida(datos: {
+  email: string;
+  nombre: string | null;
+  diasTrial: number;
+}) {
+  await enviarCorreo(
+    datos.email,
+    "¡Bienvenido a Quiubot! 🎉 Ya puedes empezar",
+    `<div style="font-family: system-ui, sans-serif; max-width: 480px; margin: 0 auto; padding: 24px;">
+      <h2 style="color:#17152B;">¡Hola${datos.nombre ? " " + datos.nombre : ""}! 👋</h2>
+      <p style="color:#333; font-size:14px; line-height:1.6;">
+        Ya tienes acceso a Quiubot, tu copiloto de campañas publicitarias con IA.
+        Tu prueba gratuita de <strong>${datos.diasTrial} días</strong> ya empezó — sin necesidad de tarjeta.
+      </p>
+
+      <div style="background:#f3f2fe; border-radius:12px; padding:18px; margin:20px 0;">
+        <p style="color:#3C3489; font-size:13px; font-weight:700; margin:0 0 10px;">Para empezar:</p>
+        <ol style="color:#333; font-size:13.5px; line-height:1.9; margin:0; padding-left:18px;">
+          <li>Sintetiza el <strong>ADN de tu marca</strong> subiendo 4-8 creativos que ya hayas usado</li>
+          <li>Conecta tu cuenta de <strong>Meta Ads</strong> en Integraciones</li>
+          <li>Genera tu primera estrategia en el <strong>Motor de Estrategia</strong></li>
+        </ol>
+      </div>
+
+      <a href="https://quiubot.site" style="display:inline-block; background:#534AB7; color:#fff; padding:12px 24px; border-radius:10px; text-decoration:none; font-weight:600;">
+        Ir a mi panel
+      </a>
+
+      <hr style="border:none; border-top:1px solid #eee; margin:28px 0 16px;" />
+
+      <p style="color:#999; font-size:11.5px; line-height:1.7;">
+        Al usar Quiubot aceptaste nuestros
+        <a href="https://quiubot.site/terminos" style="color:#7F77DD;">Términos y Condiciones</a>
+        y nuestra
+        <a href="https://quiubot.site/privacidad" style="color:#7F77DD;">Política de Privacidad</a>,
+        donde explicamos cómo tratamos tus datos y los de tu cuenta publicitaria conectada.
+        ¿Dudas? Responde este correo, con gusto te ayudamos.
+      </p>
+    </div>`
+  );
+}
+
+// Se dispara al cliente (no al admin) cada vez que su plan cambia, justo
+// despues de que el pago se confirma. A diferencia de enviarCorreoPlanActivado
+// (que es el registro interno para Juan), este es el mensaje de cara al
+// cliente: que sepa exactamente que pago, que incluye, y cuando vence --
+// aclarando explicitamente que no hay cobro automatico recurrente, para
+// que nadie se sorprenda pensando que le van a volver a cobrar solo.
+export async function enviarCorreoConfirmacionPlanCliente(datos: {
+  email: string;
+  nombre: string | null;
+  planNombre: string;
+  monto: number;
+  ciclo: string;
+  fechaVencimiento: string;
+}) {
+  const formatearFecha = (iso: string) =>
+    new Date(iso).toLocaleDateString("es-CO", { year: "numeric", month: "long", day: "numeric" });
+
+  await enviarCorreo(
+    datos.email,
+    `Tu plan ${datos.planNombre} ya está activo ✅`,
+    `<div style="font-family: system-ui, sans-serif; max-width: 480px; margin: 0 auto; padding: 24px;">
+      <h2 style="color:#17152B;">¡Listo${datos.nombre ? ", " + datos.nombre : ""}! Tu plan ya está activo</h2>
+      <p style="color:#333; font-size:14px; line-height:1.6;">
+        Confirmamos tu pago y tu cuenta de Quiubot ya está en el plan <strong>${datos.planNombre}</strong>.
+      </p>
+
+      <div style="background:#f0fdf4; border-radius:12px; padding:18px; margin:20px 0; font-size:13.5px; color:#333; line-height:1.9;">
+        <div><strong>Plan:</strong> ${datos.planNombre}</div>
+        <div><strong>Monto pagado:</strong> $${datos.monto.toLocaleString("es-CO")} COP (${datos.ciclo})</div>
+        <div><strong>Tu plan es válido hasta:</strong> ${formatearFecha(datos.fechaVencimiento)}</div>
+      </div>
+
+      <div style="background:#fef3c7; border-radius:10px; padding:14px 16px; margin:0 0 20px;">
+        <p style="color:#92400e; font-size:12.5px; line-height:1.6; margin:0;">
+          ⚠️ <strong>Importante:</strong> este pago NO se repite automáticamente. Antes de que venza tu plan,
+          te avisaremos para que renueves manualmente si quieres seguir. No te vamos a cobrar nada sin que tú lo confirmes.
+        </p>
+      </div>
+
+      <a href="https://quiubot.site/billing" style="display:inline-block; background:#534AB7; color:#fff; padding:12px 24px; border-radius:10px; text-decoration:none; font-weight:600;">
+        Ver detalles de mi plan
+      </a>
+
+      <hr style="border:none; border-top:1px solid #eee; margin:28px 0 16px;" />
+
+      <p style="color:#999; font-size:11.5px; line-height:1.7;">
+        Puedes revisar los detalles de facturación en cualquier momento en
+        <a href="https://quiubot.site/billing" style="color:#7F77DD;">Mi plan</a>.
+        Consulta también nuestros
+        <a href="https://quiubot.site/terminos" style="color:#7F77DD;">Términos y Condiciones</a>.
+        ¿Alguna duda con el cobro? Responde este correo.
+      </p>
+    </div>`
+  );
+}
+
+// Se dispara desde /api/cron/recordatorio-vencimiento, llamado una vez al
+// dia por un Schedule Trigger en n8n. Avisa al cliente ANTES de que su
+// plan venza, para que pueda renovar manualmente si quiere -- esto es lo
+// que reemplaza al cobro automatico (que Bold todavia no soporta de forma
+// nativa): en vez de cobrarle solo, le avisamos con tiempo para que decida.
+export async function enviarCorreoRecordatorioVencimiento(datos: {
+  email: string;
+  nombre: string | null;
+  planNombre: string;
+  fechaVencimiento: string;
+  diasRestantes: number;
+}) {
+  const formatearFecha = (iso: string) =>
+    new Date(iso).toLocaleDateString("es-CO", { year: "numeric", month: "long", day: "numeric" });
+
+  await enviarCorreo(
+    datos.email,
+    `Tu plan ${datos.planNombre} vence en ${datos.diasRestantes} día${datos.diasRestantes !== 1 ? "s" : ""} ⏰`,
+    `<div style="font-family: system-ui, sans-serif; max-width: 480px; margin: 0 auto; padding: 24px;">
+      <h2 style="color:#17152B;">Hola${datos.nombre ? " " + datos.nombre : ""} 👋</h2>
+      <p style="color:#333; font-size:14px; line-height:1.6;">
+        Tu plan <strong>${datos.planNombre}</strong> de Quiubot vence el
+        <strong>${formatearFecha(datos.fechaVencimiento)}</strong>
+        (en ${datos.diasRestantes} día${datos.diasRestantes !== 1 ? "s" : ""}).
+      </p>
+      <p style="color:#333; font-size:14px; line-height:1.6;">
+        Como te contamos cuando activaste tu plan, esto no se renueva solo — si quieres seguir
+        usando Quiubot sin interrupciones, renueva antes de esa fecha.
+      </p>
+
+      <a href="https://quiubot.site/billing" style="display:inline-block; background:#534AB7; color:#fff; padding:12px 24px; border-radius:10px; text-decoration:none; font-weight:600; margin-top:8px;">
+        Renovar mi plan
+      </a>
+
+      <p style="color:#999; font-size:12px; margin-top:24px;">
+        Si no renuevas, tu cuenta vuelve automáticamente al plan gratuito (Arranque) el día del
+        vencimiento, sin ningún cobro adicional.
+      </p>
+    </div>`
+  );
+}
