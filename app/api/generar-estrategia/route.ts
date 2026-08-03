@@ -3,6 +3,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { supabaseAdmin } from "@/lib/supabase";
 import { PLANES, type PlanId } from "@/app/lib/planesConfig";
 import { desencriptarSiHaceFalta } from "@/lib/crypto";
+import { registrarError } from "@/lib/registrarError";
 
 const ORDEN_PLANES = ["arranque", "crecimiento", "escala"];
 const MIN_IMAGENES = 1;
@@ -146,8 +147,20 @@ export async function POST(req: NextRequest) {
     const data = await n8nRes.json().catch(() => ({}));
 
     if (!n8nRes.ok || data.ok === false) {
+      const mensajeError = data.error || "No se pudo generar la estrategia";
+
+      registrarError({
+        origen: "generar_estrategia",
+        userId: usuario.id,
+        email: emailBusqueda,
+        paso: "webhook_generar_estrategia",
+        errorMensaje: mensajeError,
+        detalleTecnico: JSON.stringify(data),
+        objetivoId: objetivo?.id ?? null,
+      });
+
       return NextResponse.json(
-        { error: data.error || "No se pudo generar la estrategia" },
+        { error: mensajeError },
         { status: n8nRes.status || 502 }
       );
     }
@@ -160,6 +173,17 @@ export async function POST(req: NextRequest) {
     return NextResponse.json(data);
   } catch (err) {
     console.error("Error al conectar con n8n (generar_estrategia):", err);
+
+    registrarError({
+      origen: "generar_estrategia",
+      userId: usuario.id,
+      email: emailBusqueda,
+      paso: "conexion_con_n8n",
+      errorMensaje: "No se pudo conectar con el servidor de IA",
+      detalleTecnico: String(err),
+      objetivoId: objetivo?.id ?? null,
+    });
+
     return NextResponse.json({ error: "No se pudo conectar con el servidor de IA" }, { status: 503 });
   }
 }

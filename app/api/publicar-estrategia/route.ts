@@ -1,6 +1,7 @@
 import { auth } from "@/auth";
 import { NextRequest, NextResponse } from "next/server";
 import { supabaseAdmin } from "@/lib/supabase";
+import { registrarError } from "@/lib/registrarError";
 
 // Errores conocidos de Meta que YA hemos visto en producción y que no se
 // resuelven con codigo -- son pasos que el usuario (o el admin de su
@@ -26,7 +27,17 @@ const MENSAJES_AMIGABLES: Record<number, { titulo: string; mensaje: string; acci
 // parsear esa estructura exacta (fragil, cambia segun cuantas capas de
 // escapado tenga), se buscan directamente los campos que interesan con
 // una expresion regular, que tolera cualquier nivel de escapado.
-function extraerDetalleMeta(textoCrudo: string): { subcode: number | null; mensajeMeta: string | null } {
+function extraerDetalleMeta(textoCrudo: string): { paso: string | null; subcode: number | null; mensajeMeta: string | null } {
+  let paso: string | null = null;
+  try {
+    const externo = JSON.parse(textoCrudo);
+    paso = externo?.paso ?? null;
+  } catch {
+    // el texto externo no siempre es JSON valido (a veces n8n devuelve
+    // solo texto plano si el fallo ocurrio antes de llegar a un nodo de
+    // error formal) -- no pasa nada, sigue sin "paso".
+  }
+
   const subcodeMatch = textoCrudo.match(/error_subcode\\*"?\s*:\s*(\d+)/);
   const mensajeMatch = textoCrudo.match(/error_user_msg\\*"?\s*:\s*\\*"([^"\\]*(?:\\.[^"\\]*)*)/);
   let mensajeMeta: string | null = null;
@@ -36,6 +47,7 @@ function extraerDetalleMeta(textoCrudo: string): { subcode: number | null; mensa
       .replace(/\\\\/g, "\\");
   }
   return {
+    paso,
     subcode: subcodeMatch ? parseInt(subcodeMatch[1], 10) : null,
     mensajeMeta,
   };
@@ -75,18 +87,32 @@ export async function POST(req: NextRequest) {
 
     if (!n8nRes.ok) {
       const text = await n8nRes.text();
-      const { subcode, mensajeMeta } = extraerDetalleMeta(text);
+      const { paso, subcode, mensajeMeta } = extraerDetalleMeta(text);
       const amigable = subcode ? MENSAJES_AMIGABLES[subcode] : null;
+      const mensajeFinal = amigable?.mensaje || mensajeMeta || `Error de n8n: ${text}`;
+
+      // Registro central: guarda en errores_publicacion Y notifica a los
+      // contactos de admin -- una sola llamada, reutilizable desde
+      // cualquier endpoint de Quiubot.
+      registrarError({
+        origen: "publicar_estrategia",
+        userId: usuario?.id ?? null,
+        email: emailBusqueda,
+        paso,
+        errorSubcode: subcode,
+        errorTitulo: amigable?.titulo ?? null,
+        errorMensaje: mensajeFinal,
+        detalleTecnico: text,
+        campanaNombre: estrategia?.campana?.nombre ?? null,
+        objetivoId: estrategia?.campana?.objetivo_id ?? null,
+      });
 
       return NextResponse.json(
         {
-          error: amigable?.mensaje || mensajeMeta || `Error de n8n: ${text}`,
+          error: mensajeFinal,
           error_titulo: amigable?.titulo || null,
           error_accion_texto: amigable?.accionTexto || null,
           error_accion_url: amigable?.accionUrl || null,
-          // Se conserva el texto crudo para poder revisarlo si algo no
-          // quedo bien traducido -- no se le oculta al usuario, solo se
-          // le da menos protagonismo que al mensaje amigable.
           detalle_tecnico: text,
         },
         { status: 502 }
@@ -127,6 +153,18 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ ok: true, ...data });
   } catch (err) {
     console.error("Error al publicar estrategia:", err);
+
+    registrarError({
+      origen: "publicar_estrategia",
+      userId: usuario?.id ?? null,
+      email: emailBusqueda,
+      paso: "conexion_con_n8n",
+      errorMensaje: "No se pudo conectar con n8n",
+      detalleTecnico: String(err),
+      campanaNombre: estrategia?.campana?.nombre ?? null,
+      objetivoId: estrategia?.campana?.objetivo_id ?? null,
+    });
+
     return NextResponse.json({ error: "No se pudo conectar con n8n" }, { status: 503 });
   }
 }

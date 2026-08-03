@@ -282,3 +282,43 @@ export async function enviarCorreoRecordatorioVencimiento(datos: {
     </div>`
   );
 }
+
+// Se dispara desde lib/registrarError.ts cada vez que CUALQUIER endpoint
+// de Quiubot registra un error significativo -- no solo publicar
+// estrategia. Va a cada contacto activo en admin_contactos (o a
+// ADMIN_EMAIL como respaldo).
+export async function enviarCorreoErrorSistema(datos: {
+  destinatario: string;
+  origen: string;
+  clienteEmail: string | null;
+  errorTitulo: string | null;
+  errorMensaje: string;
+  campanaNombre: string | null;
+}) {
+  const NOMBRES_ORIGEN: Record<string, string> = {
+    publicar_estrategia: "Publicar estrategia en Meta",
+    generar_estrategia: "Generar estrategia",
+    crear_creativos: "Crear creativos",
+    conectar_meta: "Conectar Meta",
+    billing_bold: "Pago con Bold",
+  };
+  const origenLegible = NOMBRES_ORIGEN[datos.origen] || datos.origen;
+
+  await enviarCorreo(
+    datos.destinatario,
+    `⚠️ Error en Quiubot — ${origenLegible}${datos.clienteEmail ? " · " + datos.clienteEmail : ""}`,
+    `<div style="font-family: system-ui, sans-serif; max-width: 480px; margin: 0 auto; padding: 24px;">
+      <h2 style="color:#17152B;">⚠️ Un usuario tuvo un error</h2>
+      <div style="background:#fef2f2; border-radius:10px; padding:16px; font-size:14px; color:#333; line-height:1.8;">
+        <div><strong>Dónde:</strong> ${origenLegible}</div>
+        ${datos.clienteEmail ? `<div><strong>Usuario:</strong> ${datos.clienteEmail}</div>` : ""}
+        ${datos.campanaNombre ? `<div><strong>Campaña:</strong> ${datos.campanaNombre}</div>` : ""}
+        ${datos.errorTitulo ? `<div><strong>Tipo:</strong> ${datos.errorTitulo}</div>` : ""}
+        <div style="margin-top:8px;"><strong>Mensaje:</strong> ${datos.errorMensaje}</div>
+      </div>
+      <a href="https://quiubot.site/admin/errores" style="display:inline-block; background:#534AB7; color:#fff; padding:12px 24px; border-radius:10px; text-decoration:none; font-weight:600; margin-top:16px;">
+        Ver en el panel de admin
+      </a>
+    </div>`
+  );
+}

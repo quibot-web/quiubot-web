@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { supabaseAdmin } from "@/lib/supabase";
+import { registrarError } from "@/lib/registrarError";
 
 // Senal de riesgo mas fuerte de las tres: si una misma cuenta publicitaria
 // de Meta (un negocio real) ya esta conectada a OTRO usuario de Quiubot,
@@ -40,6 +41,15 @@ export async function GET(req: NextRequest) {
 
     if (!tokenData.access_token) {
       console.error("Error obteniendo token corto:", tokenData);
+
+      registrarError({
+        origen: "conectar_meta",
+        email,
+        paso: "intercambiar_code_por_token",
+        errorMensaje: "Meta no devolvió un access_token al intercambiar el code",
+        detalleTecnico: JSON.stringify(tokenData),
+      });
+
       return NextResponse.redirect(`${baseUrl}/?meta_error=1`);
     }
 
@@ -127,12 +137,30 @@ export async function GET(req: NextRequest) {
 
     if (error) {
       console.error("Error guardando token de Meta:", error);
+
+      registrarError({
+        origen: "conectar_meta",
+        email,
+        paso: "guardar_token_en_supabase",
+        errorMensaje: "No se pudo guardar la conexión de Meta en la base de datos",
+        detalleTecnico: JSON.stringify(error),
+      });
+
       return NextResponse.redirect(`${baseUrl}/?meta_error=1`);
     }
 
     return NextResponse.redirect(`${baseUrl}/?meta_conectado=1`);
   } catch (err) {
     console.error("Error en callback de Meta:", err);
+
+    registrarError({
+      origen: "conectar_meta",
+      email,
+      paso: "excepcion_general",
+      errorMensaje: "Ocurrió un error inesperado conectando la cuenta de Meta",
+      detalleTecnico: String(err),
+    });
+
     return NextResponse.redirect(`${baseUrl}/?meta_error=1`);
   }
 }

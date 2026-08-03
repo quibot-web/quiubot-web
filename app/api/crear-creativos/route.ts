@@ -4,6 +4,7 @@ import { supabaseAdmin } from "@/lib/supabase";
 import { desencriptarSiHaceFalta } from "@/lib/crypto";
 import { verificarLimite } from "@/lib/rateLimit";
 import { PLANES, type PlanId } from "@/app/lib/planesConfig";
+import { registrarError } from "@/lib/registrarError";
 
 const MIN_IMAGENES = 1;
 const MAX_IMAGENES = 3;
@@ -137,19 +138,52 @@ export async function POST(req: NextRequest) {
     const data = await n8nRes.json().catch(() => ({}));
 
     if (!n8nRes.ok || data.ok === false) {
+      const mensajeError = data.error || "No se pudo iniciar la generación de creativos";
+
+      registrarError({
+        origen: "crear_creativos",
+        userId: usuario.id,
+        email: emailBusqueda,
+        paso: "webhook_crear_creativos",
+        errorMensaje: mensajeError,
+        detalleTecnico: JSON.stringify(data),
+        campanaNombre: estrategia?.campana?.nombre ?? null,
+      });
+
       return NextResponse.json(
-        { error: data.error || "No se pudo iniciar la generación de creativos" },
+        { error: mensajeError },
         { status: n8nRes.status || 502 }
       );
     }
 
     if (!data.job_id) {
+      registrarError({
+        origen: "crear_creativos",
+        userId: usuario.id,
+        email: emailBusqueda,
+        paso: "webhook_crear_creativos",
+        errorMensaje: "n8n no devolvió un job_id",
+        detalleTecnico: JSON.stringify(data),
+        campanaNombre: estrategia?.campana?.nombre ?? null,
+      });
+
       return NextResponse.json({ error: "n8n no devolvió un job_id" }, { status: 502 });
     }
 
     return NextResponse.json({ job_id: data.job_id, estado: data.estado || "procesando" });
   } catch (err) {
     console.error("Error al conectar con n8n (crear_creativos):", err);
+
+    registrarError({
+      origen: "crear_creativos",
+      userId: usuario.id,
+      email: emailBusqueda,
+      paso: "conexion_con_n8n",
+      errorMensaje: "No se pudo conectar con el servidor",
+      detalleTecnico: String(err),
+      campanaNombre: estrategia?.campana?.nombre ?? null,
+    });
+
     return NextResponse.json({ error: "No se pudo conectar con el servidor" }, { status: 503 });
   }
 }
