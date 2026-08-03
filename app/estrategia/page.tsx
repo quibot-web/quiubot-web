@@ -88,10 +88,11 @@ async function pollJobHasta(
   throw new Error("La generación de creativos está tardando más de lo esperado. Intenta de nuevo en unos minutos.");
 }
 
-function ErrorConAccion({ mensaje }: { mensaje: string }) {
+function ErrorConAccion({ mensaje, titulo, accionTexto, accionUrl }: { mensaje: string; titulo?: string | null; accionTexto?: string | null; accionUrl?: string | null }) {
   const tieneLinkOpenAI = mensaje.includes("platform.openai.com");
   return (
     <div style={{ color: "#991b1b", fontSize: 13 }}>
+      {titulo && <div style={{ fontWeight: 700, marginBottom: 4 }}>{titulo}</div>}
       <div>{mensaje}</div>
       {tieneLinkOpenAI && (
         <div style={{ marginTop: 6 }}>
@@ -104,6 +105,16 @@ function ErrorConAccion({ mensaje }: { mensaje: string }) {
             Ir a recargar saldo
           </a>
         </div>
+      )}
+      {accionTexto && accionUrl && (
+        <a
+          href={accionUrl}
+          target="_blank"
+          rel="noopener noreferrer"
+          style={{ display: "inline-flex", alignItems: "center", gap: 6, marginTop: 10, background: "#534AB7", color: "#fff", textDecoration: "none", padding: "9px 16px", borderRadius: 8, fontSize: 13, fontWeight: 600 }}
+        >
+          {accionTexto} →
+        </a>
       )}
     </div>
   );
@@ -625,6 +636,8 @@ function EstrategiaContent() {
   const [metaCampaignId, setMetaCampaignId] = useState<string | null>(null);
   const [metaAdAccountId, setMetaAdAccountId] = useState<string | null>(null);
   const [errorMsg, setErrorMsg] = useState<string | null>(null);
+  const [errorTitulo, setErrorTitulo] = useState<string | null>(null);
+  const [errorAccion, setErrorAccion] = useState<{ texto: string; url: string } | null>(null);
   const [estrategiaSeleccionada, setEstrategiaSeleccionada] = useState<any | null>(null);
   const [estrategiasGeneradas, setEstrategiasGeneradas] = useState<any[] | null>(null);
   const [descripcionVisual, setDescripcionVisual] = useState<string>("");
@@ -1049,6 +1062,8 @@ function EstrategiaContent() {
   const handlePublicarEnMeta = async () => {
     setPublicando(true);
     setErrorMsg(null);
+    setErrorTitulo(null);
+    setErrorAccion(null);
     try {
       const efectividadFinal = fuenteCreativos === "album" ? analisisResultado?.score : estrategiaSeleccionada?.efectividad;
       const res = await fetch("/api/publicar-estrategia", {
@@ -1064,6 +1079,10 @@ function EstrategiaContent() {
       const data = await res.json().catch(() => ({}));
       if (!res.ok) {
         setErrorMsg(data.error || "No se pudo publicar la estrategia en Meta.");
+        setErrorTitulo(data.error_titulo || null);
+        if (data.error_accion_texto && data.error_accion_url) {
+          setErrorAccion({ texto: data.error_accion_texto, url: data.error_accion_url });
+        }
         return;
       }
       setMetaCampaignId(data.meta_campaign_id || null);
@@ -1874,7 +1893,7 @@ function EstrategiaContent() {
                       )}
                     </button>
                   )}
-                  {errorMsg && <ErrorConAccion mensaje={errorMsg} />}
+                  {errorMsg && <ErrorConAccion mensaje={errorMsg} titulo={errorTitulo} accionTexto={errorAccion?.texto} accionUrl={errorAccion?.url} />}
                 </div>
               </div>
             )}

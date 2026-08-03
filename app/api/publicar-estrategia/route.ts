@@ -2,6 +2,45 @@ import { auth } from "@/auth";
 import { NextRequest, NextResponse } from "next/server";
 import { supabaseAdmin } from "@/lib/supabase";
 
+// Errores conocidos de Meta que YA hemos visto en producción y que no se
+// resuelven con codigo -- son pasos que el usuario (o el admin de su
+// Pagina de Facebook) tiene que hacer directamente en Meta. En vez de
+// mostrarle al usuario el JSON crudo de n8n, se traduce a un mensaje
+// claro con una accion sugerida cuando aplica.
+const MENSAJES_AMIGABLES: Record<number, { titulo: string; mensaje: string; accionTexto?: string; accionUrl?: string }> = {
+  1815089: {
+    titulo: "Falta aceptar los Términos de Generación de Leads",
+    mensaje: "Tu página de Facebook todavía no ha aceptado los Términos de Servicio de Meta para generación de clientes potenciales. Es un paso único y rápido (menos de 1 minuto) que debe hacer un administrador de esa página.",
+    accionTexto: "Aceptar términos en Meta",
+    accionUrl: "https://facebook.com/ads/leadgen/tos",
+  },
+  2923003: {
+    titulo: "Tu número de WhatsApp Business está suspendido",
+    mensaje: "Meta suspendió el número de WhatsApp Business conectado a esta cuenta. Tienes que resolverlo directamente con el soporte de WhatsApp antes de poder publicar campañas de venta por WhatsApp — esto no depende de Quiubot.",
+  },
+};
+
+// Los errores de n8n llegan como un string con varios niveles de JSON
+// anidados y escapados (axios arma el mensaje como `${status} - ${JSON.stringify(cuerpo)}`,
+// y ese cuerpo a su vez es el JSON de error de Meta) -- en vez de intentar
+// parsear esa estructura exacta (fragil, cambia segun cuantas capas de
+// escapado tenga), se buscan directamente los campos que interesan con
+// una expresion regular, que tolera cualquier nivel de escapado.
+function extraerDetalleMeta(textoCrudo: string): { subcode: number | null; mensajeMeta: string | null } {
+  const subcodeMatch = textoCrudo.match(/error_subcode\\*"?\s*:\s*(\d+)/);
+  const mensajeMatch = textoCrudo.match(/error_user_msg\\*"?\s*:\s*\\*"([^"\\]*(?:\\.[^"\\]*)*)/);
+  let mensajeMeta: string | null = null;
+  if (mensajeMatch) {
+    mensajeMeta = mensajeMatch[1]
+      .replace(/\\u([0-9a-fA-F]{4})/g, (_, hex) => String.fromCharCode(parseInt(hex, 16)))
+      .replace(/\\\\/g, "\\");
+  }
+  return {
+    subcode: subcodeMatch ? parseInt(subcodeMatch[1], 10) : null,
+    mensajeMeta,
+  };
+}
+
 export async function POST(req: NextRequest) {
   const session = await auth();
   if (!session?.user?.email) {
@@ -36,7 +75,22 @@ export async function POST(req: NextRequest) {
 
     if (!n8nRes.ok) {
       const text = await n8nRes.text();
-      return NextResponse.json({ error: `Error de n8n: ${text}` }, { status: 502 });
+      const { subcode, mensajeMeta } = extraerDetalleMeta(text);
+      const amigable = subcode ? MENSAJES_AMIGABLES[subcode] : null;
+
+      return NextResponse.json(
+        {
+          error: amigable?.mensaje || mensajeMeta || `Error de n8n: ${text}`,
+          error_titulo: amigable?.titulo || null,
+          error_accion_texto: amigable?.accionTexto || null,
+          error_accion_url: amigable?.accionUrl || null,
+          // Se conserva el texto crudo para poder revisarlo si algo no
+          // quedo bien traducido -- no se le oculta al usuario, solo se
+          // le da menos protagonismo que al mensaje amigable.
+          detalle_tecnico: text,
+        },
+        { status: 502 }
+      );
     }
 
     const data = await n8nRes.json().catch(() => ({}));
@@ -62,9 +116,6 @@ export async function POST(req: NextRequest) {
         await supabaseAdmin.from("notificaciones").insert({
           user_id: usuario.id,
           campana_id: campana.id,
-          // Tipo especifico (antes "info" generico) -- asi el frontend
-          // puede mostrarle al usuario el logo real de Meta en vez de un
-          // icono generico, ya que esto ocurrio de verdad en Meta.
           tipo: "campana_publicada",
           titulo: "Campaña publicada",
           mensaje: `Tu campaña "${campana.nombre}" fue publicada correctamente en Meta.`,

@@ -1467,6 +1467,26 @@ export default function Home() {
                       )}
                     </div>
 
+                    <div style={{ borderTop: "1px solid #f0f0f0", paddingTop: 14, marginBottom: 14 }}>
+                      <span style={{ fontSize: 12, fontWeight: 600, color: "#666", display: "block", marginBottom: 8 }}>
+                        Generación de Leads (opcional)
+                      </span>
+                      <p style={{ fontSize: 12, color: "#888", lineHeight: 1.5, marginBottom: 10 }}>
+                        Si vas a publicar campañas de Generación de Leads, tu Página de Facebook necesita
+                        aceptar los Términos de Servicio de Meta para esto — es un paso único de menos de
+                        1 minuto, hecho por un administrador de tu página, directamente en Meta. Quiubot no
+                        puede hacerlo por ti — Meta exige que sea la propia página quien lo confirme.
+                      </p>
+                      <a
+                        href="https://facebook.com/ads/leadgen/tos"
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        style={{ display: "inline-flex", alignItems: "center", gap: 6, background: "#fff", border: "1px solid #534AB7", color: "#534AB7", textDecoration: "none", padding: "9px 16px", borderRadius: 8, fontSize: 13, fontWeight: 600 }}
+                      >
+                        Aceptar términos en Meta →
+                      </a>
+                    </div>
+
                     <div style={{ display: "flex", justifyContent: "flex-end", alignItems: "center", gap: 6, marginBottom: 8 }}>
                       <TutorialVideo seccion="integraciones-meta" onListo={() => setTutorialListoMeta(true)} />
                       <TourGuiado
