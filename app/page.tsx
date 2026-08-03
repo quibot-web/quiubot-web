@@ -831,6 +831,10 @@ export default function Home() {
                 <span className="qb-nav-icon"><Icono><rect x="2" y="3" width="20" height="18" rx="2" /><path d="M10 8l6 4-6 4V8z" /></Icono></span>
                 Tutoriales
               </a>
+              <a href="/admin/errores" className="qb-admin-item">
+                <span className="qb-nav-icon"><Icono><path d="M12 9v4M12 17h.01" /><path d="M10.29 3.86L1.82 18a2 2 0 001.71 3h16.94a2 2 0 001.71-3L13.71 3.86a2 2 0 00-3.42 0z" /></Icono></span>
+                Errores de publicación
+              </a>
             </div>
           </div>
         )}
