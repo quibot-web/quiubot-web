@@ -26,8 +26,15 @@ export default auth(async (req) => {
   // verificacion (firma HMAC en el caso de Bold), hecha dentro de cada
   // route handler.
   const isWebhookRoute = pathname.startsWith("/api/webhooks/")
+  // Mismo caso que los webhooks: los endpoints de cron los llama n8n
+  // desde el servidor, nunca un usuario logueado en el navegador. Sin
+  // esta excepcion, el middleware los redirige a /login, y como esa
+  // pagina no acepta POST, el resultado es un 405 confuso en vez de que
+  // el cron corra. La seguridad de estas rutas es su propio ADMIN_SECRET,
+  // no la sesion de usuario.
+  const isCronRoute = pathname.startsWith("/api/cron/")
 
-  if (isActivarRoute || isWebhookRoute) return NextResponse.next()
+  if (isActivarRoute || isWebhookRoute || isCronRoute) return NextResponse.next()
 
   if (!isLoggedIn && !isLoginPage && !isBienvenidaPage && !isTerminosPage) {
     return NextResponse.redirect(new URL("/login", req.nextUrl))
