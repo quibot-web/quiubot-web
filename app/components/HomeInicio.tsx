@@ -318,6 +318,8 @@ export default function HomeInicio({ nombreUsuario }: { nombreUsuario: string })
         />
       </div>
 
+      <BannerNovedades novedades={datos.novedades} visible={visible} />
+
       <div style={{ background: "#fff", border: "1px solid #ece9f9", borderRadius: 16, padding: "1.5rem" }}>
         <p style={{ fontSize: 15, fontWeight: 600, margin: "0 0 14px", color: "#1a1a1a" }}>Decisiones pendientes</p>
         {todoTranquilo && (
@@ -357,8 +359,6 @@ export default function HomeInicio({ nombreUsuario }: { nombreUsuario: string })
           ))}
         </div>
       </div>
-
-      <BannerNovedades novedades={datos.novedades} visible={visible} />
 
       <div style={{ background: "#fff", border: "1px solid #ece9f9", borderRadius: 16, padding: "1.5rem" }}>
         <p style={{ fontSize: 15, fontWeight: 600, margin: "0 0 12px", color: "#1a1a1a" }}>Actividad reciente</p>
