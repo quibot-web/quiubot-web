@@ -443,7 +443,13 @@ function SeccionVideo() {
         {info.descripcion && <p className="lead">{info.descripcion}</p>}
       </div>
 
-      <div className="video-card" onClick={() => setAbierto(true)}>
+      <div
+        className="video-card"
+        onClick={() => {
+          trackEvento("ViewContent", { content_name: "video_presentacion" });
+          setAbierto(true);
+        }}
+      >
         {miniatura ? (
           <img src={miniatura} alt="" className="video-thumb" />
         ) : (
@@ -474,6 +480,168 @@ function SeccionVideo() {
   );
 }
 
+/* ============================================================
+   MEDICION DE CONVERSION — Meta Pixel
+   ============================================================
+   trackEvento() dispara un evento estándar o personalizado de Meta Pixel
+   de forma segura (revisa que window.fbq exista antes de llamar).
+
+   IMPORTANTE: el script base de Meta Pixel (con tu PIXEL_ID) debe cargar
+   UNA SOLA VEZ por sitio — lo ideal es ponerlo en tu layout raíz
+   (app/layout.tsx), no aquí. Si ya lo tienes instalado ahí, ignora
+   el componente <MetaPixelBase />; si no, lo dejo listo para que
+   solo pegues tu ID y lo muevas a layout.tsx.
+   ============================================================ */
+
+declare global {
+  interface Window {
+    fbq?: (...args: unknown[]) => void;
+  }
+}
+
+function trackEvento(evento: string, params?: Record<string, unknown>) {
+  if (typeof window !== "undefined" && typeof window.fbq === "function") {
+    window.fbq("track", evento, params);
+  }
+}
+
+const META_PIXEL_ID = "TU_PIXEL_ID_AQUI"; // <-- reemplaza con tu ID real de Meta Pixel
+
+function MetaPixelBase() {
+  useEffect(() => {
+    if (typeof window === "undefined" || window.fbq) return;
+    if (META_PIXEL_ID === "TU_PIXEL_ID_AQUI") return; // evita cargar sin ID configurado
+
+    const script = document.createElement("script");
+    script.innerHTML = `
+      !function(f,b,e,v,n,t,s){if(f.fbq)return;n=f.fbq=function(){n.callMethod?
+      n.callMethod.apply(n,arguments):n.queue.push(arguments)};if(!f._fbq)f._fbq=n;
+      n.push=n;n.loaded=!0;n.version='2.0';n.queue=[];t=b.createElement(e);t.async=!0;
+      t.src=v;s=b.getElementsByTagName(e)[0];s.parentNode.insertBefore(t,s)}(window,
+      document,'script','https://connect.facebook.net/en_US/fbevents.js');
+      fbq('init', '${META_PIXEL_ID}');
+      fbq('track', 'PageView');
+    `;
+    document.head.appendChild(script);
+  }, []);
+
+  return null;
+}
+
+/* CTA reutilizable con tracking incorporado.
+   ubicacion = de dónde sale el clic (para saber qué CTA convierte más). */
+function CtaLink({
+  href,
+  ubicacion,
+  className,
+  children,
+}: {
+  href: string;
+  ubicacion: string;
+  className?: string;
+  children: React.ReactNode;
+}) {
+  return (
+    <Link
+      href={href}
+      className={className}
+      data-cta-ubicacion={ubicacion}
+      onClick={() => {
+        trackEvento("Lead", { content_name: `cta_${ubicacion}` });
+      }}
+    >
+      {children}
+    </Link>
+  );
+}
+
+/* ============================================================
+   PRUEBA SOCIAL — Testimonios
+   ============================================================
+   Estructura lista para cuando tengas testimonios reales.
+   Por ahora usa placeholders claramente marcados como "próximamente"
+   en vez de inventar citas — apenas tengas 2-3 videos o capturas de
+   WhatsApp de clientes, reemplaza el array TESTIMONIOS. */
+
+type Testimonio = {
+  nombre: string;
+  negocio: string;
+  cita: string;
+  tipo: "texto" | "video";
+};
+
+const TESTIMONIOS: Testimonio[] = [
+  // Ejemplo de cómo se vería uno real — descomenta y reemplaza cuando tengas el dato:
+  // { nombre: "María F.", negocio: "Boutique en Cali", cita: "Publiqué mi primera campaña en menos de 10 minutos.", tipo: "texto" },
+];
+
+function SeccionTestimonios() {
+  const hayTestimonios = TESTIMONIOS.length > 0;
+
+  return (
+    <section className="alt">
+      <div className="section-head qb-reveal">
+        <p className="eyebrow" style={{ textAlign: "center" }}>Prueba social</p>
+        <h2>Negocios como el tuyo ya lo están usando.</h2>
+        <p className="lead">
+          Estamos en las primeras semanas — cada testimonio de esta sección es de un negocio real,
+          verificado personalmente por el fundador.
+        </p>
+      </div>
+
+      {hayTestimonios ? (
+        <div className="testimonios-grid">
+          {TESTIMONIOS.map((t) => (
+            <div className="testimonio-card qb-reveal" key={t.nombre}>
+              <div className="testimonio-quote">"{t.cita}"</div>
+              <div className="testimonio-autor">
+                <div className="testimonio-avatar">{t.nombre.charAt(0)}</div>
+                <div>
+                  <div className="testimonio-nombre">{t.nombre}</div>
+                  <div className="testimonio-negocio">{t.negocio}</div>
+                </div>
+              </div>
+            </div>
+          ))}
+        </div>
+      ) : (
+        <div className="testimonios-placeholder qb-reveal">
+          <div className="placeholder-icon">
+            <svg viewBox="0 0 24 24" fill="none" stroke="#7F77DD" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+              <path d="M21 15a2 2 0 01-2 2H7l-4 4V5a2 2 0 012-2h14a2 2 0 012 2z" />
+            </svg>
+          </div>
+          <p>
+            Los primeros testimonios en video están en camino — mientras tanto, cada negocio nuevo
+            lo revisa personalmente el fundador. Cuéntanos tu caso y podrías ser el primero en aparecer aquí.
+          </p>
+        </div>
+      )}
+    </section>
+  );
+}
+
+/* ============================================================
+   BARRA DE CONFIANZA TEMPRANA
+   ============================================================
+   Repite la garantía justo después del hero para neutralizar la
+   duda del visitante ANTES de que la agitación del dolor la aumente. */
+function BarraConfianzaTemprana() {
+  return (
+    <div className="barra-confianza qb-reveal">
+      <div className="barra-confianza-item">
+        <span className="check-mini">✓</span> 7 días gratis, sin tarjeta
+      </div>
+      <div className="barra-confianza-item">
+        <span className="check-mini">✓</span> Tú apruebas cada cambio
+      </div>
+      <div className="barra-confianza-item">
+        <span className="check-mini">✓</span> Cancela cuando quieras
+      </div>
+    </div>
+  );
+}
+
 export default function BienvenidaExperience() {
   const [pasoActivo, setPasoActivo] = useState(0);
   const [progreso, setProgreso] = useState(0);
@@ -500,6 +668,7 @@ export default function BienvenidaExperience() {
 
   return (
     <div className="qb-lp">
+      <MetaPixelBase />
       <link
         rel="stylesheet"
         href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@500;600;700&family=JetBrains+Mono:wght@400;500;600&display=swap"
@@ -527,8 +696,8 @@ export default function BienvenidaExperience() {
         .qb-lp h1, .qb-lp h2, .qb-lp h3 { font-family: var(--font-display), system-ui, sans-serif; letter-spacing: -0.02em; margin: 0; }
         .qb-lp .eyebrow { font-family: var(--font-mono), monospace; font-size: 12px; font-weight: 500; letter-spacing: 0.14em; text-transform: uppercase; color: var(--purple-deep); margin: 0 0 14px; }
 
-        .qb-lp .btn-cta { display: inline-flex; align-items: center; gap: 8px; background: var(--purple-deep); color: #fff; font-weight: 600; font-size: 16px; padding: 15px 28px; border-radius: 10px; text-decoration: none; box-shadow: 0 3px 0 rgba(23,21,43,0.18); transition: transform 0.15s ease, box-shadow 0.15s ease, background 0.15s ease; border: none; cursor: pointer; }
-        .qb-lp .btn-cta:hover { transform: translateY(-1px); background: #3E3494; box-shadow: 0 4px 0 rgba(23,21,43,0.2); }
+        .qb-lp .btn-cta { display: inline-flex; align-items: center; gap: 8px; background: var(--mint); color: #fff; font-weight: 600; font-size: 16px; padding: 15px 28px; border-radius: 10px; text-decoration: none; box-shadow: 0 3px 0 rgba(23,21,43,0.18); transition: transform 0.15s ease, box-shadow 0.15s ease, background 0.15s ease; border: none; cursor: pointer; }
+        .qb-lp .btn-cta:hover { transform: translateY(-1px); background: #199469; box-shadow: 0 4px 0 rgba(23,21,43,0.2); }
         .qb-lp .btn-cta:active { transform: translateY(1px); box-shadow: 0 1px 0 rgba(23,21,43,0.18); }
         .qb-lp .micro { font-size: 13px; color: var(--muted); margin-top: 12px; }
 
@@ -551,12 +720,17 @@ export default function BienvenidaExperience() {
         .qb-lp nav .btn-cta { padding: 10px 20px; font-size: 14px; border-radius: 8px; box-shadow: none; }
 
         /* ---- HERO ---- */
-        .qb-lp .hero { padding: 60px 24px 64px; display: grid; grid-template-columns: 1.05fr 0.95fr; gap: 56px; align-items: center; max-width: 1120px; margin: 0 auto; position: relative; background-image: radial-gradient(rgba(74,63,174,0.14) 1px, transparent 1px); background-size: 22px 22px; background-position: -6px -6px; }
+        .qb-lp .hero { padding: 60px 24px 28px; display: grid; grid-template-columns: 1.05fr 0.95fr; gap: 56px; align-items: center; max-width: 1120px; margin: 0 auto; position: relative; background-image: radial-gradient(rgba(74,63,174,0.14) 1px, transparent 1px); background-size: 22px 22px; background-position: -6px -6px; }
         .qb-lp .hero::before { content: ""; position: absolute; inset: 0; background: radial-gradient(ellipse at 30% 20%, var(--bg) 35%, transparent 70%); pointer-events: none; z-index: 0; }
         .qb-lp .hero > * { position: relative; z-index: 1; }
         .qb-lp .hero h1 { font-size: clamp(34px, 5vw, 54px); line-height: 1.06; font-weight: 700; }
         .qb-lp .hero h1 .grad { color: var(--purple-deep); }
         .qb-lp .hero p.sub { font-size: 17px; line-height: 1.55; color: var(--muted); margin: 20px 0 28px; max-width: 480px; }
+
+        /* ---- BARRA DE CONFIANZA TEMPRANA ---- */
+        .qb-lp .barra-confianza { max-width: 1120px; margin: 0 auto; padding: 0 24px 40px; display: flex; flex-wrap: wrap; justify-content: center; gap: 12px 28px; }
+        .qb-lp .barra-confianza-item { display: flex; align-items: center; gap: 7px; font-size: 13.5px; font-weight: 600; color: var(--ink); }
+        .qb-lp .barra-confianza-item .check-mini { width: 18px; height: 18px; border-radius: 50%; background: var(--mint); color: #fff; font-size: 11px; display: flex; align-items: center; justify-content: center; flex-shrink: 0; }
 
         /* ---- NUCLEO (brillo + profundidad) ---- */
         .qb-lp .core-stage { position: relative; width: 100%; max-width: 360px; aspect-ratio: 1 / 1; margin: 0 auto 46px; }
@@ -594,7 +768,19 @@ export default function BienvenidaExperience() {
         .qb-lp .section-head p.lead { font-size: 16px; color: var(--muted); margin-top: 14px; line-height: 1.55; }
         .qb-lp .alt { background: var(--bg-alt); }
 
-        /* ---- CAOS -> OLEADA DE COLOR -> CALMA (ancho completo) ---- */
+        /* ---- TESTIMONIOS ---- */
+        .qb-lp .testimonios-grid { max-width: 1000px; margin: 0 auto; display: grid; grid-template-columns: repeat(3, 1fr); gap: 18px; }
+        .qb-lp .testimonio-card { background: #fff; border: 1px solid #ECE9F7; border-radius: 16px; padding: 24px; box-shadow: 0 10px 24px rgba(23,21,43,0.06); }
+        .qb-lp .testimonio-quote { font-size: 14.5px; color: var(--ink); line-height: 1.55; font-style: italic; margin-bottom: 16px; }
+        .qb-lp .testimonio-autor { display: flex; align-items: center; gap: 10px; }
+        .qb-lp .testimonio-avatar { width: 36px; height: 36px; border-radius: 50%; background: var(--purple-deep); color: #fff; display: flex; align-items: center; justify-content: center; font-weight: 700; font-size: 14px; flex-shrink: 0; }
+        .qb-lp .testimonio-nombre { font-size: 13.5px; font-weight: 700; color: var(--ink); }
+        .qb-lp .testimonio-negocio { font-size: 12px; color: var(--muted); }
+        .qb-lp .testimonios-placeholder { max-width: 560px; margin: 0 auto; text-align: center; background: #fff; border: 1px dashed var(--purple-light); border-radius: 16px; padding: 40px 32px; }
+        .qb-lp .testimonios-placeholder .placeholder-icon { width: 48px; height: 48px; margin: 0 auto 16px; border-radius: 12px; background: var(--bg-alt); display: flex; align-items: center; justify-content: center; }
+        .qb-lp .testimonios-placeholder .placeholder-icon svg { width: 22px; height: 22px; }
+        .qb-lp .testimonios-placeholder p { font-size: 14px; color: var(--muted); line-height: 1.6; margin: 0; }
+
         /* ---- VIDEO DE PRESENTACION ---- */
         .qb-lp .video-card { position: relative; max-width: 760px; margin: 0 auto; border-radius: 20px; overflow: hidden; aspect-ratio: 16 / 9; background: linear-gradient(135deg, var(--purple-deep), var(--purple)); cursor: pointer; border: 1px dashed var(--purple-light); box-shadow: 0 20px 50px rgba(74,63,174,0.18); }
         .qb-lp .video-thumb { width: 100%; height: 100%; object-fit: cover; display: block; }
@@ -800,6 +986,7 @@ export default function BienvenidaExperience() {
         .qb-lp footer a { color: var(--muted); text-decoration: underline; }
 
         @media (max-width: 860px) {
+          .qb-lp .testimonios-grid { grid-template-columns: 1fr; }
           .qb-lp .founder-note { flex-direction: column; text-align: center; }
           .qb-lp .founder-firma { align-items: center; }
           .qb-lp .caos-calma-band { min-height: 0; padding: 28px 16px; }
@@ -840,10 +1027,11 @@ export default function BienvenidaExperience() {
           <img src="/marca/icono-quiubot.svg" alt="" />
           quiu<span className="acc">bot</span>
         </div>
-        <Link href="/login" className="btn-cta">Iniciar prueba gratis</Link>
+        <CtaLink href="/login" ubicacion="nav" className="btn-cta">Iniciar prueba gratis</CtaLink>
       </nav>
 
-      <section className="hero" style={{ paddingBottom: 20 }}>
+      {/* 1. HERO — atención + promesa */}
+      <section className="hero" style={{ paddingBottom: 0 }}>
         <div>
           <p className="eyebrow">Publicidad con IA · Meta Ads</p>
           <h1>Tu próxima campaña <span className="grad">no la armas tú.</span></h1>
@@ -851,7 +1039,7 @@ export default function BienvenidaExperience() {
             Estrategia, creativos y publicación para Meta Ads generados con IA — y un motor
             que vigila tus campañas todo el tiempo para que nunca quemes presupuesto sin darte cuenta.
           </p>
-          <Link href="/login" className="btn-cta">Iniciar prueba gratuita de 7 días →</Link>
+          <CtaLink href="/login" ubicacion="hero" className="btn-cta">Iniciar prueba gratuita de 7 días →</CtaLink>
           <p className="micro">Sin tarjeta de crédito. Cancela cuando quieras.</p>
         </div>
         <div className="core-stage">
@@ -869,6 +1057,10 @@ export default function BienvenidaExperience() {
         </div>
       </section>
 
+      {/* 2. BARRA DE CONFIANZA — neutraliza la duda antes de agitar el dolor */}
+      <BarraConfianzaTemprana />
+
+      {/* 3. AGITACION DEL DOLOR — el visitante se reconoce en el problema */}
       <section>
         <div className="section-head qb-reveal">
           <p className="eyebrow" style={{ textAlign: "center" }}>El problema real</p>
@@ -932,8 +1124,13 @@ export default function BienvenidaExperience() {
         </div>
       </section>
 
+      {/* 4. PRUEBA SOCIAL — reduce escepticismo antes de explicar el mecanismo */}
+      <SeccionTestimonios />
+
+      {/* 5. VIDEO — refuerza la prueba social mostrando el producto real */}
       <SeccionVideo />
 
+      {/* 6. COMO FUNCIONA */}
       <section className="alt">
         <div className="section-head qb-reveal">
           <p className="eyebrow" style={{ textAlign: "center" }}>Así se siente usar Quiubot</p>
@@ -986,6 +1183,7 @@ export default function BienvenidaExperience() {
         </div>
       </section>
 
+      {/* 7. QUE PASA DESPUES DE PUBLICAR + segundo CTA intermedio */}
       <section>
         <div className="section-head qb-reveal">
           <p className="eyebrow" style={{ textAlign: "center" }}>Mientras tú haces otras cosas</p>
@@ -1011,10 +1209,11 @@ export default function BienvenidaExperience() {
             <div className="mini-cta-tag"><span className="dot-mini" />Ya viste cómo te cuida Quiubot</div>
             <h4>Falta lo mejor: verlo funcionar en tu negocio.</h4>
           </div>
-          <Link href="/login" className="btn-cta">Iniciar prueba gratuita →</Link>
+          <CtaLink href="/login" ubicacion="mini_cta" className="btn-cta">Iniciar prueba gratuita →</CtaLink>
         </div>
       </section>
 
+      {/* 8. OBJECIONES + FUNDADOR + GARANTIAS — remata la confianza antes del precio */}
       <section className="alt">
         <div className="sello-box qb-reveal">
           <div className="sello-icono">
@@ -1087,12 +1286,13 @@ export default function BienvenidaExperience() {
             </div>
           </div>
           <div className="sello-cta">
-            <Link href="/login" className="btn-cta">Iniciar prueba gratuita de 7 días →</Link>
+            <CtaLink href="/login" ubicacion="sello_confianza" className="btn-cta">Iniciar prueba gratuita de 7 días →</CtaLink>
             <p className="micro">Sin tarjeta de crédito. Cancela cuando quieras.</p>
           </div>
         </div>
       </section>
 
+      {/* 9. PRECIO — ancla de valor, ya con el riesgo mental resuelto */}
       <section>
         <div className="section-head qb-reveal">
           <p className="eyebrow" style={{ textAlign: "center" }}>Después de tu prueba</p>
@@ -1113,10 +1313,11 @@ export default function BienvenidaExperience() {
         </div>
       </section>
 
+      {/* 10. CTA FINAL */}
       <section>
         <div className="cta-final qb-reveal">
           <h2>Tus primeros 7 días con Quiubot ya están pagados. Por nosotros.</h2>
-          <Link href="/login" className="btn-cta">Iniciar prueba gratuita de 7 días →</Link>
+          <CtaLink href="/login" ubicacion="cta_final" className="btn-cta">Iniciar prueba gratuita de 7 días →</CtaLink>
           <p className="micro">Sin tarjeta de crédito. Cancela cuando quieras.</p>
         </div>
       </section>
