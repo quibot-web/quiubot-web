@@ -11,6 +11,7 @@ export async function GET() {
     .order("orden", { ascending: true });
 
   if (error) {
+    console.error("Error al leer tutoriales_testimonios:", error.message);
     return NextResponse.json({ testimonios: [] });
   }
 

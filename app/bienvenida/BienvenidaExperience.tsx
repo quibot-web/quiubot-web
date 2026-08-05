@@ -610,7 +610,7 @@ function SeccionTestimonios() {
               <button
                 key={t.id}
                 type="button"
-                className="testimonio-card testimonio-card-video qb-reveal"
+                className="testimonio-card testimonio-card-video"
                 onClick={() => {
                   trackEvento("ViewContent", { content_name: `testimonio_${t.nombre_empresa}` });
                   setAbierto(t);
@@ -907,7 +907,7 @@ export default function BienvenidaExperience() {
         .qb-lp .testimonios-placeholder p { font-size: 14px; color: var(--muted); line-height: 1.6; margin: 0; }
 
         /* ---- VIDEO DE PRESENTACION ---- */
-        .qb-lp .video-card { position: relative; max-width: 760px; margin: 0 auto; border-radius: 20px; overflow: hidden; aspect-ratio: 16 / 9; background: linear-gradient(135deg, var(--purple-deep), var(--purple)); cursor: pointer; border: 1px solid #ECE9F7; box-shadow: 0 20px 50px rgba(74,63,174,0.14); }
+        .qb-lp .video-card { position: relative; max-width: 860px; margin: 0 auto; border-radius: 20px; overflow: hidden; aspect-ratio: 16 / 9; background: linear-gradient(135deg, var(--purple-deep), var(--purple)); cursor: pointer; border: 1px solid #ECE9F7; box-shadow: 0 24px 60px rgba(74,63,174,0.18); }
         .qb-lp .video-thumb { width: 100%; height: 100%; object-fit: cover; display: block; }
         .qb-lp .video-thumb-fallback { width: 100%; height: 100%; background-image: radial-gradient(rgba(255,255,255,0.16) 1px, transparent 1px); background-size: 22px 22px; }
         .qb-lp .video-play-btn { position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%); width: 72px; height: 72px; border-radius: 50%; background: #fff; display: flex; align-items: center; justify-content: center; box-shadow: 0 10px 30px rgba(0,0,0,0.25); animation: qbPlayPulse 2.4s infinite; transition: transform .2s ease; }
@@ -1188,10 +1188,15 @@ export default function BienvenidaExperience() {
         </div>
       </section>
 
-      {/* 2. BARRA DE CONFIANZA — neutraliza la duda antes de agitar el dolor */}
+      {/* 2. VIDEO DE PRESENTACION — el gancho emocional principal, justo después del hero.
+         Llega alguien que acaba de ver el anuncio: aquí es donde controlas su emoción
+         antes de agitar el dolor o pedirle nada. */}
+      <SeccionVideo />
+
+      {/* 3. BARRA DE CONFIANZA — neutraliza la duda antes de agitar el dolor */}
       <BarraConfianzaTemprana />
 
-      {/* 3. AGITACION DEL DOLOR — el visitante se reconoce en el problema, en un mundo visualmente distinto */}
+      {/* 4. AGITACION DEL DOLOR — el visitante se reconoce en el problema, en un mundo visualmente distinto */}
       <section className="seccion-oscura">
         <div className="aclarado-total" />
         <div className="fundido-entrada">
@@ -1266,11 +1271,8 @@ export default function BienvenidaExperience() {
         </div>
       </section>
 
-      {/* 4. PRUEBA SOCIAL — reduce escepticismo antes de explicar el mecanismo */}
+      {/* 5. PRUEBA SOCIAL — reduce escepticismo antes de explicar el mecanismo */}
       <SeccionTestimonios />
-
-      {/* 5. VIDEO — refuerza la prueba social mostrando el producto real */}
-      <SeccionVideo />
 
       {/* 6. COMO FUNCIONA */}
       <section className="alt">
