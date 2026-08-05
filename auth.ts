@@ -90,8 +90,32 @@ export const { handlers, signIn, signOut, auth } = NextAuth({
       }
       return true;
     },
+    async jwt({ token, account, user }) {
+      // Solo se ejecuta esta consulta en el momento exacto del sign-in
+      // (cuando "account" viene presente) -- no en cada request, para no
+      // pegarle a Supabase de mas. Comparamos "creado_en" contra el reloj:
+      // si la cuenta se creo hace menos de 2 minutos, es un registro nuevo
+      // de verdad -- no alguien que ya tenia cuenta y solo volvio a entrar.
+      // Esto es lo que le permite al cliente saber cuando disparar
+      // CompleteRegistration en el Pixel de Meta sin inflar el conteo con
+      // logins repetidos de usuarios existentes.
+      if (account?.provider === "google" && user?.email) {
+        const { data: fila } = await supabaseAdmin
+          .from("usuarios")
+          .select("creado_en")
+          .eq("email", user.email)
+          .maybeSingle();
+
+        if (fila?.creado_en) {
+          const edadMs = Date.now() - new Date(fila.creado_en).getTime();
+          token.esRegistroNuevo = edadMs < 2 * 60 * 1000;
+        }
+      }
+      return token;
+    },
     session({ session, token }) {
       if (token.sub) session.user.id = token.sub;
+      (session.user as any).esRegistroNuevo = (token as any).esRegistroNuevo === true;
       return session;
     },
   },
