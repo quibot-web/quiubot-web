@@ -432,7 +432,6 @@ function SeccionVideo() {
 
   if (!info?.configurado || !info.url_video) return null;
 
-  const embed = embedVideo(info.url_video);
   const miniatura = miniaturaVideo(info.url_video);
 
   return (
@@ -462,20 +461,7 @@ function SeccionVideo() {
         </div>
       </div>
 
-      {abierto && (
-        <div className="video-modal-backdrop" onClick={() => setAbierto(false)}>
-          <div className="video-modal" onClick={(e) => e.stopPropagation()}>
-            <button className="video-modal-close" onClick={() => setAbierto(false)}>✕</button>
-            <div className="video-modal-frame">
-              {embed ? (
-                <iframe src={embed} allow="autoplay; fullscreen; picture-in-picture" allowFullScreen />
-              ) : (
-                <video src={info.url_video} controls autoPlay />
-              )}
-            </div>
-          </div>
-        </div>
-      )}
+      {abierto && <VideoModal url={info.url_video} onClose={() => setAbierto(false)} />}
     </section>
   );
 }
@@ -556,27 +542,54 @@ function CtaLink({
 }
 
 /* ============================================================
-   PRUEBA SOCIAL — Testimonios
+   PRUEBA SOCIAL — Testimonios en video
    ============================================================
-   Estructura lista para cuando tengas testimonios reales.
-   Por ahora usa placeholders claramente marcados como "próximamente"
-   en vez de inventar citas — apenas tengas 2-3 videos o capturas de
-   WhatsApp de clientes, reemplaza el array TESTIMONIOS. */
+   Se alimenta de /api/tutoriales-publicos/testimonios, que a su vez
+   se administra desde /admin/testimonios. Si todavia no hay ningun
+   testimonio activo, se muestra un placeholder honesto en vez de
+   inventar citas o dejar la seccion vacia. */
 
-type Testimonio = {
-  nombre: string;
-  negocio: string;
-  cita: string;
-  tipo: "texto" | "video";
+type TestimonioVideo = {
+  id: string;
+  nombre_empresa: string;
+  imagen_url: string;
+  url_video: string;
+  cita: string | null;
 };
 
-const TESTIMONIOS: Testimonio[] = [
-  // Ejemplo de cómo se vería uno real — descomenta y reemplaza cuando tengas el dato:
-  // { nombre: "María F.", negocio: "Boutique en Cali", cita: "Publiqué mi primera campaña en menos de 10 minutos.", tipo: "texto" },
-];
+/* Modal reutilizable para reproducir un video (YouTube, Vimeo o .mp4).
+   Lo usan tanto el video de presentacion como las tarjetas de testimonios,
+   asi evitamos repetir el mismo bloque de JSX dos veces. */
+function VideoModal({ url, onClose }: { url: string; onClose: () => void }) {
+  const embed = embedVideo(url);
+  return (
+    <div className="video-modal-backdrop" onClick={onClose}>
+      <div className="video-modal" onClick={(e) => e.stopPropagation()}>
+        <button className="video-modal-close" onClick={onClose}>✕</button>
+        <div className="video-modal-frame">
+          {embed ? (
+            <iframe src={embed} allow="autoplay; fullscreen; picture-in-picture" allowFullScreen />
+          ) : (
+            <video src={url} controls autoPlay />
+          )}
+        </div>
+      </div>
+    </div>
+  );
+}
 
 function SeccionTestimonios() {
-  const hayTestimonios = TESTIMONIOS.length > 0;
+  const [testimonios, setTestimonios] = useState<TestimonioVideo[] | null>(null);
+  const [abierto, setAbierto] = useState<TestimonioVideo | null>(null);
+
+  useEffect(() => {
+    fetch("/api/tutoriales-publicos/testimonios")
+      .then((r) => r.json())
+      .then((data) => setTestimonios(data.testimonios || []))
+      .catch(() => setTestimonios([]));
+  }, []);
+
+  const hayTestimonios = !!testimonios && testimonios.length > 0;
 
   return (
     <section className="alt">
@@ -591,18 +604,38 @@ function SeccionTestimonios() {
 
       {hayTestimonios ? (
         <div className="testimonios-grid">
-          {TESTIMONIOS.map((t) => (
-            <div className="testimonio-card qb-reveal" key={t.nombre}>
-              <div className="testimonio-quote">"{t.cita}"</div>
-              <div className="testimonio-autor">
-                <div className="testimonio-avatar">{t.nombre.charAt(0)}</div>
-                <div>
-                  <div className="testimonio-nombre">{t.nombre}</div>
-                  <div className="testimonio-negocio">{t.negocio}</div>
+          {testimonios!.map((t) => {
+            const miniatura = miniaturaVideo(t.url_video);
+            return (
+              <button
+                key={t.id}
+                type="button"
+                className="testimonio-card testimonio-card-video qb-reveal"
+                onClick={() => {
+                  trackEvento("ViewContent", { content_name: `testimonio_${t.nombre_empresa}` });
+                  setAbierto(t);
+                }}
+              >
+                <div className="testimonio-video-thumb">
+                  {miniatura ? (
+                    <img src={miniatura} alt="" />
+                  ) : (
+                    <img src={t.imagen_url} alt="" />
+                  )}
+                  <span className="testimonio-play">
+                    <svg viewBox="0 0 24 24" width="18" height="18" fill="#4A3FAE">
+                      <path d="M8 5v14l11-7z" />
+                    </svg>
+                  </span>
                 </div>
-              </div>
-            </div>
-          ))}
+                {t.cita && <div className="testimonio-quote">"{t.cita}"</div>}
+                <div className="testimonio-autor">
+                  <img className="testimonio-avatar-img" src={t.imagen_url} alt="" />
+                  <div className="testimonio-nombre">{t.nombre_empresa}</div>
+                </div>
+              </button>
+            );
+          })}
         </div>
       ) : (
         <div className="testimonios-placeholder qb-reveal">
@@ -617,6 +650,8 @@ function SeccionTestimonios() {
           </p>
         </div>
       )}
+
+      {abierto && <VideoModal url={abierto.url_video} onClose={() => setAbierto(null)} />}
     </section>
   );
 }
@@ -855,6 +890,12 @@ export default function BienvenidaExperience() {
         /* ---- TESTIMONIOS ---- */
         .qb-lp .testimonios-grid { max-width: 1000px; margin: 0 auto; display: grid; grid-template-columns: repeat(3, 1fr); gap: 18px; }
         .qb-lp .testimonio-card { background: #fff; border: 1px solid #ECE9F7; border-radius: 16px; padding: 24px; box-shadow: 0 10px 24px rgba(23,21,43,0.06); }
+        .qb-lp .testimonio-card-video { display: flex; flex-direction: column; text-align: left; font-family: inherit; cursor: pointer; width: 100%; transition: transform .2s ease, box-shadow .2s ease; }
+        .qb-lp .testimonio-card-video:hover { transform: translateY(-3px); box-shadow: 0 16px 32px rgba(23,21,43,0.1); }
+        .qb-lp .testimonio-video-thumb { position: relative; width: 100%; aspect-ratio: 16 / 10; border-radius: 10px; overflow: hidden; background: var(--bg-alt); margin-bottom: 14px; }
+        .qb-lp .testimonio-video-thumb img { width: 100%; height: 100%; object-fit: cover; display: block; }
+        .qb-lp .testimonio-play { position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%); width: 40px; height: 40px; border-radius: 50%; background: #fff; display: flex; align-items: center; justify-content: center; box-shadow: 0 6px 16px rgba(0,0,0,0.25); }
+        .qb-lp .testimonio-avatar-img { width: 28px; height: 28px; border-radius: 50%; object-fit: cover; flex-shrink: 0; }
         .qb-lp .testimonio-quote { font-size: 14.5px; color: var(--ink); line-height: 1.55; font-style: italic; margin-bottom: 16px; }
         .qb-lp .testimonio-autor { display: flex; align-items: center; gap: 10px; }
         .qb-lp .testimonio-avatar { width: 36px; height: 36px; border-radius: 50%; background: var(--purple-deep); color: #fff; display: flex; align-items: center; justify-content: center; font-weight: 700; font-size: 14px; flex-shrink: 0; }
