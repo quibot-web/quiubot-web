@@ -829,8 +829,6 @@ export default function BienvenidaExperience() {
           0%, 100% { transform: translateY(0) scale(1); opacity: var(--op-min, 0.25); }
           50% { transform: translateY(-14px) scale(1.15); opacity: var(--op-max, 0.7); }
         }
-        .qb-lp .seccion-oscura .calma-content h4 { color: #fff; }
-        .qb-lp .seccion-oscura .calma-content p { color: rgba(255,255,255,0.62); }
 
         /* ---- TESTIMONIOS ---- */
         .qb-lp .testimonios-grid { max-width: 1000px; margin: 0 auto; display: grid; grid-template-columns: repeat(3, 1fr); gap: 18px; }
@@ -863,8 +861,16 @@ export default function BienvenidaExperience() {
         .qb-lp .video-modal-frame { position: relative; padding-top: 56.25%; }
         .qb-lp .video-modal-frame iframe, .qb-lp .video-modal-frame video { position: absolute; inset: 0; width: 100%; height: 100%; border: none; }
 
-        .qb-lp .caos-calma-band { position: relative; width: 100vw; margin-left: calc(50% - 50vw); margin-right: calc(50% - 50vw); min-height: 420px; overflow: hidden; padding: 44px 24px; }
-        .qb-lp .caos-calma-stage { position: relative; max-width: 640px; margin: 0 auto; min-height: 330px; animation: qbShake 14s ease-in-out infinite; z-index: 1; }
+        .qb-lp .caos-calma-band { position: relative; width: 100vw; margin-left: calc(50% - 50vw); margin-right: calc(50% - 50vw); height: 420px; overflow: hidden; padding: 44px 24px; }
+        .qb-lp .escena-centrada { position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%); width: 100%; max-width: 640px; padding: 0 24px; z-index: 1; }
+        .qb-lp .escena-calma { position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%); z-index: 4; text-align: center; width: 100%; max-width: 420px; }
+        .qb-lp .aclarado-calma { position: absolute; inset: 0; background: var(--bg-alt); opacity: 0; animation: qbAclarado 14s ease-in-out infinite; pointer-events: none; z-index: 2; }
+        @keyframes qbAclarado {
+          0%, 51% { opacity: 0; }
+          60%, 85% { opacity: 0.95; }
+          94%, 100% { opacity: 0; }
+        }
+        .qb-lp .caos-calma-stage { position: relative; max-width: 640px; margin: 0 auto; min-height: 330px; animation: qbShake 14s ease-in-out infinite; }
         @keyframes qbShake {
           0%, 20%, 29%, 100% { transform: translateX(0); }
           21.4% { transform: translateX(-3px); }
@@ -910,7 +916,7 @@ export default function BienvenidaExperience() {
           57%, 85.5% { opacity: 1; transform: scale(1); }
           94%, 100% { opacity: 0; transform: scale(0.85); }
         }
-        .qb-lp .calma-content { position: relative; z-index: 4; text-align: center; padding: 0 32px; opacity: 0; transform: translateY(10px); animation: qbCalmContent 14s ease-in-out infinite; pointer-events: none; }
+        .qb-lp .calma-content { position: relative; text-align: center; padding: 0 32px; opacity: 0; transform: translateY(10px); animation: qbCalmContent 14s ease-in-out infinite; pointer-events: none; }
         @keyframes qbCalmContent {
           0%, 54% { opacity: 0; transform: translateY(10px); }
           60%, 85% { opacity: 1; transform: translateY(0); }
@@ -1052,7 +1058,9 @@ export default function BienvenidaExperience() {
           .qb-lp .testimonios-grid { grid-template-columns: 1fr; }
           .qb-lp .founder-note { flex-direction: column; text-align: center; }
           .qb-lp .founder-firma { align-items: center; }
-          .qb-lp .caos-calma-band { min-height: 0; padding: 28px 16px; }
+          .qb-lp .caos-calma-band { height: auto; padding: 28px 16px; }
+          .qb-lp .escena-centrada { position: static; transform: none; max-width: 100%; padding: 0; }
+          .qb-lp .escena-calma { position: static; transform: none; max-width: 100%; margin: 18px auto 0; }
           .qb-lp .caos-calma-stage { min-height: 0; animation: none; }
           .qb-lp .pain-notif { position: static; width: 100%; margin-bottom: 12px; }
           .qb-lp .hero { grid-template-columns: 1fr; padding-top: 32px; }
@@ -1070,13 +1078,15 @@ export default function BienvenidaExperience() {
           .qb-lp .core-glow, .qb-lp .core-ring::before, .qb-lp .hud-line,
           .qb-lp .progress-fill.activo, .qb-lp .paso-actual,
           .qb-lp .caos-calma-stage, .qb-lp .pain-notif,
-          .qb-lp .logo-render, .qb-lp .calma-content {
+          .qb-lp .logo-render, .qb-lp .calma-content, .qb-lp .aclarado-calma,
+          .qb-lp .particula-flotante {
             animation: none !important;
           }
           .qb-lp .budget-fill { width: 72% !important; }
           .qb-lp .progress-fill.activo { width: 100% !important; }
           .qb-lp .hud-line { opacity: 1 !important; color: var(--ink) !important; }
           .qb-lp .pain-notif { opacity: 0 !important; }
+          .qb-lp .aclarado-calma { opacity: 0.95 !important; }
           .qb-lp .logo-render { opacity: 1 !important; transform: none !important; }
           .qb-lp .calma-content { opacity: 1 !important; transform: none !important; }
           .qb-lp .qb-reveal { opacity: 1 !important; transform: none !important; transition: none !important; }
@@ -1137,55 +1147,60 @@ export default function BienvenidaExperience() {
           </p>
         </div>
         <div className="caos-calma-band">
-          <div className="caos-calma-stage qb-reveal">
-            <div className="pain-notif pn-1">
-              <span className="pn-badge" />
-              <div className="pn-icon">
-                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                  <circle cx="12" cy="12" r="9" /><path d="M12 7v5l3 3" />
-                </svg>
+          <div className="escena-centrada">
+            <div className="caos-calma-stage qb-reveal">
+              <div className="pain-notif pn-1">
+                <span className="pn-badge" />
+                <div className="pn-icon">
+                  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                    <circle cx="12" cy="12" r="9" /><path d="M12 7v5l3 3" />
+                  </svg>
+                </div>
+                <div className="pn-body">
+                  <div className="pn-meta">Meta Ads Manager · hace 2h</div>
+                  <div className="pn-title">Sigues editando el mismo anuncio 😮‍💨</div>
+                  <div className="pn-sub">Empezaste hace 2 horas. Todavía no publicas.</div>
+                </div>
               </div>
-              <div className="pn-body">
-                <div className="pn-meta">Meta Ads Manager · hace 2h</div>
-                <div className="pn-title">Sigues editando el mismo anuncio 😮‍💨</div>
-                <div className="pn-sub">Empezaste hace 2 horas. Todavía no publicas.</div>
+              <div className="pain-notif pn-2">
+                <span className="pn-badge" />
+                <div className="pn-icon">
+                  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                    <path d="M12 1v22M17 5H9.5a3.5 3.5 0 000 7h5a3.5 3.5 0 010 7H6" />
+                  </svg>
+                </div>
+                <div className="pn-body">
+                  <div className="pn-meta">Alerta de gasto · hace 3 días</div>
+                  <div className="pn-title">Te gastaste $180.000 sin darte cuenta</div>
+                  <div className="pn-sub">Nadie ajustó la campaña a tiempo.</div>
+                </div>
               </div>
-            </div>
-            <div className="pain-notif pn-2">
-              <span className="pn-badge" />
-              <div className="pn-icon">
-                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                  <path d="M12 1v22M17 5H9.5a3.5 3.5 0 000 7h5a3.5 3.5 0 010 7H6" />
-                </svg>
-              </div>
-              <div className="pn-body">
-                <div className="pn-meta">Alerta de gasto · hace 3 días</div>
-                <div className="pn-title">Te gastaste $180.000 sin darte cuenta</div>
-                <div className="pn-sub">Nadie ajustó la campaña a tiempo.</div>
-              </div>
-            </div>
-            <div className="pain-notif pn-3">
-              <span className="pn-badge" />
-              <div className="pn-icon">
-                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                  <rect x="3" y="3" width="18" height="18" rx="2" /><path d="M3 16l5-5 4 4 5-6 4 5" />
-                </svg>
-              </div>
-              <div className="pn-body">
-                <div className="pn-meta">Diseñador · hace 4 días</div>
-                <div className="pn-title">Los creativos no se parecen a tu marca</div>
-                <div className="pn-sub">Y llevas 4 días esperando que lleguen.</div>
+              <div className="pain-notif pn-3">
+                <span className="pn-badge" />
+                <div className="pn-icon">
+                  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                    <rect x="3" y="3" width="18" height="18" rx="2" /><path d="M3 16l5-5 4 4 5-6 4 5" />
+                  </svg>
+                </div>
+                <div className="pn-body">
+                  <div className="pn-meta">Diseñador · hace 4 días</div>
+                  <div className="pn-title">Los creativos no se parecen a tu marca</div>
+                  <div className="pn-sub">Y llevas 4 días esperando que lleguen.</div>
+                </div>
               </div>
             </div>
           </div>
 
           <DisolucionCanvas />
-          <div className="logo-render">
-            <img src="/marca/icono-quiubot.svg" alt="Quiubot" />
-          </div>
-          <div className="calma-content">
-            <h4>Esto es tener a Quiubot de tu lado.</h4>
-            <p>Cero horas tuyas, cero estrés — tu campaña vigilada y tus creativos listos, siempre.</p>
+          <div className="aclarado-calma" />
+          <div className="escena-calma">
+            <div className="logo-render">
+              <img src="/marca/icono-quiubot.svg" alt="Quiubot" />
+            </div>
+            <div className="calma-content">
+              <h4>Esto es tener a Quiubot de tu lado.</h4>
+              <p>Cero horas tuyas, cero estrés — tu campaña vigilada y tus creativos listos, siempre.</p>
+            </div>
           </div>
         </div>
         <div className="fundido-salida">
