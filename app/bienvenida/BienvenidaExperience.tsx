@@ -505,7 +505,7 @@ function trackEvento(evento: string, params?: Record<string, unknown>) {
   }
 }
 
-const META_PIXEL_ID = "TU_PIXEL_ID_AQUI"; // <-- reemplaza con tu ID real de Meta Pixel
+const META_PIXEL_ID: string = "2226087528185704";
 
 function MetaPixelBase() {
   useEffect(() => {
