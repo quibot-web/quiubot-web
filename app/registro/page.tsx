@@ -27,6 +27,14 @@ export default function RegistroPage() {
         return
       }
       setEnviado(true)
+
+      // Meta Pixel: registro completado (formulario enviado con exito).
+      // Usamos (window as any) para no depender de que el tipo global de
+      // fbq este declarado en este archivo — evita errores de build si
+      // este componente se compila antes o sin ver esa declaracion.
+      if (typeof window !== "undefined") {
+        ;(window as any).fbq?.("track", "CompleteRegistration")
+      }
     } catch {
       setError("No se pudo conectar. Intenta de nuevo.")
     } finally {

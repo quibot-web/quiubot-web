@@ -491,7 +491,10 @@ function trackEvento(evento: string, params?: Record<string, unknown>) {
   }
 }
 
-const META_PIXEL_ID: string = "2226087528185704";
+// Lee el Pixel ID de la variable de entorno NEXT_PUBLIC_META_PIXEL_ID (Coolify + .env.local).
+// Si no existe, cae al valor actual como respaldo — asi no se rompe nada si aun no
+// has agregado la variable, pero ya queda listo para moverlo sin tocar codigo.
+const META_PIXEL_ID: string = process.env.NEXT_PUBLIC_META_PIXEL_ID || "2226087528185704";
 
 function MetaPixelBase() {
   useEffect(() => {
@@ -610,7 +613,7 @@ function SeccionTestimonios() {
               <button
                 key={t.id}
                 type="button"
-                className="testimonio-card testimonio-card-video"
+                className="testimonio-card testimonio-card-video qb-reveal"
                 onClick={() => {
                   trackEvento("ViewContent", { content_name: `testimonio_${t.nombre_empresa}` });
                   setAbierto(t);
@@ -1273,6 +1276,18 @@ export default function BienvenidaExperience() {
 
       {/* 5. PRUEBA SOCIAL — reduce escepticismo antes de explicar el mecanismo */}
       <SeccionTestimonios />
+
+      {/* 5b. CTA INTERMEDIO — para quien ya se convenció con dolor + testimonios
+         y no quiere seguir bajando hasta el mecanismo o el precio */}
+      <div style={{ padding: "0 24px" }}>
+        <div className="mini-cta qb-reveal" style={{ maxWidth: 780, margin: "56px auto" }}>
+          <div>
+            <div className="mini-cta-tag"><span className="dot-mini" />Ya viste cómo trabaja Quiubot</div>
+            <h4>¿Listo para probarlo con tu propio negocio?</h4>
+          </div>
+          <CtaLink href="/login" ubicacion="post_testimonios" className="btn-cta">Iniciar prueba gratuita →</CtaLink>
+        </div>
+      </div>
 
       {/* 6. COMO FUNCIONA */}
       <section className="alt">
