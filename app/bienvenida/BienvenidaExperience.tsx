@@ -622,6 +622,44 @@ function SeccionTestimonios() {
 }
 
 /* ============================================================
+   PARTICULAS DE TRANSICION
+   ============================================================
+   Reutiliza la misma paleta y sensacion del nucleo del hero (CoreOrb)
+   dentro de las zonas de difuminado entre secciones, para que el
+   "mundo de particulas" de Quiubot se sienta continuo en todo el
+   recorrido, no aislado solo en el hero. Posiciones fijas (no
+   Math.random en render) para evitar diferencias entre servidor y cliente. */
+const PARTICULAS_FUNDIDO = [
+  { left: "8%", size: 4, color: "#7F77DD", delay: "0s", opMax: 0.6 },
+  { left: "18%", size: 3, color: "#1FA97C", delay: "1.1s", opMax: 0.5 },
+  { left: "29%", size: 5, color: "#C4BFF0", delay: "0.4s", opMax: 0.65 },
+  { left: "41%", size: 3, color: "#4A3FAE", delay: "2.2s", opMax: 0.55 },
+  { left: "53%", size: 4, color: "#7F77DD", delay: "1.6s", opMax: 0.6 },
+  { left: "64%", size: 3, color: "#1FA97C", delay: "0.8s", opMax: 0.5 },
+  { left: "76%", size: 5, color: "#C4BFF0", delay: "2.8s", opMax: 0.6 },
+  { left: "88%", size: 3, color: "#4A3FAE", delay: "1.4s", opMax: 0.5 },
+];
+
+function ParticulasFundido() {
+  return (
+    <>
+      {PARTICULAS_FUNDIDO.map((p, i) => {
+        const estilo = {
+          left: p.left,
+          top: `${20 + (i % 3) * 22}%`,
+          width: p.size,
+          height: p.size,
+          background: p.color,
+          animationDelay: p.delay,
+          "--op-max": p.opMax,
+        } as React.CSSProperties;
+        return <span key={i} className="particula-flotante" style={estilo} />;
+      })}
+    </>
+  );
+}
+
+/* ============================================================
    BARRA DE CONFIANZA TEMPRANA
    ============================================================
    Repite la garantía justo después del hero para neutralizar la
@@ -646,13 +684,23 @@ export default function BienvenidaExperience() {
   const [pasoActivo, setPasoActivo] = useState(0);
   const [progreso, setProgreso] = useState(0);
   const [navScrolled, setNavScrolled] = useState(false);
+  const coreStageRef = useRef<HTMLDivElement | null>(null);
 
   useEffect(() => {
+    const reduce = window.matchMedia("(prefers-reduced-motion: reduce)").matches;
     const onScroll = () => {
       const doc = document.documentElement;
       const total = doc.scrollHeight - doc.clientHeight;
       setProgreso(total > 0 ? Math.min(100, (window.scrollY / total) * 100) : 0);
       setNavScrolled(window.scrollY > 12);
+
+      // Parallax sutil: el nucleo del hero sube y se desvanece al hacer scroll,
+      // dando sensacion de profundidad al entrar "dentro" de la app.
+      if (!reduce && coreStageRef.current) {
+        const y = Math.min(window.scrollY, 600);
+        coreStageRef.current.style.transform = `translateY(${y * -0.12}px) scale(${1 - y * 0.00015})`;
+        coreStageRef.current.style.opacity = `${Math.max(1 - y / 700, 0.35)}`;
+      }
     };
     onScroll();
     window.addEventListener("scroll", onScroll, { passive: true });
@@ -720,7 +768,7 @@ export default function BienvenidaExperience() {
         .qb-lp nav .btn-cta { padding: 10px 20px; font-size: 14px; border-radius: 8px; box-shadow: none; }
 
         /* ---- HERO ---- */
-        .qb-lp .hero { padding: 60px 24px 28px; display: grid; grid-template-columns: 1.05fr 0.95fr; gap: 56px; align-items: center; max-width: 1120px; margin: 0 auto; position: relative; background-image: radial-gradient(rgba(74,63,174,0.14) 1px, transparent 1px); background-size: 22px 22px; background-position: -6px -6px; }
+        .qb-lp .hero { padding: 60px 24px 28px; display: grid; grid-template-columns: 1.05fr 0.95fr; gap: 56px; align-items: center; max-width: 1120px; margin: 0 auto; position: relative; background-image: radial-gradient(rgba(74,63,174,0.08) 1px, transparent 1px); background-size: 22px 22px; background-position: -6px -6px; }
         .qb-lp .hero::before { content: ""; position: absolute; inset: 0; background: radial-gradient(ellipse at 30% 20%, var(--bg) 35%, transparent 70%); pointer-events: none; z-index: 0; }
         .qb-lp .hero > * { position: relative; z-index: 1; }
         .qb-lp .hero h1 { font-size: clamp(34px, 5vw, 54px); line-height: 1.06; font-weight: 700; }
@@ -768,6 +816,22 @@ export default function BienvenidaExperience() {
         .qb-lp .section-head p.lead { font-size: 16px; color: var(--muted); margin-top: 14px; line-height: 1.55; }
         .qb-lp .alt { background: var(--bg-alt); }
 
+        /* ---- SECCION INMERSIVA (mundo oscuro del dolor) ---- */
+        .qb-lp .seccion-oscura { background: var(--ink); overflow: hidden; }
+        .qb-lp .seccion-oscura .eyebrow { color: var(--purple-light); }
+        .qb-lp .seccion-oscura .section-head h2 { color: #fff; }
+        .qb-lp .seccion-oscura .section-head p.lead { color: rgba(255,255,255,0.58); }
+        .qb-lp .seccion-oscura::before { content: ""; position: absolute; inset: 0; background-image: radial-gradient(rgba(127,119,221,0.08) 1px, transparent 1px); background-size: 26px 26px; pointer-events: none; }
+        .qb-lp .seccion-oscura .fundido-entrada { position: absolute; left: 0; right: 0; top: -1px; height: 140px; background: linear-gradient(to bottom, var(--bg), transparent); pointer-events: none; z-index: 1; overflow: hidden; }
+        .qb-lp .seccion-oscura .fundido-salida { position: absolute; left: 0; right: 0; bottom: -1px; height: 160px; background: linear-gradient(to bottom, transparent, var(--bg-alt)); pointer-events: none; z-index: 1; overflow: hidden; }
+        .qb-lp .particula-flotante { position: absolute; border-radius: 50%; animation: qbParticulaFlota 6s ease-in-out infinite; }
+        @keyframes qbParticulaFlota {
+          0%, 100% { transform: translateY(0) scale(1); opacity: var(--op-min, 0.25); }
+          50% { transform: translateY(-14px) scale(1.15); opacity: var(--op-max, 0.7); }
+        }
+        .qb-lp .seccion-oscura .calma-content h4 { color: #fff; }
+        .qb-lp .seccion-oscura .calma-content p { color: rgba(255,255,255,0.62); }
+
         /* ---- TESTIMONIOS ---- */
         .qb-lp .testimonios-grid { max-width: 1000px; margin: 0 auto; display: grid; grid-template-columns: repeat(3, 1fr); gap: 18px; }
         .qb-lp .testimonio-card { background: #fff; border: 1px solid #ECE9F7; border-radius: 16px; padding: 24px; box-shadow: 0 10px 24px rgba(23,21,43,0.06); }
@@ -776,13 +840,13 @@ export default function BienvenidaExperience() {
         .qb-lp .testimonio-avatar { width: 36px; height: 36px; border-radius: 50%; background: var(--purple-deep); color: #fff; display: flex; align-items: center; justify-content: center; font-weight: 700; font-size: 14px; flex-shrink: 0; }
         .qb-lp .testimonio-nombre { font-size: 13.5px; font-weight: 700; color: var(--ink); }
         .qb-lp .testimonio-negocio { font-size: 12px; color: var(--muted); }
-        .qb-lp .testimonios-placeholder { max-width: 560px; margin: 0 auto; text-align: center; background: #fff; border: 1px dashed var(--purple-light); border-radius: 16px; padding: 40px 32px; }
+        .qb-lp .testimonios-placeholder { max-width: 560px; margin: 0 auto; text-align: center; background: #fff; border: 1px solid #ECE9F7; border-radius: 16px; padding: 40px 32px; }
         .qb-lp .testimonios-placeholder .placeholder-icon { width: 48px; height: 48px; margin: 0 auto 16px; border-radius: 12px; background: var(--bg-alt); display: flex; align-items: center; justify-content: center; }
         .qb-lp .testimonios-placeholder .placeholder-icon svg { width: 22px; height: 22px; }
         .qb-lp .testimonios-placeholder p { font-size: 14px; color: var(--muted); line-height: 1.6; margin: 0; }
 
         /* ---- VIDEO DE PRESENTACION ---- */
-        .qb-lp .video-card { position: relative; max-width: 760px; margin: 0 auto; border-radius: 20px; overflow: hidden; aspect-ratio: 16 / 9; background: linear-gradient(135deg, var(--purple-deep), var(--purple)); cursor: pointer; border: 1px dashed var(--purple-light); box-shadow: 0 20px 50px rgba(74,63,174,0.18); }
+        .qb-lp .video-card { position: relative; max-width: 760px; margin: 0 auto; border-radius: 20px; overflow: hidden; aspect-ratio: 16 / 9; background: linear-gradient(135deg, var(--purple-deep), var(--purple)); cursor: pointer; border: 1px solid #ECE9F7; box-shadow: 0 20px 50px rgba(74,63,174,0.14); }
         .qb-lp .video-thumb { width: 100%; height: 100%; object-fit: cover; display: block; }
         .qb-lp .video-thumb-fallback { width: 100%; height: 100%; background-image: radial-gradient(rgba(255,255,255,0.16) 1px, transparent 1px); background-size: 22px 22px; }
         .qb-lp .video-play-btn { position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%); width: 72px; height: 72px; border-radius: 50%; background: #fff; display: flex; align-items: center; justify-content: center; box-shadow: 0 10px 30px rgba(0,0,0,0.25); animation: qbPlayPulse 2.4s infinite; transition: transform .2s ease; }
@@ -922,22 +986,21 @@ export default function BienvenidaExperience() {
         .qb-lp .ganancia-item .check { color: var(--mint); font-weight: 700; flex-shrink: 0; }
 
         .qb-lp .ayudas { max-width: 1000px; margin: 0 auto; display: grid; grid-template-columns: repeat(2, 1fr); gap: 18px; }
-        .qb-lp .ayuda-card { background: #fff; border-radius: 14px; padding: 26px 24px; border: 1px solid #ECE9F7; border-left: 3px solid transparent; transition: border-color .2s ease, background .2s ease, transform .2s ease; }
-        .qb-lp .ayuda-card:hover { border-left-color: var(--purple); background: #FDFCFF; transform: translateY(-2px); }
+        .qb-lp .ayuda-card { background: #fff; border-radius: 14px; padding: 26px 24px; border: 1px solid #ECE9F7; border-left: 3px solid transparent; transition: border-color .25s ease, background .25s ease, transform .25s ease, box-shadow .25s ease; }
+        .qb-lp .ayuda-card:hover { border-left-color: var(--purple); background: #FDFCFF; transform: translateY(-4px) rotate(-0.4deg); box-shadow: 0 14px 30px rgba(74,63,174,0.12); }
         .qb-lp .ayuda-icon { width: 38px; height: 38px; border-radius: 10px; background: var(--bg-alt); color: var(--purple-deep); display: flex; align-items: center; justify-content: center; margin-bottom: 14px; }
         .qb-lp .ayuda-icon svg { width: 18px; height: 18px; }
         .qb-lp .ayuda-tag { font-family: var(--font-mono), monospace; font-size: 10.5px; letter-spacing: 0.08em; color: var(--mint); font-weight: 600; margin-bottom: 6px; }
         .qb-lp .ayuda-card h3 { font-size: 16px; font-weight: 600; margin-bottom: 8px; }
         .qb-lp .ayuda-card p { font-size: 14px; color: var(--muted); line-height: 1.55; margin: 0; }
 
-        .qb-lp .mini-cta { max-width: 780px; margin: 32px auto 0; background: #fff; border: 1px dashed var(--purple-light); border-radius: 18px; padding: 26px 30px; display: flex; align-items: center; justify-content: space-between; gap: 20px; flex-wrap: wrap; }
+        .qb-lp .mini-cta { max-width: 780px; margin: 32px auto 0; background: #fff; border: 1px solid #ECE9F7; border-radius: 18px; padding: 26px 30px; display: flex; align-items: center; justify-content: space-between; gap: 20px; flex-wrap: wrap; }
         .qb-lp .mini-cta-tag { display: flex; align-items: center; gap: 7px; font-family: var(--font-mono), monospace; font-size: 11px; letter-spacing: 0.06em; color: var(--mint); font-weight: 600; margin-bottom: 6px; }
         .qb-lp .mini-cta-tag .dot-mini { width: 7px; height: 7px; border-radius: 50%; background: var(--mint); box-shadow: 0 0 0 3px rgba(31,169,124,0.18); }
         .qb-lp .mini-cta h4 { font-size: 18px; font-weight: 700; color: var(--ink); }
         .qb-lp .mini-cta .btn-cta { padding: 12px 22px; font-size: 14.5px; border-radius: 10px; flex-shrink: 0; }
 
         .qb-lp .sello-box { max-width: 780px; margin: 0 auto; text-align: center; background: #fff; border: 1.5px solid #E5E1F5; border-radius: 20px; padding: 48px 40px; position: relative; }
-        .qb-lp .sello-box::before { content: ""; position: absolute; inset: 8px; border: 1px dashed rgba(127,119,221,0.3); border-radius: 14px; pointer-events: none; }
         .qb-lp .sello-icono { width: 60px; height: 60px; margin: 0 auto 18px; border-radius: 50%; background: var(--purple-deep); display: flex; align-items: center; justify-content: center; }
         .qb-lp .sello-icono svg { width: 26px; height: 26px; }
         .qb-lp .sello-box h2 { font-size: clamp(24px, 3vw, 32px); }
@@ -1042,7 +1105,7 @@ export default function BienvenidaExperience() {
           <CtaLink href="/login" ubicacion="hero" className="btn-cta">Iniciar prueba gratuita de 7 días →</CtaLink>
           <p className="micro">Sin tarjeta de crédito. Cancela cuando quieras.</p>
         </div>
-        <div className="core-stage">
+        <div className="core-stage" ref={coreStageRef} style={{ willChange: "transform, opacity" }}>
           <div className="core-glow" />
           <CoreOrb />
           <div className="core-ring" />
@@ -1060,8 +1123,11 @@ export default function BienvenidaExperience() {
       {/* 2. BARRA DE CONFIANZA — neutraliza la duda antes de agitar el dolor */}
       <BarraConfianzaTemprana />
 
-      {/* 3. AGITACION DEL DOLOR — el visitante se reconoce en el problema */}
-      <section>
+      {/* 3. AGITACION DEL DOLOR — el visitante se reconoce en el problema, en un mundo visualmente distinto */}
+      <section className="seccion-oscura">
+        <div className="fundido-entrada">
+          <ParticulasFundido />
+        </div>
         <div className="section-head qb-reveal">
           <p className="eyebrow" style={{ textAlign: "center" }}>El problema real</p>
           <h2>Anunciarte en Meta no debería sentirse como un segundo trabajo.</h2>
@@ -1121,6 +1187,9 @@ export default function BienvenidaExperience() {
             <h4>Esto es tener a Quiubot de tu lado.</h4>
             <p>Cero horas tuyas, cero estrés — tu campaña vigilada y tus creativos listos, siempre.</p>
           </div>
+        </div>
+        <div className="fundido-salida">
+          <ParticulasFundido />
         </div>
       </section>
 
