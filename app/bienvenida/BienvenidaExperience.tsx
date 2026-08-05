@@ -817,13 +817,35 @@ export default function BienvenidaExperience() {
         .qb-lp .alt { background: var(--bg-alt); }
 
         /* ---- SECCION INMERSIVA (mundo oscuro del dolor) ---- */
-        .qb-lp .seccion-oscura { background: var(--ink); overflow: hidden; }
-        .qb-lp .seccion-oscura .eyebrow { color: var(--purple-light); }
-        .qb-lp .seccion-oscura .section-head h2 { color: #fff; }
-        .qb-lp .seccion-oscura .section-head p.lead { color: rgba(255,255,255,0.58); }
-        .qb-lp .seccion-oscura::before { content: ""; position: absolute; inset: 0; background-image: radial-gradient(rgba(127,119,221,0.08) 1px, transparent 1px); background-size: 26px 26px; pointer-events: none; }
-        .qb-lp .seccion-oscura .fundido-entrada { position: absolute; left: 0; right: 0; top: -1px; height: 140px; background: linear-gradient(to bottom, var(--bg), transparent); pointer-events: none; z-index: 1; overflow: hidden; }
-        .qb-lp .seccion-oscura .fundido-salida { position: absolute; left: 0; right: 0; bottom: -1px; height: 160px; background: linear-gradient(to bottom, transparent, var(--bg-alt)); pointer-events: none; z-index: 1; overflow: hidden; }
+        .qb-lp .seccion-oscura { position: relative; background: var(--ink); overflow: hidden; }
+        .qb-lp .seccion-oscura .section-head { position: relative; z-index: 2; }
+        .qb-lp .seccion-oscura .eyebrow { animation: qbEyebrowCalma 14s ease-in-out infinite; }
+        .qb-lp .seccion-oscura .section-head h2 { animation: qbTituloCalma 14s ease-in-out infinite; }
+        .qb-lp .seccion-oscura .section-head p.lead { animation: qbLeadCalma 14s ease-in-out infinite; }
+        @keyframes qbEyebrowCalma {
+          0%, 54% { color: var(--purple-light); }
+          60%, 85% { color: var(--purple-deep); }
+          93%, 100% { color: var(--purple-light); }
+        }
+        @keyframes qbTituloCalma {
+          0%, 54% { color: #fff; }
+          60%, 85% { color: var(--ink); }
+          93%, 100% { color: #fff; }
+        }
+        @keyframes qbLeadCalma {
+          0%, 54% { color: rgba(255,255,255,0.58); }
+          60%, 85% { color: var(--muted); }
+          93%, 100% { color: rgba(255,255,255,0.58); }
+        }
+        .qb-lp .seccion-oscura::before { content: ""; position: absolute; inset: 0; z-index: 0; background-image: radial-gradient(rgba(127,119,221,0.08) 1px, transparent 1px); background-size: 26px 26px; pointer-events: none; }
+        .qb-lp .aclarado-total { position: absolute; inset: 0; z-index: 1; background: var(--bg-alt); opacity: 0; animation: qbAclarado 14s ease-in-out infinite; pointer-events: none; }
+        @keyframes qbAclarado {
+          0%, 51% { opacity: 0; }
+          60%, 85% { opacity: 1; }
+          94%, 100% { opacity: 0; }
+        }
+        .qb-lp .seccion-oscura .fundido-entrada { position: absolute; left: 0; right: 0; top: -1px; height: 140px; background: linear-gradient(to bottom, var(--bg), transparent); pointer-events: none; z-index: 2; overflow: hidden; }
+        .qb-lp .seccion-oscura .fundido-salida { position: absolute; left: 0; right: 0; bottom: -1px; height: 160px; background: linear-gradient(to bottom, transparent, var(--bg-alt)); pointer-events: none; z-index: 2; overflow: hidden; }
         .qb-lp .particula-flotante { position: absolute; border-radius: 50%; animation: qbParticulaFlota 6s ease-in-out infinite; }
         @keyframes qbParticulaFlota {
           0%, 100% { transform: translateY(0) scale(1); opacity: var(--op-min, 0.25); }
@@ -861,15 +883,9 @@ export default function BienvenidaExperience() {
         .qb-lp .video-modal-frame { position: relative; padding-top: 56.25%; }
         .qb-lp .video-modal-frame iframe, .qb-lp .video-modal-frame video { position: absolute; inset: 0; width: 100%; height: 100%; border: none; }
 
-        .qb-lp .caos-calma-band { position: relative; width: 100vw; margin-left: calc(50% - 50vw); margin-right: calc(50% - 50vw); height: 420px; overflow: hidden; padding: 44px 24px; }
+        .qb-lp .caos-calma-band { position: relative; z-index: 2; width: 100vw; margin-left: calc(50% - 50vw); margin-right: calc(50% - 50vw); height: 420px; overflow: hidden; padding: 44px 24px; }
         .qb-lp .escena-centrada { position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%); width: 100%; max-width: 640px; padding: 0 24px; z-index: 1; }
         .qb-lp .escena-calma { position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%); z-index: 4; text-align: center; width: 100%; max-width: 420px; }
-        .qb-lp .aclarado-calma { position: absolute; inset: 0; background: var(--bg-alt); opacity: 0; animation: qbAclarado 14s ease-in-out infinite; pointer-events: none; z-index: 2; }
-        @keyframes qbAclarado {
-          0%, 51% { opacity: 0; }
-          60%, 85% { opacity: 0.95; }
-          94%, 100% { opacity: 0; }
-        }
         .qb-lp .caos-calma-stage { position: relative; max-width: 640px; margin: 0 auto; min-height: 330px; animation: qbShake 14s ease-in-out infinite; }
         @keyframes qbShake {
           0%, 20%, 29%, 100% { transform: translateX(0); }
@@ -1078,7 +1094,8 @@ export default function BienvenidaExperience() {
           .qb-lp .core-glow, .qb-lp .core-ring::before, .qb-lp .hud-line,
           .qb-lp .progress-fill.activo, .qb-lp .paso-actual,
           .qb-lp .caos-calma-stage, .qb-lp .pain-notif,
-          .qb-lp .logo-render, .qb-lp .calma-content, .qb-lp .aclarado-calma,
+          .qb-lp .logo-render, .qb-lp .calma-content, .qb-lp .aclarado-total,
+          .qb-lp .eyebrow, .qb-lp .section-head h2, .qb-lp .section-head p.lead,
           .qb-lp .particula-flotante {
             animation: none !important;
           }
@@ -1086,7 +1103,7 @@ export default function BienvenidaExperience() {
           .qb-lp .progress-fill.activo { width: 100% !important; }
           .qb-lp .hud-line { opacity: 1 !important; color: var(--ink) !important; }
           .qb-lp .pain-notif { opacity: 0 !important; }
-          .qb-lp .aclarado-calma { opacity: 0.95 !important; }
+          .qb-lp .aclarado-total { opacity: 1 !important; }
           .qb-lp .logo-render { opacity: 1 !important; transform: none !important; }
           .qb-lp .calma-content { opacity: 1 !important; transform: none !important; }
           .qb-lp .qb-reveal { opacity: 1 !important; transform: none !important; transition: none !important; }
@@ -1135,6 +1152,7 @@ export default function BienvenidaExperience() {
 
       {/* 3. AGITACION DEL DOLOR — el visitante se reconoce en el problema, en un mundo visualmente distinto */}
       <section className="seccion-oscura">
+        <div className="aclarado-total" />
         <div className="fundido-entrada">
           <ParticulasFundido />
         </div>
@@ -1192,7 +1210,6 @@ export default function BienvenidaExperience() {
           </div>
 
           <DisolucionCanvas />
-          <div className="aclarado-calma" />
           <div className="escena-calma">
             <div className="logo-render">
               <img src="/marca/icono-quiubot.svg" alt="Quiubot" />
