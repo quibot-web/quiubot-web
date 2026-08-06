@@ -1122,7 +1122,10 @@ export default function BienvenidaExperience() {
           .qb-lp .escena-centrada { position: static; transform: none; max-width: 100%; padding: 0; }
           .qb-lp .escena-calma { position: static; transform: none; max-width: 100%; margin: 18px auto 0; }
           .qb-lp .caos-calma-stage { min-height: 0; animation: none; }
-          .qb-lp .pain-notif { position: static; width: 100%; margin-bottom: 12px; }
+          .qb-lp .pain-notif { position: static; width: 100%; margin-bottom: 12px; animation: none !important; opacity: 1 !important; transform: none !important; }
+          .qb-lp .logo-render { animation: none !important; opacity: 1 !important; transform: none !important; }
+          .qb-lp .calma-content { animation: none !important; opacity: 1 !important; transform: none !important; pointer-events: auto; }
+          .qb-lp .aclarado-total { animation: none !important; opacity: 1 !important; }
           .qb-lp .hero { grid-template-columns: 1fr; padding-top: 32px; }
           .qb-lp .hero p.sub { max-width: 100%; }
           .qb-lp .ayudas { grid-template-columns: 1fr; }
