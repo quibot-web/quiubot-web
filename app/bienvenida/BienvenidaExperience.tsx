@@ -987,7 +987,7 @@ export default function BienvenidaExperience() {
         .qb-lp .pn-title { font-size: 14.5px; font-weight: 700; color: var(--ink); line-height: 1.3; }
         .qb-lp .pn-sub { font-size: 12.5px; color: var(--muted); margin-top: 3px; line-height: 1.4; }
 
-        .qb-lp .disolucion-canvas { position: absolute; inset: 0; width: 100%; height: 100%; }
+        .qb-lp .disolucion-canvas { position: absolute; inset: 0; width: 100%; height: 100%; z-index: 0; }
         .qb-lp .logo-render { position: relative; z-index: 4; width: 68px; height: 68px; border-radius: 20px; background: #fff; box-shadow: 0 16px 40px rgba(74,63,174,0.32); display: flex; align-items: center; justify-content: center; margin: 0 auto 18px; opacity: 0; transform: scale(0.7); animation: qbLogoRender 14s ease-in-out infinite; }
         .qb-lp .logo-render img { width: 38px; height: 38px; }
         @keyframes qbLogoRender {
@@ -1138,7 +1138,7 @@ export default function BienvenidaExperience() {
           .qb-lp .founder-note { flex-direction: column; text-align: center; }
           .qb-lp .founder-firma { align-items: center; }
           .qb-lp .caos-calma-band { height: auto; padding: 28px 16px; }
-          .qb-lp .escena-centrada { position: static; transform: none; max-width: 100%; padding: 0; }
+          .qb-lp .escena-centrada { position: relative; z-index: 3; transform: none; max-width: 100%; padding: 0; }
           .qb-lp .escena-calma { position: static; transform: none; max-width: 100%; margin: 18px auto 0; }
           .qb-lp .caos-calma-stage { min-height: 0; animation: none; }
           .qb-lp .pain-notif { position: static; width: 100%; margin-bottom: 12px; animation: none !important; opacity: 1 !important; transform: none !important; }
