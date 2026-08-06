@@ -1169,6 +1169,14 @@ export default function BienvenidaExperience() {
           .qb-lp .experiencia-grid { grid-template-columns: 1fr; gap: 0; }
           .qb-lp .panel-col { margin-bottom: 18px; }
           .qb-lp .core-stage { max-width: 280px; margin-bottom: 56px; }
+
+          /* En movil, el desplazamiento de 28px del qb-reveal (antes de
+             activarse con el scroll) hace que elementos apilados muy
+             juntos se monten visualmente uno sobre otro por un instante
+             -- por eso el texto solapado que se ve en testimonios y en el
+             CTA intermedio. En pantallas angostas no aporta mucho de
+             todas formas: todo se muestra directo, sin animacion. */
+          .qb-lp .qb-reveal { opacity: 1 !important; transform: none !important; transition: none !important; }
         }
         @media (prefers-reduced-motion: reduce) {
           .qb-lp .panel-fade, .qb-lp .budget-fill, .qb-lp .creativo-card,
