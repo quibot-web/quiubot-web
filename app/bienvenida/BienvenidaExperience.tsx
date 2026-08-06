@@ -722,7 +722,9 @@ export default function BienvenidaExperience() {
   const [pasoActivo, setPasoActivo] = useState(0);
   const [progreso, setProgreso] = useState(0);
   const [navScrolled, setNavScrolled] = useState(false);
+  const [mundoAclarado, setMundoAclarado] = useState(false);
   const coreStageRef = useRef<HTMLDivElement | null>(null);
+  const sensorAclaradoRef = useRef<HTMLDivElement | null>(null);
 
   useEffect(() => {
     const reduce = window.matchMedia("(prefers-reduced-motion: reduce)").matches;
@@ -750,6 +752,24 @@ export default function BienvenidaExperience() {
       setPasoActivo((p) => (p + 1) % PASOS.length);
     }, 4500);
     return () => clearInterval(id);
+  }, []);
+
+  useEffect(() => {
+    const nodo = sensorAclaradoRef.current;
+    if (!nodo) return;
+    const observer = new IntersectionObserver(
+      (entries) => {
+        entries.forEach((entry) => {
+          if (entry.isIntersecting) {
+            setMundoAclarado(true);
+            observer.disconnect();
+          }
+        });
+      },
+      { threshold: 0.1, rootMargin: "0px 0px -10% 0px" }
+    );
+    observer.observe(nodo);
+    return () => observer.disconnect();
   }, []);
 
   return (
@@ -1125,7 +1145,21 @@ export default function BienvenidaExperience() {
           .qb-lp .pain-notif { position: static; width: 100%; margin-bottom: 12px; animation: none !important; opacity: 1 !important; transform: none !important; }
           .qb-lp .logo-render { animation: none !important; opacity: 1 !important; transform: none !important; }
           .qb-lp .calma-content { animation: none !important; opacity: 1 !important; transform: none !important; pointer-events: auto; }
-          .qb-lp .aclarado-total { animation: none !important; opacity: 1 !important; }
+
+          /* Estado inicial en movil: mundo oscuro fijo (sin ciclo de 14s,
+             que en una tarjeta apilada dejaba huecos). El cambio a claro
+             ahora lo dispara el scroll (ver sensor-aclarado + IntersectionObserver
+             en el componente), no un temporizador -- pasa una sola vez,
+             justo cuando la persona termina de leer las tarjetas de dolor. */
+          .qb-lp .aclarado-total { animation: none !important; opacity: 0; transition: opacity 1.1s ease; }
+          .qb-lp .seccion-oscura .eyebrow { animation: none !important; color: var(--purple-light) !important; transition: color 1.1s ease; }
+          .qb-lp .seccion-oscura .section-head h2 { animation: none !important; color: #fff !important; transition: color 1.1s ease; }
+          .qb-lp .seccion-oscura .section-head p.lead { animation: none !important; color: rgba(255,255,255,0.58) !important; transition: color 1.1s ease; }
+
+          .qb-lp .seccion-oscura.mundo-aclarado .aclarado-total { opacity: 1; }
+          .qb-lp .seccion-oscura.mundo-aclarado .eyebrow { color: var(--purple-deep) !important; }
+          .qb-lp .seccion-oscura.mundo-aclarado .section-head h2 { color: var(--ink) !important; }
+          .qb-lp .seccion-oscura.mundo-aclarado .section-head p.lead { color: var(--muted) !important; }
           .qb-lp .hero { grid-template-columns: 1fr; padding-top: 32px; }
           .qb-lp .hero p.sub { max-width: 100%; }
           .qb-lp .ayudas { grid-template-columns: 1fr; }
@@ -1203,7 +1237,7 @@ export default function BienvenidaExperience() {
       <BarraConfianzaTemprana />
 
       {/* 4. AGITACION DEL DOLOR — el visitante se reconoce en el problema, en un mundo visualmente distinto */}
-      <section className="seccion-oscura">
+      <section className={`seccion-oscura${mundoAclarado ? " mundo-aclarado" : ""}`}>
         <div className="aclarado-total" />
         <div className="fundido-entrada">
           <ParticulasFundido />
@@ -1259,6 +1293,7 @@ export default function BienvenidaExperience() {
                 </div>
               </div>
             </div>
+            <div ref={sensorAclaradoRef} aria-hidden="true" style={{ height: 1 }} />
           </div>
 
           <DisolucionCanvas />
