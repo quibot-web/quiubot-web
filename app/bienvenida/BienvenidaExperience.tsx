@@ -662,29 +662,28 @@ function SeccionTestimonios() {
 /* ============================================================
    PARTICULAS DE TRANSICION
    ============================================================
-   Reutiliza la misma paleta y sensacion del nucleo del hero (CoreOrb)
-   dentro de las zonas de difuminado entre secciones, para que el
-   "mundo de particulas" de Quiubot se sienta continuo en todo el
-   recorrido, no aislado solo en el hero. Posiciones fijas (no
-   Math.random en render) para evitar diferencias entre servidor y cliente. */
-const PARTICULAS_FUNDIDO = [
-  { left: "8%", size: 4, color: "#7F77DD", delay: "0s", opMax: 0.6 },
-  { left: "18%", size: 3, color: "#1FA97C", delay: "1.1s", opMax: 0.5 },
-  { left: "29%", size: 5, color: "#C4BFF0", delay: "0.4s", opMax: 0.65 },
-  { left: "41%", size: 3, color: "#4A3FAE", delay: "2.2s", opMax: 0.55 },
-  { left: "53%", size: 4, color: "#7F77DD", delay: "1.6s", opMax: 0.6 },
-  { left: "64%", size: 3, color: "#1FA97C", delay: "0.8s", opMax: 0.5 },
-  { left: "76%", size: 5, color: "#C4BFF0", delay: "2.8s", opMax: 0.6 },
-  { left: "88%", size: 3, color: "#4A3FAE", delay: "1.4s", opMax: 0.5 },
+   Antes vivian esparcidas en franjas anchas (100vw) arriba y abajo de
+   la seccion oscura -- en pantallas angostas o cortas esas franjas
+   invadian el area de las tarjetas de dolor y se veian encima del
+   texto. Ahora viven en un radio pequeño y fijo alrededor del logo
+   (dentro de escena-calma), asi nunca pueden interferir con nada mas.
+   Posiciones fijas (no Math.random en render) para evitar diferencias
+   entre servidor y cliente. */
+const PARTICULAS_LOGO = [
+  { top: "-14px", left: "-10px", size: 5, color: "#7F77DD", delay: "0s", opMax: 0.7 },
+  { top: "-6px", left: "88px", size: 4, color: "#1FA97C", delay: "1.1s", opMax: 0.6 },
+  { top: "30px", left: "-18px", size: 4, color: "#C4BFF0", delay: "0.5s", opMax: 0.65 },
+  { top: "64px", left: "92px", size: 5, color: "#4A3FAE", delay: "1.8s", opMax: 0.6 },
+  { top: "78px", left: "12px", size: 3, color: "#7F77DD", delay: "0.9s", opMax: 0.55 },
 ];
 
-function ParticulasFundido() {
+function ParticulasLogo() {
   return (
-    <>
-      {PARTICULAS_FUNDIDO.map((p, i) => {
+    <div style={{ position: "absolute", inset: 0, pointerEvents: "none" }}>
+      {PARTICULAS_LOGO.map((p, i) => {
         const estilo = {
+          top: p.top,
           left: p.left,
-          top: `${20 + (i % 3) * 22}%`,
           width: p.size,
           height: p.size,
           background: p.color,
@@ -693,7 +692,7 @@ function ParticulasFundido() {
         } as React.CSSProperties;
         return <span key={i} className="particula-flotante" style={estilo} />;
       })}
-    </>
+    </div>
   );
 }
 
@@ -1247,9 +1246,7 @@ export default function BienvenidaExperience() {
       {/* 4. AGITACION DEL DOLOR — el visitante se reconoce en el problema, en un mundo visualmente distinto */}
       <section className={`seccion-oscura${mundoAclarado ? " mundo-aclarado" : ""}`}>
         <div className="aclarado-total" />
-        <div className="fundido-entrada">
-          <ParticulasFundido />
-        </div>
+        <div className="fundido-entrada" />
         <div className="section-head qb-reveal">
           <p className="eyebrow" style={{ textAlign: "center" }}>El problema real</p>
           <h2>Anunciarte en Meta no debería sentirse como un segundo trabajo.</h2>
@@ -1307,6 +1304,7 @@ export default function BienvenidaExperience() {
           <DisolucionCanvas />
           <div className="escena-calma">
             <div className="logo-render">
+              <ParticulasLogo />
               <img src="/marca/icono-quiubot.svg" alt="Quiubot" />
             </div>
             <div className="calma-content">
@@ -1315,9 +1313,7 @@ export default function BienvenidaExperience() {
             </div>
           </div>
         </div>
-        <div className="fundido-salida">
-          <ParticulasFundido />
-        </div>
+        <div className="fundido-salida" />
       </section>
 
       {/* 5. PRUEBA SOCIAL — reduce escepticismo antes de explicar el mecanismo */}
