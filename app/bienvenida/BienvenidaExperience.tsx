@@ -1138,7 +1138,7 @@ export default function BienvenidaExperience() {
           .qb-lp .founder-note { flex-direction: column; text-align: center; }
           .qb-lp .founder-firma { align-items: center; }
           .qb-lp .caos-calma-band { height: auto; padding: 28px 16px; }
-          .qb-lp .escena-centrada { position: relative; z-index: 3; transform: none; max-width: 100%; padding: 0; }
+          .qb-lp .escena-centrada { position: relative; left: 0; top: 0; z-index: 3; transform: none; max-width: 100%; padding: 0; }
           .qb-lp .escena-calma { position: static; transform: none; max-width: 100%; margin: 18px auto 0; }
           .qb-lp .caos-calma-stage { min-height: 0; animation: none; }
           .qb-lp .pain-notif { position: static; width: 100%; margin-bottom: 12px; animation: none !important; opacity: 1 !important; transform: none !important; }
