@@ -625,8 +625,7 @@ function EstrategiaContent() {
   const [tipoContenido, setTipoContenido] = useState<TipoContenido | null>(null);
   const [hoverTipo, setHoverTipo] = useState<TipoContenido | null>(null);
   const [descripcionServicio, setDescripcionServicio] = useState<string>("");
-  const [imagenes, setImagenes] = useState<File[]>([]);
-  const [previews, setPreviews] = useState<string[]>([]);
+  const [imagenesBase64, setImagenesBase64] = useState<string[]>([]);
   const [objetivo, setObjetivo] = useState<typeof OBJETIVOS[number] | null>(null);
   const [presupuestoDiario, setPresupuestoDiario] = useState<number>(50000);
   const [cargandoEstrategia, setCargandoEstrategia] = useState(false);
@@ -670,7 +669,124 @@ function EstrategiaContent() {
   const [planMinimoPorId, setPlanMinimoPorId] = useState<Record<string, string>>({});
   const [tutorialListo, setTutorialListo] = useState(false);
 
+  // Se pone en true apenas se restaura (o se confirma que NO hay nada que
+  // restaurar) el progreso guardado -- evita que el useEffect de guardado
+  // automatico sobreescriba el progreso real con el estado inicial vacio
+  // durante el primer render.
+  const [progresoListo, setProgresoListo] = useState(false);
+
   const fileRef = useRef<HTMLInputElement>(null);
+
+  const LLAVE_PROGRESO = "quiubot_estrategia_progreso";
+
+  // Pasos que tiene sentido restaurar automaticamente: los que dependen
+  // solo de elecciones del usuario (texto, imagenes, presupuesto). Los
+  // pasos posteriores (resultado en adelante) dependen de respuestas
+  // generadas por IA que tambien se guardan, pero si por alguna razon
+  // faltara algo, es mas seguro devolver al usuario al paso mas cercano
+  // que si tiene todo lo necesario, en vez de a una pantalla rota.
+  function pasoRestaurable(data: any): EstrategiaStep {
+    if (data.creativos && data.estrategiaSeleccionada && data.fuenteCreativos) return "creativos";
+    if (data.estrategiaSeleccionada && data.fuenteCreativos === "album" && data.angulosRecomendados) return "album-selector";
+    if (data.estrategiaSeleccionada) return "fuente";
+    if (data.estrategiasGeneradas) return "resultado";
+    if (data.objetivo && data.presupuestoDiario) return "presupuesto";
+    if (data.tipoContenido && data.imagenesBase64?.length) return "objetivo";
+    if (data.tipoContenido) return "imagen";
+    return "tipo";
+  }
+
+  // Restaura el progreso guardado (si existe) apenas se monta la pagina,
+  // ANTES que el efecto de recuperacion de job por notificacion (ese tiene
+  // prioridad si el usuario llego con ?job= en la URL, ya que ese es un
+  // caso mas especifico). Se corre una sola vez.
+  useEffect(() => {
+    if (searchParams.get("job")) {
+      // Si llego por notificacion, ese flujo especifico maneja su propia
+      // restauracion -- no pisamos nada aqui.
+      setProgresoListo(true);
+      return;
+    }
+    try {
+      const guardado = localStorage.getItem(LLAVE_PROGRESO);
+      if (guardado) {
+        const data = JSON.parse(guardado);
+        if (data.tipoContenido) setTipoContenido(data.tipoContenido);
+        if (data.descripcionServicio) setDescripcionServicio(data.descripcionServicio);
+        if (data.imagenesBase64) setImagenesBase64(data.imagenesBase64);
+        if (data.objetivo) setObjetivo(data.objetivo);
+        if (data.presupuestoDiario) setPresupuestoDiario(data.presupuestoDiario);
+        if (data.estrategiasGeneradas) setEstrategiasGeneradas(data.estrategiasGeneradas);
+        if (data.estrategiaSeleccionada) setEstrategiaSeleccionada(data.estrategiaSeleccionada);
+        if (data.descripcionVisual) setDescripcionVisual(data.descripcionVisual);
+        if (data.fuenteCreativos) setFuenteCreativos(data.fuenteCreativos);
+        if (data.angulosRecomendados) setAngulosRecomendados(data.angulosRecomendados);
+        if (data.creativos) setCreativos(data.creativos);
+        if (data.analisisResultado) setAnalisisResultado(data.analisisResultado);
+        setStep(pasoRestaurable(data));
+      }
+    } catch {}
+    setProgresoListo(true);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
+  // Guarda automaticamente cada vez que cambia algo relevante del wizard --
+  // asi, sin importar el motivo por el que se cierre la seccion (refresh,
+  // se cerro el navegador, se fue la luz), la proxima vez que entre a
+  // /estrategia retoma exactamente donde iba. Solo empieza a guardar
+  // despues de que la restauracion inicial ya termino (progresoListo),
+  // para no sobreescribir un progreso real con el estado vacio del primer
+  // render.
+  useEffect(() => {
+    if (!progresoListo) return;
+    if (publicado) return; // ya se publico, no hay nada que retomar
+    try {
+      localStorage.setItem(
+        LLAVE_PROGRESO,
+        JSON.stringify({
+          tipoContenido,
+          descripcionServicio,
+          imagenesBase64,
+          objetivo,
+          presupuestoDiario,
+          estrategiasGeneradas,
+          estrategiaSeleccionada,
+          descripcionVisual,
+          fuenteCreativos,
+          angulosRecomendados,
+          creativos,
+          analisisResultado,
+        })
+      );
+    } catch {}
+  }, [
+    progresoListo,
+    publicado,
+    tipoContenido,
+    descripcionServicio,
+    imagenesBase64,
+    objetivo,
+    presupuestoDiario,
+    estrategiasGeneradas,
+    estrategiaSeleccionada,
+    descripcionVisual,
+    fuenteCreativos,
+    angulosRecomendados,
+    creativos,
+    analisisResultado,
+  ]);
+
+  function limpiarProgresoGuardado() {
+    try {
+      localStorage.removeItem(LLAVE_PROGRESO);
+    } catch {}
+  }
+
+  function handleCancelarYSalir() {
+    if (!confirm("¿Seguro que quieres salir? Se cancelará esta estrategia y volverás al inicio.")) return;
+    limpiarProgresoGuardado();
+    router.push("/");
+  }
 
   // Requisito previo: sin ADN de marca sintetizado, no se puede usar el
   // Motor de Estrategia -- se verifica apenas se monta la página, antes
@@ -773,25 +889,27 @@ function EstrategiaContent() {
       .catch(() => setObjetivosActivos([]));
   }, []);
 
-  const handleFile = (e: React.ChangeEvent<HTMLInputElement>) => {
+  const handleFile = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
-    if (!file || imagenes.length >= MAX_IMAGENES_PRODUCTO) return;
-    setImagenes((prev) => [...prev, file]);
-    setPreviews((prev) => [...prev, URL.createObjectURL(file)]);
+    if (!file || imagenesBase64.length >= MAX_IMAGENES_PRODUCTO) return;
     if (fileRef.current) fileRef.current.value = "";
+    try {
+      const base64 = await fileToBase64(file);
+      setImagenesBase64((prev) => [...prev, base64]);
+    } catch {
+      setErrorMsg("No se pudo leer esa imagen. Intenta con otro archivo.");
+    }
   };
 
   const handleQuitarImagen = (idx: number) => {
-    setImagenes((prev) => prev.filter((_, i) => i !== idx));
-    setPreviews((prev) => prev.filter((_, i) => i !== idx));
+    setImagenesBase64((prev) => prev.filter((_, i) => i !== idx));
   };
 
   const handleGenerarEstrategia = async () => {
-    if (imagenes.length < MIN_IMAGENES_PRODUCTO || !objetivo || presupuestoDiario < 20000 || !tipoContenido) return;
+    if (imagenesBase64.length < MIN_IMAGENES_PRODUCTO || !objetivo || presupuestoDiario < 20000 || !tipoContenido) return;
     setCargandoEstrategia(true);
     setErrorMsg(null);
     try {
-      const imagenesBase64 = await Promise.all(imagenes.map(fileToBase64));
       const res = await fetch("/api/generar-estrategia", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
@@ -844,8 +962,8 @@ function EstrategiaContent() {
     localStorage.removeItem("quiubot_creativos_lote");
     localStorage.removeItem("quiubot_job_regenerar_idx");
     try {
-      const imagenesBase64 = imagenes.length > 0 ? await Promise.all(imagenes.map(fileToBase64)) : imagenesBase64Persistidas;
-      if (imagenesBase64.length > 0 && imagenes.length > 0) {
+      const imagenesParaEnviar = imagenesBase64.length > 0 ? imagenesBase64 : imagenesBase64Persistidas;
+      if (imagenesBase64.length > 0) {
         try {
           localStorage.setItem("quiubot_imagenes_producto_base64", JSON.stringify(imagenesBase64));
           setImagenesBase64Persistidas(imagenesBase64);
@@ -857,7 +975,7 @@ function EstrategiaContent() {
         body: JSON.stringify({
           estrategia: estrategiaSeleccionada,
           descripcion_visual_producto: descripcionVisual,
-          imagenes_producto_base64: imagenesBase64,
+          imagenes_producto_base64: imagenesParaEnviar,
           tipo_contenido: tipoContenido,
           descripcion_servicio: tipoContenido === "servicio" ? descripcionServicio : null,
         }),
@@ -889,7 +1007,7 @@ function EstrategiaContent() {
     setRegenerandoIndices((prev) => ({ ...prev, [idx]: true }));
     setErrorMsg(null);
     try {
-      const imagenesBase64 = imagenes.length > 0 ? await Promise.all(imagenes.map(fileToBase64)) : imagenesBase64Persistidas;
+      const imagenesParaEnviar = imagenesBase64.length > 0 ? imagenesBase64 : imagenesBase64Persistidas;
       const estrategiaMini = {
         ...estrategiaSeleccionada,
         conjuntos: [
@@ -911,7 +1029,7 @@ function EstrategiaContent() {
         body: JSON.stringify({
           estrategia: estrategiaMini,
           descripcion_visual_producto: descripcionVisual,
-          imagenes_producto_base64: imagenesBase64,
+          imagenes_producto_base64: imagenesParaEnviar,
           tipo_contenido: tipoContenido,
           descripcion_servicio: tipoContenido === "servicio" ? descripcionServicio : null,
         }),
@@ -1087,12 +1205,14 @@ function EstrategiaContent() {
       }
       setMetaCampaignId(data.meta_campaign_id || null);
       setPublicado(true);
-      // Ya se publicó -- limpiamos el estado persistido para que la próxima
-      // vez que se retome un job (de otra campaña distinta) no arrastre
-      // esta estrategia vieja por error.
+      // Ya se publicó -- limpiamos el estado persistido (el de retomar un
+      // job por notificacion, y el progreso general del wizard) para que
+      // la próxima vez que se entre a /estrategia empiece una campaña
+      // nueva desde cero, no arrastre esta ya publicada.
       try {
         localStorage.removeItem("quiubot_estrategia_seleccionada");
       } catch {}
+      limpiarProgresoGuardado();
     } catch (e) {
       setErrorMsg("No se pudo conectar con el servidor.");
     } finally {
@@ -1151,10 +1271,6 @@ function EstrategiaContent() {
   return (
     <div style={{ minHeight: "100vh", background: "#f9f9f8", fontFamily: "system-ui, sans-serif", padding: "2rem" }}>
       <div style={{ maxWidth: 960, margin: "0 auto" }}>
-        <button onClick={() => router.push("/")} style={{ display: "inline-flex", alignItems: "center", gap: 6, marginBottom: "1.5rem", background: "none", border: "none", color: "#7F77DD", fontSize: 14, fontWeight: 500, cursor: "pointer", padding: 0 }}>
-          ← Volver al panel principal
-        </button>
-
         <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 4 }}>
           <h1 style={{ fontSize: 20, fontWeight: 700, margin: 0, color: "#1a1a1a" }}>Motor de Estrategia Publicitaria</h1>
           <div style={{ display: "flex", gap: 6 }}>
@@ -1168,6 +1284,18 @@ function EstrategiaContent() {
                 { selector: '[data-tour="estrategia-siguiente"]', titulo: "Avanza paso a paso", texto: "Objetivo, presupuesto, y en segundos tienes la estrategia completa lista." },
               ]}
             />
+            <button
+              onClick={handleCancelarYSalir}
+              title="Cancela esta estrategia y vuelve al panel principal"
+              style={{
+                display: "inline-flex", alignItems: "center", gap: 6,
+                background: "#fff", border: "1px solid #f0c9c9", color: "#b3261e",
+                padding: "8px 14px", borderRadius: 8, fontSize: 13, fontWeight: 600, cursor: "pointer",
+              }}
+            >
+              <X size={14} strokeWidth={2.5} aria-hidden="true" />
+              Cancelar y salir
+            </button>
           </div>
         </div>
         <p style={{ fontSize: 13, color: "#999", marginBottom: "2rem" }}>
@@ -1314,7 +1442,7 @@ function EstrategiaContent() {
             </p>
 
             <div data-tour="estrategia-upload" style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(130px, 1fr))", gap: 12 }}>
-              {previews.map((src, idx) => (
+              {imagenesBase64.map((src, idx) => (
                 <div key={idx} style={{ position: "relative", aspectRatio: "1" }}>
                   <img src={src} alt={`Imagen ${idx + 1}`} style={{ width: "100%", height: "100%", objectFit: "cover", borderRadius: 12, border: "1px solid #e0e0e0" }} />
                   <button
@@ -1326,14 +1454,14 @@ function EstrategiaContent() {
                   </button>
                 </div>
               ))}
-              {imagenes.length < MAX_IMAGENES_PRODUCTO && (
+              {imagenesBase64.length < MAX_IMAGENES_PRODUCTO && (
                 <div
                   onClick={() => fileRef.current?.click()}
                   style={{ aspectRatio: "1", border: "1.5px dashed #7F77DD", borderRadius: 12, display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", cursor: "pointer", background: "#fcfcff", gap: 6 }}
                 >
                   <Camera size={22} color="#534AB7" strokeWidth={2} aria-hidden="true" />
                   <span style={{ fontSize: 11, color: "#534AB7", fontWeight: 500, textAlign: "center", padding: "0 8px" }}>
-                    {imagenes.length === 0
+                    {imagenesBase64.length === 0
                       ? (tipoContenido === "servicio" ? "Subir pieza gráfica" : "Subir foto del producto")
                       : "Subir otra"}
                   </span>
@@ -1343,7 +1471,7 @@ function EstrategiaContent() {
             </div>
 
             <p style={{ fontSize: 12, color: "#999", marginTop: -12 }}>
-              {imagenes.length}/{MAX_IMAGENES_PRODUCTO} subidas · mínimo {MIN_IMAGENES_PRODUCTO}
+              {imagenesBase64.length}/{MAX_IMAGENES_PRODUCTO} subidas · mínimo {MIN_IMAGENES_PRODUCTO}
             </p>
 
             {tipoContenido === "servicio" && (
@@ -1384,7 +1512,7 @@ function EstrategiaContent() {
               </div>
             )}
 
-            <button data-tour="estrategia-siguiente" onClick={() => setStep("objetivo")} disabled={imagenes.length < MIN_IMAGENES_PRODUCTO} style={{ background: imagenes.length < MIN_IMAGENES_PRODUCTO ? "#ccc" : "#534AB7", color: "#fff", border: "none", padding: "16px", borderRadius: 10, fontSize: 16, fontWeight: 600, cursor: imagenes.length < MIN_IMAGENES_PRODUCTO ? "not-allowed" : "pointer" }}>
+            <button data-tour="estrategia-siguiente" onClick={() => setStep("objetivo")} disabled={imagenesBase64.length < MIN_IMAGENES_PRODUCTO} style={{ background: imagenesBase64.length < MIN_IMAGENES_PRODUCTO ? "#ccc" : "#534AB7", color: "#fff", border: "none", padding: "16px", borderRadius: 10, fontSize: 16, fontWeight: 600, cursor: imagenesBase64.length < MIN_IMAGENES_PRODUCTO ? "not-allowed" : "pointer" }}>
               Siguiente paso
             </button>
           </div>
