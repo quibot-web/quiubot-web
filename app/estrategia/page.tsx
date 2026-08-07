@@ -45,12 +45,62 @@ const TEMA_OBJETIVO: Record<string, { color: string; colorClaro: string; iconos:
   trafico_mensajes: { color: "#0891B2", colorClaro: "#CFFAFE", iconos: [MousePointerClick, TrendingUp, Zap, Globe] },
 };
 
+// Redimensiona y comprime la imagen SOLO cuando hace falta -- fotos de
+// celular modernas pueden pesar varios MB, y en base64 eso crece un 33%
+// mas, lo cual puede chocar contra limites de tamano de body (Next.js,
+// n8n) o de localStorage (usado para guardar el progreso del wizard) y
+// terminar produciendo un base64 truncado/invalido en OpenAI. Pero si la
+// imagen ya es liviana y de tamano razonable, se manda tal cual: convertir
+// todo a JPEG siempre le quitaria la transparencia a un PNG (ej. un
+// producto recortado con fondo transparente), y seria trabajo innecesario
+// para algo que ya esta bien.
+const LADO_MAXIMO_IMAGEN = 1600;
+const CALIDAD_JPEG = 0.85;
+const PESO_MAXIMO_SIN_COMPRIMIR = 800 * 1024; // 800KB
+
 function fileToBase64(file: File): Promise<string> {
   return new Promise((resolve, reject) => {
     const reader = new FileReader();
     reader.onload = () => resolve(reader.result as string);
     reader.onerror = reject;
     reader.readAsDataURL(file);
+  });
+}
+
+function comprimirSiHaceFalta(file: File): Promise<string> {
+  return new Promise((resolve, reject) => {
+    const img = new Image();
+    const url = URL.createObjectURL(file);
+    img.onload = () => {
+      const yaEsLiviana = file.size <= PESO_MAXIMO_SIN_COMPRIMIR && img.width <= LADO_MAXIMO_IMAGEN && img.height <= LADO_MAXIMO_IMAGEN;
+      if (yaEsLiviana) {
+        URL.revokeObjectURL(url);
+        fileToBase64(file).then(resolve).catch(reject);
+        return;
+      }
+      let { width, height } = img;
+      if (width > LADO_MAXIMO_IMAGEN || height > LADO_MAXIMO_IMAGEN) {
+        const escala = LADO_MAXIMO_IMAGEN / Math.max(width, height);
+        width = Math.round(width * escala);
+        height = Math.round(height * escala);
+      }
+      const canvas = document.createElement("canvas");
+      canvas.width = width;
+      canvas.height = height;
+      const ctx = canvas.getContext("2d");
+      URL.revokeObjectURL(url);
+      if (!ctx) {
+        reject(new Error("No se pudo procesar la imagen"));
+        return;
+      }
+      ctx.drawImage(img, 0, 0, width, height);
+      resolve(canvas.toDataURL("image/jpeg", CALIDAD_JPEG));
+    };
+    img.onerror = () => {
+      URL.revokeObjectURL(url);
+      reject(new Error("No se pudo leer esa imagen"));
+    };
+    img.src = url;
   });
 }
 
@@ -894,7 +944,7 @@ function EstrategiaContent() {
     if (!file || imagenesBase64.length >= MAX_IMAGENES_PRODUCTO) return;
     if (fileRef.current) fileRef.current.value = "";
     try {
-      const base64 = await fileToBase64(file);
+      const base64 = await comprimirSiHaceFalta(file);
       setImagenesBase64((prev) => [...prev, base64]);
     } catch {
       setErrorMsg("No se pudo leer esa imagen. Intenta con otro archivo.");
