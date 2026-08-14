@@ -819,6 +819,10 @@ export default function Home() {
                 <span className="qb-nav-icon"><Icono><path d="M2 5a2 2 0 012-2h6v18H4a2 2 0 01-2-2V5z" /><path d="M22 5a2 2 0 00-2-2h-6v18h6a2 2 0 002-2V5z" /></Icono></span>
                 Playbook
               </a>
+              <a href="/admin/plantillas-publicitarias" className="qb-admin-item">
+                <span className="qb-nav-icon"><Icono><rect x="3" y="3" width="18" height="18" rx="2" /><circle cx="8.5" cy="8.5" r="1.5" /><path d="M21 15l-5-5L5 21" /></Icono></span>
+                Plantillas publicitarias
+              </a>
               <a href="/admin/objetivos" className="qb-admin-item">
                 <span className="qb-nav-icon"><Icono><path d="M5 21V4M5 4h13l-3 4 3 4H5" /></Icono></span>
                 Objetivos
