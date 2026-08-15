@@ -1154,6 +1154,14 @@ export default function BienvenidaExperience() {
              CTA intermedio. En pantallas angostas no aporta mucho de
              todas formas: todo se muestra directo, sin animacion. */
           .qb-lp .qb-reveal { opacity: 1 !important; transform: none !important; transition: none !important; }
+
+          .qb-lp .sello-box { padding: 32px 20px; }
+          .qb-lp .founder-note { padding: 16px 18px; }
+          .qb-lp .cta-final { padding: 40px 22px; }
+          .qb-lp .mini-cta { padding: 20px 18px; }
+          .qb-lp .testimonios-placeholder { padding: 28px 20px; }
+          .qb-lp nav { padding: 12px 16px; }
+          .qb-lp nav .btn-cta { padding: 9px 14px; font-size: 13px; }
         }
         @media (prefers-reduced-motion: reduce) {
           .qb-lp .panel-fade, .qb-lp .budget-fill, .qb-lp .creativo-card,
