@@ -2,6 +2,7 @@
 import { useEffect, useRef, useState } from "react"
 import { useSession } from "next-auth/react"
 import { useRouter } from "next/navigation"
+import Link from "next/link"
 
 import { OBJETIVOS_INFO } from "@/app/lib/objetivosInfo"
 
@@ -199,6 +200,10 @@ export default function BillingPage() {
     )
   }
 
+  const mensajeWhatsapp = session?.user?.email
+    ? `Hola, ya realicé el pago de Quiubot. Mi correo es ${session.user.email}`
+    : "Hola, ya realicé el pago de Quiubot."
+
   return (
     <div style={{ minHeight: "100vh", background: "#f9f9f8", fontFamily: "system-ui, sans-serif", padding: "2rem" }}>
       <div style={{ maxWidth: 1000, margin: "0 auto" }}>
@@ -278,7 +283,7 @@ export default function BillingPage() {
 
         <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(260px, 1fr))", gap: 20, alignItems: "start" }}>
           {PLANES.map((plan) => {
-            const esPlanActual = plan.id === info.plan
+            const esPlanActual = !!session && plan.id === info.plan
             const destacarComoPopular = plan.masElegido && !esPlanActual
             const esAnual = ciclo === "anual" && plan.precio > 0
             const totalAnual = Math.round(plan.precio * 12 * (1 - DESCUENTO_ANUAL))
@@ -415,9 +420,37 @@ export default function BillingPage() {
                     Ya lo tienes activo
                   </div>
                 ) : plan.id === "arranque" ? (
-                  <div style={{ width: "100%", padding: "13px", borderRadius: 10, border: "1px solid #e8e8e6", color: "#999", fontSize: 13, textAlign: "center" }}>
-                    Bajas automático al terminar tu plan pago
-                  </div>
+                  session ? (
+                    <div style={{ width: "100%", padding: "13px", borderRadius: 10, border: "1px solid #e8e8e6", color: "#999", fontSize: 13, textAlign: "center" }}>
+                      Bajas automático al terminar tu plan pago
+                    </div>
+                  ) : (
+                    <Link
+                      href="/registro"
+                      style={{
+                        display: "block", width: "100%", padding: "13px", borderRadius: 10,
+                        border: "1px solid #534AB7", background: "#fff", color: "#534AB7",
+                        fontSize: 14, fontWeight: 700, textAlign: "center", textDecoration: "none",
+                        boxSizing: "border-box",
+                      }}
+                    >
+                      Empezar gratis →
+                    </Link>
+                  )
+                ) : !session ? (
+                  <Link
+                    href="/registro"
+                    style={{
+                      display: "block", width: "100%", padding: "13px", borderRadius: 10,
+                      border: destacarComoPopular ? "none" : "1px solid #534AB7",
+                      background: destacarComoPopular ? "#534AB7" : "#fff",
+                      color: destacarComoPopular ? "#fff" : "#534AB7",
+                      fontSize: 14, fontWeight: 700, textAlign: "center", textDecoration: "none",
+                      boxSizing: "border-box",
+                    }}
+                  >
+                    Crear cuenta para empezar
+                  </Link>
                 ) : (
                   <button
                     onClick={() =>
@@ -464,7 +497,7 @@ export default function BillingPage() {
             Si ya pagaste y tu cuenta no está activa, contáctanos.
           </p>
           <a
-            href={"https://wa.me/" + TU_WHATSAPP + "?text=" + encodeURIComponent(`Hola, ya realicé el pago de Quiubot. Mi correo es ${session?.user?.email}`)}
+            href={"https://wa.me/" + TU_WHATSAPP + "?text=" + encodeURIComponent(mensajeWhatsapp)}
             target="_blank"
             rel="noopener noreferrer"
             style={{ display: "block", background: "#25D366", color: "#fff", padding: "10px", borderRadius: 10, fontSize: 14, fontWeight: 600, textDecoration: "none", textAlign: "center" }}
