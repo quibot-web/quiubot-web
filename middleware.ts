@@ -19,6 +19,13 @@ export default auth(async (req) => {
   const isBienvenidaPage = pathname === "/bienvenida"
   const isTerminosPage = pathname === "/terminos"
   const isActivarRoute = pathname === "/api/activar"
+  // /bienvenida (pagina publica) le pega a este endpoint desde el navegador
+  // para mostrar el video de presentacion y los testimonios a visitantes
+  // que TODAVIA no tienen cuenta -- sin esta excepcion el middleware
+  // redirige a /login y el fetch recibe HTML en vez de JSON. Solo hace
+  // SELECT de datos ya marcados como activo=true/publicos, no expone nada
+  // sensible, igual que /bienvenida y /terminos.
+  const isTutorialesPublicosRoute = pathname.startsWith("/api/tutoriales-publicos/")
   // Los webhooks (Bold, y cualquier futuro proveedor) los llama un
   // servidor externo, nunca un usuario con sesion de Quiubot -- por eso
   // necesitan quedar fuera del candado de login, igual que /api/activar.
@@ -36,7 +43,7 @@ export default auth(async (req) => {
 
   if (isActivarRoute || isWebhookRoute || isCronRoute) return NextResponse.next()
 
-  if (!isLoggedIn && !isLoginPage && !isBienvenidaPage && !isTerminosPage) {
+  if (!isLoggedIn && !isLoginPage && !isBienvenidaPage && !isTerminosPage && !isTutorialesPublicosRoute) {
     return NextResponse.redirect(new URL("/login", req.nextUrl))
   }
 
