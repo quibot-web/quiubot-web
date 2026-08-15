@@ -1,7 +1,7 @@
 "use client";
 
 import Link from "next/link";
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useRef, useState, type ReactNode } from "react";
 import RevealObserver from "@/app/components/RevealObserver";
 
 const AYUDAS = [
@@ -47,10 +47,45 @@ const GANANCIAS = [
 const CHIPS_CONFIANZA = ["Cero curva de aprendizaje", "Tú apruebas cada cambio", "Pagas solo lo que usas"];
 
 const PLANES = [
-  { nombre: "Arranque", precio: "Gratis", detalle: "1 estrategia al mes, para empezar sin riesgo." },
-  { nombre: "Crecimiento", precio: "$149.900", detalle: "4 estrategias al mes, todos los objetivos.", destacado: true },
-  { nombre: "Escala", precio: "$249.900", detalle: "Estrategias y campañas vigiladas sin límite." },
+  {
+    nombre: "Arranque",
+    precio: "Gratis",
+    detalle: "Para empezar sin riesgo",
+    features: ["1 estrategia al mes", "Creativos generados con IA", "Vigilancia basica de campaña"],
+    icono: "cohete",
+  },
+  {
+    nombre: "Crecimiento",
+    precio: "$149.900",
+    detalle: "El mas elegido por negocios en marcha",
+    features: ["4 estrategias al mes", "Todos los objetivos publicitarios", "Vigilancia y ajustes ilimitados", "Soporte prioritario"],
+    icono: "crecimiento",
+    destacado: true,
+  },
+  {
+    nombre: "Escala",
+    precio: "$249.900",
+    detalle: "Para quien ya no quiere limites",
+    features: ["Estrategias ilimitadas", "Campañas vigiladas sin limite", "Plantillas publicitarias premium", "Soporte dedicado"],
+    icono: "corona",
+  },
 ];
+
+const ICONOS_PLAN: Record<string, ReactNode> = {
+  cohete: (
+    <>
+      <path d="M12 2c3 2 5 6 5 10 0 2-1 4-2 5l-1 3-2-2-2 2-1-3c-1-1-2-3-2-5 0-4 2-8 5-10z" />
+      <circle cx="12" cy="10" r="1.5" />
+    </>
+  ),
+  crecimiento: (
+    <>
+      <path d="M3 17l6-6 4 4 8-8" />
+      <path d="M15 7h6v6" />
+    </>
+  ),
+  corona: <path d="M3 8l4 3 5-6 5 6 4-3-2 10H5L3 8z" />,
+};
 
 const HUD_LINEAS = [
   "Analizando tu categoria",
@@ -1091,15 +1126,24 @@ export default function BienvenidaExperience() {
         .qb-lp .garantia .texto-g { font-size: 13px; color: var(--muted); line-height: 1.5; }
         .qb-lp .sello-cta { margin-top: 32px; display: flex; flex-direction: column; align-items: center; gap: 10px; }
 
-        .qb-lp .planes { max-width: 900px; margin: 0 auto; display: grid; grid-template-columns: repeat(3, 1fr); gap: 18px; }
-        .qb-lp .plan-card { background: #fff; border: 1.5px solid #ECE9F7; border-radius: 14px; padding: 26px 22px; text-align: center; transition: border-color .2s ease; }
-        .qb-lp .plan-card:hover { border-color: var(--purple-light); }
-        .qb-lp .plan-card.destacado { border-color: var(--purple); box-shadow: 0 8px 22px rgba(127,119,221,0.14); }
-        .qb-lp .plan-card .tag { font-family: var(--font-mono), monospace; font-size: 10px; letter-spacing: 0.08em; text-transform: uppercase; color: var(--purple); font-weight: 600; }
-        .qb-lp .plan-card h3 { font-size: 18px; margin: 10px 0 4px; }
-        .qb-lp .plan-card .precio { font-size: 24px; font-weight: 700; margin-bottom: 10px; }
+        .qb-lp .planes { max-width: 960px; margin: 0 auto; display: grid; grid-template-columns: repeat(3, 1fr); gap: 20px; align-items: start; }
+        .qb-lp .plan-card { position: relative; background: #fff; border: 1.5px solid #ECE9F7; border-radius: 18px; padding: 30px 24px; text-align: center; transition: border-color .2s ease, transform .2s ease, box-shadow .2s ease; overflow: hidden; }
+        .qb-lp .plan-card::before { content: ""; position: absolute; top: 0; left: 0; right: 0; height: 4px; background: #E5E1F5; }
+        .qb-lp .plan-card:hover { transform: translateY(-3px); box-shadow: 0 14px 30px rgba(23,21,43,0.08); }
+        .qb-lp .plan-card.destacado { border-color: var(--purple); box-shadow: 0 16px 40px rgba(127,119,221,0.22); transform: scale(1.045); z-index: 1; }
+        .qb-lp .plan-card.destacado::before { height: 5px; background: linear-gradient(90deg, var(--purple-deep), var(--purple), var(--mint)); }
+        .qb-lp .plan-card.destacado:hover { transform: scale(1.045) translateY(-3px); }
+        .qb-lp .plan-icono { width: 46px; height: 46px; border-radius: 13px; background: var(--bg-alt); color: var(--purple-deep); display: flex; align-items: center; justify-content: center; margin: 6px auto 14px; }
+        .qb-lp .plan-card.destacado .plan-icono { background: var(--purple-deep); color: #fff; }
+        .qb-lp .plan-icono svg { width: 22px; height: 22px; }
+        .qb-lp .plan-card .tag { position: absolute; top: 14px; right: 14px; font-family: var(--font-mono), monospace; font-size: 10px; letter-spacing: 0.06em; text-transform: uppercase; color: #fff; background: var(--purple-deep); font-weight: 700; padding: 5px 10px; border-radius: 20px; }
+        .qb-lp .plan-card h3 { font-size: 19px; margin: 0 0 4px; }
+        .qb-lp .plan-subtitulo { font-size: 12.5px; color: var(--muted); margin: 0 0 14px; min-height: 32px; }
+        .qb-lp .plan-card .precio { font-size: 28px; font-weight: 700; margin-bottom: 18px; color: var(--ink); }
         .qb-lp .plan-card .precio small { font-size: 12px; font-weight: 500; color: var(--muted); }
-        .qb-lp .plan-card p.detalle { font-size: 13px; color: var(--muted); line-height: 1.5; }
+        .qb-lp .plan-features { list-style: none; margin: 0; padding: 18px 0 0; border-top: 1px dashed #E5E1F5; display: flex; flex-direction: column; gap: 10px; text-align: left; }
+        .qb-lp .plan-features li { display: flex; align-items: flex-start; gap: 8px; font-size: 13px; color: var(--ink); line-height: 1.4; }
+        .qb-lp .plan-features .check-mini { width: 16px; height: 16px; border-radius: 50%; background: var(--mint); color: #fff; font-size: 10px; display: flex; align-items: center; justify-content: center; flex-shrink: 0; margin-top: 1px; }
         .qb-lp .planes-footer { text-align: center; margin-top: 28px; }
         .qb-lp .planes-footer a { color: var(--purple-deep); font-size: 14px; font-weight: 600; text-decoration: none; }
 
@@ -1143,6 +1187,8 @@ export default function BienvenidaExperience() {
           .qb-lp .hero p.sub { max-width: 100%; }
           .qb-lp .ayudas { grid-template-columns: 1fr; }
           .qb-lp .planes { grid-template-columns: 1fr; }
+          .qb-lp .plan-card.destacado { transform: none; }
+          .qb-lp .plan-card.destacado:hover { transform: translateY(-3px); }
           .qb-lp .garantias { grid-template-columns: 1fr; }
           .qb-lp section { padding: 64px 20px; }
           .qb-lp .experiencia-grid { grid-template-columns: 1fr; gap: 0; }
@@ -1503,10 +1549,20 @@ export default function BienvenidaExperience() {
         <div className="planes">
           {PLANES.map((p, i) => (
             <div className={`plan-card ${p.destacado ? "destacado" : ""} qb-reveal qb-reveal-delay-${i + 1}`} key={p.nombre}>
-              {p.destacado && <div className="tag">Más elegido</div>}
+              {p.destacado && <div className="tag">✦ Mas elegido</div>}
+              <div className="plan-icono">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                  {ICONOS_PLAN[p.icono]}
+                </svg>
+              </div>
               <h3>{p.nombre}</h3>
+              <p className="plan-subtitulo">{p.detalle}</p>
               <div className="precio">{p.precio}{p.precio !== "Gratis" && <small> COP/mes</small>}</div>
-              <p className="detalle">{p.detalle}</p>
+              <ul className="plan-features">
+                {p.features.map((f) => (
+                  <li key={f}><span className="check-mini">✓</span>{f}</li>
+                ))}
+              </ul>
             </div>
           ))}
         </div>
