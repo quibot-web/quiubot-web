@@ -1511,7 +1511,7 @@ export default function BienvenidaExperience() {
           ))}
         </div>
         <div className="planes-footer">
-          <Link href="/login?next=/billing">Ver todos los detalles de los planes →</Link>
+          <Link href="/pricing">Ver todos los detalles de los planes →</Link>
         </div>
       </section>
 
