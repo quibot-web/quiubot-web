@@ -1077,6 +1077,8 @@ export default function BienvenidaExperience() {
         .qb-lp .founder-firma { display: flex; flex-direction: column; }
         .qb-lp .founder-nombre { font-size: 13px; font-weight: 700; color: var(--ink); font-style: normal; }
         .qb-lp .founder-cargo { font-size: 11px; color: var(--muted); font-family: var(--font-mono), monospace; letter-spacing: 0.02em; }
+        .qb-lp .founder-instagram { display: inline-flex; align-items: center; gap: 5px; margin-top: 8px; font-size: 11.5px; font-weight: 600; color: var(--purple-deep); text-decoration: none; width: fit-content; }
+        .qb-lp .founder-instagram:hover { text-decoration: underline; }
         .qb-lp .chips { display: flex; flex-wrap: wrap; justify-content: center; gap: 10px; margin-top: 30px; }
         .qb-lp .chip { display: inline-flex; align-items: center; gap: 7px; font-size: 13px; font-weight: 600; color: var(--purple-deep); background: var(--bg-alt); border: 1px solid #E5E1F5; padding: 9px 16px 9px 12px; border-radius: 20px; }
         .qb-lp .chip .check-mini { width: 16px; height: 16px; border-radius: 50%; background: var(--mint); color: #fff; font-size: 10px; display: flex; align-items: center; justify-content: center; flex-shrink: 0; }
@@ -1435,6 +1437,19 @@ export default function BienvenidaExperience() {
               <div className="founder-firma">
                 <span className="founder-nombre">Juan José Palacios Villarreal</span>
                 <span className="founder-cargo">Fundador de Quiubot</span>
+                <a
+                  href="https://www.instagram.com/juanshow_._._/"
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="founder-instagram"
+                >
+                  <svg viewBox="0 0 24 24" width="13" height="13" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                    <rect x="2" y="2" width="20" height="20" rx="5" />
+                    <path d="M16 11.37A4 4 0 1112.63 8 4 4 0 0116 11.37z" />
+                    <line x1="17.5" y1="6.5" x2="17.51" y2="6.5" />
+                  </svg>
+                  Conoce a Juan José en Instagram
+                </a>
               </div>
             </div>
           </div>
