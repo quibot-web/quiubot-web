@@ -1418,16 +1418,7 @@ export default function BienvenidaExperience() {
           </p>
           <div className="founder-note">
             <div className="founder-photo-wrap">
-              <img
-                src="/marca/fundador-juan-jose.jpg"
-                alt="Juan José Palacios Villarreal, fundador de Quiubot"
-                className="founder-photo"
-                onError={(e) => {
-                  e.currentTarget.style.display = "none";
-                  e.currentTarget.nextElementSibling?.classList.add("visible");
-                }}
-              />
-              <div className="founder-fallback">JP</div>
+              <div className="founder-fallback visible">JP</div>
             </div>
             <div>
               <p className="founder-quote">
