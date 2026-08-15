@@ -2,6 +2,7 @@
 import { useEffect, useState } from "react"
 import { ChevronDown, ChevronRight } from "lucide-react"
 import { SECCIONES_TUTORIALES } from "@/app/lib/seccionesTutoriales"
+import { CargandoQuiubotInline } from "@/app/components/CargandoQuiubot"
 
 type VideoGuardado = {
   id: string
@@ -678,7 +679,7 @@ export default function AdminTutorialesClient() {
 
         <div style={{ display: "flex", flexDirection: "column", gap: 12, marginBottom: 20 }}>
           {cargandoTestimonios ? (
-            <p style={{ color: "#666", fontSize: 14 }}>Cargando...</p>
+            <CargandoQuiubotInline />
           ) : (
             <>
               {testimonios.map((t) => (
@@ -736,7 +737,7 @@ export default function AdminTutorialesClient() {
         )}
 
         {cargando ? (
-          <p style={{ color: "#666", fontSize: 14 }}>Cargando...</p>
+          <CargandoQuiubotInline />
         ) : (
           <div style={{ display: "flex", flexDirection: "column", gap: 12 }}>
             {SECCIONES_TUTORIALES.map((s) => {

@@ -4,6 +4,7 @@ import { Upload, X, Check, Sparkles, Loader2 } from "lucide-react";
 import EscenaParticulasADN3D from "@/app/components/EscenaParticulasADN3D";
 import TutorialVideo from "@/app/components/TutorialVideo";
 import TourGuiado from "@/app/components/TourGuiado";
+import CargandoQuiubot from "@/app/components/CargandoQuiubot";
 
 const MIN_IMAGENES = 3;
 const MAX_IMAGENES = 5;
@@ -545,11 +546,7 @@ export default function MarcaPage() {
   };
 
   if (cargandoInicial) {
-    return (
-      <div style={{ minHeight: "100vh", display: "flex", alignItems: "center", justifyContent: "center", fontFamily: "system-ui, sans-serif", color: "#999" }}>
-        Cargando...
-      </div>
-    );
+    return <CargandoQuiubot mensaje="Cargando tu marca" />;
   }
 
   const nodeYs = posicionesNodos(CATEGORIAS.length);

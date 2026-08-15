@@ -3,6 +3,7 @@ import { useEffect, useState, useRef, Suspense } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 import TutorialVideo from "@/app/components/TutorialVideo";
 import TourGuiado from "@/app/components/TourGuiado";
+import CargandoQuiubot from "@/app/components/CargandoQuiubot";
 
 function CampanasContent() {
   const router = useRouter();
@@ -393,11 +394,7 @@ function CampanasContent() {
 
 export default function CampanasPage() {
   return (
-    <Suspense fallback={
-      <div style={{ minHeight: "100vh", background: "rgb(249, 249, 248)", display: "flex", alignItems: "center", justifyContent: "center" }}>
-        <p style={{ color: "rgb(153, 153, 153)", fontSize: 14 }}>Cargando...</p>
-      </div>
-    }>
+    <Suspense fallback={<CargandoQuiubot mensaje="Cargando tus campañas" />}>
       <CampanasContent />
     </Suspense>
   );

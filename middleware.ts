@@ -23,6 +23,13 @@ export default auth(async (req) => {
   const isResetearPasswordPage = pathname === "/resetear-password"
   const isPricingPage = pathname === "/pricing"
   const isBillingPage = pathname === "/billing"
+  // /billing es publica (ver isBillingPage), pero el fetch que la llena de
+  // datos le pega a /api/billing -- sin esta excepcion el middleware
+  // redirige esa llamada a /login, fetch sigue el redirect, r.json() falla
+  // parseando HTML, y la pagina se queda pegada en "Cargando..." para
+  // siempre. /api/billing/crear-link NO entra aqui -- esa sigue exigiendo
+  // sesion, es la que genera el link de pago real.
+  const isBillingRoute = pathname === "/api/billing"
   const isActivarRoute = pathname === "/api/activar"
   // /bienvenida (pagina publica) le pega a este endpoint desde el navegador
   // para mostrar el video de presentacion y los testimonios a visitantes
@@ -48,7 +55,7 @@ export default auth(async (req) => {
 
   if (isActivarRoute || isWebhookRoute || isCronRoute) return NextResponse.next()
 
-  if (!isLoggedIn && !isLoginPage && !isBienvenidaPage && !isTerminosPage && !isTutorialesPublicosRoute && !isRegistroPage && !isOlvidePasswordPage && !isResetearPasswordPage && !isPricingPage && !isBillingPage) {
+  if (!isLoggedIn && !isLoginPage && !isBienvenidaPage && !isTerminosPage && !isTutorialesPublicosRoute && !isRegistroPage && !isOlvidePasswordPage && !isResetearPasswordPage && !isPricingPage && !isBillingPage && !isBillingRoute) {
     return NextResponse.redirect(new URL("/login", req.nextUrl))
   }
 

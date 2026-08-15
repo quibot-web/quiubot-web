@@ -2,6 +2,7 @@
 import { useState, useEffect } from "react";
 import { useRouter } from "next/navigation";
 import { OBJETIVOS_INFO } from "@/app/lib/objetivosInfo";
+import { CargandoQuiubotInline } from "@/app/components/CargandoQuiubot";
 
 const PLANES = [
   { id: "arranque", label: "Arranque" },
@@ -74,7 +75,7 @@ export default function AdminObjetivosClient() {
           Activa o desactiva cada objetivo, y elige desde qué plan queda disponible. Mientras un objetivo esté desactivado, solo los administradores podrán probarlo en el Motor de Estrategia.
         </p>
 
-        {cargando && <p style={{ color: "#666", fontSize: 13 }}>Cargando...</p>}
+        {cargando && <CargandoQuiubotInline />}
 
         {!cargando && (
           <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>

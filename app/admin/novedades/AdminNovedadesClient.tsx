@@ -1,6 +1,7 @@
 "use client";
 
 import { useState, useEffect, useCallback } from "react";
+import { CargandoQuiubotInline } from "@/app/components/CargandoQuiubot";
 
 type Novedad = {
   id: string;
@@ -170,7 +171,7 @@ export default function AdminNovedadesClient() {
 
       {/* Lista de novedades existentes */}
       {cargando ? (
-        <p style={{ fontSize: 13, color: "#888" }}>Cargando...</p>
+        <CargandoQuiubotInline />
       ) : novedades.length === 0 ? (
         <p style={{ fontSize: 13, color: "#888" }}>Aún no has publicado ninguna novedad.</p>
       ) : (

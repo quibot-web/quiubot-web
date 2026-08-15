@@ -1,6 +1,7 @@
 "use client";
 import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
+import { CargandoQuiubotInline } from "@/app/components/CargandoQuiubot";
 
 export default function AdminPlaybookClient() {
   const router = useRouter();
@@ -117,9 +118,7 @@ export default function AdminPlaybookClient() {
 
         {cargando && (
           <div style={cardStyle}>
-            <p style={{ color: "rgb(153, 153, 153)", fontSize: 14, textAlign: "center", margin: 0 }}>
-              Cargando...
-            </p>
+            <CargandoQuiubotInline />
           </div>
         )}
 

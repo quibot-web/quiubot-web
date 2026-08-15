@@ -1,5 +1,6 @@
 "use client"
 import { useEffect, useState } from "react"
+import { CargandoQuiubotInline } from "@/app/components/CargandoQuiubot"
 
 type Seccion = {
   id: string
@@ -212,7 +213,7 @@ export default function AdminConocimientoClient() {
         )}
 
         {cargando ? (
-          <p style={{ color: "#666", fontSize: 14 }}>Cargando...</p>
+          <CargandoQuiubotInline />
         ) : secciones.length === 0 ? (
           <p style={{ color: "#666", fontSize: 14 }}>
             Todavía no hay ninguna sección. Crea la primera con el botón de arriba.

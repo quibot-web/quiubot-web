@@ -7,6 +7,7 @@ import TutorialVideo from "@/app/components/TutorialVideo";
 import TourGuiado from "@/app/components/TourGuiado";
 import ProgresoPasos from "@/app/components/ProgresoPasos";
 import EsperaCreativos from "@/app/components/EsperaCreativos";
+import CargandoQuiubot from "@/app/components/CargandoQuiubot";
 
 function IconoWhatsApp() {
   return (
@@ -1279,11 +1280,7 @@ function EstrategiaContent() {
   // ni el bloqueo -- evita el parpadeo de "bloqueado" por una fracción de
   // segundo a alguien que sí puede usarlo.
   if (tieneAdn === null) {
-    return (
-      <div style={{ minHeight: "100vh", background: "#f9f9f8", display: "flex", alignItems: "center", justifyContent: "center" }}>
-        <p style={{ color: "#999", fontSize: 14 }}>Cargando...</p>
-      </div>
-    );
+    return <CargandoQuiubot mensaje="Verificando tu marca" />;
   }
 
   if (tieneAdn === false) {
@@ -2104,11 +2101,7 @@ function EstrategiaContent() {
 
 export default function EstrategiaPage() {
   return (
-    <Suspense fallback={
-      <div style={{ minHeight: "100vh", background: "#f9f9f8", display: "flex", alignItems: "center", justifyContent: "center" }}>
-        <p style={{ color: "#999", fontSize: 14 }}>Cargando...</p>
-      </div>
-    }>
+    <Suspense fallback={<CargandoQuiubot mensaje="Cargando el motor de estrategia" />}>
       <EstrategiaContent />
     </Suspense>
   );

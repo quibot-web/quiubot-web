@@ -1,6 +1,7 @@
 "use client";
 
 import { useState, useEffect, useCallback } from "react";
+import { CargandoQuiubotInline } from "@/app/components/CargandoQuiubot";
 
 type ErrorPublicacion = {
   id: string;
@@ -125,7 +126,7 @@ function SeccionContactos() {
       {abierto && (
         <div style={{ marginTop: 14 }}>
           {cargando ? (
-            <p style={{ fontSize: 12, color: "#888" }}>Cargando...</p>
+            <CargandoQuiubotInline />
           ) : (
             <div style={{ display: "flex", flexDirection: "column", gap: 6, marginBottom: 12 }}>
               {contactos.length === 0 && <p style={{ fontSize: 12, color: "#888" }}>Sin contactos registrados — usando ADMIN_EMAIL.</p>}
@@ -346,7 +347,7 @@ export default function AdminErroresClient() {
       </form>
 
       {cargando ? (
-        <p style={{ fontSize: 13, color: "#888" }}>Cargando...</p>
+        <CargandoQuiubotInline />
       ) : errorCarga ? (
         <p style={{ fontSize: 13, color: "#DC2626" }}>{errorCarga}</p>
       ) : errores.length === 0 ? (

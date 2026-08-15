@@ -3,6 +3,7 @@ import { useEffect, useRef, useState } from "react"
 import { useSession } from "next-auth/react"
 import { useRouter } from "next/navigation"
 import Link from "next/link"
+import CargandoQuiubot from "@/app/components/CargandoQuiubot"
 
 import { OBJETIVOS_INFO } from "@/app/lib/objetivosInfo"
 
@@ -124,6 +125,10 @@ export default function BillingPage() {
     fetch("/api/billing")
       .then(r => r.json())
       .then(setInfo)
+      .catch((err) => {
+        console.error("No se pudo cargar la info de billing:", err)
+        setInfo({ plan: "arranque", en_trial: false, trial_termina_en: null, fecha_vencimiento: null, fecha_pago: null })
+      })
 
     fetch("/api/objetivos-activos")
       .then(r => r.json())
@@ -193,11 +198,7 @@ export default function BillingPage() {
   }
 
   if (info === null) {
-    return (
-      <div style={{ minHeight: "100vh", background: "#f9f9f8", display: "flex", alignItems: "center", justifyContent: "center" }}>
-        <p style={{ color: "#999", fontSize: 14 }}>Cargando...</p>
-      </div>
-    )
+    return <CargandoQuiubot mensaje="Cargando tu plan" />
   }
 
   const mensajeWhatsapp = session?.user?.email
