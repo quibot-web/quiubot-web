@@ -1,11 +1,13 @@
 "use client"
 import { useState } from "react"
 import Link from "next/link"
+import { Eye, EyeOff } from "lucide-react"
 
 export default function RegistroPage() {
   const [nombre, setNombre] = useState("")
   const [email, setEmail] = useState("")
   const [password, setPassword] = useState("")
+  const [mostrarPassword, setMostrarPassword] = useState(false)
   const [enviando, setEnviando] = useState(false)
   const [enviado, setEnviado] = useState(false)
   const [error, setError] = useState<string | null>(null)
@@ -79,7 +81,29 @@ export default function RegistroPage() {
 
             <input className="ql-input" placeholder="Tu nombre" value={nombre} onChange={(e) => setNombre(e.target.value)} />
             <input className="ql-input" type="email" placeholder="Correo electrónico" required value={email} onChange={(e) => setEmail(e.target.value)} />
-            <input className="ql-input" type="password" placeholder="Contraseña (mín. 10 caracteres)" required value={password} onChange={(e) => setPassword(e.target.value)} />
+            <div style={{ position: "relative" }}>
+              <input
+                className="ql-input"
+                type={mostrarPassword ? "text" : "password"}
+                placeholder="Contraseña (mín. 10 caracteres)"
+                required
+                value={password}
+                onChange={(e) => setPassword(e.target.value)}
+                style={{ paddingRight: 40 }}
+              />
+              <button
+                type="button"
+                onClick={() => setMostrarPassword((v) => !v)}
+                aria-label={mostrarPassword ? "Ocultar contraseña" : "Mostrar contraseña"}
+                style={{
+                  position: "absolute", right: 12, top: "50%", transform: "translateY(-50%)",
+                  background: "none", border: "none", padding: 0, cursor: "pointer",
+                  display: "flex", alignItems: "center", color: "#999",
+                }}
+              >
+                {mostrarPassword ? <EyeOff size={18} /> : <Eye size={18} />}
+              </button>
+            </div>
 
             {error && (
               <div style={{ background: "#fef2f2", border: "1px solid #fecaca", color: "#b91c1c", borderRadius: 8, padding: "8px 12px", fontSize: 12.5 }}>

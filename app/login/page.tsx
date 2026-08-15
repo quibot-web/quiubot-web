@@ -3,6 +3,7 @@ import { Suspense, useState } from "react"
 import { signIn } from "next-auth/react"
 import { useSearchParams, useRouter } from "next/navigation"
 import Link from "next/link"
+import { Eye, EyeOff } from "lucide-react"
 
 function LoginContent() {
   const searchParams = useSearchParams()
@@ -13,6 +14,7 @@ function LoginContent() {
 
   const [email, setEmail] = useState("")
   const [password, setPassword] = useState("")
+  const [mostrarPassword, setMostrarPassword] = useState(false)
   const [enviando, setEnviando] = useState(false)
   const [error, setError] = useState<string | null>(null)
 
@@ -194,14 +196,29 @@ function LoginContent() {
             value={email}
             onChange={(e) => setEmail(e.target.value)}
           />
-          <input
-            className="ql-input"
-            type="password"
-            placeholder="Contraseña"
-            required
-            value={password}
-            onChange={(e) => setPassword(e.target.value)}
-          />
+          <div style={{ position: "relative" }}>
+            <input
+              className="ql-input"
+              type={mostrarPassword ? "text" : "password"}
+              placeholder="Contraseña"
+              required
+              value={password}
+              onChange={(e) => setPassword(e.target.value)}
+              style={{ paddingRight: 40 }}
+            />
+            <button
+              type="button"
+              onClick={() => setMostrarPassword((v) => !v)}
+              aria-label={mostrarPassword ? "Ocultar contraseña" : "Mostrar contraseña"}
+              style={{
+                position: "absolute", right: 12, top: "50%", transform: "translateY(-50%)",
+                background: "none", border: "none", padding: 0, cursor: "pointer",
+                display: "flex", alignItems: "center", color: "#999",
+              }}
+            >
+              {mostrarPassword ? <EyeOff size={18} /> : <Eye size={18} />}
+            </button>
+          </div>
           {error && <div className="ql-alerta-error">{error}</div>}
           <button className="ql-btn-password" type="submit" disabled={enviando}>
             {enviando ? "Entrando..." : "Iniciar sesión"}
