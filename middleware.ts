@@ -21,6 +21,7 @@ export default auth(async (req) => {
   const isRegistroPage = pathname === "/registro"
   const isOlvidePasswordPage = pathname === "/olvide-password"
   const isResetearPasswordPage = pathname === "/resetear-password"
+  const isPricingPage = pathname === "/pricing"
   const isActivarRoute = pathname === "/api/activar"
   // /bienvenida (pagina publica) le pega a este endpoint desde el navegador
   // para mostrar el video de presentacion y los testimonios a visitantes
@@ -46,7 +47,7 @@ export default auth(async (req) => {
 
   if (isActivarRoute || isWebhookRoute || isCronRoute) return NextResponse.next()
 
-  if (!isLoggedIn && !isLoginPage && !isBienvenidaPage && !isTerminosPage && !isTutorialesPublicosRoute && !isRegistroPage && !isOlvidePasswordPage && !isResetearPasswordPage) {
+  if (!isLoggedIn && !isLoginPage && !isBienvenidaPage && !isTerminosPage && !isTutorialesPublicosRoute && !isRegistroPage && !isOlvidePasswordPage && !isResetearPasswordPage && !isPricingPage) {
     return NextResponse.redirect(new URL("/login", req.nextUrl))
   }
 
