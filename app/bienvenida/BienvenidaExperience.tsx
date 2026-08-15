@@ -124,27 +124,15 @@ function PanelContenido({ paso }: { paso: number }) {
         </div>
       )}
       {paso === 2 && (
-        <div className="panel-escena">
-          <div className="creativos-row">
-            <div className="creativo-card c1"><div className="foto" /><div className="precio-tag">-20%</div><div className="info-mini"><div className="linea" /><div className="linea corta" /></div></div>
-            <div className="creativo-card c2"><div className="foto" /><div className="precio-tag">Nuevo</div><div className="info-mini"><div className="linea" /><div className="linea corta" /></div></div>
-            <div className="creativo-card c3"><div className="foto" /><div className="precio-tag">Top</div><div className="info-mini"><div className="linea" /><div className="linea corta" /></div></div>
-          </div>
-          <div style={{ fontSize: 13, color: "var(--muted)", fontWeight: 500 }}>Generados y auditados por IA</div>
+        <div className="panel-escena panel-escena-captura">
+          <img src="/marca/resultado-creativos.jpg" alt="Creativos generados por Quiubot para una campana real" className="captura-real" />
+          <div style={{ fontSize: 13, color: "var(--muted)", fontWeight: 500 }}>Generados y auditados por IA — captura real de la app</div>
         </div>
       )}
       {paso === 3 && (
-        <div className="panel-escena">
-          <div className="campana-row">
-            <span className="estado-dot" />
-            <div className="info"><b>Venta Directa · Activa</b><span>Publicada en Meta Ads</span></div>
-          </div>
-          <div className="vigilancia-line">
-            <svg viewBox="0 0 200 40" width="100%" height="40">
-              <polyline points="0,30 30,26 60,28 90,14 120,18 150,6 180,10 200,4" fill="none" stroke="#1FA97C" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" />
-            </svg>
-          </div>
-          <div className="badge-ok">✓ Rendimiento por encima de tu promedio</div>
+        <div className="panel-escena panel-escena-captura">
+          <img src="/marca/resultado-publicado.jpg" alt="Campana publicada en Meta Ads Manager desde Quiubot" className="captura-real" />
+          <div className="badge-ok">✓ Publicada directo en tu cuenta de Meta — captura real</div>
         </div>
       )}
     </div>
@@ -1032,6 +1020,8 @@ export default function BienvenidaExperience() {
         .qb-lp .panel-fade { width: 100%; animation: qbPanelFade .45s cubic-bezier(.16,.84,.44,1); }
         @keyframes qbPanelFade { from { opacity: 0; transform: translateY(10px); } to { opacity: 1; transform: none; } }
         .qb-lp .panel-escena { display: flex; flex-direction: column; gap: 16px; width: 100%; }
+        .qb-lp .panel-escena-captura { gap: 10px; }
+        .qb-lp .captura-real { width: 100%; height: 190px; object-fit: cover; object-position: top; border-radius: 10px; box-shadow: 0 0 0 1px #ECE9F7; }
         .qb-lp .avatar-marca { width: 54px; height: 54px; border-radius: 16px; background: linear-gradient(135deg, var(--purple), var(--purple-light)); }
         .qb-lp .paleta { display: flex; gap: 6px; }
         .qb-lp .paleta span { width: 16px; height: 16px; border-radius: 5px; }
