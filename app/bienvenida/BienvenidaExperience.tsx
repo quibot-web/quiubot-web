@@ -101,26 +101,14 @@ function PanelContenido({ paso }: { paso: number }) {
   return (
     <div className="panel-fade" key={paso}>
       {paso === 0 && (
-        <div className="panel-escena">
-          <div className="avatar-marca" />
-          <div className="paleta">
-            <span style={{ background: "#4A3FAE" }} />
-            <span style={{ background: "#7F77DD" }} />
-            <span style={{ background: "#C4BFF0" }} />
-          </div>
-          <div className="badge-ok">✓ Identidad de marca guardada</div>
+        <div className="panel-escena panel-escena-captura">
+          <img src="/marca/resultado-adn.jpg" alt="ADN de marca sintetizado por Quiubot" className="captura-real" />
+          <div className="badge-ok">✓ Identidad de marca guardada — captura real</div>
         </div>
       )}
       {paso === 1 && (
-        <div className="panel-escena">
-          <div className="pills">
-            <span className="pill activo">Venta Directa</span>
-            <span className="pill">Reconocimiento</span>
-          </div>
-          <div className="budget-row">
-            <div className="budget-bar"><div className="budget-fill" /></div>
-            <span className="budget-num">$300.000/mes</span>
-          </div>
+        <div className="panel-escena panel-escena-captura">
+          <img src="/marca/resultado-objetivo.jpg" alt="Seleccion de objetivo publicitario en Quiubot" className="captura-real" />
         </div>
       )}
       {paso === 2 && (
@@ -131,7 +119,7 @@ function PanelContenido({ paso }: { paso: number }) {
       )}
       {paso === 3 && (
         <div className="panel-escena panel-escena-captura">
-          <img src="/marca/resultado-publicado.jpg" alt="Campana publicada en Meta Ads Manager desde Quiubot" className="captura-real" />
+          <img src="/marca/resultado-publicado-check.jpg" alt="Confirmacion de campana publicada en Meta desde Quiubot" className="captura-real" />
           <div className="badge-ok">✓ Publicada directo en tu cuenta de Meta — captura real</div>
         </div>
       )}
