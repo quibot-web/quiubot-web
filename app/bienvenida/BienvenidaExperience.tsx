@@ -1069,7 +1069,7 @@ export default function BienvenidaExperience() {
         .qb-lp .sello-box h2 { font-size: clamp(24px, 3vw, 32px); }
         .qb-lp .sello-box p.lead { max-width: 560px; margin: 14px auto 0; }
         .qb-lp .founder-note { display: flex; align-items: center; gap: 18px; text-align: left; background: var(--bg-alt); border-radius: 16px; padding: 20px 24px; margin: 26px auto 0; max-width: 600px; }
-        .qb-lp .founder-photo-wrap { position: relative; width: 64px; height: 64px; border-radius: 50%; flex-shrink: 0; overflow: hidden; box-shadow: 0 6px 16px rgba(74,63,174,0.2); }
+        .qb-lp .founder-photo-wrap { position: relative; width: 64px; height: 64px; border-radius: 50%; flex-shrink: 0; overflow: hidden; box-shadow: 0 6px 16px rgba(74,63,174,0.2), 0 0 0 3px #fff, 0 0 0 5px #1FA97C; }
         .qb-lp .founder-photo { width: 100%; height: 100%; object-fit: cover; display: block; }
         .qb-lp .founder-fallback { position: absolute; inset: 0; display: none; align-items: center; justify-content: center; background: var(--purple-deep); color: #fff; font-weight: 700; font-size: 19px; font-family: var(--font-display), sans-serif; }
         .qb-lp .founder-fallback.visible { display: flex; }
@@ -1418,7 +1418,16 @@ export default function BienvenidaExperience() {
           </p>
           <div className="founder-note">
             <div className="founder-photo-wrap">
-              <div className="founder-fallback visible">JP</div>
+              <img
+                src="/marca/fundador-juan-jose.jpg"
+                alt="Juan José Palacios Villarreal, fundador de Quiubot"
+                className="founder-photo"
+                onError={(e) => {
+                  e.currentTarget.style.display = "none";
+                  e.currentTarget.nextElementSibling?.classList.add("visible");
+                }}
+              />
+              <div className="founder-fallback">JP</div>
             </div>
             <div>
               <p className="founder-quote">
