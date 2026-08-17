@@ -4,6 +4,9 @@ import { supabaseAdmin } from "@/lib/supabase";
 import { desencriptarSiHaceFalta } from "@/lib/crypto";
 import { registrarError } from "@/lib/registrarError";
 
+const MIN_IMAGENES_PRODUCTO = 1;
+const MAX_IMAGENES_PRODUCTO = 3;
+
 export async function POST(req: NextRequest) {
   const session = await auth();
   if (!session?.user?.email) {
@@ -11,10 +14,17 @@ export async function POST(req: NextRequest) {
   }
 
   const emailBusqueda = session.user.email.trim().toLowerCase();
-  const { imagen_producto_url, argumentacion } = await req.json();
+  const { imagenes_producto_urls, argumentacion } = await req.json();
 
-  if (!imagen_producto_url) {
-    return NextResponse.json({ error: "Falta la imagen del producto" }, { status: 400 });
+  if (
+    !Array.isArray(imagenes_producto_urls) ||
+    imagenes_producto_urls.length < MIN_IMAGENES_PRODUCTO ||
+    imagenes_producto_urls.length > MAX_IMAGENES_PRODUCTO
+  ) {
+    return NextResponse.json(
+      { error: `Faltan las imágenes del producto (entre ${MIN_IMAGENES_PRODUCTO} y ${MAX_IMAGENES_PRODUCTO})` },
+      { status: 400 }
+    );
   }
 
   const { data: usuario } = await supabaseAdmin
@@ -58,7 +68,7 @@ export async function POST(req: NextRequest) {
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({
         email: emailBusqueda,
-        imagen_producto_url,
+        imagenes_producto_urls,
         argumentacion,
         cloudinary_name: usuario.cloudinary_name,
         cloudinary_key: cloudinaryKeyDescifrada,
