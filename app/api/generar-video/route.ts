@@ -14,7 +14,7 @@ export async function POST(req: NextRequest) {
   }
 
   const emailBusqueda = session.user.email.trim().toLowerCase();
-  const { imagenes_producto_urls, argumentacion } = await req.json();
+  const { imagenes_producto_urls, argumentacion, texto_cta } = await req.json();
 
   if (
     !Array.isArray(imagenes_producto_urls) ||
@@ -70,6 +70,7 @@ export async function POST(req: NextRequest) {
         email: emailBusqueda,
         imagenes_producto_urls,
         argumentacion,
+        texto_cta,
         cloudinary_name: usuario.cloudinary_name,
         cloudinary_key: cloudinaryKeyDescifrada,
         cloudinary_secret: cloudinarySecretDescifrado,
