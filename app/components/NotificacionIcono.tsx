@@ -1,6 +1,6 @@
 "use client";
 import { useState } from "react";
-import { AlertTriangle, Lightbulb, BookOpen, Sparkles, Info } from "lucide-react";
+import { AlertTriangle, Lightbulb, BookOpen, Sparkles, Info, Video } from "lucide-react";
 
 // Logo real de Meta con respaldo: si el CDN principal falla, intenta el
 // segundo antes de caer a una inicial -- mismo patrón que ya usamos en
@@ -36,6 +36,9 @@ const FONDO_POR_TIPO: Record<string, string> = {
   playbook_pendiente: "#EEF2FF",
   creativos_listos: "#F3F2FE",
   campana_publicada: "#EAF2FF",
+  video_revision_pendiente: "#F3F2FE",
+  video_listo: "#DCFCE7",
+  video_error: "#FEF2F2",
 };
 const FONDO_DEFECTO = "#F3F4F6";
 
@@ -70,6 +73,15 @@ export default function NotificacionIcono({ tipo, size = 30 }: Props) {
       break;
     case "campana_publicada":
       contenido = <LogoMetaConRespaldo tamano={tamanoIcono} />;
+      break;
+    case "video_revision_pendiente":
+      contenido = <Video size={tamanoIcono} color="#534AB7" strokeWidth={2.2} aria-hidden="true" />;
+      break;
+    case "video_listo":
+      contenido = <Video size={tamanoIcono} color="#15803D" strokeWidth={2.2} aria-hidden="true" />;
+      break;
+    case "video_error":
+      contenido = <AlertTriangle size={tamanoIcono} color="#DC2626" strokeWidth={2.2} aria-hidden="true" />;
       break;
     default:
       contenido = <Info size={tamanoIcono} color="#6B7280" strokeWidth={2.2} aria-hidden="true" />;

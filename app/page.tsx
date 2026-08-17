@@ -643,7 +643,8 @@ export default function Home() {
   const notiEsClicable = (n: any) =>
     n.tipo === "playbook_pendiente" ||
     !!n.campana_id ||
-    (n.tipo === "creativos_listos" && !!n.accion_sugerida?.job_id);
+    (n.tipo === "creativos_listos" && !!n.accion_sugerida?.job_id) ||
+    (["video_revision_pendiente", "video_listo", "video_error"].includes(n.tipo) && !!n.accion_sugerida?.job_id);
 
   return (
     <div style={{ display: "flex", height: "100vh", fontFamily: "system-ui, sans-serif", background: "#f9f9f8" }}>
@@ -964,6 +965,10 @@ export default function Home() {
                         setMostrarNotis(false);
                         handleEliminarNoti(n.id); // se borra al abrirla, así no vuelve a redirigir a un lote viejo
                         router.push(`/estrategia?job=${n.accion_sugerida.job_id}`);
+                      } else if (["video_revision_pendiente", "video_listo", "video_error"].includes(n.tipo) && n.accion_sugerida?.job_id) {
+                        setMostrarNotis(false);
+                        handleEliminarNoti(n.id);
+                        router.push(`/video?job=${n.accion_sugerida.job_id}`);
                       } else if (n.campana_id) {
                         setMostrarNotis(false);
                         router.push(`/campanas?highlight=${n.campana_id}`);
