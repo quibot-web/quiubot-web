@@ -3,9 +3,11 @@ import { NextRequest, NextResponse } from "next/server";
 import { supabaseAdmin } from "@/lib/supabase";
 import { desencriptarSiHaceFalta } from "@/lib/crypto";
 import { registrarError } from "@/lib/registrarError";
+import { PLANES, type PlanId } from "@/app/lib/planesConfig";
 
 const MIN_IMAGENES_PRODUCTO = 1;
 const MAX_IMAGENES_PRODUCTO = 3;
+const LIMITE_VIDEOS_TRIAL = 2;
 
 export async function POST(req: NextRequest) {
   const session = await auth();
@@ -29,12 +31,76 @@ export async function POST(req: NextRequest) {
 
   const { data: usuario } = await supabaseAdmin
     .from("usuarios")
-    .select("id, cloudinary_name, cloudinary_key, cloudinary_secret")
+    .select("id, plan, en_trial, trial_termina_en, cloudinary_name, cloudinary_key, cloudinary_secret")
     .eq("email", emailBusqueda)
     .single();
 
   if (!usuario) {
     return NextResponse.json({ error: "Usuario no encontrado" }, { status: 404 });
+  }
+
+  // Limite de videos por mes/prueba -- a diferencia de estrategiasPorMes y
+  // creativosJobsPorMes (que siempre cuentan por mes calendario, sin
+  // importar si el usuario esta en trial), el trial tiene un limite TOTAL
+  // para todo el periodo de 7 dias, que no se reinicia cada mes. Como no
+  // hay una columna con la fecha de inicio del trial (solo
+  // trial_termina_en, el final), el inicio de la ventana se calcula
+  // restandole 7 dias a esa fecha.
+  if (usuario.en_trial) {
+    const inicioTrial = usuario.trial_termina_en
+      ? new Date(new Date(usuario.trial_termina_en).getTime() - 7 * 24 * 60 * 60 * 1000)
+      : new Date(0);
+
+    const { count } = await supabaseAdmin
+      .from("video_jobs")
+      .select("*", { count: "exact", head: true })
+      .eq("user_id", usuario.id)
+      .gte("creado_en", inicioTrial.toISOString());
+
+    if ((count ?? 0) >= LIMITE_VIDEOS_TRIAL) {
+      return NextResponse.json(
+        {
+          error: `Ya usaste tus ${LIMITE_VIDEOS_TRIAL} videos de tu prueba gratuita. Mejora tu plan para seguir generando.`,
+          limite_alcanzado: true,
+        },
+        { status: 403 }
+      );
+    }
+  } else {
+    const plan = (usuario.plan as PlanId) || "arranque";
+    const limiteVideos = PLANES[plan].videosPorMes;
+
+    if (limiteVideos === 0) {
+      return NextResponse.json(
+        {
+          error: `Generar video no está disponible en el plan ${PLANES[plan].nombre}. Mejora tu plan para acceder a esta función.`,
+          limite_alcanzado: true,
+        },
+        { status: 403 }
+      );
+    }
+
+    if (limiteVideos !== null) {
+      const inicioMes = new Date();
+      inicioMes.setDate(1);
+      inicioMes.setHours(0, 0, 0, 0);
+
+      const { count } = await supabaseAdmin
+        .from("video_jobs")
+        .select("*", { count: "exact", head: true })
+        .eq("user_id", usuario.id)
+        .gte("creado_en", inicioMes.toISOString());
+
+      if ((count ?? 0) >= limiteVideos) {
+        return NextResponse.json(
+          {
+            error: `Ya usaste tus ${limiteVideos} video${limiteVideos > 1 ? "s" : ""} de este mes en el plan ${PLANES[plan].nombre}. Mejora tu plan para seguir generando, o espera al próximo mes.`,
+            limite_alcanzado: true,
+          },
+          { status: 403 }
+        );
+      }
+    }
   }
 
   if (!usuario.cloudinary_name || !usuario.cloudinary_key || !usuario.cloudinary_secret) {
