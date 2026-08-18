@@ -435,6 +435,16 @@ function VideoContent() {
         return;
       }
       setJobId(data.job_id);
+      // En modo wizard, /estrategia necesita este job_id para poder
+      // consultar el estado real (GET /api/video-jobs/[id]) si el usuario
+      // vuelve ahí manualmente en vez de por el link de retorno o la
+      // notificación -- sin esto no tiene forma de saber que hay un video
+      // en curso ni en qué estado quedó.
+      if (modoWizard) {
+        try {
+          localStorage.setItem("quiubot_video_job_activo", data.job_id);
+        } catch {}
+      }
       const listo = await pollVideoJobHasta(data.job_id, ESTADOS_TERMINALES_GENERACION);
       if (listo.estado === "error") {
         setErrorMsg(listo.error_mensaje || "No se pudo generar el video.");
@@ -554,6 +564,9 @@ function VideoContent() {
       setTextoCta("");
     }
     setJobId(null);
+    try {
+      localStorage.removeItem("quiubot_video_job_activo");
+    } catch {}
     setSegmentos([]);
     setRegeneracionesUsadas(0);
     setVideoFinalUrl(null);

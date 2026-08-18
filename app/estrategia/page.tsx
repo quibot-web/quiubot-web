@@ -210,6 +210,47 @@ function PantallaTransicionTipo({
   );
 }
 
+// Se muestra cuando el usuario vuelve a /estrategia manualmente (no por
+// notificación ni por el link de retorno de /video) mientras el tipo
+// activo de la cola es "video" o "imagen" -- ninguno tiene una
+// sub-pantalla propia a la que restaurar, así que esto informa el estado
+// real en vez de devolverlo a "asignar-tipos" como si no hubiera nada
+// pendiente.
+function PantallaEsperandoTipoEnCurso({
+  info,
+  onActualizar,
+}: {
+  info: { tipo: TipoCreativo; detalle: string; videoJobId?: string; estadoVideo?: string };
+  onActualizar: () => void;
+}) {
+  const necesitaAccion = info.estadoVideo === "revision_pendiente" || info.estadoVideo === "regenerando_fragmento";
+  return (
+    <div style={{ maxWidth: 480, margin: "3rem auto", background: "#fff", border: "1px solid #e8e8e6", borderRadius: 20, padding: "2.5rem 2rem", textAlign: "center" }}>
+      <div style={{ width: 56, height: 56, borderRadius: "50%", background: "#F3F2FE", display: "flex", alignItems: "center", justifyContent: "center", margin: "0 auto 16px" }}>
+        <Zap size={26} color="var(--qb-purple)" strokeWidth={2} fill="var(--qb-purple)" aria-hidden="true" />
+      </div>
+      <h2 style={{ fontSize: 18, fontWeight: 700, color: "#1a1a1a", margin: "0 0 8px", textTransform: "capitalize" }}>
+        Tienes {LABEL_TIPO[info.tipo]} en curso
+      </h2>
+      <p style={{ fontSize: 14, color: "#666", lineHeight: 1.6, margin: "0 0 20px" }}>{info.detalle}</p>
+      {info.videoJobId && necesitaAccion && (
+        <a
+          href={`/video?job=${info.videoJobId}`}
+          style={{ display: "block", width: "100%", padding: "13px", borderRadius: 10, background: "var(--qb-purple)", color: "#fff", fontSize: 14, fontWeight: 700, textDecoration: "none", boxSizing: "border-box", marginBottom: 10 }}
+        >
+          Ir a revisar mi video →
+        </a>
+      )}
+      <button
+        onClick={onActualizar}
+        style={{ background: "none", border: "none", color: "#7F77DD", fontSize: 13, fontWeight: 600, cursor: "pointer" }}
+      >
+        Actualizar estado
+      </button>
+    </div>
+  );
+}
+
 // Logo real de Meta (mismo CDN que usa Integraciones), con texto de
 // respaldo si el ícono no carga -- nunca deja un ícono roto en pantalla.
 function LogoMetaInline({ size = 18 }: { size?: number }) {
@@ -766,6 +807,17 @@ function EstrategiaContent() {
   // true mientras se muestra "{tipo} listo ✓ -- ahora vamos con..." --
   // nunca se auto-continúa, el usuario siempre confirma.
   const [mostrandoTransicionTipo, setMostrandoTransicionTipo] = useState(false);
+  // Bug B: si el usuario vuelve a /estrategia manualmente (sin ?job= ni
+  // ?videoJobId=) mientras el tipo activo de la cola es "video" o "imagen",
+  // no hay una sub-pantalla propia a la que restaurar -- esto muestra el
+  // estado REAL en vez de devolverlo a "asignar-tipos" como si nada
+  // estuviera en curso.
+  const [esperandoTipoEnCurso, setEsperandoTipoEnCurso] = useState<{
+    tipo: TipoCreativo;
+    detalle: string;
+    videoJobId?: string;
+    estadoVideo?: string;
+  } | null>(null);
 
   const [analisisResultado, setAnalisisResultado] = useState<{ score: number; detalle: any[] } | null>(null);
   const [analizandoAlbum, setAnalizandoAlbum] = useState(false);
@@ -1145,6 +1197,9 @@ function EstrategiaContent() {
         const acumulado = { ...acumuladoRestaurado, [`${ci}-${ai}`]: nuevoCreativo };
         setCreativosPorClave(acumulado);
         setMostrandoTransicionTipo(true);
+        try {
+          localStorage.removeItem("quiubot_video_job_activo");
+        } catch {}
       })
       .catch((e: any) => {
         setErrorMsg(e?.message || "No se pudo recuperar el video generado.");
@@ -1157,6 +1212,113 @@ function EstrategiaContent() {
     router.replace("/estrategia");
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
+
+  // Bug B: consulta el estado REAL del tipo activo de la cola (video o
+  // imagen) cuando el usuario vuelve a /estrategia por su cuenta, en vez
+  // de asumir que no hay nada en curso y devolverlo a "asignar-tipos".
+  // Álbum no lo necesita -- ese sí tiene su propia sub-pantalla
+  // (album-selector/analisis) restaurada por pasoRestaurable.
+  function revisarTipoEnCurso() {
+    const tipoActual = colaDeTipos[tipoEnProcesoIdx];
+    if (tipoActual !== "video" && tipoActual !== "imagen") {
+      setEsperandoTipoEnCurso(null);
+      return;
+    }
+
+    if (tipoActual === "imagen") {
+      let jobImagenActivo: string | null = null;
+      try {
+        jobImagenActivo = localStorage.getItem("quiubot_job_creativos_activo");
+      } catch {}
+      setEsperandoTipoEnCurso(
+        jobImagenActivo
+          ? {
+              tipo: "imagen",
+              detalle: "Tus anuncios de imagen se están generando. No hace falta que hagas nada -- te avisamos apenas estén listos.",
+            }
+          : null
+      );
+      return;
+    }
+
+    // tipoActual === "video"
+    let videoJobId: string | null = null;
+    try {
+      videoJobId = localStorage.getItem("quiubot_video_job_activo");
+    } catch {}
+    if (!videoJobId) {
+      setEsperandoTipoEnCurso(null);
+      return;
+    }
+
+    fetch(`/api/video-jobs/${videoJobId}`)
+      .then((r) => r.json())
+      .then((data) => {
+        if (!data.ok) return;
+
+        if (data.estado === "listo" && data.video_final_url) {
+          // El video ya terminó mientras el usuario no estaba -- se arma
+          // el mismo shape de creativo que usa el retorno normal desde
+          // /video, sin obligarlo a pasar por ahí de nuevo.
+          let anuncioRef: string | null = null;
+          try {
+            anuncioRef = localStorage.getItem("quiubot_video_anuncio_ref");
+          } catch {}
+          const [ciStr, aiStr] = (anuncioRef || "0-0").split("-");
+          const ci = parseInt(ciStr, 10) || 0;
+          const ai = parseInt(aiStr, 10) || 0;
+          const anuncio = estrategiaSeleccionada?.conjuntos?.[ci]?.anuncios?.[ai];
+          const nuevoCreativo = {
+            id: videoJobId,
+            tipo: "video",
+            origen: "video",
+            url_imagen: data.video_final_url,
+            titulo: anuncio?.copy?.titulo || "",
+            texto: anuncio?.copy?.texto || "",
+            cta: anuncio?.copy?.cta || "Comprar ahora",
+            conjunto_nombre: anuncio ? estrategiaSeleccionada.conjuntos[ci].nombre : "",
+            anuncio_nombre: anuncio?.nombre || "",
+            argumentacion: anuncio?.argumentacion || "",
+          };
+          try {
+            localStorage.removeItem("quiubot_video_anuncio_ref");
+            localStorage.removeItem("quiubot_video_job_activo");
+          } catch {}
+          setEsperandoTipoEnCurso(null);
+          marcarTipoCompletado({ ...creativosPorClave, [`${ci}-${ai}`]: nuevoCreativo });
+          return;
+        }
+
+        if (data.estado === "error") {
+          setEsperandoTipoEnCurso({
+            tipo: "video",
+            detalle: `Hubo un problema generando tu video: ${data.error_mensaje || "intenta de nuevo desde la asignación de tipos."}`,
+          });
+          return;
+        }
+
+        const detallePorEstado: Record<string, string> = {
+          generando_fragmentos: "Se está generando (puede tardar hasta 20 minutos). No hace falta que hagas nada -- te avisamos apenas esté listo para revisar.",
+          revision_pendiente: "Tus 4 fragmentos ya están listos para revisar.",
+          regenerando_fragmento: "Se está regenerando un fragmento.",
+          uniendo: "Se está uniendo, ya casi está listo.",
+        };
+        setEsperandoTipoEnCurso({
+          tipo: "video",
+          detalle: detallePorEstado[data.estado] || "Tu video sigue en proceso.",
+          videoJobId: videoJobId as string,
+          estadoVideo: data.estado,
+        });
+      })
+      .catch(() => {});
+  }
+
+  useEffect(() => {
+    if (!progresoListo) return;
+    if (searchParams.get("job") || searchParams.get("videoJobId")) return; // esos flujos ya se encargan de su propia restauración
+    revisarTipoEnCurso();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [progresoListo]);
 
   useEffect(() => {
     fetch("/api/objetivos-activos")
@@ -1303,13 +1465,24 @@ function EstrategiaContent() {
       setStep("creativos");
     } else {
       setTipoEnProcesoIdx(nuevoIdx);
-      dispararTipo(colaDeTipos[nuevoIdx]);
+      // colaDeTipos y creativosPorClave (state) ya están al día acá -- esta
+      // función corre en respuesta a un click posterior, no justo después
+      // de sus propios setters como pasa en handleConfirmarAsignaciones.
+      dispararTipo(colaDeTipos[nuevoIdx], colaDeTipos, nuevoIdx, creativosPorClave);
     }
   }
 
-  function dispararTipo(tipo: TipoCreativo) {
-    if (tipo === "video") dispararVideo();
-    else if (tipo === "imagen") dispararImagen();
+  // Bug A (closures obsoletos): cola/idx/acumulado se reciben como
+  // parámetros explícitos en vez de leerse de colaDeTipos/tipoEnProcesoIdx/
+  // creativosPorClave (React state) -- estas funciones se llaman
+  // SINCRÓNICAMENTE justo después de sus propios setState en
+  // handleConfirmarAsignaciones, y React no aplica esos setState hasta el
+  // siguiente render. Leer el state directo ahí persistía valores viejos
+  // (ej. colaDeTipos=[] en vez de ["video","imagen"]) en localStorage, y
+  // por eso la restauración desde /video volvía con la cola vacía.
+  function dispararTipo(tipo: TipoCreativo, cola: TipoCreativo[], idx: number, acumulado: Record<string, any>) {
+    if (tipo === "video") dispararVideo(cola, idx, acumulado);
+    else if (tipo === "imagen") dispararImagen(cola, idx, acumulado);
     else dispararAlbum();
   }
 
@@ -1326,13 +1499,15 @@ function EstrategiaContent() {
     setTipoEnProcesoIdx(0);
     setCreativosPorClave({});
     if (cola.length === 0) return; // no debería pasar (default es "imagen"), guarda extra
-    dispararTipo(cola[0]);
+    // cola/0/{} explícitos -- ver comentario en dispararTipo. Los setters de
+    // arriba (setColaDeTipos, etc.) todavía no aplicaron en este mismo tick.
+    dispararTipo(cola[0], cola, 0, {});
   };
 
   // Genera imagen con IA solo para los anuncios asignados a "imagen" --
   // un único job (mismo patrón que handleRegenerarUno, generalizado de 1 a
   // N anuncios), se reparte por posición al terminar.
-  const dispararImagen = async () => {
+  const dispararImagen = async (cola: TipoCreativo[], idx: number, acumuladoInicial: Record<string, any>) => {
     const { estrategiaFiltrada, claves } = filtrarEstrategiaPorTipo("imagen", tiposPorAnuncio);
     setAnalisisResultado(null);
     setCargandoCreativos(true);
@@ -1371,16 +1546,16 @@ function EstrategiaContent() {
       // más queda pendiente después de este job.
       try {
         localStorage.setItem("quiubot_job_creativos_activo", data.job_id);
-        localStorage.setItem("quiubot_cola_de_tipos", JSON.stringify(colaDeTipos));
-        localStorage.setItem("quiubot_tipo_en_proceso_idx", String(tipoEnProcesoIdx));
+        localStorage.setItem("quiubot_cola_de_tipos", JSON.stringify(cola));
+        localStorage.setItem("quiubot_tipo_en_proceso_idx", String(idx));
         localStorage.setItem("quiubot_tipos_por_anuncio", JSON.stringify(tiposPorAnuncio));
-        localStorage.setItem("quiubot_creativos_por_clave", JSON.stringify(creativosPorClave));
+        localStorage.setItem("quiubot_creativos_por_clave", JSON.stringify(acumuladoInicial));
       } catch {}
       const creativosListos = await pollJobHasta(data.job_id, (p) =>
         setProgresoCreativos({ completados: p.creativos.length, total: p.total_creativos, parciales: p.creativos })
       );
       localStorage.removeItem("quiubot_job_creativos_activo");
-      const acumulado = { ...creativosPorClave };
+      const acumulado = { ...acumuladoInicial };
       claves.forEach((clave, i) => {
         if (creativosListos[i]) acumulado[clave] = { ...creativosListos[i], origen: "imagen" };
       });
@@ -1558,17 +1733,17 @@ function EstrategiaContent() {
   // precarga y el creativo final que vuelve sean los de ESE anuncio, no
   // conjuntos[0].anuncios[0] a lo bruto) y el estado de la cola (para que
   // /estrategia sepa qué sigue cuando el usuario vuelva).
-  const dispararVideo = () => {
+  const dispararVideo = (cola: TipoCreativo[], idx: number, acumuladoInicial: Record<string, any>) => {
     const claveVideo = Object.keys(tiposPorAnuncio).find((k) => tiposPorAnuncio[k] === "video");
     try {
       const imagenesParaVideo = imagenesBase64.length > 0 ? imagenesBase64 : imagenesBase64Persistidas;
       localStorage.setItem("quiubot_imagenes_producto_base64", JSON.stringify(imagenesParaVideo));
       localStorage.setItem("quiubot_descripcion_visual_producto", descripcionVisual || "");
       if (claveVideo) localStorage.setItem("quiubot_video_anuncio_ref", claveVideo);
-      localStorage.setItem("quiubot_cola_de_tipos", JSON.stringify(colaDeTipos));
-      localStorage.setItem("quiubot_tipo_en_proceso_idx", String(tipoEnProcesoIdx));
+      localStorage.setItem("quiubot_cola_de_tipos", JSON.stringify(cola));
+      localStorage.setItem("quiubot_tipo_en_proceso_idx", String(idx));
       localStorage.setItem("quiubot_tipos_por_anuncio", JSON.stringify(tiposPorAnuncio));
-      localStorage.setItem("quiubot_creativos_por_clave", JSON.stringify(creativosPorClave));
+      localStorage.setItem("quiubot_creativos_por_clave", JSON.stringify(acumuladoInicial));
     } catch {}
     router.push("/video?returnTo=estrategia");
   };
@@ -1806,7 +1981,9 @@ function EstrategiaContent() {
           Paso {NUMERO_DE_PASO[step]} de 6
         </p>
 
-        {mostrandoTransicionTipo ? (
+        {esperandoTipoEnCurso ? (
+          <PantallaEsperandoTipoEnCurso info={esperandoTipoEnCurso} onActualizar={revisarTipoEnCurso} />
+        ) : mostrandoTransicionTipo ? (
           <PantallaTransicionTipo
             tipoCompletado={colaDeTipos[tipoEnProcesoIdx]}
             tipoSiguiente={colaDeTipos[tipoEnProcesoIdx + 1] ?? null}
