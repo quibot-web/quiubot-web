@@ -1,6 +1,7 @@
 "use client";
 import { useEffect, useRef, useState, Suspense } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
+import { Dna } from "lucide-react";
 import CargandoQuiubot from "@/app/components/CargandoQuiubot";
 
 const MIN_IMAGENES = 1;
@@ -102,6 +103,97 @@ function VideoPlayerGrande({
   );
 }
 
+// 4 etapas simuladas -- no hay progreso real disponible del lado del
+// backend (video_jobs.segmentos solo se escribe TODO junto al final, no
+// fragmento por fragmento), así que esto avanza por tiempo transcurrido,
+// no por datos reales. Es honesto igual: nunca dice "listo" antes de
+// tiempo, solo da sensación de trabajo activo mientras se espera.
+const ETAPAS_GENERACION = [
+  { titulo: "Generando el hook", detalle: "Los primeros 5 segundos — el gancho que detiene el scroll." },
+  { titulo: "Creando el primer fragmento de contenido", detalle: "Tu producto en acción." },
+  { titulo: "Creando el segundo fragmento de contenido", detalle: "Otro ángulo de tu producto." },
+  { titulo: "Armando el cierre", detalle: "El fragmento final, con tu llamado a la acción." },
+];
+const DURACION_ESTIMADA_SEG = 16 * 60;
+
+// Reemplaza el spinner de pantalla completa que antes atrapaba al usuario
+// ~17 minutos: esto vive en una card normal (no minHeight:100vh), deja el
+// resto de la página (el "← Volver" de arriba) visible, y explícitamente
+// invita a salir en vez de sugerir que hay que quedarse mirando.
+function EsperaGeneracionVideo() {
+  const [segundos, setSegundos] = useState(0);
+
+  useEffect(() => {
+    const intervalo = setInterval(() => setSegundos((s) => s + 1), 1000);
+    return () => clearInterval(intervalo);
+  }, []);
+
+  const etapaActiva = Math.min(
+    ETAPAS_GENERACION.length - 1,
+    Math.floor(segundos / (DURACION_ESTIMADA_SEG / ETAPAS_GENERACION.length))
+  );
+
+  return (
+    <div>
+      <div style={{ display: "flex", alignItems: "center", gap: 14, marginBottom: 6 }}>
+        <div style={{ width: 40, height: 40, borderRadius: "50%", background: "#F3F2FE", display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0 }}>
+          <div style={{ width: 18, height: 18, border: "2.5px solid #ECE9F7", borderTopColor: "#7F77DD", borderRadius: "50%", animation: "girarVideo 0.9s linear infinite" }} />
+        </div>
+        <div>
+          <p style={{ fontSize: 15, fontWeight: 600, color: "#1a1a1a", margin: 0 }}>{ETAPAS_GENERACION[etapaActiva].titulo}...</p>
+          <p style={{ fontSize: 12.5, color: "#999", margin: "2px 0 0" }}>{ETAPAS_GENERACION[etapaActiva].detalle}</p>
+        </div>
+      </div>
+
+      <div style={{ display: "flex", flexDirection: "column", gap: 10, margin: "20px 0" }}>
+        {ETAPAS_GENERACION.map((etapa, i) => {
+          const completada = i < etapaActiva;
+          const activa = i === etapaActiva;
+          return (
+            <div key={etapa.titulo} style={{ display: "flex", alignItems: "center", gap: 10 }}>
+              <div
+                style={{
+                  width: 22, height: 22, borderRadius: "50%", flexShrink: 0,
+                  display: "flex", alignItems: "center", justifyContent: "center", fontSize: 11, fontWeight: 700,
+                  background: completada ? "#534AB7" : activa ? "#F3F2FE" : "#F1F1F0",
+                  color: completada ? "#fff" : activa ? "#534AB7" : "#bbb",
+                  border: activa ? "2px solid #534AB7" : "none",
+                }}
+              >
+                {completada ? "✓" : i + 1}
+              </div>
+              <div style={{ flex: 1, height: 5, borderRadius: 3, background: "#ECE9F7", overflow: "hidden" }}>
+                <div
+                  style={{
+                    height: "100%", borderRadius: 3, background: "#7F77DD",
+                    width: completada ? "100%" : activa ? "45%" : "0%",
+                    transition: "width 0.6s ease",
+                    animation: activa ? "pulsoEtapa 1.6s ease-in-out infinite" : "none",
+                  }}
+                />
+              </div>
+            </div>
+          );
+        })}
+      </div>
+
+      <div style={{ background: "#F9F9F8", borderRadius: 10, padding: "0.9rem 1rem", fontSize: 12.5, color: "#666", lineHeight: 1.5, marginBottom: 16 }}>
+        Esto tarda unos 15-20 minutos en total. <strong>No hace falta que te quedes esperando</strong> —
+        puedes cerrar esta pestaña o seguir navegando la app, te avisamos apenas los fragmentos estén listos para revisar.
+      </div>
+
+      <a
+        href="/"
+        style={{ display: "block", textAlign: "center", background: "#fff", border: "1px solid #e0e0e0", color: "#534AB7", padding: 12, borderRadius: 10, fontSize: 14, fontWeight: 600, textDecoration: "none" }}
+      >
+        Volver al inicio mientras se genera
+      </a>
+
+      <style>{`@keyframes pulsoEtapa { 0%, 100% { opacity: 1; } 50% { opacity: 0.55; } }`}</style>
+    </div>
+  );
+}
+
 function VideoContent() {
   const searchParams = useSearchParams();
   const router = useRouter();
@@ -120,6 +212,12 @@ function VideoContent() {
   // que no trae el ?returnTo= en la URL.
   const [modoWizard, setModoWizard] = useState(false);
   const [precargandoFotos, setPrecargandoFotos] = useState(false);
+  // Mismo gate que /estrategia (estrategia/page.tsx:1362-1396) -- /video es
+  // standalone y no pasa por ese chequeo, así que alguien podría llegar
+  // acá con un link viejo/guardado sin nunca haber sintetizado su ADN.
+  // Aunque venga con ?returnTo=estrategia (donde ya se pasó ese gate en
+  // el wizard), se revisa igual del lado de /video, por si acaso.
+  const [tieneAdn, setTieneAdn] = useState<boolean | null>(null);
   const [segmentos, setSegmentos] = useState<Segmento[]>([]);
   const [regeneracionesUsadas, setRegeneracionesUsadas] = useState(0);
   const [videoFinalUrl, setVideoFinalUrl] = useState<string | null>(null);
@@ -129,6 +227,13 @@ function VideoContent() {
   const [progreso, setProgreso] = useState(0);
   const fileInputRef = useRef<HTMLInputElement | null>(null);
   const videoRef = useRef<HTMLVideoElement | null>(null);
+
+  useEffect(() => {
+    fetch("/api/marca-adn")
+      .then((r) => r.json())
+      .then((data) => setTieneAdn(!!data.tieneAdn))
+      .catch(() => setTieneAdn(false));
+  }, []);
 
   // Si el usuario llega desde una notificación (?job=<id>), retoma el
   // estado real del job en vez de arrancar el formulario desde cero.
@@ -426,6 +531,45 @@ function VideoContent() {
     setProgreso(0);
   };
 
+  // Mismo gate que estrategia/page.tsx:1362-1396 -- mientras se confirma
+  // si tiene ADN de marca, no mostramos ni el formulario ni el bloqueo
+  // (evita el parpadeo de "bloqueado" a alguien que sí puede usarlo).
+  if (tieneAdn === null) {
+    return <CargandoQuiubot mensaje="Verificando tu marca" />;
+  }
+
+  if (tieneAdn === false) {
+    return (
+      <div style={{ minHeight: "100vh", background: "#f9f9f8", fontFamily: "system-ui, sans-serif", display: "flex", alignItems: "center", justifyContent: "center", padding: "2rem" }}>
+        <div style={{ maxWidth: 480, width: "100%", background: "#fff", borderRadius: 20, border: "1px solid #e8e8e6", padding: "2.5rem 2rem", textAlign: "center", boxShadow: "0 8px 30px rgba(0,0,0,0.06)" }}>
+          <div style={{ width: 64, height: 64, borderRadius: "50%", background: "#F3F2FE", display: "flex", alignItems: "center", justifyContent: "center", margin: "0 auto 1.25rem" }}>
+            <Dna size={28} color="#534AB7" strokeWidth={2} aria-hidden="true" />
+          </div>
+          <h1 style={{ fontSize: 20, fontWeight: 700, color: "#1a1a1a", margin: "0 0 10px" }}>
+            Primero, sintetiza el ADN de tu marca
+          </h1>
+          <p style={{ fontSize: 14, color: "#666", lineHeight: 1.6, margin: "0 0 24px" }}>
+            El Motor de Estrategia usa tu ADN de marca (paleta, tipografía, tono, estilo visual) para que cada
+            campaña y cada creativo se sientan hechos por ti — no genéricos. Es un paso único de unos minutos, y
+            después queda listo para siempre.
+          </p>
+          <a
+            href="/marca"
+            style={{ display: "block", width: "100%", padding: "13px", borderRadius: 10, background: "#534AB7", color: "#fff", fontSize: 14, fontWeight: 700, textDecoration: "none", boxSizing: "border-box" }}
+          >
+            Sintetizar mi ADN de marca
+          </a>
+          <button
+            onClick={() => router.push("/")}
+            style={{ display: "block", width: "100%", padding: "12px", borderRadius: 10, border: "1px solid #e8e8e6", background: "#fff", color: "#666", fontSize: 13, fontWeight: 600, marginTop: 10, cursor: "pointer" }}
+          >
+            Volver al panel principal
+          </button>
+        </div>
+      </div>
+    );
+  }
+
   const pageStyle: React.CSSProperties = {
     minHeight: "100vh",
     background: "#f9f9f8",
@@ -554,7 +698,7 @@ function VideoContent() {
 
         {paso === "generando" && (
           <div style={cardStyle}>
-            <CargandoQuiubot mensaje="Generando los 4 fragmentos de tu video (puede tardar hasta 20 minutos)" />
+            <EsperaGeneracionVideo />
           </div>
         )}
 
