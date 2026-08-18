@@ -31,7 +31,7 @@ export async function POST(req: NextRequest) {
 
   const { data: usuario } = await supabaseAdmin
     .from("usuarios")
-    .select("id, plan, en_trial, trial_termina_en, cloudinary_name, cloudinary_key, cloudinary_secret")
+    .select("id, plan, en_trial, trial_termina_en, cloudinary_name, cloudinary_key, cloudinary_secret, openai_key")
     .eq("email", emailBusqueda)
     .single();
 
@@ -123,6 +123,22 @@ export async function POST(req: NextRequest) {
     );
   }
 
+  // openai_key es opcional (BYOK, mismo patrón que el ADN de marca): si el
+  // usuario no la tiene guardada, se manda null y n8n sigue funcionando con
+  // las plantillas de siempre, sin el paso de guion con IA. Un error al
+  // descifrar tampoco debe tumbar la generación de video -- se degrada a
+  // null en vez de bloquear con un 500 como sí hace Cloudinary (que es
+  // obligatorio para este flujo).
+  let openaiKeyDescifrada: string | null = null;
+  if (usuario.openai_key) {
+    try {
+      openaiKeyDescifrada = desencriptarSiHaceFalta(usuario.openai_key);
+    } catch (err) {
+      console.error("Error al descifrar openai_key (se continúa sin guion de IA):", err);
+      openaiKeyDescifrada = null;
+    }
+  }
+
   const n8nUrl = process.env.N8N_WEBHOOK_GENERAR_VIDEO;
   if (!n8nUrl) {
     return NextResponse.json({ error: "Falta configurar N8N_WEBHOOK_GENERAR_VIDEO en el servidor." }, { status: 500 });
@@ -140,6 +156,7 @@ export async function POST(req: NextRequest) {
         cloudinary_name: usuario.cloudinary_name,
         cloudinary_key: cloudinaryKeyDescifrada,
         cloudinary_secret: cloudinarySecretDescifrado,
+        openai_key: openaiKeyDescifrada,
       }),
     });
 
