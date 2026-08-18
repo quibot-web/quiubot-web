@@ -701,7 +701,7 @@ function EstrategiaContent() {
   const [regenerandoIndices, setRegenerandoIndices] = useState<Record<number, boolean>>({});
   const [imagenAmpliada, setImagenAmpliada] = useState<string | null>(null);
 
-  const [fuenteCreativos, setFuenteCreativos] = useState<"ia" | "album" | null>(null);
+  const [fuenteCreativos, setFuenteCreativos] = useState<"ia" | "album" | "video" | null>(null);
   const [analisisResultado, setAnalisisResultado] = useState<{ score: number; detalle: any[] } | null>(null);
   const [analizandoAlbum, setAnalizandoAlbum] = useState(false);
 
@@ -752,9 +752,9 @@ function EstrategiaContent() {
   // prioridad si el usuario llego con ?job= en la URL, ya que ese es un
   // caso mas especifico). Se corre una sola vez.
   useEffect(() => {
-    if (searchParams.get("job")) {
-      // Si llego por notificacion, ese flujo especifico maneja su propia
-      // restauracion -- no pisamos nada aqui.
+    if (searchParams.get("job") || searchParams.get("videoJobId")) {
+      // Si llego por notificacion o de vuelta desde /video, esos flujos
+      // especificos manejan su propia restauracion -- no pisamos nada aqui.
       setProgresoListo(true);
       return;
     }
@@ -924,6 +924,72 @@ function EstrategiaContent() {
       .finally(() => setCargandoCreativos(false));
 
     // limpia el ?job= de la URL para que un refresh no repita el polling
+    router.replace("/estrategia");
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
+  // Si el usuario vuelve de /video con su video ya unido
+  // (?step=6&videoJobId=<id>), arma el creativo y lo lleva directo al
+  // paso 6 -- /video nunca conoce el shape de "creativo" de este wizard,
+  // esa traduccion vive aca.
+  useEffect(() => {
+    const videoJobId = searchParams.get("videoJobId");
+    if (!videoJobId) return;
+
+    const descGuardada = localStorage.getItem("quiubot_descripcion_visual_producto");
+    if (descGuardada) setDescripcionVisual(descGuardada);
+    const imgsGuardadas = localStorage.getItem("quiubot_imagenes_producto_base64");
+    if (imgsGuardadas) {
+      try {
+        setImagenesBase64Persistidas(JSON.parse(imgsGuardadas));
+      } catch {}
+    }
+
+    const estrategiaGuardada = localStorage.getItem("quiubot_estrategia_seleccionada");
+    let estrategiaRestaurada: any = null;
+    if (estrategiaGuardada) {
+      try {
+        estrategiaRestaurada = JSON.parse(estrategiaGuardada);
+        setEstrategiaSeleccionada(estrategiaRestaurada);
+      } catch {}
+    }
+
+    setCargandoCreativos(true);
+    setStep("creativos");
+    setErrorMsg(null);
+
+    fetch(`/api/video-jobs/${videoJobId}`)
+      .then((r) => r.json())
+      .then((data) => {
+        if (!data.ok || data.estado !== "listo" || !data.video_final_url) {
+          throw new Error(data.error || "Este video todavía no está listo.");
+        }
+        // Mismo angulo que usa handleConfirmarSeleccionAlbum para el
+        // primer anuncio recomendado -- el video es un solo creativo,
+        // reemplaza el lote completo (no convive con otros).
+        const primerAnuncio = estrategiaRestaurada?.conjuntos?.[0]?.anuncios?.[0];
+        setFuenteCreativos("video");
+        setCreativos([
+          {
+            id: videoJobId,
+            tipo: "video",
+            url_imagen: data.video_final_url,
+            titulo: primerAnuncio?.copy?.titulo || "",
+            texto: primerAnuncio?.copy?.texto || "",
+            cta: primerAnuncio?.copy?.cta || "Comprar ahora",
+            conjunto_nombre: primerAnuncio ? estrategiaRestaurada.conjuntos[0].nombre : "",
+            anuncio_nombre: primerAnuncio?.nombre || "",
+            argumentacion: primerAnuncio?.argumentacion || "",
+          },
+        ]);
+      })
+      .catch((e: any) => {
+        setErrorMsg(e?.message || "No se pudo recuperar el video generado.");
+        setCreativos([]);
+      })
+      .finally(() => setCargandoCreativos(false));
+
+    // limpia el ?step=6&videoJobId= de la URL para que un refresh no repita esto
     router.replace("/estrategia");
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
@@ -1155,6 +1221,20 @@ function EstrategiaContent() {
     } finally {
       setCargandoAlbum(false);
     }
+  };
+
+  // /video es standalone (no vive dentro de este archivo a propósito).
+  // Antes de salir, nos aseguramos de que las 2 claves dedicadas que /video
+  // va a leer en modo precargado (returnTo=estrategia) estén al día -- casi
+  // siempre ya lo están a esta altura del wizard, esto es solo defensivo.
+  // quiubot_estrategia_seleccionada ya se guarda desde handleSeleccionarEstrategia.
+  const handleIrAVideo = () => {
+    try {
+      const imagenesParaVideo = imagenesBase64.length > 0 ? imagenesBase64 : imagenesBase64Persistidas;
+      localStorage.setItem("quiubot_imagenes_producto_base64", JSON.stringify(imagenesParaVideo));
+      localStorage.setItem("quiubot_descripcion_visual_producto", descripcionVisual || "");
+    } catch {}
+    router.push("/video?returnTo=estrategia");
   };
 
   const abrirPickerParaSlot = (idx: number) => setSlotEligiendo(idx);
@@ -1686,13 +1766,20 @@ function EstrategiaContent() {
               ← Volver a estrategias
             </button>
             <p style={{ fontSize: 15, fontWeight: 600, color: "#1a1a1a", marginBottom: 16 }}>5. ¿Cómo quieres tus creativos?</p>
-            <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 16 }}>
+            <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr 1fr", gap: 16 }}>
               <div onClick={handleGenerarConIA} style={{ padding: "2rem", borderRadius: 16, border: "1px solid #e8e8e6", background: "#fff", cursor: "pointer", textAlign: "center" }}>
                 <div style={{ width: 56, height: 56, borderRadius: "50%", background: "#F3F2FE", display: "flex", alignItems: "center", justifyContent: "center", margin: "0 auto 12px" }}>
                   <Bot size={26} color="#534AB7" strokeWidth={2} aria-hidden="true" />
                 </div>
-                <div style={{ fontWeight: 600, marginBottom: 6 }}>Generar con IA</div>
+                <div style={{ fontWeight: 600, marginBottom: 6 }}>Imagen con IA</div>
                 <div style={{ fontSize: 12, color: "#666" }}>Crea imágenes y copys nuevos automáticamente según tu estrategia.</div>
+              </div>
+              <div onClick={handleIrAVideo} style={{ padding: "2rem", borderRadius: 16, border: "1px solid #e8e8e6", background: "#fff", cursor: "pointer", textAlign: "center" }}>
+                <div style={{ width: 56, height: 56, borderRadius: "50%", background: "#F3F2FE", display: "flex", alignItems: "center", justifyContent: "center", margin: "0 auto 12px" }}>
+                  <Video size={26} color="#534AB7" strokeWidth={2} aria-hidden="true" />
+                </div>
+                <div style={{ fontWeight: 600, marginBottom: 6 }}>Video con IA</div>
+                <div style={{ fontSize: 12, color: "#666" }}>Genera un video de 4 fragmentos con tus fotos, listo para Meta Ads.</div>
               </div>
               <div onClick={handleUsarAlbum} style={{ padding: "2rem", borderRadius: 16, border: "1px solid #e8e8e6", background: "#fff", cursor: "pointer", textAlign: "center" }}>
                 <div style={{ width: 56, height: 56, borderRadius: "50%", background: "#F3F2FE", display: "flex", alignItems: "center", justifyContent: "center", margin: "0 auto 12px" }}>
@@ -1992,7 +2079,7 @@ function EstrategiaContent() {
                         )}
 
                         <div style={{ padding: "1rem", display: "flex", flexDirection: "column", gap: 8 }}>
-                          {fuenteCreativos === "album" ? (
+                          {fuenteCreativos === "album" || fuenteCreativos === "video" ? (
                             <>
                               <input placeholder="Título del anuncio" value={c.titulo} onChange={(e) => actualizarCreativo(idx, "titulo", e.target.value)} style={{ padding: 8, borderRadius: 6, border: "1px solid #e0e0e0", fontSize: 13, fontWeight: 600 }} />
                               <textarea placeholder="Texto / descripción" value={c.texto} onChange={(e) => actualizarCreativo(idx, "texto", e.target.value)} style={{ padding: 8, borderRadius: 6, border: "1px solid #e0e0e0", fontSize: 12, resize: "none", minHeight: 50 }} />
