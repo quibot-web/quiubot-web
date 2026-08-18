@@ -221,9 +221,30 @@ function PantallaEsperandoTipoEnCurso({
   onActualizar,
 }: {
   info: { tipo: TipoCreativo; detalle: string; videoJobId?: string; estadoVideo?: string };
-  onActualizar: () => void;
+  onActualizar: () => Promise<string | null>;
 }) {
+  const [verificando, setVerificando] = useState(false);
+  const [sinCambios, setSinCambios] = useState(false);
   const necesitaAccion = info.estadoVideo === "revision_pendiente" || info.estadoVideo === "regenerando_fragmento";
+
+  // Firma del estado actual antes de refrescar -- para imagen no hay un
+  // "estadoVideo" granular, así que se usa un valor fijo mientras siga en
+  // curso. Si el resultado del refresh trae la misma firma, no hubo
+  // cambios y hay que avisarlo explícitamente (si no, el click parece
+  // no haber hecho nada).
+  const firmaActual = info.tipo === "video" ? info.estadoVideo ?? null : "imagen-en-curso";
+
+  async function handleActualizar() {
+    setVerificando(true);
+    setSinCambios(false);
+    const resultado = await onActualizar();
+    setVerificando(false);
+    if (resultado !== null && resultado === firmaActual) {
+      setSinCambios(true);
+      setTimeout(() => setSinCambios(false), 3500);
+    }
+  }
+
   return (
     <div style={{ maxWidth: 480, margin: "3rem auto", background: "#fff", border: "1px solid #e8e8e6", borderRadius: 20, padding: "2.5rem 2rem", textAlign: "center" }}>
       <div style={{ width: 56, height: 56, borderRadius: "50%", background: "#F3F2FE", display: "flex", alignItems: "center", justifyContent: "center", margin: "0 auto 16px" }}>
@@ -241,12 +262,27 @@ function PantallaEsperandoTipoEnCurso({
           Ir a revisar mi video →
         </a>
       )}
-      <button
-        onClick={onActualizar}
-        style={{ background: "none", border: "none", color: "#7F77DD", fontSize: 13, fontWeight: 600, cursor: "pointer" }}
+      {/* Salida explícita, mismo estilo/comportamiento que "Salir -- te
+          avisamos cuando esté listo" en /video -- el usuario no debe
+          quedar con la única opción de reintentar el chequeo. */}
+      <a
+        href="/"
+        style={{ display: "block", width: "100%", padding: "13px", borderRadius: 10, background: "var(--qb-purple)", color: "#fff", fontSize: 14, fontWeight: 700, textDecoration: "none", boxSizing: "border-box", marginBottom: 10 }}
       >
-        Actualizar estado
+        Volver al inicio →
+      </a>
+      <button
+        onClick={handleActualizar}
+        disabled={verificando}
+        style={{ background: "none", border: "none", color: "#7F77DD", fontSize: 13, fontWeight: 600, cursor: verificando ? "default" : "pointer", opacity: verificando ? 0.7 : 1 }}
+      >
+        {verificando ? "Verificando…" : "Actualizar estado"}
       </button>
+      {sinCambios && (
+        <p style={{ fontSize: 12, color: "#999", margin: "10px 0 0" }}>
+          Todavía se está generando -- sin cambios por ahora.
+        </p>
+      )}
     </div>
   );
 }
@@ -1218,11 +1254,14 @@ function EstrategiaContent() {
   // de asumir que no hay nada en curso y devolverlo a "asignar-tipos".
   // Álbum no lo necesita -- ese sí tiene su propia sub-pantalla
   // (album-selector/analisis) restaurada por pasoRestaurable.
-  function revisarTipoEnCurso() {
+  // Async y con valor de retorno solo para que el botón "Actualizar estado"
+  // pueda mostrar un estado de carga y detectar "sin cambios" -- la
+  // ramificación/diagnóstico del bug B de abajo queda intacta, no se toca.
+  async function revisarTipoEnCurso(): Promise<string | null> {
     const tipoActual = colaDeTipos[tipoEnProcesoIdx];
     if (tipoActual !== "video" && tipoActual !== "imagen") {
       setEsperandoTipoEnCurso(null);
-      return;
+      return null;
     }
 
     if (tipoActual === "imagen") {
@@ -1238,7 +1277,7 @@ function EstrategiaContent() {
             }
           : null
       );
-      return;
+      return jobImagenActivo ? "imagen-en-curso" : null;
     }
 
     // tipoActual === "video"
@@ -1248,69 +1287,71 @@ function EstrategiaContent() {
     } catch {}
     if (!videoJobId) {
       setEsperandoTipoEnCurso(null);
-      return;
+      return null;
     }
 
-    fetch(`/api/video-jobs/${videoJobId}`)
-      .then((r) => r.json())
-      .then((data) => {
-        if (!data.ok) return;
+    try {
+      const r = await fetch(`/api/video-jobs/${videoJobId}`);
+      const data = await r.json();
+      if (!data.ok) return null;
 
-        if (data.estado === "listo" && data.video_final_url) {
-          // El video ya terminó mientras el usuario no estaba -- se arma
-          // el mismo shape de creativo que usa el retorno normal desde
-          // /video, sin obligarlo a pasar por ahí de nuevo.
-          let anuncioRef: string | null = null;
-          try {
-            anuncioRef = localStorage.getItem("quiubot_video_anuncio_ref");
-          } catch {}
-          const [ciStr, aiStr] = (anuncioRef || "0-0").split("-");
-          const ci = parseInt(ciStr, 10) || 0;
-          const ai = parseInt(aiStr, 10) || 0;
-          const anuncio = estrategiaSeleccionada?.conjuntos?.[ci]?.anuncios?.[ai];
-          const nuevoCreativo = {
-            id: videoJobId,
-            tipo: "video",
-            origen: "video",
-            url_imagen: data.video_final_url,
-            titulo: anuncio?.copy?.titulo || "",
-            texto: anuncio?.copy?.texto || "",
-            cta: anuncio?.copy?.cta || "Comprar ahora",
-            conjunto_nombre: anuncio ? estrategiaSeleccionada.conjuntos[ci].nombre : "",
-            anuncio_nombre: anuncio?.nombre || "",
-            argumentacion: anuncio?.argumentacion || "",
-          };
-          try {
-            localStorage.removeItem("quiubot_video_anuncio_ref");
-            localStorage.removeItem("quiubot_video_job_activo");
-          } catch {}
-          setEsperandoTipoEnCurso(null);
-          marcarTipoCompletado({ ...creativosPorClave, [`${ci}-${ai}`]: nuevoCreativo });
-          return;
-        }
-
-        if (data.estado === "error") {
-          setEsperandoTipoEnCurso({
-            tipo: "video",
-            detalle: `Hubo un problema generando tu video: ${data.error_mensaje || "intenta de nuevo desde la asignación de tipos."}`,
-          });
-          return;
-        }
-
-        const detallePorEstado: Record<string, string> = {
-          generando_fragmentos: "Se está generando (puede tardar hasta 20 minutos). No hace falta que hagas nada -- te avisamos apenas esté listo para revisar.",
-          revision_pendiente: "Tus 4 fragmentos ya están listos para revisar.",
-          regenerando_fragmento: "Se está regenerando un fragmento.",
-          uniendo: "Se está uniendo, ya casi está listo.",
+      if (data.estado === "listo" && data.video_final_url) {
+        // El video ya terminó mientras el usuario no estaba -- se arma
+        // el mismo shape de creativo que usa el retorno normal desde
+        // /video, sin obligarlo a pasar por ahí de nuevo.
+        let anuncioRef: string | null = null;
+        try {
+          anuncioRef = localStorage.getItem("quiubot_video_anuncio_ref");
+        } catch {}
+        const [ciStr, aiStr] = (anuncioRef || "0-0").split("-");
+        const ci = parseInt(ciStr, 10) || 0;
+        const ai = parseInt(aiStr, 10) || 0;
+        const anuncio = estrategiaSeleccionada?.conjuntos?.[ci]?.anuncios?.[ai];
+        const nuevoCreativo = {
+          id: videoJobId,
+          tipo: "video",
+          origen: "video",
+          url_imagen: data.video_final_url,
+          titulo: anuncio?.copy?.titulo || "",
+          texto: anuncio?.copy?.texto || "",
+          cta: anuncio?.copy?.cta || "Comprar ahora",
+          conjunto_nombre: anuncio ? estrategiaSeleccionada.conjuntos[ci].nombre : "",
+          anuncio_nombre: anuncio?.nombre || "",
+          argumentacion: anuncio?.argumentacion || "",
         };
+        try {
+          localStorage.removeItem("quiubot_video_anuncio_ref");
+          localStorage.removeItem("quiubot_video_job_activo");
+        } catch {}
+        setEsperandoTipoEnCurso(null);
+        marcarTipoCompletado({ ...creativosPorClave, [`${ci}-${ai}`]: nuevoCreativo });
+        return data.estado;
+      }
+
+      if (data.estado === "error") {
         setEsperandoTipoEnCurso({
           tipo: "video",
-          detalle: detallePorEstado[data.estado] || "Tu video sigue en proceso.",
-          videoJobId: videoJobId as string,
-          estadoVideo: data.estado,
+          detalle: `Hubo un problema generando tu video: ${data.error_mensaje || "intenta de nuevo desde la asignación de tipos."}`,
         });
-      })
-      .catch(() => {});
+        return data.estado;
+      }
+
+      const detallePorEstado: Record<string, string> = {
+        generando_fragmentos: "Se está generando (puede tardar hasta 20 minutos). No hace falta que hagas nada -- te avisamos apenas esté listo para revisar.",
+        revision_pendiente: "Tus 4 fragmentos ya están listos para revisar.",
+        regenerando_fragmento: "Se está regenerando un fragmento.",
+        uniendo: "Se está uniendo, ya casi está listo.",
+      };
+      setEsperandoTipoEnCurso({
+        tipo: "video",
+        detalle: detallePorEstado[data.estado] || "Tu video sigue en proceso.",
+        videoJobId: videoJobId as string,
+        estadoVideo: data.estado,
+      });
+      return data.estado;
+    } catch {
+      return null;
+    }
   }
 
   useEffect(() => {
