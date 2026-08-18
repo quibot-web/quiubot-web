@@ -7,6 +7,22 @@ const MIN_IMAGENES = 1;
 const MAX_IMAGENES = 3;
 const LIMITE_REGENERACIONES = 2;
 
+// Convierte un data URI ("data:image/jpeg;base64,...") a Blob decodificando
+// el base64 a mano (Uint8Array), sin pasar por fetch(dataUri) -- eso
+// generaba un aviso de CSP (Report-Only por ahora, pero frágil si algún
+// día deja de serlo).
+function base64ToBlob(dataUri: string): Blob {
+  const [meta, contenidoBase64] = dataUri.split(",");
+  const mimeMatch = meta.match(/data:(.*);base64/);
+  const mime = mimeMatch ? mimeMatch[1] : "image/jpeg";
+  const binario = atob(contenidoBase64);
+  const bytes = new Uint8Array(binario.length);
+  for (let i = 0; i < binario.length; i++) {
+    bytes[i] = binario.charCodeAt(i);
+  }
+  return new Blob([bytes], { type: mime });
+}
+
 type Segmento = {
   orden: number;
   job_id: string;
@@ -210,20 +226,25 @@ function VideoContent() {
       try {
         const base64s: string[] = JSON.parse(imgsGuardadas);
         const urls: string[] = [];
+        const errores: string[] = [];
         for (const b64 of base64s.slice(0, MAX_IMAGENES)) {
-          const blob = await (await fetch(b64)).blob();
+          const blob = base64ToBlob(b64);
           const formData = new FormData();
           formData.append("archivo", blob, "foto.jpg");
           const res = await fetch("/api/album/subir", { method: "POST", body: formData });
           const data = await res.json().catch(() => ({}));
-          if (res.ok && data.url) urls.push(data.url);
+          if (res.ok && data.url) {
+            urls.push(data.url);
+          } else {
+            errores.push(data.error || `Error ${res.status}`);
+          }
         }
         setImagenesUrls(urls);
         if (urls.length === 0) {
-          setErrorMsg("No se pudieron preparar las fotos que subiste en el wizard. Vuelve e intenta de nuevo.");
+          setErrorMsg(`No se pudieron preparar las fotos que subiste en el wizard: ${errores[0] || "error desconocido"}`);
         }
-      } catch {
-        setErrorMsg("No se pudieron preparar las fotos que subiste en el wizard. Vuelve e intenta de nuevo.");
+      } catch (e: any) {
+        setErrorMsg(`No se pudieron preparar las fotos que subiste en el wizard: ${e?.message || "error desconocido"}`);
       } finally {
         setPrecargandoFotos(false);
       }
