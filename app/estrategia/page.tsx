@@ -2203,7 +2203,7 @@ function EstrategiaContent() {
                                 opacity: bloqueada ? 0.5 : 1,
                                 border: activo ? "1.5px solid var(--qb-purple)" : "1px solid #e0e0e0",
                                 background: activo ? "var(--qb-purple)" : "#fff",
-                                clipPath: "polygon(0 0, calc(100% - 12px) 0, 100% 12px, 100% 100%, 0 100%)",
+                                borderRadius: 12,
                               }}
                             >
                               <IconoTipo size={22} strokeWidth={1.8} color={activo ? "#fff" : "var(--text-muted)"} aria-hidden="true" />
