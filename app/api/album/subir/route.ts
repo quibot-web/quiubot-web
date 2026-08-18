@@ -1,6 +1,7 @@
 import { auth } from "@/auth";
 import { NextRequest, NextResponse } from "next/server";
 import { supabaseAdmin } from "@/lib/supabase";
+import { desencriptarSiHaceFalta } from "@/lib/crypto";
 import { v2 as cloudinary } from "cloudinary";
 
 export async function POST(req: NextRequest) {
@@ -38,10 +39,18 @@ export async function POST(req: NextRequest) {
     const base64 = Buffer.from(bytes).toString("base64");
     const dataUri = `data:${archivo.type};base64,${base64}`;
 
+    // cloudinary_key y cloudinary_secret se guardan cifradas (ver
+    // configurar-cloudinary/route.ts) -- este handler nunca las
+    // desencriptaba, así que Cloudinary siempre recibía el valor cifrado
+    // tal cual y lo rechazaba con "Invalid api_key". Mismo patrón que ya
+    // usan crear-creativos y generar-video.
+    const cloudinaryKeyDescifrada = desencriptarSiHaceFalta(usuario.cloudinary_key);
+    const cloudinarySecretDescifrado = desencriptarSiHaceFalta(usuario.cloudinary_secret);
+
     cloudinary.config({
       cloud_name: usuario.cloudinary_name,
-      api_key: usuario.cloudinary_key,
-      api_secret: usuario.cloudinary_secret,
+      api_key: cloudinaryKeyDescifrada,
+      api_secret: cloudinarySecretDescifrado,
     });
 
     const upload = await cloudinary.uploader.upload(dataUri, {
