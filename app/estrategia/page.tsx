@@ -1,7 +1,7 @@
 "use client";
 import { useState, useRef, useEffect, Suspense } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
-import { ShoppingBag, Target, Camera, Sparkles, Check, Shirt, Smartphone, UtensilsCrossed, Plane, Briefcase, Palmtree, Video, Watch, Bot, FolderOpen, Dna, X, ShoppingCart, Tag, DollarSign, CheckCircle2, MessageCircle, Phone, Send, Megaphone, Eye, Heart, Star, RefreshCw, Repeat, Users, MousePointerClick, TrendingUp, Zap, Globe } from "lucide-react";
+import { ShoppingBag, Target, Camera, Sparkles, Check, Shirt, Smartphone, UtensilsCrossed, Plane, Briefcase, Palmtree, Video, Watch, Bot, FolderOpen, Dna, X, ShoppingCart, Tag, DollarSign, CheckCircle2, MessageCircle, Phone, Send, Megaphone, Eye, Heart, Star, RefreshCw, Repeat, Users, MousePointerClick, TrendingUp, Zap, Globe, Image as ImageIcon, Upload } from "lucide-react";
 import AdBlueprintExplorer from "@/app/components/AdBlueprintExplorer";
 import TutorialVideo from "@/app/components/TutorialVideo";
 import TourGuiado from "@/app/components/TourGuiado";
@@ -2166,22 +2166,22 @@ function EstrategiaContent() {
                     <div
                       key={clave}
                       style={{
-                        background: "#fff", border: "1px solid #e8e8e6", padding: "1rem 1.25rem",
-                        display: "flex", alignItems: "center", gap: 16, flexWrap: "wrap",
+                        background: "#fff", border: "1px solid #e8e8e6", padding: "1.25rem",
                         // Esquinas cortadas (no border-radius) -- detalle geométrico
                         // distintivo en vez del redondeado genérico del resto de la app.
-                        clipPath: "polygon(0 0, calc(100% - 14px) 0, 100% 14px, 100% 100%, 14px 100%, 0 calc(100% - 14px))",
+                        clipPath: "polygon(0 0, calc(100% - 16px) 0, 100% 16px, 100% 100%, 16px 100%, 0 calc(100% - 16px))",
                       }}
                     >
-                      <div style={{ flex: 1, minWidth: 200 }}>
+                      <div style={{ marginBottom: 14 }}>
                         <div style={{ fontSize: 10, color: "#999", fontFamily: "ui-monospace, monospace", textTransform: "uppercase", letterSpacing: 0.4 }}>{conjunto.nombre}</div>
-                        <div style={{ fontWeight: 600, fontSize: 14, color: "#1a1a1a" }}>{anuncio.copy?.titulo || anuncio.nombre}</div>
+                        <div style={{ fontWeight: 600, fontSize: 15, color: "#1a1a1a" }}>{anuncio.copy?.titulo || anuncio.nombre}</div>
                         <div style={{ fontSize: 12, color: "#666" }}>{anuncio.copy?.texto}</div>
                       </div>
-                      <div style={{ display: "flex", gap: 6, flexWrap: "wrap" }}>
+                      <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr 1fr", gap: 8 }}>
                         {(["imagen", "video", "album"] as TipoCreativo[]).map((tipo) => {
                           const deshabilitado = tipo === "video" && hayVideoEnOtroLado && tipoActual !== "video";
                           const activo = tipoActual === tipo;
+                          const IconoTipo = tipo === "imagen" ? ImageIcon : tipo === "video" ? Video : Upload;
                           return (
                             <button
                               key={tipo}
@@ -2189,14 +2189,17 @@ function EstrategiaContent() {
                               disabled={deshabilitado}
                               title={deshabilitado ? "Solo se puede generar 1 video por estrategia" : undefined}
                               style={{
-                                padding: "8px 14px", borderRadius: 20, fontSize: 12.5, fontWeight: 600,
+                                display: "flex", flexDirection: "column", alignItems: "center", gap: 6,
+                                padding: "14px 6px", fontSize: 11.5, fontWeight: 600,
                                 cursor: deshabilitado ? "not-allowed" : "pointer",
-                                border: activo ? "1.5px solid var(--qb-purple)" : "1px solid #e0e0e0",
+                                border: activo ? "1.5px solid var(--qb-purple)" : "1px solid #e8e8e6",
                                 background: activo ? "#F3F2FE" : "#fff",
                                 color: deshabilitado ? "#ccc" : activo ? "var(--qb-purple)" : "#666",
+                                clipPath: "polygon(0 0, calc(100% - 10px) 0, 100% 10px, 100% 100%, 0 100%)",
                               }}
                             >
-                              {tipo === "imagen" ? "Imagen con IA" : tipo === "video" ? "Video con IA" : "Álbum"}
+                              <IconoTipo size={20} strokeWidth={1.8} aria-hidden="true" />
+                              <span>{tipo === "imagen" ? "Imagen con IA" : tipo === "video" ? "Video con IA" : "Álbum"}</span>
                             </button>
                           );
                         })}

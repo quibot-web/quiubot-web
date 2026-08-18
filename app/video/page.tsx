@@ -120,24 +120,31 @@ const DURACION_ESTIMADA_SEG = 16 * 60;
 // ~17 minutos: esto vive en una card normal (no minHeight:100vh), deja el
 // resto de la página (el "← Volver" de arriba) visible, y explícitamente
 // invita a salir en vez de sugerir que hay que quedarse mirando.
-// Núcleo con 2 "órbitas" (puntos girando en sentidos opuestos, radios
-// distintos) alrededor de un ícono de rayo fijo en el centro -- transmite
-// "IA procesando" en vez de un spinner de carga genérico.
-function NucleoOrbitas() {
+// Núcleo con "órbita" -- un aro visible con 2 puntos girando en sentidos
+// opuestos (arrancan en polos opuestos del mismo aro) alrededor de un
+// ícono de rayo fijo en el centro -- transmite "IA procesando" en vez de
+// un spinner de carga genérico. size configurable: chico para usos
+// inline, grande para la pantalla de espera (protagonista, no un ícono
+// más al lado de texto).
+function NucleoOrbitas({ size = 48 }: { size?: number }) {
+  const grosorAro = Math.max(1.5, Math.round(size / 70));
+  const tamanoIcono = Math.round(size * 0.36);
+  const dot = Math.max(6, Math.round(size / 16));
   return (
-    <div style={{ position: "relative", width: 48, height: 48, flexShrink: 0 }}>
+    <div style={{ position: "relative", width: size, height: size, flexShrink: 0, margin: "0 auto" }}>
+      <div style={{ position: "absolute", inset: 0, borderRadius: "50%", border: `${grosorAro}px solid #ECE9F7` }} />
       <div style={{ position: "absolute", inset: 0, display: "flex", alignItems: "center", justifyContent: "center" }}>
-        <Zap size={18} color="var(--qb-purple)" strokeWidth={2.2} fill="var(--qb-purple)" aria-hidden="true" />
+        <Zap size={tamanoIcono} color="var(--qb-purple)" strokeWidth={2} fill="var(--qb-purple)" aria-hidden="true" />
       </div>
       <div className="nucleo-orbita-ext" style={{ position: "absolute", inset: 0 }}>
-        <span style={{ position: "absolute", top: -1, left: "50%", width: 7, height: 7, marginLeft: -3.5, borderRadius: "50%", background: "var(--qb-purple)" }} />
+        <span style={{ position: "absolute", top: -dot / 2, left: "50%", width: dot, height: dot, marginLeft: -dot / 2, borderRadius: "50%", background: "var(--qb-purple)" }} />
       </div>
-      <div className="nucleo-orbita-int" style={{ position: "absolute", inset: 9 }}>
-        <span style={{ position: "absolute", top: -1, left: "50%", width: 5, height: 5, marginLeft: -2.5, borderRadius: "50%", background: "#7F77DD" }} />
+      <div className="nucleo-orbita-int" style={{ position: "absolute", inset: 0 }}>
+        <span style={{ position: "absolute", bottom: -dot / 2, left: "50%", width: dot * 0.8, height: dot * 0.8, marginLeft: -(dot * 0.8) / 2, borderRadius: "50%", background: "#7F77DD" }} />
       </div>
       <style>{`
-        .nucleo-orbita-ext { animation: orbitaCW 1.4s linear infinite; }
-        .nucleo-orbita-int { animation: orbitaCCW 1s linear infinite; }
+        .nucleo-orbita-ext { animation: orbitaCW 1.6s linear infinite; }
+        .nucleo-orbita-int { animation: orbitaCCW 1.6s linear infinite; }
         @keyframes orbitaCW { to { transform: rotate(360deg); } }
         @keyframes orbitaCCW { to { transform: rotate(-360deg); } }
         @media (prefers-reduced-motion: reduce) {
@@ -160,62 +167,44 @@ function EsperaGeneracionVideo() {
     ETAPAS_GENERACION.length - 1,
     Math.floor(segundos / (DURACION_ESTIMADA_SEG / ETAPAS_GENERACION.length))
   );
+  // Barra continua unica -- reemplaza el checklist de 4 pasos (se sentía
+  // como una lista de tareas, no como "un editor de video trabajando").
+  const progresoContinuo = Math.min(100, (segundos / DURACION_ESTIMADA_SEG) * 100);
 
   return (
-    <div>
-      <div style={{ display: "flex", alignItems: "center", gap: 14, marginBottom: 6 }}>
-        <NucleoOrbitas />
-        <div>
-          <p style={{ fontSize: 15, fontWeight: 600, color: "#1a1a1a", margin: 0 }}>{ETAPAS_GENERACION[etapaActiva].titulo}...</p>
-          <p style={{ fontSize: 12.5, color: "#999", margin: "2px 0 0" }}>{ETAPAS_GENERACION[etapaActiva].detalle}</p>
-        </div>
+    <div style={{ textAlign: "center", padding: "0.5rem 0" }}>
+      <div style={{ marginBottom: 24 }}>
+        <NucleoOrbitas size={140} />
       </div>
 
-      <div style={{ display: "flex", flexDirection: "column", gap: 10, margin: "20px 0" }}>
-        {ETAPAS_GENERACION.map((etapa, i) => {
-          const completada = i < etapaActiva;
-          const activa = i === etapaActiva;
-          return (
-            <div key={etapa.titulo} style={{ display: "flex", alignItems: "center", gap: 10 }}>
-              <div
-                style={{
-                  width: 22, height: 22, borderRadius: "50%", flexShrink: 0,
-                  display: "flex", alignItems: "center", justifyContent: "center", fontSize: 11, fontWeight: 700,
-                  background: completada ? "#534AB7" : activa ? "#F3F2FE" : "#F1F1F0",
-                  color: completada ? "#fff" : activa ? "#534AB7" : "#bbb",
-                  border: activa ? "2px solid #534AB7" : "none",
-                }}
-              >
-                {completada ? "✓" : i + 1}
-              </div>
-              <div style={{ flex: 1, height: 5, borderRadius: 3, background: "#ECE9F7", overflow: "hidden" }}>
-                <div
-                  style={{
-                    height: "100%", borderRadius: 3, background: "#7F77DD",
-                    width: completada ? "100%" : activa ? "45%" : "0%",
-                    transition: "width 0.6s ease",
-                    animation: activa ? "pulsoEtapa 1.6s ease-in-out infinite" : "none",
-                  }}
-                />
-              </div>
-            </div>
-          );
-        })}
+      <p style={{ fontSize: 17, fontWeight: 700, color: "#1a1a1a", margin: "0 0 4px" }}>
+        {ETAPAS_GENERACION[etapaActiva].titulo}...
+      </p>
+      <p style={{ fontSize: 13, color: "#999", margin: "0 0 24px" }}>
+        {ETAPAS_GENERACION[etapaActiva].detalle}
+      </p>
+
+      <div style={{ maxWidth: 320, margin: "0 auto 28px", height: 6, borderRadius: 3, background: "#ECE9F7", overflow: "hidden" }}>
+        <div
+          style={{
+            height: "100%", borderRadius: 3, background: "var(--qb-purple)",
+            width: `${progresoContinuo}%`, transition: "width 1s linear",
+          }}
+        />
       </div>
 
-      <div style={{ background: "#F9F9F8", borderRadius: 10, padding: "0.9rem 1rem", fontSize: 12.5, color: "#666", lineHeight: 1.5, marginBottom: 16 }}>
-        Esto tarda unos 15-20 minutos en total. <strong>No hace falta que te quedes esperando</strong> —
-        puedes cerrar esta pestaña o seguir navegando la app, te avisamos apenas los fragmentos estén listos para revisar.
-      </div>
-
+      {/* La salida es EL siguiente paso, no una opción secundaria --
+          botón sólido y primero en jerarquía visual, no un link discreto
+          después de un cuadro de aviso. */}
       <a
         href="/"
-        style={{ display: "block", textAlign: "center", background: "#fff", border: "1px solid #e0e0e0", color: "#534AB7", padding: 12, borderRadius: 10, fontSize: 14, fontWeight: 600, textDecoration: "none" }}
+        style={{ display: "block", maxWidth: 360, margin: "0 auto 10px", textAlign: "center", background: "var(--qb-purple)", color: "#fff", padding: "14px", borderRadius: 10, fontSize: 15, fontWeight: 700, textDecoration: "none" }}
       >
-        Volver al inicio mientras se genera
+        Salir — te avisamos cuando esté listo →
       </a>
-
-      <style>{`@keyframes pulsoEtapa { 0%, 100% { opacity: 1; } 50% { opacity: 0.55; } }`}</style>
+      <p style={{ fontSize: 12, color: "#999", margin: 0, maxWidth: 360, marginLeft: "auto", marginRight: "auto" }}>
+        Esto tarda unos 15-20 minutos. No hace falta que te quedes mirando esta pantalla.
+      </p>
     </div>
   );
 }
