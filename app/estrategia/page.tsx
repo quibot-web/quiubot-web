@@ -1,7 +1,7 @@
 "use client";
 import { useState, useRef, useEffect, Suspense } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
-import { ShoppingBag, Target, Camera, Sparkles, Check, Shirt, Smartphone, UtensilsCrossed, Plane, Briefcase, Palmtree, Video, Watch, Bot, FolderOpen, Dna, X, ShoppingCart, Tag, DollarSign, CheckCircle2, MessageCircle, Phone, Send, Megaphone, Eye, Heart, Star, RefreshCw, Repeat, Users, MousePointerClick, TrendingUp, Zap, Globe, Image as ImageIcon, Upload } from "lucide-react";
+import { ShoppingBag, Target, Camera, Sparkles, Check, Shirt, Smartphone, UtensilsCrossed, Plane, Briefcase, Palmtree, Video, Watch, Bot, FolderOpen, Dna, X, ShoppingCart, Tag, DollarSign, CheckCircle2, MessageCircle, Phone, Send, Megaphone, Eye, Heart, Star, RefreshCw, Repeat, Users, MousePointerClick, TrendingUp, Zap, Globe, Image as ImageIcon, Upload, Film, Lock } from "lucide-react";
 import AdBlueprintExplorer from "@/app/components/AdBlueprintExplorer";
 import TutorialVideo from "@/app/components/TutorialVideo";
 import TourGuiado from "@/app/components/TourGuiado";
@@ -2156,84 +2156,69 @@ function EstrategiaContent() {
               Elige la fuente del creativo para cada anuncio. Solo se puede generar 1 video por estrategia.
             </p>
 
-            <div style={{ display: "flex", flexDirection: "column", gap: 8, marginBottom: 20 }}>
-              {(() => {
-                let contador = 0;
-                return (estrategiaSeleccionada?.conjuntos || []).flatMap((conjunto: any, ci: number) =>
-                  (conjunto.anuncios || []).map((anuncio: any, ai: number) => {
-                    contador += 1;
-                    const numero = String(contador).padStart(2, "0");
-                    const clave = `${ci}-${ai}`;
-                    const tipoActual = tiposPorAnuncio[clave] || "imagen";
-                    const hayVideoEnOtroLado = Object.entries(tiposPorAnuncio).some(([k, v]) => v === "video" && k !== clave);
-                    return (
-                      <div
-                        key={clave}
-                        style={{
-                          background: "#fff", border: "1px solid #e8e8e6", padding: "0.85rem 1.1rem",
-                          display: "flex", alignItems: "center", gap: 16, flexWrap: "wrap",
-                          // Esquinas cortadas (no border-radius) -- detalle geométrico
-                          // distintivo en vez del redondeado genérico del resto de la app.
-                          clipPath: "polygon(0 0, calc(100% - 12px) 0, 100% 12px, 100% 100%, 12px 100%, 0 calc(100% - 12px))",
-                        }}
-                      >
-                        {/* Etiqueta numerada, monospace -- identifica el anuncio sin
-                            competir en peso visual con el resto de la fila. */}
-                        <div
-                          style={{
-                            width: 30, height: 30, flexShrink: 0, display: "flex", alignItems: "center", justifyContent: "center",
-                            fontFamily: "ui-monospace, monospace", fontSize: 11, fontWeight: 700, color: "var(--qb-purple)",
-                            background: "#F3F2FE",
-                            clipPath: "polygon(0 0, calc(100% - 6px) 0, 100% 6px, 100% 100%, 0 100%)",
-                          }}
-                        >
-                          {numero}
-                        </div>
-
-                        {/* Contexto del anuncio -- solo lo necesario para identificarlo,
-                            una sola línea con truncado (el copy completo no hace falta
-                            para decidir el tipo de creativo, y era lo que amontonaba). */}
-                        <div style={{ flex: "1 1 220px", minWidth: 0 }}>
-                          <div style={{ fontSize: 9.5, color: "#999", fontFamily: "ui-monospace, monospace", textTransform: "uppercase", letterSpacing: 0.5 }}>
-                            {conjunto.nombre}
-                          </div>
-                          <div style={{ fontWeight: 600, fontSize: 13.5, color: "#1a1a1a", whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>
-                            {anuncio.copy?.titulo || anuncio.nombre}
-                          </div>
-                        </div>
-
-                        <div style={{ display: "flex", gap: 6, flexShrink: 0 }}>
-                          {(["imagen", "video", "album"] as TipoCreativo[]).map((tipo) => {
-                            const deshabilitado = tipo === "video" && hayVideoEnOtroLado && tipoActual !== "video";
-                            const activo = tipoActual === tipo;
-                            const IconoTipo = tipo === "imagen" ? ImageIcon : tipo === "video" ? Video : Upload;
-                            return (
-                              <button
-                                key={tipo}
-                                onClick={() => !deshabilitado && setTiposPorAnuncio((prev) => ({ ...prev, [clave]: tipo }))}
-                                disabled={deshabilitado}
-                                title={deshabilitado ? "Solo se puede generar 1 video por estrategia" : undefined}
-                                style={{
-                                  display: "flex", alignItems: "center", gap: 5,
-                                  padding: "7px 10px", fontSize: 11.5, fontWeight: 600,
-                                  cursor: deshabilitado ? "not-allowed" : "pointer",
-                                  border: activo ? "1.5px solid var(--qb-purple)" : "1px solid #e0e0e0",
-                                  background: activo ? "#F3F2FE" : "#fff",
-                                  color: deshabilitado ? "#ccc" : activo ? "var(--qb-purple)" : "#666",
-                                  clipPath: "polygon(0 0, calc(100% - 6px) 0, 100% 6px, 100% 100%, 0 100%)",
-                                }}
-                              >
-                                <IconoTipo size={14} strokeWidth={2} aria-hidden="true" />
-                                <span>{tipo === "imagen" ? "Imagen" : tipo === "video" ? "Video" : "Álbum"}</span>
-                              </button>
-                            );
-                          })}
-                        </div>
+            <div style={{ display: "flex", flexDirection: "column", gap: 16, marginBottom: 20 }}>
+              {(estrategiaSeleccionada?.conjuntos || []).flatMap((conjunto: any, ci: number) =>
+                (conjunto.anuncios || []).map((anuncio: any, ai: number) => {
+                  const clave = `${ci}-${ai}`;
+                  const tipoActual = tiposPorAnuncio[clave] || "imagen";
+                  const hayVideoEnOtroLado = Object.entries(tiposPorAnuncio).some(([k, v]) => v === "video" && k !== clave);
+                  return (
+                    <div
+                      key={clave}
+                      style={{
+                        background: "#fff", border: "1px solid #e8e8e6", padding: "1.25rem",
+                        // Esquinas cortadas (no border-radius) -- detalle geométrico
+                        // distintivo en vez del redondeado genérico del resto de la app.
+                        clipPath: "polygon(0 0, calc(100% - 16px) 0, 100% 16px, 100% 100%, 16px 100%, 0 calc(100% - 16px))",
+                      }}
+                    >
+                      <div style={{ fontSize: 11, color: "var(--text-muted)", fontFamily: "ui-monospace, monospace", textTransform: "uppercase", letterSpacing: 0.5, marginBottom: 4 }}>
+                        {conjunto.nombre}
                       </div>
-                    );
-                  })
-                );
-              })()}
+                      <div style={{ fontWeight: 500, fontSize: 16, color: "#1a1a1a", marginBottom: 14 }}>
+                        {anuncio.copy?.titulo || anuncio.nombre}
+                      </div>
+
+                      <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr 1fr", gap: 10 }}>
+                        {(["imagen", "video", "album"] as TipoCreativo[]).map((tipo) => {
+                          const bloqueada = tipo === "video" && hayVideoEnOtroLado && tipoActual !== "video";
+                          const activo = tipoActual === tipo;
+                          const IconoTipo = bloqueada ? Lock : tipo === "imagen" ? ImageIcon : tipo === "video" ? Film : Upload;
+                          const nombreTipo = tipo === "imagen" ? "Imagen con IA" : tipo === "video" ? "Video con IA" : "Álbum";
+                          const descripcion = bloqueada
+                            ? "Ya usado en otro anuncio"
+                            : tipo === "video"
+                            ? "4 escenas generadas, listas en ~20 min"
+                            : "Lista en segundos";
+                          return (
+                            <button
+                              key={tipo}
+                              onClick={() => !bloqueada && setTiposPorAnuncio((prev) => ({ ...prev, [clave]: tipo }))}
+                              disabled={bloqueada}
+                              title={bloqueada ? "Solo se puede generar 1 video por estrategia" : undefined}
+                              style={{
+                                display: "flex", flexDirection: "column", alignItems: "flex-start", gap: 8,
+                                padding: "14px 14px 14px 16px", textAlign: "left",
+                                cursor: bloqueada ? "not-allowed" : "pointer",
+                                opacity: bloqueada ? 0.5 : 1,
+                                border: activo ? "1.5px solid var(--qb-purple)" : "1px solid #e0e0e0",
+                                background: activo ? "var(--qb-purple)" : "#fff",
+                                clipPath: "polygon(0 0, calc(100% - 12px) 0, 100% 12px, 100% 100%, 0 100%)",
+                              }}
+                            >
+                              <IconoTipo size={22} strokeWidth={1.8} color={activo ? "#fff" : "var(--text-muted)"} aria-hidden="true" />
+                              <div>
+                                <div style={{ fontSize: 13, fontWeight: 500, color: activo ? "#fff" : "#1a1a1a" }}>{nombreTipo}</div>
+                                <div style={{ fontSize: 11, color: activo ? "var(--qb-purple-light)" : "var(--text-muted)", marginTop: 2 }}>{descripcion}</div>
+                              </div>
+                            </button>
+                          );
+                        })}
+                      </div>
+                    </div>
+                  );
+                })
+              )}
             </div>
 
             <button

@@ -11,6 +11,13 @@
      migró el resto del hex hardcodeado del proyecto, sería un cambio
      mucho más grande y no fue lo que se pidió. */
   --qb-purple: #534AB7;
+  /* Morado claro para texto secundario SOBRE fondo --qb-purple sólido
+     (ej. la descripción de una tarjeta seleccionada) -- #999/#666
+     normales quedarían ilegibles ahí. */
+  --qb-purple-light: #CECBF6;
+  /* Mismo caso que --qb-purple: no existía como variable, el proyecto usa
+     #999 suelto para texto secundario/deshabilitado en todos lados. */
+  --text-muted: #999;
 }
 
 @theme inline {
