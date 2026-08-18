@@ -1,7 +1,7 @@
 "use client";
 import { useEffect, useRef, useState, Suspense } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
-import { Dna } from "lucide-react";
+import { Dna, Zap } from "lucide-react";
 import CargandoQuiubot from "@/app/components/CargandoQuiubot";
 
 const MIN_IMAGENES = 1;
@@ -120,6 +120,34 @@ const DURACION_ESTIMADA_SEG = 16 * 60;
 // ~17 minutos: esto vive en una card normal (no minHeight:100vh), deja el
 // resto de la página (el "← Volver" de arriba) visible, y explícitamente
 // invita a salir en vez de sugerir que hay que quedarse mirando.
+// Núcleo con 2 "órbitas" (puntos girando en sentidos opuestos, radios
+// distintos) alrededor de un ícono de rayo fijo en el centro -- transmite
+// "IA procesando" en vez de un spinner de carga genérico.
+function NucleoOrbitas() {
+  return (
+    <div style={{ position: "relative", width: 48, height: 48, flexShrink: 0 }}>
+      <div style={{ position: "absolute", inset: 0, display: "flex", alignItems: "center", justifyContent: "center" }}>
+        <Zap size={18} color="var(--qb-purple)" strokeWidth={2.2} fill="var(--qb-purple)" aria-hidden="true" />
+      </div>
+      <div className="nucleo-orbita-ext" style={{ position: "absolute", inset: 0 }}>
+        <span style={{ position: "absolute", top: -1, left: "50%", width: 7, height: 7, marginLeft: -3.5, borderRadius: "50%", background: "var(--qb-purple)" }} />
+      </div>
+      <div className="nucleo-orbita-int" style={{ position: "absolute", inset: 9 }}>
+        <span style={{ position: "absolute", top: -1, left: "50%", width: 5, height: 5, marginLeft: -2.5, borderRadius: "50%", background: "#7F77DD" }} />
+      </div>
+      <style>{`
+        .nucleo-orbita-ext { animation: orbitaCW 1.4s linear infinite; }
+        .nucleo-orbita-int { animation: orbitaCCW 1s linear infinite; }
+        @keyframes orbitaCW { to { transform: rotate(360deg); } }
+        @keyframes orbitaCCW { to { transform: rotate(-360deg); } }
+        @media (prefers-reduced-motion: reduce) {
+          .nucleo-orbita-ext, .nucleo-orbita-int { animation: none !important; }
+        }
+      `}</style>
+    </div>
+  );
+}
+
 function EsperaGeneracionVideo() {
   const [segundos, setSegundos] = useState(0);
 
@@ -136,9 +164,7 @@ function EsperaGeneracionVideo() {
   return (
     <div>
       <div style={{ display: "flex", alignItems: "center", gap: 14, marginBottom: 6 }}>
-        <div style={{ width: 40, height: 40, borderRadius: "50%", background: "#F3F2FE", display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0 }}>
-          <div style={{ width: 18, height: 18, border: "2.5px solid #ECE9F7", borderTopColor: "#7F77DD", borderRadius: "50%", animation: "girarVideo 0.9s linear infinite" }} />
-        </div>
+        <NucleoOrbitas />
         <div>
           <p style={{ fontSize: 15, fontWeight: 600, color: "#1a1a1a", margin: 0 }}>{ETAPAS_GENERACION[etapaActiva].titulo}...</p>
           <p style={{ fontSize: 12.5, color: "#999", margin: "2px 0 0" }}>{ETAPAS_GENERACION[etapaActiva].detalle}</p>

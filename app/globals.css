@@ -3,6 +3,14 @@
 :root {
   --background: #ffffff;
   --foreground: #171717;
+  /* Morado oficial de marca -- mismo valor que themeColor en app/layout.tsx.
+     No existía como variable en ningún lado: el resto del proyecto lo
+     hardcodea como #534AB7 suelto en cada componente. Este token es nuevo,
+     lo usan por ahora solo los 2 rediseños que lo pidieron explícito
+     (selector de tipos por anuncio y espera de video en /video) -- no se
+     migró el resto del hex hardcodeado del proyecto, sería un cambio
+     mucho más grande y no fue lo que se pidió. */
+  --qb-purple: #534AB7;
 }
 
 @theme inline {

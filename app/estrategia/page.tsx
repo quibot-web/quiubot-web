@@ -202,7 +202,7 @@ function PantallaTransicionTipo({
       </p>
       <button
         onClick={onContinuar}
-        style={{ width: "100%", padding: "13px", borderRadius: 10, background: "#534AB7", color: "#fff", border: "none", fontSize: 14, fontWeight: 700, cursor: "pointer" }}
+        style={{ width: "100%", padding: "13px", borderRadius: 10, background: "var(--qb-purple)", color: "#fff", border: "none", fontSize: 14, fontWeight: 700, cursor: "pointer" }}
       >
         {tipoSiguiente ? "Continuar →" : "Ver mis creativos →"}
       </button>
@@ -2163,7 +2163,16 @@ function EstrategiaContent() {
                   const tipoActual = tiposPorAnuncio[clave] || "imagen";
                   const hayVideoEnOtroLado = Object.entries(tiposPorAnuncio).some(([k, v]) => v === "video" && k !== clave);
                   return (
-                    <div key={clave} style={{ background: "#fff", border: "1px solid #e8e8e6", borderRadius: 12, padding: "1rem 1.25rem", display: "flex", alignItems: "center", gap: 16, flexWrap: "wrap" }}>
+                    <div
+                      key={clave}
+                      style={{
+                        background: "#fff", border: "1px solid #e8e8e6", padding: "1rem 1.25rem",
+                        display: "flex", alignItems: "center", gap: 16, flexWrap: "wrap",
+                        // Esquinas cortadas (no border-radius) -- detalle geométrico
+                        // distintivo en vez del redondeado genérico del resto de la app.
+                        clipPath: "polygon(0 0, calc(100% - 14px) 0, 100% 14px, 100% 100%, 14px 100%, 0 calc(100% - 14px))",
+                      }}
+                    >
                       <div style={{ flex: 1, minWidth: 200 }}>
                         <div style={{ fontSize: 10, color: "#999", fontFamily: "ui-monospace, monospace", textTransform: "uppercase", letterSpacing: 0.4 }}>{conjunto.nombre}</div>
                         <div style={{ fontWeight: 600, fontSize: 14, color: "#1a1a1a" }}>{anuncio.copy?.titulo || anuncio.nombre}</div>
@@ -2182,9 +2191,9 @@ function EstrategiaContent() {
                               style={{
                                 padding: "8px 14px", borderRadius: 20, fontSize: 12.5, fontWeight: 600,
                                 cursor: deshabilitado ? "not-allowed" : "pointer",
-                                border: activo ? "1.5px solid #534AB7" : "1px solid #e0e0e0",
+                                border: activo ? "1.5px solid var(--qb-purple)" : "1px solid #e0e0e0",
                                 background: activo ? "#F3F2FE" : "#fff",
-                                color: deshabilitado ? "#ccc" : activo ? "#534AB7" : "#666",
+                                color: deshabilitado ? "#ccc" : activo ? "var(--qb-purple)" : "#666",
                               }}
                             >
                               {tipo === "imagen" ? "Imagen con IA" : tipo === "video" ? "Video con IA" : "Álbum"}
@@ -2200,7 +2209,7 @@ function EstrategiaContent() {
 
             <button
               onClick={handleConfirmarAsignaciones}
-              style={{ width: "100%", background: "#534AB7", color: "#fff", border: "none", padding: 16, borderRadius: 10, fontSize: 16, fontWeight: 600, cursor: "pointer" }}
+              style={{ width: "100%", background: "var(--qb-purple)", color: "#fff", border: "none", padding: 16, borderRadius: 10, fontSize: 16, fontWeight: 600, cursor: "pointer" }}
             >
               Continuar →
             </button>
