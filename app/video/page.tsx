@@ -3,6 +3,7 @@ import { useEffect, useRef, useState, Suspense } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 import { Dna, Zap } from "lucide-react";
 import CargandoQuiubot from "@/app/components/CargandoQuiubot";
+import { OBJETIVOS_INFO } from "@/app/lib/objetivosInfo";
 
 const MIN_IMAGENES = 1;
 const MAX_IMAGENES = 3;
@@ -218,6 +219,11 @@ function VideoContent() {
   const [subiendoImagen, setSubiendoImagen] = useState(false);
   const [argumentacion, setArgumentacion] = useState("");
   const [textoCta, setTextoCta] = useState("");
+  // Id de OBJETIVOS_INFO (mismos valores exactos que el paso 3 del
+  // wizard). En modo wizard llega precargado desde
+  // quiubot_video_objetivo (el usuario ya lo eligió allá); en uso
+  // standalone lo elige acá con el dropdown de más abajo.
+  const [objetivo, setObjetivo] = useState("");
   const [jobId, setJobId] = useState<string | null>(null);
   // true si se llegó con ?returnTo=estrategia -- controla el formulario
   // (fotos read-only, sin campo de CTA). La decisión de a dónde volver al
@@ -329,6 +335,12 @@ function VideoContent() {
     const descGuardada = localStorage.getItem("quiubot_descripcion_visual_producto");
     if (descGuardada) setArgumentacion(descGuardada);
 
+    // Objetivo elegido en el paso 3 del wizard -- se usa tal cual, sin
+    // mostrar el selector standalone (ese es solo para cuando no hay
+    // wizard de por medio).
+    const objetivoGuardado = localStorage.getItem("quiubot_video_objetivo");
+    if (objetivoGuardado) setObjetivo(objetivoGuardado);
+
     // El CTA precargado es del anuncio ESPECÍFICO que el usuario asignó a
     // video en el paso de asignación (quiubot_video_anuncio_ref, "ci-ai")
     // -- no siempre conjuntos[0].anuncios[0]. Si por algún motivo esa
@@ -416,6 +428,7 @@ function VideoContent() {
 
   const handleGenerar = async () => {
     if (imagenesUrls.length < MIN_IMAGENES) return;
+    if (!modoWizard && !objetivo) return; // standalone: el dropdown es obligatorio, el botón ya queda deshabilitado
     setErrorMsg(null);
     setPaso("generando");
     try {
@@ -426,6 +439,7 @@ function VideoContent() {
           imagenes_producto_urls: imagenesUrls,
           argumentacion,
           texto_cta: textoCta,
+          objetivo,
         }),
       });
       const data = await res.json().catch(() => ({}));
@@ -723,16 +737,37 @@ function VideoContent() {
                 <p style={{ fontSize: 11.5, color: "#999", marginTop: -14, marginBottom: 20 }}>
                   Se puede editar de nuevo más adelante, antes de unir el video final.
                 </p>
+
+                {/* Selector, no campo de texto libre -- es un parámetro de
+                    campaña (como elegir la fuente de las fotos), no algo
+                    que el usuario redacte. Los textos en pantalla del
+                    video se generan solos con IA según esta elección. En
+                    modo wizard esto ya viene decidido desde el paso 3 y
+                    no se vuelve a preguntar. */}
+                <p style={{ fontSize: 14, fontWeight: 600, marginBottom: 8, color: "#1a1a1a" }}>4. Objetivo de la campaña</p>
+                <select
+                  value={objetivo}
+                  onChange={(e) => setObjetivo(e.target.value)}
+                  style={{ width: "100%", padding: 10, borderRadius: 8, border: "1px solid #e0e0e0", fontSize: 13, boxSizing: "border-box", marginBottom: 6, background: "#fff", color: objetivo ? "#1a1a1a" : "#999" }}
+                >
+                  <option value="">Selecciona un objetivo...</option>
+                  {OBJETIVOS_INFO.map((opt) => (
+                    <option key={opt.id} value={opt.id}>{opt.label}</option>
+                  ))}
+                </select>
+                <p style={{ fontSize: 11.5, color: "#999", marginTop: 0, marginBottom: 20 }}>
+                  Los textos que aparecen en el video se generan solos según este objetivo.
+                </p>
               </>
             )}
 
             <button
               onClick={handleGenerar}
-              disabled={imagenesUrls.length < MIN_IMAGENES || subiendoImagen || precargandoFotos}
+              disabled={imagenesUrls.length < MIN_IMAGENES || subiendoImagen || precargandoFotos || (!modoWizard && !objetivo)}
               style={{
-                width: "100%", background: imagenesUrls.length < MIN_IMAGENES || precargandoFotos ? "#ccc" : "#534AB7", color: "#fff",
+                width: "100%", background: imagenesUrls.length < MIN_IMAGENES || precargandoFotos || (!modoWizard && !objetivo) ? "#ccc" : "#534AB7", color: "#fff",
                 border: "none", padding: 14, borderRadius: 10, fontSize: 15, fontWeight: 600,
-                cursor: imagenesUrls.length < MIN_IMAGENES || precargandoFotos ? "not-allowed" : "pointer",
+                cursor: imagenesUrls.length < MIN_IMAGENES || precargandoFotos || (!modoWizard && !objetivo) ? "not-allowed" : "pointer",
               }}
             >
               Generar video →

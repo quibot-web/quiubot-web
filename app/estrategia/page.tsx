@@ -1781,6 +1781,11 @@ function EstrategiaContent() {
       localStorage.setItem("quiubot_imagenes_producto_base64", JSON.stringify(imagenesParaVideo));
       localStorage.setItem("quiubot_descripcion_visual_producto", descripcionVisual || "");
       if (claveVideo) localStorage.setItem("quiubot_video_anuncio_ref", claveVideo);
+      // El objetivo ya se eligió en el paso 3 del wizard -- se pasa
+      // automático a /video para que arme los 4 textos con AIDA, sin
+      // pedírselo de nuevo (el selector de /video es solo para uso
+      // standalone, sin wizard de por medio).
+      if (objetivo?.id) localStorage.setItem("quiubot_video_objetivo", objetivo.id);
       localStorage.setItem("quiubot_cola_de_tipos", JSON.stringify(cola));
       localStorage.setItem("quiubot_tipo_en_proceso_idx", String(idx));
       localStorage.setItem("quiubot_tipos_por_anuncio", JSON.stringify(tiposPorAnuncio));

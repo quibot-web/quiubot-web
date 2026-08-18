@@ -16,7 +16,7 @@ export async function POST(req: NextRequest) {
   }
 
   const emailBusqueda = session.user.email.trim().toLowerCase();
-  const { imagenes_producto_urls, argumentacion, texto_cta } = await req.json();
+  const { imagenes_producto_urls, argumentacion, texto_cta, objetivo } = await req.json();
 
   if (
     !Array.isArray(imagenes_producto_urls) ||
@@ -153,6 +153,12 @@ export async function POST(req: NextRequest) {
         imagenes_producto_urls,
         argumentacion,
         texto_cta,
+        // Objetivo de campaña elegido en el paso 3 del wizard (o en el
+        // selector standalone de /video) -- n8n lo usa para generar los 4
+        // textos en pantalla con AIDA en vez de plantillas fijas. Igual
+        // que openai_key, se manda null si no llegó en vez de bloquear la
+        // request; no es obligatorio a nivel de este endpoint.
+        objetivo: objetivo || null,
         cloudinary_name: usuario.cloudinary_name,
         cloudinary_key: cloudinaryKeyDescifrada,
         cloudinary_secret: cloudinarySecretDescifrado,
