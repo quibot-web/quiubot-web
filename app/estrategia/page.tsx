@@ -171,6 +171,45 @@ function ErrorConAccion({ mensaje, titulo, accionTexto, accionUrl }: { mensaje: 
   );
 }
 
+// Pantalla de confirmación explícita entre un tipo de creativo y el
+// siguiente en la cola (video -> imagen -> álbum) -- nunca se auto-
+// continua, el usuario siempre confirma antes de que arranque el
+// siguiente tipo o de saltar al paso 6 final.
+function PantallaTransicionTipo({
+  tipoCompletado,
+  tipoSiguiente,
+  conteoSiguiente,
+  onContinuar,
+}: {
+  tipoCompletado: TipoCreativo;
+  tipoSiguiente: TipoCreativo | null;
+  conteoSiguiente: number;
+  onContinuar: () => void;
+}) {
+  const nombreCompletado = LABEL_TIPO[tipoCompletado];
+  return (
+    <div style={{ maxWidth: 480, margin: "3rem auto", background: "#fff", border: "1px solid #e8e8e6", borderRadius: 20, padding: "2.5rem 2rem", textAlign: "center" }}>
+      <div style={{ width: 56, height: 56, borderRadius: "50%", background: "#DCFCE7", display: "flex", alignItems: "center", justifyContent: "center", margin: "0 auto 16px" }}>
+        <Check size={26} color="#15803D" strokeWidth={3} aria-hidden="true" />
+      </div>
+      <h2 style={{ fontSize: 18, fontWeight: 700, color: "#1a1a1a", margin: "0 0 8px", textTransform: "capitalize" }}>
+        {nombreCompletado} listo ✓
+      </h2>
+      <p style={{ fontSize: 14, color: "#666", lineHeight: 1.6, margin: "0 0 24px" }}>
+        {tipoSiguiente
+          ? `Ahora vamos con tus ${conteoSiguiente} anuncio${conteoSiguiente !== 1 ? "s" : ""} de ${LABEL_TIPO[tipoSiguiente]}.`
+          : "Todos tus creativos están listos."}
+      </p>
+      <button
+        onClick={onContinuar}
+        style={{ width: "100%", padding: "13px", borderRadius: 10, background: "#534AB7", color: "#fff", border: "none", fontSize: 14, fontWeight: 700, cursor: "pointer" }}
+      >
+        {tipoSiguiente ? "Continuar →" : "Ver mis creativos →"}
+      </button>
+    </div>
+  );
+}
+
 // Logo real de Meta (mismo CDN que usa Integraciones), con texto de
 // respaldo si el ícono no carga -- nunca deja un ícono roto en pantalla.
 function LogoMetaInline({ size = 18 }: { size?: number }) {
@@ -202,13 +241,21 @@ function linkMetaAdsManager(campaignId: string | null, adAccountId: string | nul
 
 type TipoContenido = "producto" | "servicio";
 
+// Fuente de creativo asignable por anuncio individual. Reemplaza al viejo
+// "fuenteCreativos" global (una sola eleccion para toda la campaña) --
+// ahora cada anuncio tiene la suya, y el procesamiento es secuencial por
+// tipo (nunca 2 tipos generando al mismo tiempo, ver colaDeTipos).
+type TipoCreativo = "video" | "imagen" | "album";
+
+const LABEL_TIPO: Record<TipoCreativo, string> = { video: "video", imagen: "imagen", album: "álbum" };
+
 type EstrategiaStep =
   | "tipo"
   | "imagen"
   | "objetivo"
   | "presupuesto"
   | "resultado"
-  | "fuente"
+  | "asignar-tipos"
   | "album-selector"
   | "analisis"
   | "creativos";
@@ -221,7 +268,7 @@ const NUMERO_DE_PASO: Record<EstrategiaStep, number> = {
   objetivo: 3,
   presupuesto: 4,
   resultado: 5,
-  fuente: 6,
+  "asignar-tipos": 6,
   "album-selector": 6,
   analisis: 6,
   creativos: 6,
@@ -229,8 +276,8 @@ const NUMERO_DE_PASO: Record<EstrategiaStep, number> = {
 
 // Cada paso del wizard tiene su propio video tutorial (ver
 // app/lib/seccionesTutoriales.ts, grupo "Motor de Estrategia"). Los pasos
-// 6.x (fuente/album-selector/analisis/creativos) comparten el mismo video
-// del paso 6, ya que visualmente son sub-pantallas del mismo paso.
+// 6.x (asignar-tipos/album-selector/analisis/creativos) comparten el mismo
+// video del paso 6, ya que visualmente son sub-pantallas del mismo paso.
 // El paso 2 es especial: el video cambia según si se eligió "producto" o
 // "servicio" en el paso 1, porque las instrucciones son distintas (subir
 // una foto de producto vs. subir una pieza ya diseñada con contexto extra).
@@ -239,7 +286,7 @@ const SECCION_TUTORIAL_POR_PASO: Record<Exclude<EstrategiaStep, "imagen">, strin
   objetivo: "motor-estrategia-paso3",
   presupuesto: "motor-estrategia-paso4",
   resultado: "motor-estrategia-paso5",
-  fuente: "motor-estrategia-paso6",
+  "asignar-tipos": "motor-estrategia-paso6",
   "album-selector": "motor-estrategia-paso6",
   analisis: "motor-estrategia-paso6",
   creativos: "motor-estrategia-paso6",
@@ -701,16 +748,38 @@ function EstrategiaContent() {
   const [regenerandoIndices, setRegenerandoIndices] = useState<Record<number, boolean>>({});
   const [imagenAmpliada, setImagenAmpliada] = useState<string | null>(null);
 
-  const [fuenteCreativos, setFuenteCreativos] = useState<"ia" | "album" | "video" | null>(null);
+  // Asignación por anuncio individual (reemplaza al viejo fuenteCreativos
+  // global) -- clave "conjuntoIdx-anuncioIdx", valor "video"|"imagen"|"album".
+  // Se inicializa con todos los anuncios en "imagen" al elegir la estrategia
+  // (ver handleSeleccionarEstrategia), así el usuario solo cambia las filas
+  // que quiere distinto.
+  const [tiposPorAnuncio, setTiposPorAnuncio] = useState<Record<string, TipoCreativo>>({});
+  // Cola de tipos distintos presentes en tiposPorAnuncio, en orden de
+  // procesamiento (video primero por ser el más lento, después imagen,
+  // después álbum) -- se arma una sola vez al confirmar las asignaciones.
+  const [colaDeTipos, setColaDeTipos] = useState<TipoCreativo[]>([]);
+  const [tipoEnProcesoIdx, setTipoEnProcesoIdx] = useState(0);
+  // Resultados acumulados por clave de anuncio, conforme cada tipo de la
+  // cola va terminando -- se ensamblan en el array final "creativos" recién
+  // cuando el usuario confirma la pantalla de transición del último tipo.
+  const [creativosPorClave, setCreativosPorClave] = useState<Record<string, any>>({});
+  // true mientras se muestra "{tipo} listo ✓ -- ahora vamos con..." --
+  // nunca se auto-continúa, el usuario siempre confirma.
+  const [mostrandoTransicionTipo, setMostrandoTransicionTipo] = useState(false);
+
   const [analisisResultado, setAnalisisResultado] = useState<{ score: number; detalle: any[] } | null>(null);
   const [analizandoAlbum, setAnalizandoAlbum] = useState(false);
 
   const [albumItems, setAlbumItems] = useState<{ url_imagen: string; tipo: string; public_id: string }[]>([]);
   const [cargandoAlbum, setCargandoAlbum] = useState(false);
-  // Un "hueco" por cada anuncio que recomendó la estrategia (con su copy
-  // real: título, texto, cta) -- el usuario no elige libremente cuántos
-  // creativos usar, elige QUÉ imagen de su álbum va en cada hueco recomendado.
+  // Un "hueco" por cada anuncio ASIGNADO A ÁLBUM (con su copy real:
+  // título, texto, cta) -- el usuario no elige libremente cuántos
+  // creativos usar, elige QUÉ imagen de su álbum va en cada hueco.
+  // angulosClaves es paralelo a angulosRecomendados por índice: guarda la
+  // clave "conjuntoIdx-anuncioIdx" real de cada hueco, para poder guardar
+  // el resultado en creativosPorClave en la posición correcta.
   const [angulosRecomendados, setAngulosRecomendados] = useState<any[]>([]);
+  const [angulosClaves, setAngulosClaves] = useState<string[]>([]);
   const [asignaciones, setAsignaciones] = useState<({ url_imagen: string; tipo: string; public_id: string } | null)[]>([]);
   const [slotEligiendo, setSlotEligiendo] = useState<number | null>(null);
 
@@ -737,9 +806,19 @@ function EstrategiaContent() {
   // faltara algo, es mas seguro devolver al usuario al paso mas cercano
   // que si tiene todo lo necesario, en vez de a una pantalla rota.
   function pasoRestaurable(data: any): EstrategiaStep {
-    if (data.creativos && data.estrategiaSeleccionada && data.fuenteCreativos) return "creativos";
-    if (data.estrategiaSeleccionada && data.fuenteCreativos === "album" && data.angulosRecomendados) return "album-selector";
-    if (data.estrategiaSeleccionada) return "fuente";
+    if (data.creativos && data.creativos.length > 0 && data.estrategiaSeleccionada) return "creativos";
+    if (data.colaDeTipos?.length > 0 && data.tipoEnProcesoIdx < data.colaDeTipos.length) {
+      const tipoActual = data.colaDeTipos[data.tipoEnProcesoIdx];
+      // video y imagen no tienen una sub-pantalla propia a la que volver
+      // sin el job_id de una notificación (?job=/?videoJobId=) -- si el
+      // usuario recarga a mitad sin pasar por ahí, cae a asignar-tipos,
+      // mismo comportamiento que ya existía para esos casos.
+      if (tipoActual === "album") {
+        if (data.analisisResultado) return "analisis";
+        if (data.angulosRecomendados?.length > 0) return "album-selector";
+      }
+    }
+    if (data.estrategiaSeleccionada) return "asignar-tipos";
     if (data.estrategiasGeneradas) return "resultado";
     if (data.objetivo && data.presupuestoDiario) return "presupuesto";
     if (data.tipoContenido && data.imagenesBase64?.length) return "objetivo";
@@ -770,8 +849,12 @@ function EstrategiaContent() {
         if (data.estrategiasGeneradas) setEstrategiasGeneradas(data.estrategiasGeneradas);
         if (data.estrategiaSeleccionada) setEstrategiaSeleccionada(data.estrategiaSeleccionada);
         if (data.descripcionVisual) setDescripcionVisual(data.descripcionVisual);
-        if (data.fuenteCreativos) setFuenteCreativos(data.fuenteCreativos);
+        if (data.tiposPorAnuncio) setTiposPorAnuncio(data.tiposPorAnuncio);
+        if (data.colaDeTipos) setColaDeTipos(data.colaDeTipos);
+        if (typeof data.tipoEnProcesoIdx === "number") setTipoEnProcesoIdx(data.tipoEnProcesoIdx);
+        if (data.creativosPorClave) setCreativosPorClave(data.creativosPorClave);
         if (data.angulosRecomendados) setAngulosRecomendados(data.angulosRecomendados);
+        if (data.angulosClaves) setAngulosClaves(data.angulosClaves);
         if (data.creativos) setCreativos(data.creativos);
         if (data.analisisResultado) setAnalisisResultado(data.analisisResultado);
         setStep(pasoRestaurable(data));
@@ -803,8 +886,12 @@ function EstrategiaContent() {
           estrategiasGeneradas,
           estrategiaSeleccionada,
           descripcionVisual,
-          fuenteCreativos,
+          tiposPorAnuncio,
+          colaDeTipos,
+          tipoEnProcesoIdx,
+          creativosPorClave,
           angulosRecomendados,
+          angulosClaves,
           creativos,
           analisisResultado,
         })
@@ -821,8 +908,12 @@ function EstrategiaContent() {
     estrategiasGeneradas,
     estrategiaSeleccionada,
     descripcionVisual,
-    fuenteCreativos,
+    tiposPorAnuncio,
+    colaDeTipos,
+    tipoEnProcesoIdx,
+    creativosPorClave,
     angulosRecomendados,
+    angulosClaves,
     creativos,
     analisisResultado,
   ]);
@@ -877,13 +968,35 @@ function EstrategiaContent() {
     // pierde, y "Publicar estrategia en Meta" falla con "Falta la
     // estrategia a publicar" aunque los creativos sí se vean bien.
     const estrategiaGuardada = localStorage.getItem("quiubot_estrategia_seleccionada");
+    let estrategiaRestaurada: any = null;
     if (estrategiaGuardada) {
       try {
-        setEstrategiaSeleccionada(JSON.parse(estrategiaGuardada));
+        estrategiaRestaurada = JSON.parse(estrategiaGuardada);
+        setEstrategiaSeleccionada(estrategiaRestaurada);
       } catch {}
     }
 
-    setFuenteCreativos("ia");
+    // Restaura el estado de la cola -- sin esto no sabríamos si este job de
+    // imagen era el único tipo pendiente (saltar a paso 6) o si falta
+    // álbum/video después (mostrar la pantalla de transición).
+    let colaRestaurada: TipoCreativo[] = [];
+    let tipoEnProcesoIdxRestaurado = 0;
+    let tiposPorAnuncioRestaurado: Record<string, TipoCreativo> = {};
+    let acumuladoRestaurado: Record<string, any> = {};
+    try {
+      const colaGuardada = localStorage.getItem("quiubot_cola_de_tipos");
+      if (colaGuardada) colaRestaurada = JSON.parse(colaGuardada);
+      const idxGuardadoCola = localStorage.getItem("quiubot_tipo_en_proceso_idx");
+      if (idxGuardadoCola !== null) tipoEnProcesoIdxRestaurado = parseInt(idxGuardadoCola, 10) || 0;
+      const tiposGuardados = localStorage.getItem("quiubot_tipos_por_anuncio");
+      if (tiposGuardados) tiposPorAnuncioRestaurado = JSON.parse(tiposGuardados);
+      const creativosPorClaveGuardado = localStorage.getItem("quiubot_creativos_por_clave");
+      if (creativosPorClaveGuardado) acumuladoRestaurado = JSON.parse(creativosPorClaveGuardado);
+    } catch {}
+    setColaDeTipos(colaRestaurada);
+    setTipoEnProcesoIdx(tipoEnProcesoIdxRestaurado);
+    setTiposPorAnuncio(tiposPorAnuncioRestaurado);
+
     setCargandoCreativos(true);
     setStep("creativos");
     setErrorMsg(null);
@@ -892,8 +1005,9 @@ function EstrategiaContent() {
       .then((creativosListos) => {
         localStorage.removeItem("quiubot_job_creativos_activo");
 
-        // Si este job era la regeneración de un solo anuncio (no un lote completo nuevo),
-        // restauramos el lote guardado y solo reemplazamos esa posición.
+        // Caso 1: este job era la regeneración de UNA sola card ya en el
+        // paso 6 (handleRegenerarUno o "Regenerar todos los de imagen"),
+        // completamente independiente de la cola nueva.
         const idxGuardado = localStorage.getItem("quiubot_job_regenerar_idx");
         const loteGuardado = localStorage.getItem("quiubot_creativos_lote");
         if (idxGuardado !== null && loteGuardado) {
@@ -901,7 +1015,7 @@ function EstrategiaContent() {
             const loteBase = JSON.parse(loteGuardado);
             const idx = parseInt(idxGuardado, 10);
             if (creativosListos[0]) {
-              loteBase[idx] = creativosListos[0];
+              loteBase[idx] = { ...creativosListos[0], origen: "imagen" };
             }
             setCreativos(loteBase);
           } catch {
@@ -910,9 +1024,26 @@ function EstrategiaContent() {
             localStorage.removeItem("quiubot_creativos_lote");
             localStorage.removeItem("quiubot_job_regenerar_idx");
           }
-        } else {
-          setCreativos(creativosListos);
+          return;
         }
+
+        // Caso 2: este job era el lote de imagen de la cola nueva --
+        // recalculamos las mismas claves que dispararImagen mandó (misma
+        // función determinística sobre estrategiaSeleccionada +
+        // tiposPorAnuncio, así que el orden coincide exacto).
+        const clavesImagen: string[] = [];
+        (estrategiaRestaurada?.conjuntos || []).forEach((conjunto: any, ci: number) => {
+          (conjunto.anuncios || []).forEach((_anuncio: any, ai: number) => {
+            const clave = `${ci}-${ai}`;
+            if (tiposPorAnuncioRestaurado[clave] === "imagen") clavesImagen.push(clave);
+          });
+        });
+        const acumulado = { ...acumuladoRestaurado };
+        clavesImagen.forEach((clave, i) => {
+          if (creativosListos[i]) acumulado[clave] = { ...creativosListos[i], origen: "imagen" };
+        });
+        setCreativosPorClave(acumulado);
+        setMostrandoTransicionTipo(true);
       })
       .catch((e: any) => {
         localStorage.removeItem("quiubot_job_creativos_activo");
@@ -929,9 +1060,9 @@ function EstrategiaContent() {
   }, []);
 
   // Si el usuario vuelve de /video con su video ya unido
-  // (?step=6&videoJobId=<id>), arma el creativo y lo lleva directo al
-  // paso 6 -- /video nunca conoce el shape de "creativo" de este wizard,
-  // esa traduccion vive aca.
+  // (?step=6&videoJobId=<id>&anuncioRef=ci-ai), arma el creativo para ESE
+  // anuncio puntual y continúa la cola -- /video nunca conoce el shape de
+  // "creativo" de este wizard, esa traduccion vive aca.
   useEffect(() => {
     const videoJobId = searchParams.get("videoJobId");
     if (!videoJobId) return;
@@ -954,6 +1085,40 @@ function EstrategiaContent() {
       } catch {}
     }
 
+    let colaRestaurada: TipoCreativo[] = [];
+    let tipoEnProcesoIdxRestaurado = 0;
+    let tiposPorAnuncioRestaurado: Record<string, TipoCreativo> = {};
+    let acumuladoRestaurado: Record<string, any> = {};
+    try {
+      const colaGuardada = localStorage.getItem("quiubot_cola_de_tipos");
+      if (colaGuardada) colaRestaurada = JSON.parse(colaGuardada);
+      const idxGuardadoCola = localStorage.getItem("quiubot_tipo_en_proceso_idx");
+      if (idxGuardadoCola !== null) tipoEnProcesoIdxRestaurado = parseInt(idxGuardadoCola, 10) || 0;
+      const tiposGuardados = localStorage.getItem("quiubot_tipos_por_anuncio");
+      if (tiposGuardados) tiposPorAnuncioRestaurado = JSON.parse(tiposGuardados);
+      const creativosPorClaveGuardado = localStorage.getItem("quiubot_creativos_por_clave");
+      if (creativosPorClaveGuardado) acumuladoRestaurado = JSON.parse(creativosPorClaveGuardado);
+    } catch {}
+    setColaDeTipos(colaRestaurada);
+    setTipoEnProcesoIdx(tipoEnProcesoIdxRestaurado);
+    setTiposPorAnuncio(tiposPorAnuncioRestaurado);
+
+    // El anuncio específico asignado a video -- de la URL de retorno (mas
+    // robusto) o, si faltara, de la clave dedicada que /video guardó antes
+    // de salir.
+    let anuncioRef = searchParams.get("anuncioRef");
+    if (!anuncioRef) {
+      try {
+        anuncioRef = localStorage.getItem("quiubot_video_anuncio_ref");
+      } catch {}
+    }
+    const [ciStr, aiStr] = (anuncioRef || "0-0").split("-");
+    const ci = parseInt(ciStr, 10) || 0;
+    const ai = parseInt(aiStr, 10) || 0;
+    try {
+      localStorage.removeItem("quiubot_video_anuncio_ref");
+    } catch {}
+
     setCargandoCreativos(true);
     setStep("creativos");
     setErrorMsg(null);
@@ -964,24 +1129,22 @@ function EstrategiaContent() {
         if (!data.ok || data.estado !== "listo" || !data.video_final_url) {
           throw new Error(data.error || "Este video todavía no está listo.");
         }
-        // Mismo angulo que usa handleConfirmarSeleccionAlbum para el
-        // primer anuncio recomendado -- el video es un solo creativo,
-        // reemplaza el lote completo (no convive con otros).
-        const primerAnuncio = estrategiaRestaurada?.conjuntos?.[0]?.anuncios?.[0];
-        setFuenteCreativos("video");
-        setCreativos([
-          {
-            id: videoJobId,
-            tipo: "video",
-            url_imagen: data.video_final_url,
-            titulo: primerAnuncio?.copy?.titulo || "",
-            texto: primerAnuncio?.copy?.texto || "",
-            cta: primerAnuncio?.copy?.cta || "Comprar ahora",
-            conjunto_nombre: primerAnuncio ? estrategiaRestaurada.conjuntos[0].nombre : "",
-            anuncio_nombre: primerAnuncio?.nombre || "",
-            argumentacion: primerAnuncio?.argumentacion || "",
-          },
-        ]);
+        const anuncio = estrategiaRestaurada?.conjuntos?.[ci]?.anuncios?.[ai];
+        const nuevoCreativo = {
+          id: videoJobId,
+          tipo: "video",
+          origen: "video",
+          url_imagen: data.video_final_url,
+          titulo: anuncio?.copy?.titulo || "",
+          texto: anuncio?.copy?.texto || "",
+          cta: anuncio?.copy?.cta || "Comprar ahora",
+          conjunto_nombre: anuncio ? estrategiaRestaurada.conjuntos[ci].nombre : "",
+          anuncio_nombre: anuncio?.nombre || "",
+          argumentacion: anuncio?.argumentacion || "",
+        };
+        const acumulado = { ...acumuladoRestaurado, [`${ci}-${ai}`]: nuevoCreativo };
+        setCreativosPorClave(acumulado);
+        setMostrandoTransicionTipo(true);
       })
       .catch((e: any) => {
         setErrorMsg(e?.message || "No se pudo recuperar el video generado.");
@@ -989,7 +1152,8 @@ function EstrategiaContent() {
       })
       .finally(() => setCargandoCreativos(false));
 
-    // limpia el ?step=6&videoJobId= de la URL para que un refresh no repita esto
+    // limpia el ?step=6&videoJobId=&anuncioRef= de la URL para que un
+    // refresh no repita esto
     router.replace("/estrategia");
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
@@ -1064,18 +1228,117 @@ function EstrategiaContent() {
     try {
       localStorage.setItem("quiubot_estrategia_seleccionada", JSON.stringify(estrategia));
     } catch {}
-    setStep("fuente");
+    // Default: todos los anuncios arrancan asignados a "imagen" -- el
+    // usuario solo cambia las filas que quiere distinto, no tiene que
+    // elegir fila por fila para el caso más común.
+    const defaults: Record<string, TipoCreativo> = {};
+    (estrategia?.conjuntos || []).forEach((conjunto: any, ci: number) => {
+      (conjunto.anuncios || []).forEach((_anuncio: any, ai: number) => {
+        defaults[`${ci}-${ai}`] = "imagen";
+      });
+    });
+    setTiposPorAnuncio(defaults);
+    setColaDeTipos([]);
+    setTipoEnProcesoIdx(0);
+    setCreativosPorClave({});
+    setStep("asignar-tipos");
   };
 
-  const handleGenerarConIA = async () => {
-    setFuenteCreativos("ia");
+  // Recorre estrategiaSeleccionada.conjuntos[].anuncios[] en orden y arma
+  // (a) el objeto estrategia filtrado a solo los anuncios con ese tipo, y
+  // (b) las claves "ci-ai" correspondientes, en el mismo orden -- función
+  // determinística, se usa tanto al disparar como al recuperar por
+  // notificación (el orden siempre coincide).
+  function filtrarEstrategiaPorTipo(tipo: TipoCreativo, tipos: Record<string, TipoCreativo>) {
+    const claves: string[] = [];
+    const conjuntosFiltrados: any[] = [];
+    (estrategiaSeleccionada?.conjuntos || []).forEach((conjunto: any, ci: number) => {
+      const anunciosDelConjunto: any[] = [];
+      (conjunto.anuncios || []).forEach((anuncio: any, ai: number) => {
+        const clave = `${ci}-${ai}`;
+        if (tipos[clave] === tipo) {
+          anunciosDelConjunto.push(anuncio);
+          claves.push(clave);
+        }
+      });
+      if (anunciosDelConjunto.length > 0) {
+        conjuntosFiltrados.push({ ...conjunto, anuncios: anunciosDelConjunto });
+      }
+    });
+    return { estrategiaFiltrada: { ...estrategiaSeleccionada, conjuntos: conjuntosFiltrados }, claves };
+  }
+
+  // Ensambla el array final "creativos" recorriendo la estrategia en su
+  // orden original y buscando cada anuncio en el acumulado por clave --
+  // así ningún anuncio se pierde ni queda en la posición equivocada, sin
+  // importar en qué orden se procesaron los tipos.
+  function ensamblarCreativosDesde(estrategia: any, acumulado: Record<string, any>) {
+    const final: any[] = [];
+    (estrategia?.conjuntos || []).forEach((conjunto: any, ci: number) => {
+      (conjunto.anuncios || []).forEach((_anuncio: any, ai: number) => {
+        const clave = `${ci}-${ai}`;
+        if (acumulado[clave]) final.push(acumulado[clave]);
+      });
+    });
+    setCreativos(final);
+  }
+
+  // Un tipo de la cola terminó -- nunca se auto-continúa: siempre se
+  // muestra la pantalla de transición, incluso si era el último (ahí
+  // dice "Ver mis creativos" en vez de "Continuar").
+  function marcarTipoCompletado(acumuladoActualizado: Record<string, any>) {
+    setCreativosPorClave(acumuladoActualizado);
+    setMostrandoTransicionTipo(true);
+  }
+
+  // Botón "Continuar →" / "Ver mis creativos →" de la pantalla de
+  // transición -- avanza al siguiente tipo de la cola, o ensambla y salta
+  // al paso 6 si ya no queda ninguno.
+  function continuarSiguienteTipo() {
+    const nuevoIdx = tipoEnProcesoIdx + 1;
+    setMostrandoTransicionTipo(false);
+    if (nuevoIdx >= colaDeTipos.length) {
+      ensamblarCreativosDesde(estrategiaSeleccionada, creativosPorClave);
+      setTipoEnProcesoIdx(nuevoIdx);
+      setStep("creativos");
+    } else {
+      setTipoEnProcesoIdx(nuevoIdx);
+      dispararTipo(colaDeTipos[nuevoIdx]);
+    }
+  }
+
+  function dispararTipo(tipo: TipoCreativo) {
+    if (tipo === "video") dispararVideo();
+    else if (tipo === "imagen") dispararImagen();
+    else dispararAlbum();
+  }
+
+  // Paso "asignar-tipos" -> botón "Continuar →": arma la cola (video
+  // primero si está, después imagen, después álbum -- orden fijo, no el
+  // de asignación) y dispara el primer tipo.
+  const handleConfirmarAsignaciones = () => {
+    const presentes = new Set(Object.values(tiposPorAnuncio));
+    const cola: TipoCreativo[] = [];
+    if (presentes.has("video")) cola.push("video");
+    if (presentes.has("imagen")) cola.push("imagen");
+    if (presentes.has("album")) cola.push("album");
+    setColaDeTipos(cola);
+    setTipoEnProcesoIdx(0);
+    setCreativosPorClave({});
+    if (cola.length === 0) return; // no debería pasar (default es "imagen"), guarda extra
+    dispararTipo(cola[0]);
+  };
+
+  // Genera imagen con IA solo para los anuncios asignados a "imagen" --
+  // un único job (mismo patrón que handleRegenerarUno, generalizado de 1 a
+  // N anuncios), se reparte por posición al terminar.
+  const dispararImagen = async () => {
+    const { estrategiaFiltrada, claves } = filtrarEstrategiaPorTipo("imagen", tiposPorAnuncio);
     setAnalisisResultado(null);
     setCargandoCreativos(true);
     setStep("creativos");
     setErrorMsg(null);
     setProgresoCreativos({ completados: 0, total: null, parciales: [] });
-    // Un lote completo nuevo nunca es una regeneración parcial — limpiamos cualquier
-    // marca vieja de "regenerando el índice X" que pudiera haber quedado de antes.
     localStorage.removeItem("quiubot_creativos_lote");
     localStorage.removeItem("quiubot_job_regenerar_idx");
     try {
@@ -1090,7 +1353,7 @@ function EstrategiaContent() {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
-          estrategia: estrategiaSeleccionada,
+          estrategia: estrategiaFiltrada,
           descripcion_visual_producto: descripcionVisual,
           imagenes_producto_base64: imagenesParaEnviar,
           tipo_contenido: tipoContenido,
@@ -1099,19 +1362,76 @@ function EstrategiaContent() {
       });
       const data = await res.json().catch(() => ({}));
       if (!res.ok || !data.job_id) {
-        setErrorMsg(data.error || "No se pudieron generar los creativos.");
-        setCreativos([]);
+        setErrorMsg(data.error || "No se pudieron generar los creativos de imagen.");
         return;
       }
-      localStorage.setItem("quiubot_job_creativos_activo", data.job_id);
+      // Persistimos el estado de la cola en claves dedicadas -- la
+      // recuperación por notificación (?job=) salta la restauración
+      // genérica de LLAVE_PROGRESO, así que necesita esto para saber qué
+      // más queda pendiente después de este job.
+      try {
+        localStorage.setItem("quiubot_job_creativos_activo", data.job_id);
+        localStorage.setItem("quiubot_cola_de_tipos", JSON.stringify(colaDeTipos));
+        localStorage.setItem("quiubot_tipo_en_proceso_idx", String(tipoEnProcesoIdx));
+        localStorage.setItem("quiubot_tipos_por_anuncio", JSON.stringify(tiposPorAnuncio));
+        localStorage.setItem("quiubot_creativos_por_clave", JSON.stringify(creativosPorClave));
+      } catch {}
       const creativosListos = await pollJobHasta(data.job_id, (p) =>
         setProgresoCreativos({ completados: p.creativos.length, total: p.total_creativos, parciales: p.creativos })
       );
       localStorage.removeItem("quiubot_job_creativos_activo");
-      setCreativos(creativosListos);
+      const acumulado = { ...creativosPorClave };
+      claves.forEach((clave, i) => {
+        if (creativosListos[i]) acumulado[clave] = { ...creativosListos[i], origen: "imagen" };
+      });
+      marcarTipoCompletado(acumulado);
     } catch (e: any) {
       setErrorMsg(e?.message || "No se pudo conectar con el servidor.");
-      setCreativos([]);
+    } finally {
+      setCargandoCreativos(false);
+    }
+  };
+
+  // "🔄 Regenerar todos los de imagen" en el paso 6 -- vuelve a generar
+  // SOLO las cards de origen "imagen" desde el copy original recomendado
+  // (descarta ediciones manuales de esas cards, mismo comportamiento que
+  // ya tenía "Regenerar todos"), y refresca el array final in-place, sin
+  // pasar por la cola/transición de nuevo (ya se pasó ese punto).
+  const handleRegenerarTodosImagen = async () => {
+    const { estrategiaFiltrada, claves } = filtrarEstrategiaPorTipo("imagen", tiposPorAnuncio);
+    if (claves.length === 0) return;
+    setCargandoCreativos(true);
+    setErrorMsg(null);
+    setProgresoCreativos({ completados: 0, total: null, parciales: [] });
+    try {
+      const imagenesParaEnviar = imagenesBase64.length > 0 ? imagenesBase64 : imagenesBase64Persistidas;
+      const res = await fetch("/api/crear-creativos", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          estrategia: estrategiaFiltrada,
+          descripcion_visual_producto: descripcionVisual,
+          imagenes_producto_base64: imagenesParaEnviar,
+          tipo_contenido: tipoContenido,
+          descripcion_servicio: tipoContenido === "servicio" ? descripcionServicio : null,
+        }),
+      });
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok || !data.job_id) {
+        setErrorMsg(data.error || "No se pudieron regenerar los creativos de imagen.");
+        return;
+      }
+      const creativosListos = await pollJobHasta(data.job_id, (p) =>
+        setProgresoCreativos({ completados: p.creativos.length, total: p.total_creativos, parciales: p.creativos })
+      );
+      const acumulado = { ...creativosPorClave };
+      claves.forEach((clave, i) => {
+        if (creativosListos[i]) acumulado[clave] = { ...creativosListos[i], origen: "imagen" };
+      });
+      setCreativosPorClave(acumulado);
+      ensamblarCreativosDesde(estrategiaSeleccionada, acumulado);
+    } catch (e: any) {
+      setErrorMsg(e?.message || "No se pudo conectar con el servidor.");
     } finally {
       setCargandoCreativos(false);
     }
@@ -1173,7 +1493,10 @@ function EstrategiaContent() {
       setCreativos((prev) => {
         if (!prev) return prev;
         const nuevos = [...prev];
-        nuevos[idx] = creativosListos[0];
+        // origen se fija a mano -- este botón solo existe en cards de
+        // origen "imagen" (ver el branch de render en el paso 6), y la
+        // respuesta cruda de crear-creativos no trae ese campo.
+        nuevos[idx] = { ...creativosListos[0], origen: "imagen" };
         return nuevos;
       });
     } catch (e: any) {
@@ -1188,28 +1511,33 @@ function EstrategiaContent() {
     setCreativos((prev) => prev?.filter((_, i) => i !== idx) ?? null);
   };
 
-  const handleUsarAlbum = async () => {
-    setFuenteCreativos("album");
+  // Dispara el sub-flujo de álbum SOLO para los anuncios asignados a
+  // "album" -- mismo sub-paso de siempre (album-selector -> analisis), con
+  // el aplanado filtrado en vez de recorrer todos los anuncios.
+  const dispararAlbum = async () => {
     setCargandoAlbum(true);
     setStep("album-selector");
 
-    // Aplanamos los anuncios que recomendó la estrategia -- exactamente uno
-    // por conjunto/anuncio, con su copy real. Este número es el que manda:
-    // el usuario no puede seleccionar más ni menos huecos que estos.
     const angulos: any[] = [];
-    for (const conjunto of estrategiaSeleccionada?.conjuntos || []) {
-      for (const anuncio of conjunto.anuncios || []) {
-        angulos.push({
-          conjunto_nombre: conjunto.nombre,
-          anuncio_nombre: anuncio.nombre,
-          titulo: anuncio.copy?.titulo || "",
-          texto: anuncio.copy?.texto || "",
-          cta: anuncio.copy?.cta || "Comprar ahora",
-          argumentacion: anuncio.argumentacion || "",
-        });
-      }
-    }
+    const claves: string[] = [];
+    (estrategiaSeleccionada?.conjuntos || []).forEach((conjunto: any, ci: number) => {
+      (conjunto.anuncios || []).forEach((anuncio: any, ai: number) => {
+        const clave = `${ci}-${ai}`;
+        if (tiposPorAnuncio[clave] === "album") {
+          angulos.push({
+            conjunto_nombre: conjunto.nombre,
+            anuncio_nombre: anuncio.nombre,
+            titulo: anuncio.copy?.titulo || "",
+            texto: anuncio.copy?.texto || "",
+            cta: anuncio.copy?.cta || "Comprar ahora",
+            argumentacion: anuncio.argumentacion || "",
+          });
+          claves.push(clave);
+        }
+      });
+    });
     setAngulosRecomendados(angulos);
+    setAngulosClaves(claves);
     setAsignaciones(new Array(angulos.length).fill(null));
 
     try {
@@ -1224,15 +1552,23 @@ function EstrategiaContent() {
   };
 
   // /video es standalone (no vive dentro de este archivo a propósito).
-  // Antes de salir, nos aseguramos de que las 2 claves dedicadas que /video
-  // va a leer en modo precargado (returnTo=estrategia) estén al día -- casi
-  // siempre ya lo están a esta altura del wizard, esto es solo defensivo.
-  // quiubot_estrategia_seleccionada ya se guarda desde handleSeleccionarEstrategia.
-  const handleIrAVideo = () => {
+  // Antes de salir, guardamos las claves dedicadas que /video va a leer:
+  // las 2 de siempre (fotos/descripción, en modo precargado) más el
+  // anuncio ESPECÍFICO asignado a video (para que el copy/CTA que se
+  // precarga y el creativo final que vuelve sean los de ESE anuncio, no
+  // conjuntos[0].anuncios[0] a lo bruto) y el estado de la cola (para que
+  // /estrategia sepa qué sigue cuando el usuario vuelva).
+  const dispararVideo = () => {
+    const claveVideo = Object.keys(tiposPorAnuncio).find((k) => tiposPorAnuncio[k] === "video");
     try {
       const imagenesParaVideo = imagenesBase64.length > 0 ? imagenesBase64 : imagenesBase64Persistidas;
       localStorage.setItem("quiubot_imagenes_producto_base64", JSON.stringify(imagenesParaVideo));
       localStorage.setItem("quiubot_descripcion_visual_producto", descripcionVisual || "");
+      if (claveVideo) localStorage.setItem("quiubot_video_anuncio_ref", claveVideo);
+      localStorage.setItem("quiubot_cola_de_tipos", JSON.stringify(colaDeTipos));
+      localStorage.setItem("quiubot_tipo_en_proceso_idx", String(tipoEnProcesoIdx));
+      localStorage.setItem("quiubot_tipos_por_anuncio", JSON.stringify(tiposPorAnuncio));
+      localStorage.setItem("quiubot_creativos_por_clave", JSON.stringify(creativosPorClave));
     } catch {}
     router.push("/video?returnTo=estrategia");
   };
@@ -1266,6 +1602,7 @@ function EstrategiaContent() {
       return {
         id: it.public_id || `album_${i}`,
         tipo: it.tipo,
+        origen: "album",
         url_imagen: it.url_imagen,
         titulo: ang.titulo,
         texto: ang.texto,
@@ -1275,7 +1612,11 @@ function EstrategiaContent() {
         argumentacion: ang.argumentacion,
       };
     });
-    setCreativos(nuevosCreativos);
+    // Ojo: ya NO se hace setCreativos(nuevosCreativos) acá -- este álbum
+    // puede ser solo uno de varios tipos en la cola. Los resultados se
+    // guardan en creativosPorClave recién cuando el usuario confirma la
+    // pantalla de análisis (handleContinuarDesdeAnalisis), y ensamblarCreativosDesde
+    // arma el array final "creativos" respetando el orden original.
     setAnalisisResultado(null);
     setErrorMsg(null);
     setAnalizandoAlbum(true);
@@ -1304,6 +1645,33 @@ function EstrategiaContent() {
     }
   };
 
+  // Paso "analisis" -> botón "Continuar y editar copys →": recién acá se
+  // materializan los creativos de álbum en creativosPorClave (angulosRecomendados/
+  // asignaciones/angulosClaves siguen intactos desde handleConfirmarSeleccionAlbum,
+  // no hace falta un estado temporal aparte) y se marca el tipo como completado.
+  const handleContinuarDesdeAnalisis = () => {
+    const acumulado = { ...creativosPorClave };
+    angulosRecomendados.forEach((ang, i) => {
+      const it = asignaciones[i];
+      const clave = angulosClaves[i];
+      if (it && clave) {
+        acumulado[clave] = {
+          id: it.public_id || `album_${i}`,
+          tipo: it.tipo,
+          origen: "album",
+          url_imagen: it.url_imagen,
+          titulo: ang.titulo,
+          texto: ang.texto,
+          cta: ang.cta,
+          conjunto_nombre: ang.conjunto_nombre,
+          anuncio_nombre: ang.anuncio_nombre,
+          argumentacion: ang.argumentacion,
+        };
+      }
+    });
+    marcarTipoCompletado(acumulado);
+  };
+
   const actualizarCreativo = (idx: number, campo: string, valor: string) => {
     setCreativos((prev) => prev?.map((c, i) => (i === idx ? { ...c, [campo]: valor } : c)) ?? null);
   };
@@ -1314,14 +1682,21 @@ function EstrategiaContent() {
     setErrorTitulo(null);
     setErrorAccion(null);
     try {
-      const efectividadFinal = fuenteCreativos === "album" ? analisisResultado?.score : estrategiaSeleccionada?.efectividad;
+      // Mismos 3 valores que ya mandaba fuenteCreativos ("ia"/"album"/"video")
+      // cuando solo había un tipo por campaña -- "mixto" es el único valor
+      // nuevo, para cuando la cola combina más de uno.
+      const tiposUnicos = new Set(colaDeTipos);
+      const fuenteCreativosFinal =
+        tiposUnicos.size > 1 ? "mixto" : colaDeTipos[0] === "imagen" ? "ia" : colaDeTipos[0] || "ia";
+      const efectividadFinal =
+        colaDeTipos.length === 1 && colaDeTipos[0] === "album" ? analisisResultado?.score : estrategiaSeleccionada?.efectividad;
       const res = await fetch("/api/publicar-estrategia", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           estrategia: estrategiaSeleccionada,
           creativos,
-          fuente_creativos: fuenteCreativos,
+          fuente_creativos: fuenteCreativosFinal,
           efectividad_final: efectividadFinal,
         }),
       });
@@ -1352,7 +1727,9 @@ function EstrategiaContent() {
   };
 
   const scoreParaMostrar =
-    fuenteCreativos === "album" ? analisisResultado?.score ?? estrategiaSeleccionada?.efectividad : estrategiaSeleccionada?.efectividad;
+    colaDeTipos.length === 1 && colaDeTipos[0] === "album"
+      ? analisisResultado?.score ?? estrategiaSeleccionada?.efectividad
+      : estrategiaSeleccionada?.efectividad;
 
   const algunaRegenerando = Object.values(regenerandoIndices).some(Boolean);
 
@@ -1429,6 +1806,15 @@ function EstrategiaContent() {
           Paso {NUMERO_DE_PASO[step]} de 6
         </p>
 
+        {mostrandoTransicionTipo ? (
+          <PantallaTransicionTipo
+            tipoCompletado={colaDeTipos[tipoEnProcesoIdx]}
+            tipoSiguiente={colaDeTipos[tipoEnProcesoIdx + 1] ?? null}
+            conteoSiguiente={Object.values(tiposPorAnuncio).filter((t) => t === colaDeTipos[tipoEnProcesoIdx + 1]).length}
+            onContinuar={continuarSiguienteTipo}
+          />
+        ) : (
+          <>
         {step === "tipo" && (
           <div style={{ display: "flex", flexDirection: "column", gap: "1.5rem" }} data-tour="estrategia-tipo">
             <div>
@@ -1760,41 +2146,70 @@ function EstrategiaContent() {
           </div>
         )}
 
-        {step === "fuente" && (
+        {step === "asignar-tipos" && (
           <div>
             <button onClick={() => setStep("resultado")} style={{ marginBottom: 16, background: "none", border: "none", color: "#7F77DD", cursor: "pointer", fontSize: 13 }}>
               ← Volver a estrategias
             </button>
-            <p style={{ fontSize: 15, fontWeight: 600, color: "#1a1a1a", marginBottom: 16 }}>5. ¿Cómo quieres tus creativos?</p>
-            <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr 1fr", gap: 16 }}>
-              <div onClick={handleGenerarConIA} style={{ padding: "2rem", borderRadius: 16, border: "1px solid #e8e8e6", background: "#fff", cursor: "pointer", textAlign: "center" }}>
-                <div style={{ width: 56, height: 56, borderRadius: "50%", background: "#F3F2FE", display: "flex", alignItems: "center", justifyContent: "center", margin: "0 auto 12px" }}>
-                  <Bot size={26} color="#534AB7" strokeWidth={2} aria-hidden="true" />
-                </div>
-                <div style={{ fontWeight: 600, marginBottom: 6 }}>Imagen con IA</div>
-                <div style={{ fontSize: 12, color: "#666" }}>Crea imágenes y copys nuevos automáticamente según tu estrategia.</div>
-              </div>
-              <div onClick={handleIrAVideo} style={{ padding: "2rem", borderRadius: 16, border: "1px solid #e8e8e6", background: "#fff", cursor: "pointer", textAlign: "center" }}>
-                <div style={{ width: 56, height: 56, borderRadius: "50%", background: "#F3F2FE", display: "flex", alignItems: "center", justifyContent: "center", margin: "0 auto 12px" }}>
-                  <Video size={26} color="#534AB7" strokeWidth={2} aria-hidden="true" />
-                </div>
-                <div style={{ fontWeight: 600, marginBottom: 6 }}>Video con IA</div>
-                <div style={{ fontSize: 12, color: "#666" }}>Genera un video de 4 fragmentos con tus fotos, listo para Meta Ads.</div>
-              </div>
-              <div onClick={handleUsarAlbum} style={{ padding: "2rem", borderRadius: 16, border: "1px solid #e8e8e6", background: "#fff", cursor: "pointer", textAlign: "center" }}>
-                <div style={{ width: 56, height: 56, borderRadius: "50%", background: "#F3F2FE", display: "flex", alignItems: "center", justifyContent: "center", margin: "0 auto 12px" }}>
-                  <FolderOpen size={26} color="#534AB7" strokeWidth={2} aria-hidden="true" />
-                </div>
-                <div style={{ fontWeight: 600, marginBottom: 6 }}>Usar mis creativos del álbum</div>
-                <div style={{ fontSize: 12, color: "#666" }}>Elige imágenes o videos que ya subiste. El sistema evaluará si encajan con la estrategia.</div>
-              </div>
+            <p style={{ fontSize: 15, fontWeight: 600, color: "#1a1a1a", marginBottom: 4 }}>6. ¿Cómo quieres cada anuncio?</p>
+            <p style={{ fontSize: 13, color: "#666", marginBottom: 16 }}>
+              Elige la fuente del creativo para cada anuncio. Solo se puede generar 1 video por estrategia.
+            </p>
+
+            <div style={{ display: "flex", flexDirection: "column", gap: 10, marginBottom: 20 }}>
+              {(estrategiaSeleccionada?.conjuntos || []).flatMap((conjunto: any, ci: number) =>
+                (conjunto.anuncios || []).map((anuncio: any, ai: number) => {
+                  const clave = `${ci}-${ai}`;
+                  const tipoActual = tiposPorAnuncio[clave] || "imagen";
+                  const hayVideoEnOtroLado = Object.entries(tiposPorAnuncio).some(([k, v]) => v === "video" && k !== clave);
+                  return (
+                    <div key={clave} style={{ background: "#fff", border: "1px solid #e8e8e6", borderRadius: 12, padding: "1rem 1.25rem", display: "flex", alignItems: "center", gap: 16, flexWrap: "wrap" }}>
+                      <div style={{ flex: 1, minWidth: 200 }}>
+                        <div style={{ fontSize: 10, color: "#999", fontFamily: "ui-monospace, monospace", textTransform: "uppercase", letterSpacing: 0.4 }}>{conjunto.nombre}</div>
+                        <div style={{ fontWeight: 600, fontSize: 14, color: "#1a1a1a" }}>{anuncio.copy?.titulo || anuncio.nombre}</div>
+                        <div style={{ fontSize: 12, color: "#666" }}>{anuncio.copy?.texto}</div>
+                      </div>
+                      <div style={{ display: "flex", gap: 6, flexWrap: "wrap" }}>
+                        {(["imagen", "video", "album"] as TipoCreativo[]).map((tipo) => {
+                          const deshabilitado = tipo === "video" && hayVideoEnOtroLado && tipoActual !== "video";
+                          const activo = tipoActual === tipo;
+                          return (
+                            <button
+                              key={tipo}
+                              onClick={() => !deshabilitado && setTiposPorAnuncio((prev) => ({ ...prev, [clave]: tipo }))}
+                              disabled={deshabilitado}
+                              title={deshabilitado ? "Solo se puede generar 1 video por estrategia" : undefined}
+                              style={{
+                                padding: "8px 14px", borderRadius: 20, fontSize: 12.5, fontWeight: 600,
+                                cursor: deshabilitado ? "not-allowed" : "pointer",
+                                border: activo ? "1.5px solid #534AB7" : "1px solid #e0e0e0",
+                                background: activo ? "#F3F2FE" : "#fff",
+                                color: deshabilitado ? "#ccc" : activo ? "#534AB7" : "#666",
+                              }}
+                            >
+                              {tipo === "imagen" ? "Imagen con IA" : tipo === "video" ? "Video con IA" : "Álbum"}
+                            </button>
+                          );
+                        })}
+                      </div>
+                    </div>
+                  );
+                })
+              )}
             </div>
+
+            <button
+              onClick={handleConfirmarAsignaciones}
+              style={{ width: "100%", background: "#534AB7", color: "#fff", border: "none", padding: 16, borderRadius: 10, fontSize: 16, fontWeight: 600, cursor: "pointer" }}
+            >
+              Continuar →
+            </button>
           </div>
         )}
 
         {step === "album-selector" && (
           <div>
-            <button onClick={() => setStep("fuente")} style={{ marginBottom: 16, background: "none", border: "none", color: "#7F77DD", cursor: "pointer", fontSize: 13 }}>
+            <button onClick={() => setStep("asignar-tipos")} style={{ marginBottom: 16, background: "none", border: "none", color: "#7F77DD", cursor: "pointer", fontSize: 13 }}>
               ← Atrás
             </button>
             <p style={{ fontSize: 15, fontWeight: 600, color: "#1a1a1a", marginBottom: 4 }}>
@@ -1986,7 +2401,7 @@ function EstrategiaContent() {
                     </div>
                   ))}
                 </div>
-                <button onClick={() => setStep("creativos")} style={{ width: "100%", background: "#534AB7", color: "#fff", border: "none", padding: 16, borderRadius: 10, fontSize: 16, fontWeight: 600, cursor: "pointer" }}>
+                <button onClick={handleContinuarDesdeAnalisis} style={{ width: "100%", background: "#534AB7", color: "#fff", border: "none", padding: 16, borderRadius: 10, fontSize: 16, fontWeight: 600, cursor: "pointer" }}>
                   Continuar y editar copys →
                 </button>
               </>
@@ -1997,12 +2412,12 @@ function EstrategiaContent() {
         {step === "creativos" && (
           <div>
             <button
-              onClick={() => !algunaRegenerando && setStep(fuenteCreativos === "album" ? "analisis" : "fuente")}
+              onClick={() => !algunaRegenerando && setStep("asignar-tipos")}
               disabled={algunaRegenerando}
               title={algunaRegenerando ? "Espera a que termine de regenerar el anuncio" : undefined}
               style={{ marginBottom: 16, background: "none", border: "none", color: algunaRegenerando ? "#bbb" : "#7F77DD", cursor: algunaRegenerando ? "not-allowed" : "pointer", fontSize: 13 }}
             >
-              {fuenteCreativos === "album" ? "← Volver al análisis" : "← Cambiar fuente de creativos"}
+              ← Cambiar asignación de creativos
             </button>
             {algunaRegenerando && (
               <p style={{ fontSize: 12, color: "#999", marginTop: -12, marginBottom: 16 }}>
@@ -2018,12 +2433,12 @@ function EstrategiaContent() {
                     Efectividad estimada: {scoreParaMostrar}%
                   </span>
                 )}
-                {fuenteCreativos === "ia" && !cargandoCreativos && creativos && creativos.length > 0 && (
+                {!cargandoCreativos && creativos && creativos.some((c) => c.origen === "imagen") && (
                   <button
-                    onClick={handleGenerarConIA}
+                    onClick={handleRegenerarTodosImagen}
                     style={{ background: "#fff", border: "1px solid #e0e0e0", color: "#534AB7", fontSize: 13, fontWeight: 600, padding: "8px 14px", borderRadius: 20, cursor: "pointer" }}
                   >
-                    🔄 Regenerar todos
+                    🔄 Regenerar todos los de imagen
                   </button>
                 )}
               </div>
@@ -2079,7 +2494,7 @@ function EstrategiaContent() {
                         )}
 
                         <div style={{ padding: "1rem", display: "flex", flexDirection: "column", gap: 8 }}>
-                          {fuenteCreativos === "album" || fuenteCreativos === "video" ? (
+                          {c.origen === "album" || c.origen === "video" ? (
                             <>
                               <input placeholder="Título del anuncio" value={c.titulo} onChange={(e) => actualizarCreativo(idx, "titulo", e.target.value)} style={{ padding: 8, borderRadius: 6, border: "1px solid #e0e0e0", fontSize: 13, fontWeight: 600 }} />
                               <textarea placeholder="Texto / descripción" value={c.texto} onChange={(e) => actualizarCreativo(idx, "texto", e.target.value)} style={{ padding: 8, borderRadius: 6, border: "1px solid #e0e0e0", fontSize: 12, resize: "none", minHeight: 50 }} />
@@ -2160,6 +2575,8 @@ function EstrategiaContent() {
               </div>
             )}
           </div>
+        )}
+          </>
         )}
       </div>
 

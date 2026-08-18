@@ -314,11 +314,22 @@ function VideoContent() {
     const descGuardada = localStorage.getItem("quiubot_descripcion_visual_producto");
     if (descGuardada) setArgumentacion(descGuardada);
 
+    // El CTA precargado es del anuncio ESPECÍFICO que el usuario asignó a
+    // video en el paso de asignación (quiubot_video_anuncio_ref, "ci-ai")
+    // -- no siempre conjuntos[0].anuncios[0]. Si por algún motivo esa
+    // referencia no está (ej. link viejo de antes de esta funcionalidad),
+    // cae al primer anuncio como respaldo defensivo.
     const estrategiaGuardada = localStorage.getItem("quiubot_estrategia_seleccionada");
     if (estrategiaGuardada) {
       try {
         const estrategia = JSON.parse(estrategiaGuardada);
-        const ctaResuelto = estrategia?.conjuntos?.[0]?.anuncios?.[0]?.copy?.cta || "Comprar ahora";
+        const anuncioRef = localStorage.getItem("quiubot_video_anuncio_ref");
+        let anuncioAsignado: any = null;
+        if (anuncioRef) {
+          const [ci, ai] = anuncioRef.split("-").map((n) => parseInt(n, 10));
+          anuncioAsignado = estrategia?.conjuntos?.[ci]?.anuncios?.[ai] || null;
+        }
+        const ctaResuelto = anuncioAsignado?.copy?.cta || estrategia?.conjuntos?.[0]?.anuncios?.[0]?.copy?.cta || "Comprar ahora";
         setTextoCta(ctaResuelto);
       } catch {}
     }
@@ -492,16 +503,21 @@ function VideoContent() {
       // Si se vino del wizard de estrategia (aunque haya sido por
       // notificación, sin ?returnTo= en esta URL puntual), se vuelve
       // directo al paso 6 con el video ya armado, en vez de mostrar la
-      // pantalla de resultado standalone.
+      // pantalla de resultado standalone. anuncioRef viaja en la URL de
+      // retorno (más robusto que depender solo de que la clave de
+      // localStorage siga ahí) para que /estrategia sepa a qué anuncio
+      // puntual corresponde este video.
       let vuelveAEstrategia = false;
+      let anuncioRef: string | null = null;
       try {
         vuelveAEstrategia = localStorage.getItem("quiubot_video_return_to") === "estrategia";
+        anuncioRef = localStorage.getItem("quiubot_video_anuncio_ref");
       } catch {}
       if (vuelveAEstrategia) {
         try {
           localStorage.removeItem("quiubot_video_return_to");
         } catch {}
-        router.push(`/estrategia?step=6&videoJobId=${jobId}`);
+        router.push(`/estrategia?step=6&videoJobId=${jobId}${anuncioRef ? `&anuncioRef=${anuncioRef}` : ""}`);
         return;
       }
 
