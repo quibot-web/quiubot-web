@@ -844,6 +844,10 @@ export default function Home() {
                 <span className="qb-nav-icon"><Icono><path d="M12 2l2.4 7.2H22l-6 4.4 2.3 7.2L12 16.4 5.7 20.8 8 13.6l-6-4.4h7.6z" /></Icono></span>
                 Novedades
               </a>
+              <a href="/admin/musica" className="qb-admin-item">
+                <span className="qb-nav-icon"><Icono><path d="M9 18V5l12-2v13" /><circle cx="6" cy="18" r="3" /><circle cx="18" cy="16" r="3" /></Icono></span>
+                Música
+              </a>
             </div>
           </div>
         )}
