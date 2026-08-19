@@ -730,24 +730,14 @@ function VideoContent() {
 
             {!modoWizard && (
               <>
-                <p style={{ fontSize: 14, fontWeight: 600, marginBottom: 8, color: "#1a1a1a" }}>3. Texto del llamado a la acción (opcional)</p>
-                <input
-                  value={textoCta}
-                  onChange={(e) => setTextoCta(e.target.value)}
-                  placeholder="Ej: Compra ahora"
-                  style={{ width: "100%", padding: 10, borderRadius: 8, border: "1px solid #e0e0e0", fontSize: 13, boxSizing: "border-box", marginBottom: 20 }}
-                />
-                <p style={{ fontSize: 11.5, color: "#999", marginTop: -14, marginBottom: 20 }}>
-                  Se puede editar de nuevo más adelante, antes de unir el video final.
-                </p>
-
                 {/* Selector, no campo de texto libre -- es un parámetro de
                     campaña (como elegir la fuente de las fotos), no algo
                     que el usuario redacte. Los textos en pantalla del
-                    video se generan solos con IA según esta elección. En
+                    video (incluido el CTA) se generan solos con IA según
+                    esta elección -- ya no hay campo de CTA manual acá. En
                     modo wizard esto ya viene decidido desde el paso 3 y
                     no se vuelve a preguntar. */}
-                <p style={{ fontSize: 14, fontWeight: 600, marginBottom: 8, color: "#1a1a1a" }}>4. Objetivo de la campaña</p>
+                <p style={{ fontSize: 14, fontWeight: 600, marginBottom: 8, color: "#1a1a1a" }}>3. Objetivo de la campaña</p>
                 <select
                   value={objetivo}
                   onChange={(e) => setObjetivo(e.target.value)}
