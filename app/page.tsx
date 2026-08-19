@@ -294,6 +294,10 @@ export default function Home() {
   const [adminAbierto, setAdminAbierto] = useState(false);
   const [hoverExpandido, setHoverExpandido] = useState(false);
   const expandidoVisual = !colapsado || hoverExpandido;
+  // Controla el dark del panel de contenido principal (header + area de
+  // la pestaña activa) -- solo tiene sentido si el sidebar realmente esta
+  // mostrando la cara de atras del flip (rol admin + adminAbierto).
+  const modoAdminVisual = rol === "admin" && adminAbierto;
 
   const cargarRol = () => {
     fetch("/api/usuario/rol").then(r => r.json()).then(data => setRol(data.rol));
@@ -930,8 +934,23 @@ export default function Home() {
         </div>
       </div>
 
-      <div style={{ flex: 1, display: "flex", flexDirection: "column", overflow: "hidden" }}>
-        <div style={{ padding: "1rem 1.5rem", borderBottom: "1px solid #e8e8e6", background: "#fff", fontSize: 15, fontWeight: 500, display: "flex", alignItems: "center", justifyContent: "space-between" }}>
+      <div
+        style={{
+          flex: 1, display: "flex", flexDirection: "column", overflow: "hidden",
+          background: modoAdminVisual ? "linear-gradient(165deg, #1e1b34 0%, #14121f 100%)" : "transparent",
+          transition: "background .5s ease",
+        }}
+      >
+        <div
+          style={{
+            padding: "1rem 1.5rem",
+            borderBottom: modoAdminVisual ? "1px solid rgba(255,255,255,0.08)" : "1px solid #e8e8e6",
+            background: modoAdminVisual ? "transparent" : "#fff",
+            color: modoAdminVisual ? "#EDEBFB" : "#1a1a1a",
+            fontSize: 15, fontWeight: 500, display: "flex", alignItems: "center", justifyContent: "space-between",
+            transition: "background .5s ease, border-color .5s ease, color .5s ease",
+          }}
+        >
           <div style={{ display: "flex", alignItems: "center", gap: 12 }}>
             <span>{tab === "inicio" ? "Inicio" : tab === "album" ? "Álbum de Creativos" : "Integraciones"}</span>
             {tab === "inicio" && <TutorialVideo seccion="inicio" onListo={() => setTutorialListoInicio(true)} />}
