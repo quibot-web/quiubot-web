@@ -699,23 +699,49 @@ export default function Home() {
         }
         .qb-sidebar.colapsado .qb-nav-item:hover .qb-tooltip,
         .qb-sidebar.colapsado .qb-admin-toggle:hover .qb-tooltip { opacity: 1; }
+        /* Flip 3D del menu Admin -- la tarjeta completa gira sobre su eje
+           vertical en vez de desplegar un acordeon. adminAbierto (mismo
+           estado que antes controlaba el acordeon) ahora controla el
+           rotateY. perspective vive en el contenedor externo (no rotable);
+           transform-style: preserve-3d + backface-visibility: hidden en
+           ambas caras es lo que arma el efecto 3D real. */
+        .qb-admin-flip-outer { perspective: 1200px; }
+        .qb-admin-flip-card {
+          position: relative; width: 100%; height: 46px;
+          transform-style: preserve-3d;
+          transition: transform .55s cubic-bezier(0.4,0,0.2,1), height .55s cubic-bezier(0.4,0,0.2,1);
+        }
+        .qb-admin-flip-card.abierto { transform: rotateY(180deg); height: 380px; }
+        .qb-admin-face {
+          position: absolute; inset: 0;
+          backface-visibility: hidden; -webkit-backface-visibility: hidden;
+        }
         .qb-admin-toggle {
           display: flex; align-items: center; gap: 10px; padding: 9px 10px; border-radius: 10px; cursor: pointer;
           color: #534AB7; font-weight: 600; font-size: 13px; background: transparent; border: none; width: 100%;
-          text-align: left; position: relative;
+          height: 100%; text-align: left; box-sizing: border-box;
         }
         .qb-admin-toggle:hover { background: #f9f9fc; }
         .qb-admin-toggle .qb-nav-icon { background: #ece9fb; }
-        .qb-admin-chevron { margin-left: auto; transition: transform .2s ease; flex-shrink: 0; }
-        .qb-admin-chevron.abierto { transform: rotate(90deg); }
-        .qb-admin-panel {
-          max-height: 0; overflow: hidden; transition: max-height .3s ease, padding .3s ease, margin .3s ease;
+        .qb-admin-chevron { margin-left: auto; flex-shrink: 0; }
+        /* Cara de atras: fija en rotateY(180deg) para que, al girar la
+           tarjeta 180deg completa, el contenido quede leyendose normal
+           (sin espejar) en vez de invertido. */
+        .qb-admin-face-back {
+          transform: rotateY(180deg);
           background: linear-gradient(180deg, #f7f6ff, #fcfbff); border-radius: 12px;
+          border: 1px dashed #d8d3f5; padding: 8px; box-sizing: border-box;
+          display: flex; flex-direction: column; overflow-y: auto;
         }
-        .qb-admin-panel.abierto { max-height: 280px; padding: 8px; margin-top: 4px; border: 1px dashed #d8d3f5; }
+        .qb-admin-volver {
+          display: flex; align-items: center; gap: 6px; padding: 7px 8px; border-radius: 8px; cursor: pointer;
+          color: #534AB7; font-weight: 600; font-size: 12.5px; background: transparent; border: none;
+          text-align: left; margin-bottom: 4px; flex-shrink: 0;
+        }
+        .qb-admin-volver:hover { background: #fff; }
         .qb-admin-item {
           display: flex; align-items: center; gap: 9px; padding: 7px 8px; border-radius: 8px;
-          color: #534AB7; font-size: 12.5px; text-decoration: none; font-weight: 500;
+          color: #534AB7; font-size: 12.5px; text-decoration: none; font-weight: 500; flex-shrink: 0;
         }
         .qb-admin-item:hover { background: #fff; }
         .qb-admin-item .qb-nav-icon { width: 24px; height: 24px; background: #fff; }
@@ -796,58 +822,69 @@ export default function Home() {
 
         {rol === "admin" && (
           <div style={{ borderTop: "1px solid #e8e8e6", marginTop: 8, paddingTop: 8 }}>
-            <button
-              className="qb-admin-toggle"
-              onClick={() => {
-                if (colapsado) {
-                  setColapsado(false);
-                  setAdminAbierto(true);
-                } else {
-                  setAdminAbierto((v) => !v);
-                }
-              }}
-            >
-              <span className="qb-nav-icon"><Icono><path d="M12 2l7 4v6c0 5-3.5 8-7 10-3.5-2-7-5-7-10V6l7-4z" /></Icono></span>
-              <span className="qb-nav-label">Admin</span>
-              <span className="qb-tooltip">Panel de Admin</span>
-              <span className={`qb-admin-chevron${adminAbierto ? " abierto" : ""} qb-nav-label`}>
-                <Icono><path d="M9 6l6 6-6 6" /></Icono>
-              </span>
-            </button>
+            <div className="qb-admin-flip-outer">
+              <div className={`qb-admin-flip-card${adminAbierto && !colapsado ? " abierto" : ""}`}>
+                {/* Cara frontal */}
+                <button
+                  className="qb-admin-toggle qb-admin-face"
+                  onClick={() => {
+                    if (colapsado) {
+                      setColapsado(false);
+                      setAdminAbierto(true);
+                    } else {
+                      setAdminAbierto((v) => !v);
+                    }
+                  }}
+                >
+                  <span className="qb-nav-icon"><Icono><path d="M12 2l7 4v6c0 5-3.5 8-7 10-3.5-2-7-5-7-10V6l7-4z" /></Icono></span>
+                  <span className="qb-nav-label">Admin</span>
+                  <span className="qb-tooltip">Panel de Admin</span>
+                  <span className="qb-admin-chevron qb-nav-label">
+                    <Icono><path d="M9 6l6 6-6 6" /></Icono>
+                  </span>
+                </button>
 
-            <div className={`qb-admin-panel${adminAbierto && !colapsado ? " abierto" : ""}`}>
-              <a href="/admin/playbook" className="qb-admin-item">
-                <span className="qb-nav-icon"><Icono><path d="M2 5a2 2 0 012-2h6v18H4a2 2 0 01-2-2V5z" /><path d="M22 5a2 2 0 00-2-2h-6v18h6a2 2 0 002-2V5z" /></Icono></span>
-                Playbook
-              </a>
-              <a href="/admin/plantillas-publicitarias" className="qb-admin-item">
-                <span className="qb-nav-icon"><Icono><rect x="3" y="3" width="18" height="18" rx="2" /><circle cx="8.5" cy="8.5" r="1.5" /><path d="M21 15l-5-5L5 21" /></Icono></span>
-                Plantillas publicitarias
-              </a>
-              <a href="/admin/objetivos" className="qb-admin-item">
-                <span className="qb-nav-icon"><Icono><path d="M5 21V4M5 4h13l-3 4 3 4H5" /></Icono></span>
-                Objetivos
-              </a>
-              <a href="/admin/conocimiento" className="qb-admin-item">
-                <span className="qb-nav-icon"><Icono><path d="M9 18h6M10 22h4M12 2a6 6 0 00-6 6c0 2 1 3 2 4.5S9 15 9 16h6c0-1 0-2 1-3.5S18 10 18 8a6 6 0 00-6-6z" /></Icono></span>
-                Conocimiento
-              </a>
-              <a href="/admin/tutoriales" className="qb-admin-item">
-                <span className="qb-nav-icon"><Icono><rect x="2" y="3" width="20" height="18" rx="2" /><path d="M10 8l6 4-6 4V8z" /></Icono></span>
-                Tutoriales
-              </a>
-              <a href="/admin/errores" className="qb-admin-item">
-                <span className="qb-nav-icon"><Icono><path d="M12 9v4M12 17h.01" /><path d="M10.29 3.86L1.82 18a2 2 0 001.71 3h16.94a2 2 0 001.71-3L13.71 3.86a2 2 0 00-3.42 0z" /></Icono></span>
-                Errores de publicación
-              </a>
-              <a href="/admin/novedades" className="qb-admin-item">
-                <span className="qb-nav-icon"><Icono><path d="M12 2l2.4 7.2H22l-6 4.4 2.3 7.2L12 16.4 5.7 20.8 8 13.6l-6-4.4h7.6z" /></Icono></span>
-                Novedades
-              </a>
-              <a href="/admin/musica" className="qb-admin-item">
-                <span className="qb-nav-icon"><Icono><path d="M9 18V5l12-2v13" /><circle cx="6" cy="18" r="3" /><circle cx="18" cy="16" r="3" /></Icono></span>
-                Música
-              </a>
+                {/* Cara de atras -- rotateY(180deg) fijo para que el texto
+                    no salga espejado cuando la tarjeta gira 180deg */}
+                <div className="qb-admin-face qb-admin-face-back">
+                  <button className="qb-admin-volver" onClick={() => setAdminAbierto(false)}>
+                    <Icono><path d="M15 6l-6 6 6 6" /></Icono>
+                    Volver
+                  </button>
+                  <a href="/admin/playbook" className="qb-admin-item">
+                    <span className="qb-nav-icon"><Icono><path d="M2 5a2 2 0 012-2h6v18H4a2 2 0 01-2-2V5z" /><path d="M22 5a2 2 0 00-2-2h-6v18h6a2 2 0 002-2V5z" /></Icono></span>
+                    Playbook
+                  </a>
+                  <a href="/admin/plantillas-publicitarias" className="qb-admin-item">
+                    <span className="qb-nav-icon"><Icono><rect x="3" y="3" width="18" height="18" rx="2" /><circle cx="8.5" cy="8.5" r="1.5" /><path d="M21 15l-5-5L5 21" /></Icono></span>
+                    Plantillas publicitarias
+                  </a>
+                  <a href="/admin/objetivos" className="qb-admin-item">
+                    <span className="qb-nav-icon"><Icono><path d="M5 21V4M5 4h13l-3 4 3 4H5" /></Icono></span>
+                    Objetivos
+                  </a>
+                  <a href="/admin/conocimiento" className="qb-admin-item">
+                    <span className="qb-nav-icon"><Icono><path d="M9 18h6M10 22h4M12 2a6 6 0 00-6 6c0 2 1 3 2 4.5S9 15 9 16h6c0-1 0-2 1-3.5S18 10 18 8a6 6 0 00-6-6z" /></Icono></span>
+                    Conocimiento
+                  </a>
+                  <a href="/admin/tutoriales" className="qb-admin-item">
+                    <span className="qb-nav-icon"><Icono><rect x="2" y="3" width="20" height="18" rx="2" /><path d="M10 8l6 4-6 4V8z" /></Icono></span>
+                    Tutoriales
+                  </a>
+                  <a href="/admin/errores" className="qb-admin-item">
+                    <span className="qb-nav-icon"><Icono><path d="M12 9v4M12 17h.01" /><path d="M10.29 3.86L1.82 18a2 2 0 001.71 3h16.94a2 2 0 001.71-3L13.71 3.86a2 2 0 00-3.42 0z" /></Icono></span>
+                    Errores de publicación
+                  </a>
+                  <a href="/admin/novedades" className="qb-admin-item">
+                    <span className="qb-nav-icon"><Icono><path d="M12 2l2.4 7.2H22l-6 4.4 2.3 7.2L12 16.4 5.7 20.8 8 13.6l-6-4.4h7.6z" /></Icono></span>
+                    Novedades
+                  </a>
+                  <a href="/admin/musica" className="qb-admin-item">
+                    <span className="qb-nav-icon"><Icono><path d="M9 18V5l12-2v13" /><circle cx="6" cy="18" r="3" /><circle cx="18" cy="16" r="3" /></Icono></span>
+                    Música
+                  </a>
+                </div>
+              </div>
             </div>
           </div>
         )}
