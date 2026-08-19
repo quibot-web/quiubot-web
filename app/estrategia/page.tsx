@@ -2744,7 +2744,12 @@ function EstrategiaContent() {
                             <>
                               <input placeholder="Título del anuncio" value={c.titulo} onChange={(e) => actualizarCreativo(idx, "titulo", e.target.value)} style={{ padding: 8, borderRadius: 6, border: "1px solid #e0e0e0", fontSize: 13, fontWeight: 600 }} />
                               <textarea placeholder="Texto / descripción" value={c.texto} onChange={(e) => actualizarCreativo(idx, "texto", e.target.value)} style={{ padding: 8, borderRadius: 6, border: "1px solid #e0e0e0", fontSize: 12, resize: "none", minHeight: 50 }} />
-                              <input placeholder="Texto del botón (CTA)" value={c.cta} onChange={(e) => actualizarCreativo(idx, "cta", e.target.value)} style={{ padding: 8, borderRadius: 6, border: "1px solid #e0e0e0", fontSize: 12 }} />
+                              {/* El CTA de video ya no es editable -- lo decide el guion con
+                                  IA (AIDA) según el objetivo de campaña. Álbum sigue con su
+                                  campo de CTA editable de siempre, sin tocar. */}
+                              {c.origen === "album" && (
+                                <input placeholder="Texto del botón (CTA)" value={c.cta} onChange={(e) => actualizarCreativo(idx, "cta", e.target.value)} style={{ padding: 8, borderRadius: 6, border: "1px solid #e0e0e0", fontSize: 12 }} />
+                              )}
                             </>
                           ) : (
                             <>
