@@ -523,7 +523,10 @@ function VideoContent() {
       const res = await fetch("/api/confirmar-union-video", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ job_id: jobId, texto_cta: textoCta }),
+        // texto_cta ya no se manda -- n8n decide el CTA final con
+        // guion.texto_cierre o el fallback por objetivo, no con lo que
+        // haya en este campo (que ya no existe en esta pantalla).
+        body: JSON.stringify({ job_id: jobId }),
       });
       const data = await res.json().catch(() => ({}));
       if (!res.ok || data.ok === false) {
@@ -866,13 +869,10 @@ function VideoContent() {
               </div>
 
               <div style={{ ...cardStyle, marginTop: 16 }}>
-                <p style={{ fontSize: 13, fontWeight: 600, marginBottom: 8, color: "#1a1a1a" }}>Texto del llamado a la acción</p>
-                <input
-                  value={textoCta}
-                  onChange={(e) => setTextoCta(e.target.value)}
-                  placeholder="Ej: Compra ahora"
-                  style={{ width: "100%", padding: 10, borderRadius: 8, border: "1px solid #e0e0e0", fontSize: 13, boxSizing: "border-box", marginBottom: 16 }}
-                />
+                {/* El CTA ya no es editable acá -- lo decide el guion con
+                    IA (texto_cierre) o el fallback por objetivo si el
+                    guion falla. Este campo quedó de cuando el CTA era
+                    manual. */}
                 <button
                   onClick={handleConfirmarUnion}
                   style={{ width: "100%", background: "#534AB7", color: "#fff", border: "none", padding: 14, borderRadius: 10, fontSize: 15, fontWeight: 600, cursor: "pointer" }}
