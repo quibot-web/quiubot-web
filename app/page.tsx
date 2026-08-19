@@ -721,11 +721,17 @@ export default function Home() {
         }
         /* Cara de atras: fija en rotateY(180deg) para que, al girar la
            tarjeta 180deg completa, el contenido quede leyendose normal
-           (sin espejar) en vez de invertido. */
+           (sin espejar) en vez de invertido. Fondo oscuro deliberado --
+           "modo admin" se ve y se siente distinto del resto de la app,
+           como una consola aparte, no una lista mas sobre blanco. */
         .qb-mainnav-face-back {
           position: absolute; inset: 0;
           transform: rotateY(180deg);
           overflow-y: auto;
+          background: linear-gradient(165deg, #1e1b34 0%, #14121f 100%);
+          border-radius: 14px;
+          padding: 8px;
+          box-sizing: border-box;
         }
         .qb-admin-toggle {
           display: flex; align-items: center; gap: 10px; padding: 9px 10px; border-radius: 10px; cursor: pointer;
@@ -738,16 +744,17 @@ export default function Home() {
         .qb-admin-chevron.abierto { transform: rotate(90deg); }
         .qb-admin-volver {
           display: flex; align-items: center; gap: 6px; padding: 7px 8px; border-radius: 8px; cursor: pointer;
-          color: #534AB7; font-weight: 600; font-size: 12.5px; background: transparent; border: none;
+          color: #C9C4F0; font-weight: 600; font-size: 12.5px; background: transparent; border: none;
           text-align: left; margin-bottom: 4px; flex-shrink: 0;
         }
-        .qb-admin-volver:hover { background: #f9f9fc; }
+        .qb-admin-volver:hover { background: rgba(255,255,255,0.08); color: #fff; }
         .qb-admin-item {
           display: flex; align-items: center; gap: 9px; padding: 7px 8px; border-radius: 8px;
-          color: #534AB7; font-size: 12.5px; text-decoration: none; font-weight: 500; flex-shrink: 0;
+          color: #C9C4F0; font-size: 12.5px; text-decoration: none; font-weight: 500; flex-shrink: 0;
         }
-        .qb-admin-item:hover { background: #f9f9fc; }
-        .qb-admin-item .qb-nav-icon { width: 24px; height: 24px; background: #f3f2fe; }
+        .qb-admin-item:hover { background: rgba(255,255,255,0.08); color: #fff; }
+        .qb-admin-item .qb-nav-icon { width: 24px; height: 24px; background: rgba(255,255,255,0.08); color: #A79EEA; }
+        .qb-admin-item:hover .qb-nav-icon { background: #534AB7; color: #fff; }
         .qb-footer-btn { display: flex; align-items: center; gap: 8px; justify-content: flex-start; }
         .qb-sidebar.colapsado .qb-footer-btn { justify-content: center; }
       `}</style>
