@@ -669,13 +669,16 @@ export default function Home() {
           70% { box-shadow: 0 0 0 7px rgba(16,185,129,0); }
           100% { box-shadow: 0 0 0 0 rgba(16,185,129,0); }
         }
-        .qb-sidebar { transition: width .25s ease; position: relative; }
+        .qb-sidebar { transition: width .25s ease, background .5s ease, border-color .5s ease; position: relative; }
         .qb-sidebar-toggle {
           position: absolute; top: 22px; right: -12px; width: 24px; height: 24px; border-radius: 50%;
           background: #fff; border: 1px solid #e8e8e6; box-shadow: 0 2px 6px rgba(0,0,0,0.1);
           display: flex; align-items: center; justify-content: center; cursor: pointer; z-index: 6;
+          transition: background .5s ease, border-color .5s ease, color .5s ease;
         }
         .qb-sidebar-toggle:hover { border-color: #534AB7; color: #534AB7; }
+        .qb-sidebar-toggle.dark { background: #221d3d; border-color: rgba(255,255,255,0.15); color: #C9C4F0; }
+        .qb-sidebar-toggle.dark:hover { border-color: #8B7FE8; color: #fff; }
         .qb-orb { width: 8px; height: 8px; border-radius: 50%; background: #10b981; animation: qbOrbPulse 2.4s infinite; flex-shrink: 0; }
         .qb-logo-mark {
           width: 34px; height: 34px; border-radius: 9px; flex-shrink: 0; overflow: hidden;
@@ -740,10 +743,16 @@ export default function Home() {
         .qb-admin-toggle {
           display: flex; align-items: center; gap: 10px; padding: 9px 10px; border-radius: 10px; cursor: pointer;
           color: #534AB7; font-weight: 600; font-size: 13px; background: transparent; border: none; width: 100%;
-          text-align: left; position: relative;
+          text-align: left; position: relative; transition: color .5s ease;
         }
         .qb-admin-toggle:hover { background: #f9f9fc; }
-        .qb-admin-toggle .qb-nav-icon { background: #ece9fb; }
+        .qb-admin-toggle .qb-nav-icon { background: #ece9fb; transition: background .5s ease, color .5s ease; }
+        /* Variante dark del boton "Admin" cuando el sidebar entero esta
+           en modo admin (mismo booleano modoAdminVisual) -- sigue siendo
+           el mismo boton fijo, solo cambia de paleta. */
+        .qb-admin-toggle.dark { color: #C9C4F0; }
+        .qb-admin-toggle.dark:hover { background: rgba(255,255,255,0.08); }
+        .qb-admin-toggle.dark .qb-nav-icon { background: rgba(255,255,255,0.08); color: #A79EEA; }
         .qb-admin-chevron { margin-left: auto; transition: transform .2s ease; flex-shrink: 0; }
         .qb-admin-chevron.abierto { transform: rotate(90deg); }
         .qb-admin-volver {
@@ -764,12 +773,17 @@ export default function Home() {
       `}</style>
       <div
         className={`qb-sidebar${expandidoVisual ? "" : " colapsado"}`}
-        style={{ width: expandidoVisual ? 232 : 72, background: "#fff", borderRight: "1px solid #e8e8e6", padding: "1.25rem 0.85rem", display: "flex", flexDirection: "column", gap: 4, flexShrink: 0 }}
+        style={{
+          width: expandidoVisual ? 232 : 72,
+          background: modoAdminVisual ? "linear-gradient(165deg, #1e1b34 0%, #14121f 100%)" : "#fff",
+          borderRight: modoAdminVisual ? "1px solid rgba(255,255,255,0.08)" : "1px solid #e8e8e6",
+          padding: "1.25rem 0.85rem", display: "flex", flexDirection: "column", gap: 4, flexShrink: 0,
+        }}
         onMouseEnter={() => { if (colapsado) setHoverExpandido(true); }}
         onMouseLeave={() => setHoverExpandido(false)}
       >
 
-        <div className="qb-sidebar-toggle" onClick={() => setColapsado((v) => !v)} title={colapsado ? "Expandir menú" : "Contraer menú"}>
+        <div className={`qb-sidebar-toggle${modoAdminVisual ? " dark" : ""}`} onClick={() => setColapsado((v) => !v)} title={colapsado ? "Expandir menú" : "Contraer menú"}>
           <Icono>
             {colapsado ? <path d="M9 6l6 6-6 6" /> : <path d="M15 6l-6 6 6 6" />}
           </Icono>
@@ -891,9 +905,9 @@ export default function Home() {
         </div>
 
         {rol === "admin" && (
-          <div style={{ borderTop: "1px solid #e8e8e6", marginTop: 8, paddingTop: 8 }}>
+          <div style={{ borderTop: modoAdminVisual ? "1px solid rgba(255,255,255,0.08)" : "1px solid #e8e8e6", marginTop: 8, paddingTop: 8, transition: "border-color .5s ease" }}>
             <button
-              className="qb-admin-toggle"
+              className={`qb-admin-toggle${modoAdminVisual ? " dark" : ""}`}
               onClick={() => {
                 if (colapsado) {
                   setColapsado(false);
@@ -913,7 +927,7 @@ export default function Home() {
           </div>
         )}
 
-        <div style={{ marginTop: "auto", borderTop: "1px solid #e8e8e6", paddingTop: 12 }}>
+        <div style={{ marginTop: "auto", borderTop: modoAdminVisual ? "1px solid rgba(255,255,255,0.08)" : "1px solid #e8e8e6", paddingTop: 12, transition: "border-color .5s ease" }}>
           {session?.user && (
             <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 8, justifyContent: expandidoVisual ? "flex-start" : "center" }}>
               <div style={{ width: 30, height: 30, borderRadius: "50%", background: "#7F77DD", display: "flex", alignItems: "center", justifyContent: "center", color: "#fff", fontSize: 13, fontWeight: 600, flexShrink: 0 }}>
@@ -921,13 +935,23 @@ export default function Home() {
               </div>
               {expandidoVisual && (
                 <div style={{ overflow: "hidden" }}>
-                  <div style={{ fontSize: 12, fontWeight: 500, color: "#333", whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>{session.user.name}</div>
-                  <div style={{ fontSize: 10, color: "#999", whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>{session.user.email}</div>
+                  <div style={{ fontSize: 12, fontWeight: 500, color: modoAdminVisual ? "#EDEBFB" : "#333", whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis", transition: "color .5s ease" }}>{session.user.name}</div>
+                  <div style={{ fontSize: 10, color: modoAdminVisual ? "#9089B8" : "#999", whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis", transition: "color .5s ease" }}>{session.user.email}</div>
                 </div>
               )}
             </div>
           )}
-          <button onClick={() => signOut({ callbackUrl: "/login" })} className="qb-footer-btn" style={{ width: "100%", padding: "7px 10px", borderRadius: 8, border: "1px solid #e8e8e6", background: "transparent", color: "#666", fontSize: 13, cursor: "pointer" }} title="Cerrar sesión">
+          <button
+            onClick={() => signOut({ callbackUrl: "/login" })}
+            className="qb-footer-btn"
+            style={{
+              width: "100%", padding: "7px 10px", borderRadius: 8,
+              border: modoAdminVisual ? "1px solid rgba(255,255,255,0.15)" : "1px solid #e8e8e6",
+              background: "transparent", color: modoAdminVisual ? "#C9C4F0" : "#666", fontSize: 13, cursor: "pointer",
+              transition: "border-color .5s ease, color .5s ease",
+            }}
+            title="Cerrar sesión"
+          >
             <Icono><path d="M9 21H5a2 2 0 01-2-2V5a2 2 0 012-2h4" /><path d="M16 17l5-5-5-5" /><path d="M21 12H9" /></Icono>
             <span className="qb-nav-label">Cerrar sesión</span>
           </button>
