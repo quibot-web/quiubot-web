@@ -1,6 +1,7 @@
 import { auth } from "@/auth";
 import { NextRequest, NextResponse } from "next/server";
 import { supabaseAdmin } from "@/lib/supabase";
+import { desencriptarSiHaceFalta } from "@/lib/crypto";
 import { registrarError } from "@/lib/registrarError";
 
 const MENSAJES_POR_ESTADO: Record<string, string> = {
@@ -26,12 +27,39 @@ export async function POST(req: NextRequest) {
 
   const { data: usuario } = await supabaseAdmin
     .from("usuarios")
-    .select("id")
+    .select("id, cloudinary_name, cloudinary_key, cloudinary_secret")
     .eq("email", emailBusqueda)
     .single();
 
   if (!usuario) {
     return NextResponse.json({ error: "Usuario no encontrado" }, { status: 404 });
+  }
+
+  if (!usuario.cloudinary_name) {
+    return NextResponse.json(
+      { error: "Necesitas conectar tus credenciales de Cloudinary en Integraciones antes de unir el video." },
+      { status: 400 }
+    );
+  }
+
+  // cloudinary_key/secret solo sirven para la sincronización OPCIONAL de
+  // música (n8n las usa para subir la música firmada a la cuenta del
+  // usuario) -- a diferencia de cloudinary_name, nunca deben bloquear la
+  // unión del video. Si faltan o falla el descifrado, se degradan a null
+  // y n8n ya está diseñado para saltarse la música gracefully (el video se
+  // une igual, sin música). Mismo patrón que openai_key en
+  // generar-video/route.ts.
+  let cloudinaryKeyDescifrada: string | null = null;
+  let cloudinarySecretDescifrado: string | null = null;
+  if (usuario.cloudinary_key && usuario.cloudinary_secret) {
+    try {
+      cloudinaryKeyDescifrada = desencriptarSiHaceFalta(usuario.cloudinary_key);
+      cloudinarySecretDescifrado = desencriptarSiHaceFalta(usuario.cloudinary_secret);
+    } catch (err) {
+      console.error("Error al descifrar credenciales de Cloudinary (se continúa sin música):", err);
+      cloudinaryKeyDescifrada = null;
+      cloudinarySecretDescifrado = null;
+    }
   }
 
   const { data: job } = await supabaseAdmin
@@ -79,7 +107,12 @@ export async function POST(req: NextRequest) {
     const n8nRes = await fetch(n8nUrl, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ job_id }),
+      body: JSON.stringify({
+        job_id,
+        cloudinary_name: usuario.cloudinary_name,
+        cloudinary_key: cloudinaryKeyDescifrada,
+        cloudinary_secret: cloudinarySecretDescifrado,
+      }),
     });
 
     const data = await n8nRes.json().catch(() => ({}));
