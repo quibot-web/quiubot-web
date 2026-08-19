@@ -7,94 +7,105 @@ import { MOODS_MUSICA } from "@/app/lib/moodsMusica";
 import { v2 as cloudinary } from "cloudinary";
 
 export async function GET() {
-  const session = await auth();
-  if (!session?.user?.email) return NextResponse.json({ error: "No autenticado" }, { status: 401 });
+  try {
+    const session = await auth();
+    if (!session?.user?.email) return NextResponse.json({ error: "No autenticado" }, { status: 401 });
 
-  const acceso = await verificarAccesoMusica(session.user.email);
-  if (!acceso.permitido) return NextResponse.json({ error: "No autorizado" }, { status: 403 });
+    const acceso = await verificarAccesoMusica(session.user.email);
+    if (!acceso.permitido) return NextResponse.json({ error: "No autorizado" }, { status: 403 });
 
-  let query = supabaseAdmin
-    .from("pistas_musicales")
-    .select("*")
-    .order("mood", { ascending: true })
-    .order("creado_en", { ascending: false });
+    let query = supabaseAdmin
+      .from("pistas_musicales")
+      .select("*")
+      .order("mood", { ascending: true })
+      .order("creado_en", { ascending: false });
 
-  // Un colaborador (no admin) solo ve sus propias pistas -- identificadas
-  // por cloudinary_name, el único campo disponible para eso (ver
-  // lib/accesoMusica.ts).
-  if (!acceso.esAdmin) {
-    query = query.eq("cloudinary_name", acceso.cloudinaryName || "__ninguno__");
+    // Un colaborador (no admin) solo ve sus propias pistas -- identificadas
+    // por cloudinary_name, el único campo disponible para eso (ver
+    // lib/accesoMusica.ts).
+    if (!acceso.esAdmin) {
+      query = query.eq("cloudinary_name", acceso.cloudinaryName || "__ninguno__");
+    }
+
+    const { data, error } = await query;
+    if (error) return NextResponse.json({ error: error.message }, { status: 500 });
+
+    return NextResponse.json({ pistas: data ?? [] });
+  } catch (err: any) {
+    console.error("Error en GET /api/admin/musica:", err);
+    return NextResponse.json({ error: err?.message || "Error interno del servidor." }, { status: 500 });
   }
-
-  const { data, error } = await query;
-  if (error) return NextResponse.json({ error: error.message }, { status: 500 });
-
-  return NextResponse.json({ pistas: data ?? [] });
 }
 
 export async function POST(req: NextRequest) {
-  const session = await auth();
-  if (!session?.user?.email) return NextResponse.json({ error: "No autenticado" }, { status: 401 });
-
-  const acceso = await verificarAccesoMusica(session.user.email);
-  if (!acceso.permitido) return NextResponse.json({ error: "No autorizado" }, { status: 403 });
-
-  const emailBusqueda = session.user.email.trim().toLowerCase();
-
-  const formData = await req.formData();
-  const archivo = formData.get("archivo") as File | null;
-  const mood = formData.get("mood") as string | null;
-  const nombre = (formData.get("nombre") as string | null)?.trim() || null;
-
-  if (!archivo) {
-    return NextResponse.json({ error: "Falta el archivo de audio" }, { status: 400 });
-  }
-  if (!mood || !(MOODS_MUSICA as readonly string[]).includes(mood)) {
-    return NextResponse.json({ error: "Mood inválido" }, { status: 400 });
-  }
-  if (!archivo.type.startsWith("audio/")) {
-    return NextResponse.json({ error: "El archivo debe ser un audio (mp3)" }, { status: 400 });
-  }
-
-  // Subida con las credenciales de Cloudinary del usuario LOGUEADO (admin o
-  // colaborador) -- mismo patrón BYOK que /api/album/subir, sin cuenta fija.
-  const { data: usuario, error: errorUsuario } = await supabaseAdmin
-    .from("usuarios")
-    .select("id, cloudinary_name, cloudinary_key, cloudinary_secret")
-    .eq("email", emailBusqueda)
-    .single();
-
-  if (errorUsuario || !usuario) {
-    return NextResponse.json({ error: "Usuario no encontrado" }, { status: 404 });
-  }
-
-  if (!usuario.cloudinary_name || !usuario.cloudinary_key || !usuario.cloudinary_secret) {
-    return NextResponse.json(
-      { error: "Configura tus credenciales de Cloudinary en Integraciones antes de subir música." },
-      { status: 400 }
-    );
-  }
-
-  let cloudinaryKeyDescifrada: string;
-  let cloudinarySecretDescifrado: string;
+  // Todo el handler queda cubierto -- antes req.formData() (y todo lo que
+  // seguía) no tenía manejo de errores propio, así que una excepción ahí
+  // (ej. el body cortado por algún límite de tamaño de la capa de proxy/
+  // plataforma al subir un archivo grande) se perdía como un 500 vacío de
+  // Next.js, sin mensaje, en vez de pasar por acá. Mismo fix que ya se
+  // aplicó en /api/album/subir.
   try {
-    cloudinaryKeyDescifrada = desencriptarSiHaceFalta(usuario.cloudinary_key);
-    cloudinarySecretDescifrado = desencriptarSiHaceFalta(usuario.cloudinary_secret);
-  } catch (err) {
-    console.error("Error al descifrar credenciales de Cloudinary:", err);
-    return NextResponse.json(
-      { error: "No se pudieron leer tus credenciales guardadas. Vuelve a conectarlas en Integraciones." },
-      { status: 500 }
-    );
-  }
+    const session = await auth();
+    if (!session?.user?.email) return NextResponse.json({ error: "No autenticado" }, { status: 401 });
 
-  cloudinary.config({
-    cloud_name: usuario.cloudinary_name,
-    api_key: cloudinaryKeyDescifrada,
-    api_secret: cloudinarySecretDescifrado,
-  });
+    const acceso = await verificarAccesoMusica(session.user.email);
+    if (!acceso.permitido) return NextResponse.json({ error: "No autorizado" }, { status: 403 });
 
-  try {
+    const emailBusqueda = session.user.email.trim().toLowerCase();
+
+    const formData = await req.formData();
+    const archivo = formData.get("archivo") as File | null;
+    const mood = formData.get("mood") as string | null;
+    const nombre = (formData.get("nombre") as string | null)?.trim() || null;
+
+    if (!archivo) {
+      return NextResponse.json({ error: "Falta el archivo de audio" }, { status: 400 });
+    }
+    if (!mood || !(MOODS_MUSICA as readonly string[]).includes(mood)) {
+      return NextResponse.json({ error: "Mood inválido" }, { status: 400 });
+    }
+    if (!archivo.type.startsWith("audio/")) {
+      return NextResponse.json({ error: "El archivo debe ser un audio (mp3)" }, { status: 400 });
+    }
+
+    // Subida con las credenciales de Cloudinary del usuario LOGUEADO (admin o
+    // colaborador) -- mismo patrón BYOK que /api/album/subir, sin cuenta fija.
+    const { data: usuario, error: errorUsuario } = await supabaseAdmin
+      .from("usuarios")
+      .select("id, cloudinary_name, cloudinary_key, cloudinary_secret")
+      .eq("email", emailBusqueda)
+      .single();
+
+    if (errorUsuario || !usuario) {
+      return NextResponse.json({ error: "Usuario no encontrado" }, { status: 404 });
+    }
+
+    if (!usuario.cloudinary_name || !usuario.cloudinary_key || !usuario.cloudinary_secret) {
+      return NextResponse.json(
+        { error: "Configura tus credenciales de Cloudinary en Integraciones antes de subir música." },
+        { status: 400 }
+      );
+    }
+
+    let cloudinaryKeyDescifrada: string;
+    let cloudinarySecretDescifrado: string;
+    try {
+      cloudinaryKeyDescifrada = desencriptarSiHaceFalta(usuario.cloudinary_key);
+      cloudinarySecretDescifrado = desencriptarSiHaceFalta(usuario.cloudinary_secret);
+    } catch (err) {
+      console.error("Error al descifrar credenciales de Cloudinary:", err);
+      return NextResponse.json(
+        { error: "No se pudieron leer tus credenciales guardadas. Vuelve a conectarlas en Integraciones." },
+        { status: 500 }
+      );
+    }
+
+    cloudinary.config({
+      cloud_name: usuario.cloudinary_name,
+      api_key: cloudinaryKeyDescifrada,
+      api_secret: cloudinarySecretDescifrado,
+    });
+
     const bytes = await archivo.arrayBuffer();
     const base64 = Buffer.from(bytes).toString("base64");
     const dataUri = `data:${archivo.type};base64,${base64}`;
@@ -119,7 +130,10 @@ export async function POST(req: NextRequest) {
 
     return NextResponse.json({ pista });
   } catch (err: any) {
-    console.error("Error al subir pista musical:", err);
-    return NextResponse.json({ error: err?.message || "No se pudo subir el archivo a Cloudinary." }, { status: 500 });
+    console.error("Error en POST /api/admin/musica:", err);
+    return NextResponse.json(
+      { error: err?.message || "No se pudo subir el archivo a Cloudinary." },
+      { status: 500 }
+    );
   }
 }
