@@ -7,6 +7,7 @@ import HomeInicio from "@/app/components/HomeInicio";
 import TutorialVideo from "@/app/components/TutorialVideo";
 import TourGuiado from "@/app/components/TourGuiado";
 import NotificacionIcono from "@/app/components/NotificacionIcono";
+import { urlDescargaCloudinary } from "@/app/lib/cloudinaryUrl";
 
 function Icono({ children }: { children: React.ReactNode }) {
   return (
@@ -1162,6 +1163,29 @@ export default function Home() {
                     ) : (
                       <img src={item.url_imagen} alt="creatividad" style={{ width: "100%", borderRadius: 12, border: "1px solid #e8e8e6", display: "block" }} />
                     )}
+                    <a
+                      href={urlDescargaCloudinary(item.url_imagen)}
+                      download
+                      title="Descargar"
+                      style={{
+                        position: "absolute",
+                        top: 8,
+                        right: 44,
+                        width: 28,
+                        height: 28,
+                        borderRadius: "50%",
+                        background: "rgba(0,0,0,0.55)",
+                        color: "#fff",
+                        border: "none",
+                        display: "flex",
+                        alignItems: "center",
+                        justifyContent: "center",
+                        fontSize: 13,
+                        textDecoration: "none",
+                      }}
+                    >
+                      ⬇
+                    </a>
                     <button
                       onClick={() => handleEliminarCreativo(item.id)}
                       disabled={eliminandoId === item.id}
