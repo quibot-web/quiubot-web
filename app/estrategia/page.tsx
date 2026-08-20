@@ -1,7 +1,7 @@
 "use client";
 import { useState, useRef, useEffect, Suspense } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
-import { ShoppingBag, Target, Camera, Sparkles, Check, Shirt, Smartphone, UtensilsCrossed, Plane, Briefcase, Palmtree, Video, Watch, Bot, FolderOpen, Dna, X, ShoppingCart, Tag, DollarSign, CheckCircle2, MessageCircle, Phone, Send, Megaphone, Eye, Heart, Star, RefreshCw, Repeat, Users, MousePointerClick, TrendingUp, Zap, Globe, Image as ImageIcon, Upload, Film, Lock } from "lucide-react";
+import { ShoppingBag, Target, Camera, Sparkles, Check, Shirt, Smartphone, UtensilsCrossed, Plane, Briefcase, Palmtree, Video, Watch, Bot, FolderOpen, Dna, X, ShoppingCart, Tag, DollarSign, CheckCircle2, MessageCircle, Phone, Send, Megaphone, Eye, Heart, Star, RefreshCw, Repeat, Users, MousePointerClick, TrendingUp, Zap, Globe, Image as ImageIcon, Play, Lock } from "lucide-react";
 import AdBlueprintExplorer from "@/app/components/AdBlueprintExplorer";
 import TutorialVideo from "@/app/components/TutorialVideo";
 import TourGuiado from "@/app/components/TourGuiado";
@@ -885,6 +885,11 @@ function EstrategiaContent() {
   const [progresoListo, setProgresoListo] = useState(false);
 
   const fileRef = useRef<HTMLInputElement>(null);
+  // Refs a cada celda del selector 3D "asignar-tipos" (una por
+  // clave-tipo), para poder forzar un reflow antes de re-agregar 'active'
+  // al seleccionar -- sin esto, las animaciones de flash/abanico no se
+  // reinician si el usuario re-selecciona el mismo tipo con otro en el medio.
+  const qb3dCellRefs = useRef<Record<string, HTMLButtonElement | null>>({});
 
   const LLAVE_PROGRESO = "quiubot_estrategia_progreso";
 
@@ -1527,6 +1532,27 @@ function EstrategiaContent() {
     else if (tipo === "imagen") dispararImagen(cola, idx, acumulado);
     else dispararAlbum();
   }
+
+  // Selecciona un tipo para un anuncio en el selector 3D "asignar-tipos".
+  // Quita 'active' de las otras 2 celdas de la misma fila y fuerza un
+  // reflow (void offsetWidth) ANTES de re-agregar 'active' a la celda
+  // elegida -- esto es lo que hace que las animaciones de flash/abanico se
+  // reinicien cada vez que se selecciona, no solo la primera vez (sin
+  // esto, click en "Imagen" dos veces seguidas con otra opción en el medio
+  // no vuelve a disparar el flash).
+  const seleccionarTipoQb3d = (clave: string, tipo: TipoCreativo, bloqueada: boolean) => {
+    if (bloqueada) return;
+    (["imagen", "video", "album"] as TipoCreativo[]).forEach((t) => {
+      if (t !== tipo) qb3dCellRefs.current[`${clave}-${t}`]?.classList.remove("active");
+    });
+    const elNuevo = qb3dCellRefs.current[`${clave}-${tipo}`];
+    if (elNuevo) {
+      elNuevo.classList.remove("active");
+      void elNuevo.offsetWidth;
+      elNuevo.classList.add("active");
+    }
+    setTiposPorAnuncio((prev) => ({ ...prev, [clave]: tipo }));
+  };
 
   // Paso "asignar-tipos" -> botón "Continuar →": arma la cola (video
   // primero si está, después imagen, después álbum -- orden fijo, no el
@@ -2380,7 +2406,7 @@ function EstrategiaContent() {
               Elige la fuente del creativo para cada anuncio. Solo se puede generar 1 video por estrategia.
             </p>
 
-            <div style={{ display: "flex", flexDirection: "column", gap: 16, marginBottom: 20 }}>
+            <div style={{ display: "flex", flexDirection: "column", gap: 16, marginBottom: 20, perspective: 900 }}>
               {(estrategiaSeleccionada?.conjuntos || []).flatMap((conjunto: any, ci: number) =>
                 (conjunto.anuncios || []).map((anuncio: any, ai: number) => {
                   const clave = `${ci}-${ai}`;
@@ -2399,42 +2425,48 @@ function EstrategiaContent() {
                       <div style={{ fontSize: 11, color: "var(--text-muted)", fontFamily: "ui-monospace, monospace", textTransform: "uppercase", letterSpacing: 0.5, marginBottom: 4 }}>
                         {conjunto.nombre}
                       </div>
-                      <div style={{ fontWeight: 500, fontSize: 16, color: "#1a1a1a", marginBottom: 14 }}>
-                        {anuncio.copy?.titulo || anuncio.nombre}
+                      <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 8, marginBottom: 14 }}>
+                        <div style={{ fontWeight: 500, fontSize: 16, color: "#1a1a1a" }}>
+                          {anuncio.copy?.titulo || anuncio.nombre}
+                        </div>
+                        {tipoActual === "video" && <span className="qb3d-badge-video">Video usado aquí</span>}
                       </div>
 
-                      <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr 1fr", gap: 10 }}>
+                      <div style={{ display: "grid", gridTemplateColumns: "repeat(3, 1fr)", gap: 10 }}>
                         {(["imagen", "video", "album"] as TipoCreativo[]).map((tipo) => {
                           const bloqueada = tipo === "video" && hayVideoEnOtroLado && tipoActual !== "video";
                           const activo = tipoActual === tipo;
-                          const IconoTipo = bloqueada ? Lock : tipo === "imagen" ? ImageIcon : tipo === "video" ? Film : Upload;
                           const nombreTipo = tipo === "imagen" ? "Imagen con IA" : tipo === "video" ? "Video con IA" : "Álbum";
-                          const descripcion = bloqueada
-                            ? "Ya usado en otro anuncio"
-                            : tipo === "video"
-                            ? "4 escenas generadas, listas en ~20 min"
-                            : "Lista en segundos";
                           return (
                             <button
                               key={tipo}
-                              onClick={() => !bloqueada && setTiposPorAnuncio((prev) => ({ ...prev, [clave]: tipo }))}
+                              ref={(el) => { qb3dCellRefs.current[`${clave}-${tipo}`] = el; }}
+                              onClick={() => seleccionarTipoQb3d(clave, tipo, bloqueada)}
                               disabled={bloqueada}
                               title={bloqueada ? "Solo se puede generar 1 video por estrategia" : undefined}
-                              style={{
-                                display: "flex", flexDirection: "column", alignItems: "flex-start", gap: 8,
-                                padding: "14px 14px 14px 16px", textAlign: "left",
-                                cursor: bloqueada ? "not-allowed" : "pointer",
-                                opacity: bloqueada ? 0.5 : 1,
-                                border: activo ? "1.5px solid var(--qb-purple)" : "1px solid #e0e0e0",
-                                background: activo ? "var(--qb-purple)" : "#fff",
-                                borderRadius: 12,
-                              }}
+                              className={`qb3d-cell${activo ? " active" : ""}${bloqueada ? " locked" : ""}`}
                             >
-                              <IconoTipo size={22} strokeWidth={1.8} color={activo ? "#fff" : "var(--text-muted)"} aria-hidden="true" />
-                              <div>
-                                <div style={{ fontSize: 13, fontWeight: 500, color: activo ? "#fff" : "#1a1a1a" }}>{nombreTipo}</div>
-                                <div style={{ fontSize: 11, color: activo ? "var(--qb-purple-light)" : "var(--text-muted)", marginTop: 2 }}>{descripcion}</div>
-                              </div>
+                              {bloqueada ? (
+                                <Lock size={22} strokeWidth={1.8} color="var(--text-muted)" aria-hidden="true" style={{ zIndex: 2 }} />
+                              ) : tipo === "imagen" ? (
+                                <>
+                                  <div className="qb3d-flash" />
+                                  <ImageIcon size={26} strokeWidth={1.8} color="var(--qb-purple)" aria-hidden="true" style={{ zIndex: 2 }} />
+                                </>
+                              ) : tipo === "video" ? (
+                                <>
+                                  <div className="qb3d-ring r1" />
+                                  <div className="qb3d-ring r2" />
+                                  <Play size={22} strokeWidth={1.8} color="var(--qb-purple)" fill="var(--qb-purple)" aria-hidden="true" style={{ zIndex: 2 }} />
+                                </>
+                              ) : (
+                                <div className="qb3d-fan">
+                                  <div className="qb3d-fan-card c1" />
+                                  <div className="qb3d-fan-card c2" />
+                                  <div className="qb3d-fan-card c3" />
+                                </div>
+                              )}
+                              <span className="qb3d-label">{bloqueada ? "Ya usado en otro anuncio" : nombreTipo}</span>
                             </button>
                           );
                         })}
@@ -2863,6 +2895,71 @@ function EstrategiaContent() {
         .quiubot-card-tipo:focus-visible { box-shadow: 0 0 0 3px rgba(83, 74, 183, 0.3); }
         .quiubot-textarea-servicio:focus { border-color: #7F77DD !important; background: #fff !important; box-shadow: 0 0 0 3px rgba(83, 74, 183, 0.12); }
         .quiubot-textarea-servicio::placeholder { color: #aaa; }
+
+        /* Selector 3D "asignar-tipos" -- diseño confirmado y cerrado, ver
+           mensaje de la sesión que lo especificó. Timings, curvas de
+           easing, ángulos y transforms EXACTOS, no tocar -- lo único
+           sustituido respecto a la especificación original son los
+           colores, por las variables/valores reales del proyecto
+           confirmados en el "paso 0" de esa misma conversación. */
+        .qb3d-cell {
+          position: relative; height: 120px; border-radius: 12px;
+          border: 0.5px solid #e8e8e6;
+          background: #fff;
+          cursor: pointer; overflow: hidden;
+          transform: translateY(0) scale(1);
+          transition: transform 0.4s cubic-bezier(0.34,1.4,0.64,1), box-shadow 0.4s, border-color 0.3s;
+          display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 8px;
+        }
+        .qb3d-cell.active {
+          transform: perspective(700px) rotateX(6deg) translateY(-6px) scale(1.045);
+          border-color: var(--qb-purple);
+          box-shadow: 0 14px 24px -8px rgba(83,74,183,0.45);
+          background: linear-gradient(180deg, var(--qb-purple-light) 0%, #fff 100%);
+        }
+        .qb3d-cell.locked { opacity: 0.32; cursor: not-allowed; }
+        .qb3d-label { font-size: 12px; font-weight: 500; color: var(--text-muted); z-index: 2; }
+        .qb3d-cell.active .qb3d-label { color: var(--qb-purple); }
+
+        .qb3d-flash {
+          position: absolute; inset: -14px; border-radius: 50%;
+          background: radial-gradient(circle, rgba(83,74,183,0.5) 0%, transparent 70%);
+          opacity: 0;
+        }
+        .qb3d-cell.active .qb3d-flash { animation: qb3dFlash 0.7s ease-out; }
+        @keyframes qb3dFlash {
+          0% { opacity: 0; transform: scale(0.3); }
+          30% { opacity: 1; transform: scale(1.3); }
+          100% { opacity: 0; transform: scale(1.6); }
+        }
+
+        .qb3d-ring {
+          position: absolute; inset: 0; border-radius: 50%;
+          border: 2px solid var(--qb-purple); opacity: 0;
+        }
+        .qb3d-cell.active .qb3d-ring.r1 { animation: qb3dPulse 1.6s ease-out infinite; }
+        .qb3d-cell.active .qb3d-ring.r2 { animation: qb3dPulse 1.6s ease-out infinite 0.5s; }
+        @keyframes qb3dPulse {
+          0% { opacity: 0.7; transform: scale(0.6); }
+          100% { opacity: 0; transform: scale(2.1); }
+        }
+
+        .qb3d-fan { position: relative; width: 44px; height: 36px; }
+        .qb3d-fan-card {
+          position: absolute; width: 26px; height: 32px; border-radius: 4px;
+          background: #fff;
+          border: 1.5px solid #d0d0d0;
+          top: 2px; left: 9px;
+          transition: transform 0.4s cubic-bezier(0.34,1.4,0.64,1);
+        }
+        .qb3d-cell.active .qb3d-fan-card.c1 { transform: translateX(-11px) rotate(-14deg); border-color: var(--qb-purple); }
+        .qb3d-cell.active .qb3d-fan-card.c2 { transform: translateY(-3px) rotate(0deg); border-color: var(--qb-purple); }
+        .qb3d-cell.active .qb3d-fan-card.c3 { transform: translateX(11px) rotate(14deg); border-color: var(--qb-purple); }
+
+        .qb3d-badge-video {
+          background: #DCFCE7; color: #15803D; font-size: 10px; font-weight: 600;
+          padding: 3px 8px; border-radius: 20px; white-space: nowrap; flex-shrink: 0;
+        }
       `}</style>
     </div>
   );
