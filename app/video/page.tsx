@@ -4,6 +4,7 @@ import { useRouter, useSearchParams } from "next/navigation";
 import { Dna, Zap } from "lucide-react";
 import CargandoQuiubot from "@/app/components/CargandoQuiubot";
 import { OBJETIVOS_INFO } from "@/app/lib/objetivosInfo";
+import { urlDescargaCloudinary } from "@/app/lib/cloudinaryUrl";
 
 const MIN_IMAGENES = 1;
 const MAX_IMAGENES = 3;
@@ -882,12 +883,11 @@ function VideoContent() {
             </div>
             <div style={{ display: "flex", gap: 10 }}>
               <a
-                href={videoFinalUrl}
-                target="_blank"
-                rel="noopener noreferrer"
+                href={urlDescargaCloudinary(videoFinalUrl)}
+                download
                 style={{ flex: 1, textAlign: "center", background: "#534AB7", color: "#fff", padding: 12, borderRadius: 10, fontSize: 14, fontWeight: 600, textDecoration: "none" }}
               >
-                Descargar / abrir
+                Descargar
               </a>
               <button
                 onClick={handleEmpezarDeNuevo}

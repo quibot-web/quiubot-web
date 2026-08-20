@@ -8,6 +8,7 @@ import TourGuiado from "@/app/components/TourGuiado";
 import ProgresoPasos from "@/app/components/ProgresoPasos";
 import EsperaCreativos from "@/app/components/EsperaCreativos";
 import CargandoQuiubot from "@/app/components/CargandoQuiubot";
+import { urlDescargaCloudinary } from "@/app/lib/cloudinaryUrl";
 
 function IconoWhatsApp() {
   return (
@@ -2717,6 +2718,19 @@ function EstrategiaContent() {
                         >
                           ✕
                         </button>
+
+                        {/* Botón descargar -- fl_attachment fuerza la descarga real
+                            del archivo, no solo abrir la URL en pestaña nueva. */}
+                        {c.url_imagen && (
+                          <a
+                            href={urlDescargaCloudinary(c.url_imagen)}
+                            download
+                            title="Descargar"
+                            style={{ position: "absolute", top: 8, right: 44, zIndex: 2, width: 28, height: 28, borderRadius: "50%", border: "none", background: "rgba(0,0,0,0.55)", color: "#fff", fontSize: 13, cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center", textDecoration: "none" }}
+                          >
+                            ⬇
+                          </a>
+                        )}
 
                         {/* Imagen completa, sin recortar, con vista ampliada al hacer clic */}
                         {c.url_imagen ? (
