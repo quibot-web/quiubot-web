@@ -1,6 +1,19 @@
 import type { NextConfig } from "next";
 
 const nextConfig: NextConfig = {
+  experimental: {
+    // Default de Next.js es 10MB para el body que el proxy (middleware.ts)
+    // buffera en memoria -- por encima de eso, Next NO rechaza la
+    // request, la trunca en silencio (solo un warning en el log) y sigue
+    // procesando el body cortado. Eso es lo que rompía la subida de
+    // música: el multipart llegaba truncado a mitad de un boundary y
+    // formData() fallaba al parsearlo. 25mb da margen para archivos de
+    // audio de hasta ~30-50s sin llegar a los ~50mb que sí empezarían a
+    // pesar en memoria bajo carga concurrente -- afecta a TODA la app
+    // (no hay forma de acotarlo por ruta), así que se eligió el valor
+    // más chico que cubre el caso real en vez de sobre-otorgar.
+    proxyClientMaxBodySize: "25mb",
+  },
   async headers() {
     return [
       {
