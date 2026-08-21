@@ -1,7 +1,7 @@
 "use client";
 import { useState, useRef, useEffect, Suspense } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
-import { ShoppingBag, Target, Camera, Sparkles, Check, Shirt, Smartphone, UtensilsCrossed, Plane, Briefcase, Palmtree, Video, Watch, Bot, FolderOpen, Dna, X, ShoppingCart, Tag, DollarSign, CheckCircle2, MessageCircle, Phone, Send, Megaphone, Eye, Heart, Star, RefreshCw, Repeat, Users, MousePointerClick, TrendingUp, Zap, Globe, Image as ImageIcon, Play, Lock } from "lucide-react";
+import { ShoppingBag, Target, Camera, Sparkles, Check, Shirt, Smartphone, UtensilsCrossed, Plane, Briefcase, Palmtree, Video, Watch, Bot, FolderOpen, Dna, X, ShoppingCart, Tag, DollarSign, CheckCircle2, MessageCircle, Phone, Send, Megaphone, Eye, Heart, Star, RefreshCw, Repeat, Users, MousePointerClick, TrendingUp, Zap, Globe, Image as ImageIcon, Play, Upload, Lock } from "lucide-react";
 import AdBlueprintExplorer from "@/app/components/AdBlueprintExplorer";
 import TutorialVideo from "@/app/components/TutorialVideo";
 import TourGuiado from "@/app/components/TourGuiado";
@@ -885,11 +885,6 @@ function EstrategiaContent() {
   const [progresoListo, setProgresoListo] = useState(false);
 
   const fileRef = useRef<HTMLInputElement>(null);
-  // Refs a cada celda del selector 3D "asignar-tipos" (una por
-  // clave-tipo), para poder forzar un reflow antes de re-agregar 'active'
-  // al seleccionar -- sin esto, las animaciones de flash/abanico no se
-  // reinician si el usuario re-selecciona el mismo tipo con otro en el medio.
-  const qb3dCellRefs = useRef<Record<string, HTMLButtonElement | null>>({});
 
   const LLAVE_PROGRESO = "quiubot_estrategia_progreso";
 
@@ -1533,24 +1528,13 @@ function EstrategiaContent() {
     else dispararAlbum();
   }
 
-  // Selecciona un tipo para un anuncio en el selector 3D "asignar-tipos".
-  // Quita 'active' de las otras 2 celdas de la misma fila y fuerza un
-  // reflow (void offsetWidth) ANTES de re-agregar 'active' a la celda
-  // elegida -- esto es lo que hace que las animaciones de flash/abanico se
-  // reinicien cada vez que se selecciona, no solo la primera vez (sin
-  // esto, click en "Imagen" dos veces seguidas con otra opción en el medio
-  // no vuelve a disparar el flash).
-  const seleccionarTipoQb3d = (clave: string, tipo: TipoCreativo, bloqueada: boolean) => {
+  // Selecciona un tipo para un anuncio en el selector "asignar-tipos"
+  // (deck de 3 cards en abanico). A diferencia de la versión anterior con
+  // flash/anillos (animation, con loop o disparo único), acá .qbf-glow es
+  // una transition de opacity nada más -- eso replica correctamente con
+  // solo actualizar el estado, sin necesidad de forzar un reflow.
+  const seleccionarTipoQbf = (clave: string, tipo: TipoCreativo, bloqueada: boolean) => {
     if (bloqueada) return;
-    (["imagen", "video", "album"] as TipoCreativo[]).forEach((t) => {
-      if (t !== tipo) qb3dCellRefs.current[`${clave}-${t}`]?.classList.remove("active");
-    });
-    const elNuevo = qb3dCellRefs.current[`${clave}-${tipo}`];
-    if (elNuevo) {
-      elNuevo.classList.remove("active");
-      void elNuevo.offsetWidth;
-      elNuevo.classList.add("active");
-    }
     setTiposPorAnuncio((prev) => ({ ...prev, [clave]: tipo }));
   };
 
@@ -2406,67 +2390,50 @@ function EstrategiaContent() {
               Elige la fuente del creativo para cada anuncio. Solo se puede generar 1 video por estrategia.
             </p>
 
-            <div style={{ display: "flex", flexDirection: "column", gap: 16, marginBottom: 20, perspective: 900 }}>
+            <div style={{ marginBottom: 20 }}>
               {(estrategiaSeleccionada?.conjuntos || []).flatMap((conjunto: any, ci: number) =>
                 (conjunto.anuncios || []).map((anuncio: any, ai: number) => {
                   const clave = `${ci}-${ai}`;
                   const tipoActual = tiposPorAnuncio[clave] || "imagen";
                   const hayVideoEnOtroLado = Object.entries(tiposPorAnuncio).some(([k, v]) => v === "video" && k !== clave);
                   return (
-                    <div
-                      key={clave}
-                      style={{
-                        background: "#fff", border: "1px solid #e8e8e6", padding: "1.25rem",
-                        // Esquinas cortadas (no border-radius) -- detalle geométrico
-                        // distintivo en vez del redondeado genérico del resto de la app.
-                        clipPath: "polygon(0 0, calc(100% - 16px) 0, 100% 16px, 100% 100%, 16px 100%, 0 calc(100% - 16px))",
-                      }}
-                    >
-                      <div style={{ fontSize: 11, color: "var(--text-muted)", fontFamily: "ui-monospace, monospace", textTransform: "uppercase", letterSpacing: 0.5, marginBottom: 4 }}>
-                        {conjunto.nombre}
-                      </div>
-                      <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 8, marginBottom: 14 }}>
-                        <div style={{ fontWeight: 500, fontSize: 16, color: "#1a1a1a" }}>
-                          {anuncio.copy?.titulo || anuncio.nombre}
-                        </div>
-                        {tipoActual === "video" && <span className="qb3d-badge-video">Video usado aquí</span>}
+                    <div key={clave} className="qbf-row">
+                      <p className="qbf-title">{conjunto.nombre}</p>
+                      <div style={{ display: "flex", alignItems: "center", justifyContent: "center", gap: 8, marginBottom: 22 }}>
+                        <p className="qbf-name" style={{ margin: 0 }}>{anuncio.copy?.titulo || anuncio.nombre}</p>
+                        {tipoActual === "video" && <span className="qbf-badge-video">Video usado aquí</span>}
                       </div>
 
-                      <div style={{ display: "grid", gridTemplateColumns: "repeat(3, 1fr)", gap: 10 }}>
-                        {(["imagen", "video", "album"] as TipoCreativo[]).map((tipo) => {
+                      <div className="qbf-deck">
+                        {(["imagen", "video", "album"] as TipoCreativo[]).map((tipo, pos) => {
                           const bloqueada = tipo === "video" && hayVideoEnOtroLado && tipoActual !== "video";
                           const activo = tipoActual === tipo;
-                          const nombreTipo = tipo === "imagen" ? "Imagen con IA" : tipo === "video" ? "Video con IA" : "Álbum";
+                          const nombreTipo = tipo === "imagen" ? "Imagen" : tipo === "video" ? "Video" : "Álbum";
+                          const IconoTipo = bloqueada ? Lock : tipo === "imagen" ? ImageIcon : tipo === "video" ? Play : Upload;
+                          // Color calculado en cada render según el estado -- no es un
+                          // selector CSS descendiente, es la prop `color`/`fill` real del
+                          // ícono recalculada con React, así también el ícono en sí
+                          // cambia de color al (de)seleccionar, no solo el texto.
+                          const colorIcono = bloqueada ? "var(--text-muted)" : activo ? "var(--qb-purple)" : "var(--text-muted)";
                           return (
                             <button
                               key={tipo}
-                              ref={(el) => { qb3dCellRefs.current[`${clave}-${tipo}`] = el; }}
-                              onClick={() => seleccionarTipoQb3d(clave, tipo, bloqueada)}
+                              data-pos={pos}
+                              onClick={() => seleccionarTipoQbf(clave, tipo, bloqueada)}
                               disabled={bloqueada}
                               title={bloqueada ? "Solo se puede generar 1 video por estrategia" : undefined}
-                              className={`qb3d-cell${activo ? " active" : ""}${bloqueada ? " locked" : ""}`}
+                              className={`qbf-card${activo ? " active" : bloqueada ? " locked" : " recede"}`}
                             >
-                              {bloqueada ? (
-                                <Lock size={22} strokeWidth={1.8} color="var(--text-muted)" aria-hidden="true" style={{ zIndex: 2 }} />
-                              ) : tipo === "imagen" ? (
-                                <>
-                                  <div className="qb3d-flash" />
-                                  <ImageIcon size={26} strokeWidth={1.8} color="var(--qb-purple)" aria-hidden="true" style={{ zIndex: 2 }} />
-                                </>
-                              ) : tipo === "video" ? (
-                                <>
-                                  <div className="qb3d-ring r1" />
-                                  <div className="qb3d-ring r2" />
-                                  <Play size={22} strokeWidth={1.8} color="var(--qb-purple)" fill="var(--qb-purple)" aria-hidden="true" style={{ zIndex: 2 }} />
-                                </>
-                              ) : (
-                                <div className="qb3d-fan">
-                                  <div className="qb3d-fan-card c1" />
-                                  <div className="qb3d-fan-card c2" />
-                                  <div className="qb3d-fan-card c3" />
-                                </div>
-                              )}
-                              <span className="qb3d-label">{bloqueada ? "Ya usado en otro anuncio" : nombreTipo}</span>
+                              <div className="qbf-glow" />
+                              <IconoTipo
+                                size={26}
+                                strokeWidth={1.8}
+                                color={colorIcono}
+                                fill={tipo === "video" && !bloqueada ? colorIcono : "none"}
+                                aria-hidden="true"
+                                className="qbf-icon"
+                              />
+                              <span>{nombreTipo}</span>
                             </button>
                           );
                         })}
@@ -2896,67 +2863,57 @@ function EstrategiaContent() {
         .quiubot-textarea-servicio:focus { border-color: #7F77DD !important; background: #fff !important; box-shadow: 0 0 0 3px rgba(83, 74, 183, 0.12); }
         .quiubot-textarea-servicio::placeholder { color: #aaa; }
 
-        /* Selector 3D "asignar-tipos" -- diseño confirmado y cerrado, ver
-           mensaje de la sesión que lo especificó. Timings, curvas de
-           easing, ángulos y transforms EXACTOS, no tocar -- lo único
-           sustituido respecto a la especificación original son los
-           colores, por las variables/valores reales del proyecto
-           confirmados en el "paso 0" de esa misma conversación. */
-        .qb3d-cell {
-          position: relative; height: 120px; border-radius: 12px;
+        /* Selector "asignar-tipos" -- diseño FINAL y CERRADO (deck de 3
+           cards en abanico con glow + profundidad 3D real vía rotateX +
+           translateZ). Reemplaza cualquier versión anterior (el qb3d con
+           flash/anillos/mini-abanico, y el abanico horizontal simple sin
+           halo). Timings, curvas de easing, ángulos y transforms EXACTOS,
+           no tocar -- lo único sustituido respecto a la especificación
+           original son los colores, por las variables/valores reales del
+           proyecto ya confirmados. */
+        .qbf-row {
+          background: #fff;
           border: 0.5px solid #e8e8e6;
+          border-radius: 14px; padding: 28px 16px 24px; margin-bottom: 16px;
+          perspective: 800px;
+        }
+        .qbf-title { font-size: 11px; color: var(--text-muted); letter-spacing: 0.4px; margin: 0 0 3px; text-align: center; }
+        .qbf-name { font-size: 15px; font-weight: 500; margin: 0 0 22px; text-align: center; }
+        .qbf-deck {
+          position: relative; height: 130px; display: flex; align-items: center; justify-content: center;
+          transform-style: preserve-3d;
+        }
+        .qbf-card {
+          position: relative; width: 100px; height: 120px; border-radius: 14px;
           background: #fff;
-          cursor: pointer; overflow: hidden;
-          transform: translateY(0) scale(1);
-          transition: transform 0.4s cubic-bezier(0.34,1.4,0.64,1), box-shadow 0.4s, border-color 0.3s;
-          display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 8px;
+          border: 1.5px solid #e8e8e6;
+          display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 9px;
+          cursor: pointer;
+          transition: transform 0.45s cubic-bezier(0.34,1.35,0.64,1), box-shadow 0.45s, border-color 0.3s;
+          box-shadow: 0 4px 10px -4px rgba(0,0,0,0.15);
+          margin: 0 4px; overflow: hidden;
         }
-        .qb3d-cell.active {
-          transform: perspective(700px) rotateX(6deg) translateY(-6px) scale(1.045);
-          border-color: var(--qb-purple);
-          box-shadow: 0 14px 24px -8px rgba(83,74,183,0.45);
-          background: linear-gradient(180deg, var(--qb-purple-light) 0%, #fff 100%);
+        .qbf-glow {
+          position: absolute; inset: -20px; border-radius: 50%;
+          background: radial-gradient(circle, rgba(83,74,183,0.28) 0%, transparent 70%);
+          opacity: 0; transition: opacity 0.45s;
         }
-        .qb3d-cell.locked { opacity: 0.32; cursor: not-allowed; }
-        .qb3d-label { font-size: 12px; font-weight: 500; color: var(--text-muted); z-index: 2; }
-        .qb3d-cell.active .qb3d-label { color: var(--qb-purple); }
+        .qbf-card.active .qbf-glow { opacity: 1; }
+        .qbf-icon { position: relative; z-index: 2; }
+        .qbf-card span { position: relative; z-index: 2; font-size: 13px; font-weight: 500; color: var(--text-muted); }
+        .qbf-card.active span { color: var(--qb-purple); }
+        .qbf-card[data-pos="0"] { transform: rotate(-7deg) translateY(8px); z-index: 1; }
+        .qbf-card[data-pos="1"] { transform: rotate(0deg) translateY(-4px); z-index: 2; }
+        .qbf-card[data-pos="2"] { transform: rotate(7deg) translateY(8px); z-index: 1; }
+        .qbf-card.active {
+          transform: rotateX(9deg) translateY(-18px) translateZ(65px) scale(1.1) !important;
+          z-index: 5; border-color: var(--qb-purple);
+          box-shadow: 0 26px 34px -14px rgba(83,74,183,0.45);
+        }
+        .qbf-card.recede { opacity: 0.6; filter: saturate(0.7); }
+        .qbf-card.locked { opacity: 0.35; cursor: not-allowed; }
 
-        .qb3d-flash {
-          position: absolute; inset: -14px; border-radius: 50%;
-          background: radial-gradient(circle, rgba(83,74,183,0.5) 0%, transparent 70%);
-          opacity: 0;
-        }
-        .qb3d-cell.active .qb3d-flash { animation: qb3dFlash 0.7s ease-out; }
-        @keyframes qb3dFlash {
-          0% { opacity: 0; transform: scale(0.3); }
-          30% { opacity: 1; transform: scale(1.3); }
-          100% { opacity: 0; transform: scale(1.6); }
-        }
-
-        .qb3d-ring {
-          position: absolute; inset: 0; border-radius: 50%;
-          border: 2px solid var(--qb-purple); opacity: 0;
-        }
-        .qb3d-cell.active .qb3d-ring.r1 { animation: qb3dPulse 1.6s ease-out infinite; }
-        .qb3d-cell.active .qb3d-ring.r2 { animation: qb3dPulse 1.6s ease-out infinite 0.5s; }
-        @keyframes qb3dPulse {
-          0% { opacity: 0.7; transform: scale(0.6); }
-          100% { opacity: 0; transform: scale(2.1); }
-        }
-
-        .qb3d-fan { position: relative; width: 44px; height: 36px; }
-        .qb3d-fan-card {
-          position: absolute; width: 26px; height: 32px; border-radius: 4px;
-          background: #fff;
-          border: 1.5px solid #d0d0d0;
-          top: 2px; left: 9px;
-          transition: transform 0.4s cubic-bezier(0.34,1.4,0.64,1);
-        }
-        .qb3d-cell.active .qb3d-fan-card.c1 { transform: translateX(-11px) rotate(-14deg); border-color: var(--qb-purple); }
-        .qb3d-cell.active .qb3d-fan-card.c2 { transform: translateY(-3px) rotate(0deg); border-color: var(--qb-purple); }
-        .qb3d-cell.active .qb3d-fan-card.c3 { transform: translateX(11px) rotate(14deg); border-color: var(--qb-purple); }
-
-        .qb3d-badge-video {
+        .qbf-badge-video {
           background: #DCFCE7; color: #15803D; font-size: 10px; font-weight: 600;
           padding: 3px 8px; border-radius: 20px; white-space: nowrap; flex-shrink: 0;
         }
