@@ -2399,7 +2399,7 @@ function EstrategiaContent() {
                   return (
                     <div key={clave} className="qbf-row">
                       <p className="qbf-title">{conjunto.nombre}</p>
-                      <div style={{ display: "flex", alignItems: "center", justifyContent: "center", gap: 8, marginBottom: 22 }}>
+                      <div style={{ display: "flex", alignItems: "center", justifyContent: "center", gap: 8, marginBottom: 40 }}>
                         <p className="qbf-name" style={{ margin: 0 }}>{anuncio.copy?.titulo || anuncio.nombre}</p>
                         {tipoActual === "video" && <span className="qbf-badge-video">Video usado aquí</span>}
                       </div>
@@ -2410,11 +2410,6 @@ function EstrategiaContent() {
                           const activo = tipoActual === tipo;
                           const nombreTipo = tipo === "imagen" ? "Imagen" : tipo === "video" ? "Video" : "Álbum";
                           const IconoTipo = bloqueada ? Lock : tipo === "imagen" ? ImageIcon : tipo === "video" ? Play : Upload;
-                          // Color calculado en cada render según el estado -- no es un
-                          // selector CSS descendiente, es la prop `color`/`fill` real del
-                          // ícono recalculada con React, así también el ícono en sí
-                          // cambia de color al (de)seleccionar, no solo el texto.
-                          const colorIcono = bloqueada ? "var(--text-muted)" : activo ? "var(--qb-purple)" : "var(--text-muted)";
                           return (
                             <button
                               key={tipo}
@@ -2425,14 +2420,19 @@ function EstrategiaContent() {
                               className={`qbf-card${activo ? " active" : bloqueada ? " locked" : " recede"}`}
                             >
                               <div className="qbf-glow" />
-                              <IconoTipo
-                                size={26}
-                                strokeWidth={1.8}
-                                color={colorIcono}
-                                fill={tipo === "video" && !bloqueada ? colorIcono : "none"}
-                                aria-hidden="true"
-                                className="qbf-icon"
-                              />
+                              {/* Badge "clay" morado sólido siempre (activa o no) -- lo
+                                  que cambia entre estados es el borde/sombra de la card
+                                  y el color del label, no el badge ni el ícono. */}
+                              <div className="qbf-badge">
+                                <IconoTipo
+                                  size={26}
+                                  strokeWidth={1.8}
+                                  color="#fff"
+                                  fill={tipo === "video" && !bloqueada ? "#fff" : "none"}
+                                  aria-hidden="true"
+                                  className="qbf-icon"
+                                />
+                              </div>
                               <span>{nombreTipo}</span>
                             </button>
                           );
@@ -2878,7 +2878,25 @@ function EstrategiaContent() {
           perspective: 800px;
         }
         .qbf-title { font-size: 11px; color: var(--text-muted); letter-spacing: 0.4px; margin: 0 0 3px; text-align: center; }
-        .qbf-name { font-size: 15px; font-weight: 500; margin: 0 0 22px; text-align: center; }
+        /* #1a1a1a -- mismo color que usan el resto de los títulos de
+           sección en /estrategia (ej. "6. ¿Cómo quieres cada anuncio?").
+           Sin esto hereda el color de body, que bajo prefers-color-
+           scheme:dark del sistema operativo pasa a #ededed (casi blanco)
+           -- mismo bug de fondo que ya arreglamos para inputs en
+           globals.css, acá aplicado puntualmente a este texto. */
+        .qbf-name { font-size: 15px; font-weight: 500; margin: 0 0 40px; text-align: center; color: #1a1a1a; }
+        /* Badge "clay" morado detrás de cada ícono -- fondo sólido +
+           sombra exterior + 2 sombras internas para simular volumen
+           (plástico/gel), siempre igual, activa o no. */
+        .qbf-badge {
+          width: 52px; height: 52px; border-radius: 14px;
+          background: var(--qb-purple);
+          box-shadow: 0 6px 12px -5px rgba(83,74,183,0.5),
+                      inset 0 -4px 6px rgba(0,0,0,0.12),
+                      inset 0 4px 5px rgba(255,255,255,0.15);
+          display: flex; align-items: center; justify-content: center;
+          margin: 0 auto 8px;
+        }
         .qbf-deck {
           position: relative; height: 130px; display: flex; align-items: center; justify-content: center;
           transform-style: preserve-3d;
