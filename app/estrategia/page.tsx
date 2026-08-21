@@ -832,6 +832,13 @@ function EstrategiaContent() {
   // (ver handleSeleccionarEstrategia), así el usuario solo cambia las filas
   // que quiere distinto.
   const [tiposPorAnuncio, setTiposPorAnuncio] = useState<Record<string, TipoCreativo>>({});
+  // Stepper de "asignar-tipos": qué anuncio se muestra (uno a la vez, en
+  // vez de todos apilados). transicionAsignacion solo existe durante los
+  // ~320ms de la animación de deslizamiento entre anuncios -- mientras
+  // está seteado, se renderiza también la fila SALIENTE (position:
+  // absolute encima de la entrante, que sigue en flujo normal).
+  const [pasoAsignacionIdx, setPasoAsignacionIdx] = useState(0);
+  const [transicionAsignacion, setTransicionAsignacion] = useState<{ idxSaliente: number; direccion: "siguiente" | "anterior" } | null>(null);
   // Cola de tipos distintos presentes en tiposPorAnuncio, en orden de
   // procesamiento (video primero por ser el más lento, después imagen,
   // después álbum) -- se arma una sola vez al confirmar las asignaciones.
@@ -939,6 +946,7 @@ function EstrategiaContent() {
         if (data.estrategiaSeleccionada) setEstrategiaSeleccionada(data.estrategiaSeleccionada);
         if (data.descripcionVisual) setDescripcionVisual(data.descripcionVisual);
         if (data.tiposPorAnuncio) setTiposPorAnuncio(data.tiposPorAnuncio);
+        if (typeof data.pasoAsignacionIdx === "number") setPasoAsignacionIdx(data.pasoAsignacionIdx);
         if (data.colaDeTipos) setColaDeTipos(data.colaDeTipos);
         if (typeof data.tipoEnProcesoIdx === "number") setTipoEnProcesoIdx(data.tipoEnProcesoIdx);
         if (data.creativosPorClave) setCreativosPorClave(data.creativosPorClave);
@@ -976,6 +984,7 @@ function EstrategiaContent() {
           estrategiaSeleccionada,
           descripcionVisual,
           tiposPorAnuncio,
+          pasoAsignacionIdx,
           colaDeTipos,
           tipoEnProcesoIdx,
           creativosPorClave,
@@ -998,6 +1007,7 @@ function EstrategiaContent() {
     estrategiaSeleccionada,
     descripcionVisual,
     tiposPorAnuncio,
+    pasoAsignacionIdx,
     colaDeTipos,
     tipoEnProcesoIdx,
     creativosPorClave,
@@ -1445,8 +1455,34 @@ function EstrategiaContent() {
     setColaDeTipos([]);
     setTipoEnProcesoIdx(0);
     setCreativosPorClave({});
+    setPasoAsignacionIdx(0);
     setStep("asignar-tipos");
   };
+
+  // Respaldo defensivo: handleSeleccionarEstrategia ya deja tiposPorAnuncio
+  // con "imagen" para cada clave al elegir una estrategia nueva, pero si se
+  // restaura desde LLAVE_PROGRESO (recarga a mitad de asignar-tipos) el
+  // snapshot guardado podría no cubrir todas las claves de la estrategia
+  // actual -- esto asegura que SIEMPRE haya un default válido por clave
+  // apenas se conoce estrategiaSeleccionada, para que el botón Siguiente/
+  // Confirmar nunca quede bloqueado por falta de selección.
+  useEffect(() => {
+    if (!estrategiaSeleccionada) return;
+    const claves: string[] = [];
+    (estrategiaSeleccionada.conjuntos || []).forEach((conjunto: any, ci: number) => {
+      (conjunto.anuncios || []).forEach((_anuncio: any, ai: number) => {
+        claves.push(`${ci}-${ai}`);
+      });
+    });
+    const faltantes = claves.filter((c) => tiposPorAnuncio[c] === undefined);
+    if (faltantes.length === 0) return;
+    setTiposPorAnuncio((prev) => {
+      const siguiente = { ...prev };
+      faltantes.forEach((c) => { siguiente[c] = "imagen"; });
+      return siguiente;
+    });
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [estrategiaSeleccionada]);
 
   // Recorre estrategiaSeleccionada.conjuntos[].anuncios[] en orden y arma
   // (a) el objeto estrategia filtrado a solo los anuncios con ese tipo, y
@@ -1537,6 +1573,21 @@ function EstrategiaContent() {
     if (bloqueada) return;
     setTiposPorAnuncio((prev) => ({ ...prev, [clave]: tipo }));
   };
+
+  // Duración del deslizamiento entre anuncios del stepper -- debe coincidir
+  // exactamente con la duración de los @keyframes qbfSalir*/qbfEntrar* en
+  // el <style> de abajo.
+  const DURACION_TRANSICION_ASIGNACION = 320;
+
+  // Avanza/retrocede un anuncio en el stepper de "asignar-tipos". El
+  // entrante muestra el contenido nuevo de inmediato (queda en flujo
+  // normal, define el alto); el saliente se anima encima como
+  // position:absolute y se limpia del DOM cuando termina la animación.
+  function irAsignacion(nuevoIdx: number, direccion: "siguiente" | "anterior") {
+    setTransicionAsignacion({ idxSaliente: pasoAsignacionIdx, direccion });
+    setPasoAsignacionIdx(nuevoIdx);
+    setTimeout(() => setTransicionAsignacion(null), DURACION_TRANSICION_ASIGNACION);
+  }
 
   // Paso "asignar-tipos" -> botón "Continuar →": arma la cola (video
   // primero si está, después imagen, después álbum -- orden fijo, no el
@@ -2390,66 +2441,127 @@ function EstrategiaContent() {
               Elige la fuente del creativo para cada anuncio. Solo se puede generar 1 video por estrategia.
             </p>
 
-            <div style={{ marginBottom: 20 }}>
-              {(estrategiaSeleccionada?.conjuntos || []).flatMap((conjunto: any, ci: number) =>
-                (conjunto.anuncios || []).map((anuncio: any, ai: number) => {
-                  const clave = `${ci}-${ai}`;
-                  const tipoActual = tiposPorAnuncio[clave] || "imagen";
-                  const hayVideoEnOtroLado = Object.entries(tiposPorAnuncio).some(([k, v]) => v === "video" && k !== clave);
-                  return (
-                    <div key={clave} className="qbf-row">
-                      <p className="qbf-title">{conjunto.nombre}</p>
-                      <div style={{ display: "flex", alignItems: "center", justifyContent: "center", gap: 8, marginBottom: 40 }}>
-                        <p className="qbf-name" style={{ margin: 0 }}>{anuncio.copy?.titulo || anuncio.nombre}</p>
-                        {tipoActual === "video" && <span className="qbf-badge-video">Video usado aquí</span>}
-                      </div>
+            {(() => {
+              type ItemAsignar = { clave: string; conjunto: any; anuncio: any };
+              const listaAnunciosAsignar: ItemAsignar[] = (estrategiaSeleccionada?.conjuntos || []).flatMap((conjunto: any, ci: number) =>
+                (conjunto.anuncios || []).map((anuncio: any, ai: number) => ({ clave: `${ci}-${ai}`, conjunto, anuncio }))
+              );
+              if (listaAnunciosAsignar.length === 0) return null;
 
-                      <div className="qbf-deck">
-                        {(["imagen", "video", "album"] as TipoCreativo[]).map((tipo, pos) => {
-                          const bloqueada = tipo === "video" && hayVideoEnOtroLado && tipoActual !== "video";
-                          const activo = tipoActual === tipo;
-                          const nombreTipo = tipo === "imagen" ? "Imagen" : tipo === "video" ? "Video" : "Álbum";
-                          const IconoTipo = bloqueada ? Lock : tipo === "imagen" ? ImageIcon : tipo === "video" ? Play : Upload;
-                          return (
-                            <button
-                              key={tipo}
-                              data-pos={pos}
-                              onClick={() => seleccionarTipoQbf(clave, tipo, bloqueada)}
-                              disabled={bloqueada}
-                              title={bloqueada ? "Solo se puede generar 1 video por estrategia" : undefined}
-                              className={`qbf-card${activo ? " active" : bloqueada ? " locked" : " recede"}`}
-                            >
-                              <div className="qbf-glow" />
-                              {/* Badge "clay" morado sólido siempre (activa o no) -- lo
-                                  que cambia entre estados es el borde/sombra de la card
-                                  y el color del label, no el badge ni el ícono. */}
-                              <div className="qbf-badge">
-                                <IconoTipo
-                                  size={26}
-                                  strokeWidth={1.8}
-                                  color="#fff"
-                                  fill={tipo === "video" && !bloqueada ? "#fff" : "none"}
-                                  aria-hidden="true"
-                                  className="qbf-icon"
-                                />
-                              </div>
-                              <span>{nombreTipo}</span>
-                            </button>
-                          );
-                        })}
-                      </div>
+              const total = listaAnunciosAsignar.length;
+              const idxActual = Math.min(pasoAsignacionIdx, total - 1);
+              const item = listaAnunciosAsignar[idxActual];
+              const esUltimo = idxActual === total - 1;
+              const puedeAvanzar = !!tiposPorAnuncio[item.clave];
+
+              // Misma fila de siempre (título + badge de video usado + deck de
+              // 3 cards) -- extraída para poder renderizarla dos veces durante
+              // la transición (saliente + entrante) sin duplicar el markup.
+              const renderFilaAsignacion = (it: { clave: string; conjunto: any; anuncio: any }, claseExtra: string) => {
+                const tipoActual = tiposPorAnuncio[it.clave] || "imagen";
+                const hayVideoEnOtroLado = Object.entries(tiposPorAnuncio).some(([k, v]) => v === "video" && k !== it.clave);
+                return (
+                  <div key={it.clave} className={`qbf-row${claseExtra ? ` ${claseExtra}` : ""}`}>
+                    <p className="qbf-title">{it.conjunto.nombre}</p>
+                    <div style={{ display: "flex", alignItems: "center", justifyContent: "center", gap: 8, marginBottom: 40 }}>
+                      <p className="qbf-name" style={{ margin: 0 }}>{it.anuncio.copy?.titulo || it.anuncio.nombre}</p>
+                      {tipoActual === "video" && <span className="qbf-badge-video">Video usado aquí</span>}
                     </div>
-                  );
-                })
-              )}
-            </div>
 
-            <button
-              onClick={handleConfirmarAsignaciones}
-              style={{ width: "100%", background: "var(--qb-purple)", color: "#fff", border: "none", padding: 16, borderRadius: 10, fontSize: 16, fontWeight: 600, cursor: "pointer" }}
-            >
-              Continuar →
-            </button>
+                    <div className="qbf-deck">
+                      {(["imagen", "video", "album"] as TipoCreativo[]).map((tipo, pos) => {
+                        const bloqueada = tipo === "video" && hayVideoEnOtroLado && tipoActual !== "video";
+                        const activo = tipoActual === tipo;
+                        const nombreTipo = tipo === "imagen" ? "Imagen" : tipo === "video" ? "Video" : "Álbum";
+                        const IconoTipo = bloqueada ? Lock : tipo === "imagen" ? ImageIcon : tipo === "video" ? Play : Upload;
+                        return (
+                          <button
+                            key={tipo}
+                            data-pos={pos}
+                            onClick={() => seleccionarTipoQbf(it.clave, tipo, bloqueada)}
+                            disabled={bloqueada}
+                            title={bloqueada ? "Solo se puede generar 1 video por estrategia" : undefined}
+                            className={`qbf-card${activo ? " active" : bloqueada ? " locked" : " recede"}`}
+                          >
+                            <div className="qbf-glow" />
+                            {/* Badge "clay" morado sólido siempre (activa o no) -- lo
+                                que cambia entre estados es el borde/sombra de la card
+                                y el color del label, no el badge ni el ícono. */}
+                            <div className="qbf-badge">
+                              <IconoTipo
+                                size={26}
+                                strokeWidth={1.8}
+                                color="#fff"
+                                fill={tipo === "video" && !bloqueada ? "#fff" : "none"}
+                                aria-hidden="true"
+                                className="qbf-icon"
+                              />
+                            </div>
+                            <span>{nombreTipo}</span>
+                          </button>
+                        );
+                      })}
+                    </div>
+                  </div>
+                );
+              };
+
+              const itemSaliente = transicionAsignacion ? listaAnunciosAsignar[transicionAsignacion.idxSaliente] : null;
+              const claseSaliente = transicionAsignacion
+                ? `saliendo-${transicionAsignacion.direccion === "siguiente" ? "izquierda" : "derecha"}`
+                : "";
+              const claseEntrante = transicionAsignacion
+                ? `entrando-${transicionAsignacion.direccion === "siguiente" ? "derecha" : "izquierda"}`
+                : "";
+
+              return (
+                <>
+                  <p className="qbf-progreso">Anuncio {idxActual + 1} de {total}</p>
+                  <div className="qbf-dots">
+                    {listaAnunciosAsignar.map((it, i) => (
+                      <span
+                        key={it.clave}
+                        className={`qbf-dot${tiposPorAnuncio[it.clave] !== undefined ? " asignado" : ""}${i === idxActual ? " actual" : ""}`}
+                      />
+                    ))}
+                  </div>
+
+                  <div className="qbf-row-wrap">
+                    {itemSaliente && renderFilaAsignacion(itemSaliente, claseSaliente)}
+                    {renderFilaAsignacion(item, claseEntrante)}
+                  </div>
+
+                  <div style={{ display: "flex", gap: 10 }}>
+                    <button
+                      onClick={() => irAsignacion(idxActual - 1, "anterior")}
+                      disabled={idxActual === 0}
+                      style={{
+                        flex: 1, background: "#fff", color: idxActual === 0 ? "#ccc" : "var(--qb-purple)",
+                        border: "1px solid #e0e0e0", padding: 16, borderRadius: 10, fontSize: 16, fontWeight: 600,
+                        cursor: idxActual === 0 ? "not-allowed" : "pointer",
+                      }}
+                    >
+                      ← Anterior
+                    </button>
+                    <button
+                      onClick={() => {
+                        if (!puedeAvanzar) return;
+                        if (esUltimo) handleConfirmarAsignaciones();
+                        else irAsignacion(idxActual + 1, "siguiente");
+                      }}
+                      disabled={!puedeAvanzar}
+                      style={{
+                        flex: 1, background: puedeAvanzar ? "var(--qb-purple)" : "#ccc", color: "#fff",
+                        border: "none", padding: 16, borderRadius: 10, fontSize: 16, fontWeight: 600,
+                        cursor: puedeAvanzar ? "pointer" : "not-allowed",
+                      }}
+                    >
+                      {esUltimo ? "Confirmar ✓" : "Siguiente →"}
+                    </button>
+                  </div>
+                </>
+              );
+            })()}
           </div>
         )}
 
@@ -2934,6 +3046,45 @@ function EstrategiaContent() {
         .qbf-badge-video {
           background: #DCFCE7; color: #15803D; font-size: 10px; font-weight: 600;
           padding: 3px 8px; border-radius: 20px; white-space: nowrap; flex-shrink: 0;
+        }
+
+        /* Stepper de "asignar-tipos" -- un solo .qbf-row a la vez en vez de
+           todos apilados, con progreso + puntos arriba y deslizamiento tipo
+           carrusel al cambiar de anuncio. */
+        .qbf-progreso { font-size: 12px; color: var(--text-muted); text-align: center; margin: 0 0 8px; }
+        .qbf-dots { display: flex; align-items: center; justify-content: center; gap: 6px; margin-bottom: 16px; }
+        .qbf-dot { width: 6px; height: 6px; border-radius: 50%; background: #e0e0e0; transition: background 0.2s ease, transform 0.2s ease; }
+        .qbf-dot.asignado { background: var(--qb-purple); }
+        .qbf-dot.actual { transform: scale(1.4); }
+
+        .qbf-row-wrap { position: relative; margin-bottom: 20px; }
+        /* La fila SALIENTE se anima encima como position:absolute, sin
+           afectar el alto del contenedor -- la ENTRANTE se queda en flujo
+           normal (sin position:absolute) y es la que define el alto real.
+           Mismo truco que ya usamos para el flip del sidebar en Admin. */
+        .qbf-row.saliendo-izquierda,
+        .qbf-row.saliendo-derecha {
+          position: absolute; inset: 0; pointer-events: none;
+        }
+        .qbf-row.saliendo-izquierda { animation: qbfSalirIzq 0.32s ease-out forwards; }
+        .qbf-row.saliendo-derecha { animation: qbfSalirDer 0.32s ease-out forwards; }
+        .qbf-row.entrando-derecha { animation: qbfEntrarDer 0.32s ease-out forwards; }
+        .qbf-row.entrando-izquierda { animation: qbfEntrarIzq 0.32s ease-out forwards; }
+        @keyframes qbfSalirIzq {
+          from { transform: translateX(0); opacity: 1; }
+          to { transform: translateX(-60px); opacity: 0; }
+        }
+        @keyframes qbfSalirDer {
+          from { transform: translateX(0); opacity: 1; }
+          to { transform: translateX(60px); opacity: 0; }
+        }
+        @keyframes qbfEntrarDer {
+          from { transform: translateX(60px); opacity: 0; }
+          to { transform: translateX(0); opacity: 1; }
+        }
+        @keyframes qbfEntrarIzq {
+          from { transform: translateX(-60px); opacity: 0; }
+          to { transform: translateX(0); opacity: 1; }
         }
       `}</style>
     </div>
