@@ -279,11 +279,17 @@ function DiagramaEstrategia({ estrategia }) {
     setConjuntosAbiertos((prev) => prev.map((v, i) => (i === idx ? !v : v)));
   };
 
-  const contenedorRef = useRef(null); // wrapper relative que crece al alto total del contenido (el que scrollea es su padre)
+  const scrollWrapperRef = useRef(null); // el que realmente scrollea (overflowY:auto) -- su clientWidth/Height es el "viewport visible" para Ajustar a pantalla
+  const contenedorRef = useRef(null); // wrapper relative que crece al alto total del contenido, con el transform:scale(zoom) aplicado
   const campanaRef = useRef(null);
   const conjuntoRefs = useRef([]);
   const anuncioRefs = useRef([]); // anuncioRefs.current[ci][ai]
   const [lineas, setLineas] = useState([]);
+
+  const ZOOM_MIN = 0.5;
+  const ZOOM_MAX = 1.5;
+  const [zoom, setZoom] = useState(1);
+  const ajustarZoom = (valor) => setZoom(Math.max(ZOOM_MIN, Math.min(ZOOM_MAX, valor)));
 
   const recalcularLineas = useCallback(() => {
     const contEl = contenedorRef.current;
@@ -293,14 +299,18 @@ function DiagramaEstrategia({ estrategia }) {
     // getBoundingClientRect ya es relativo al viewport considerando el
     // scroll de todos los ancestros -- restar contRect da coordenadas
     // relativas al contenedor sin necesidad de sumar scrollTop/scrollLeft
-    // a mano.
+    // a mano. PERO como contenedorRef tiene transform:scale(zoom), esas
+    // coordenadas ya vienen escaladas -- y el propio <svg> overlay,
+    // al ser hijo del mismo contenedor, hereda ese mismo transform al
+    // pintarse. Sin dividir acá por zoom, la línea quedaría escalada dos
+    // veces (una por la medición, otra por el transform que el SVG hereda).
     const puntoDerecho = (el) => {
       const r = el.getBoundingClientRect();
-      return { x: r.right - contRect.left, y: r.top - contRect.top + r.height / 2 };
+      return { x: (r.right - contRect.left) / zoom, y: (r.top - contRect.top + r.height / 2) / zoom };
     };
     const puntoIzquierdo = (el) => {
       const r = el.getBoundingClientRect();
-      return { x: r.left - contRect.left, y: r.top - contRect.top + r.height / 2 };
+      return { x: (r.left - contRect.left) / zoom, y: (r.top - contRect.top + r.height / 2) / zoom };
     };
 
     const nuevasLineas = [];
@@ -322,17 +332,21 @@ function DiagramaEstrategia({ estrategia }) {
       });
     });
     setLineas(nuevasLineas);
-  }, [conjuntosAbiertos]);
+  }, [conjuntosAbiertos, zoom]);
 
   // Recalcula ANTES del paint (evita el parpadeo de líneas mal ubicadas un
-  // frame) cuando cambia la estrategia o se colapsa/expande un conjunto.
+  // frame) cuando cambia la estrategia, se colapsa/expande un conjunto, o
+  // cambia el zoom.
   useLayoutEffect(() => {
     recalcularLineas();
   }, [recalcularLineas, estrategia]);
 
   // Recalcula también si el contenido cambia de alto sin que nuestro propio
   // estado cambie (ej. el navegador re-envuelve texto al redimensionar la
-  // ventana).
+  // ventana). scrollWidth/scrollHeight (usados más abajo en Ajustar a
+  // pantalla) no se ven afectados por el propio transform del elemento, así
+  // que este observer sigue detectando cambios reales de contenido, no el
+  // zoom en sí.
   useEffect(() => {
     const contEl = contenedorRef.current;
     if (!contEl || typeof ResizeObserver === "undefined") return;
@@ -345,18 +359,61 @@ function DiagramaEstrategia({ estrategia }) {
     };
   }, [recalcularLineas]);
 
+  // "Ajustar a pantalla": el zoom mínimo entre ancho y alto para que el
+  // diagrama COMPLETO (en su estado actual de colapsado/expandido) quepa
+  // sin scroll dentro del wrapper visible.
+  const ajustarAPantalla = () => {
+    const wrapEl = scrollWrapperRef.current;
+    const contEl = contenedorRef.current;
+    if (!wrapEl || !contEl) return;
+    const factor = Math.min(
+      wrapEl.clientWidth / contEl.scrollWidth,
+      wrapEl.clientHeight / contEl.scrollHeight
+    );
+    if (Number.isFinite(factor) && factor > 0) ajustarZoom(factor);
+  };
+
   const conjuntos = estrategia.conjuntos || [];
   const { conjuntoFilas, totalFilas } = calcularFilas(conjuntos, conjuntosAbiertos);
 
   return (
-    // Red de seguridad para estrategias con muchos conjuntos/anuncios --
-    // scroll VERTICAL contenido (nunca horizontal como flujo principal;
-    // overflowX:auto queda solo de escape para pantallas angostas).
-    <div style={{ maxHeight: "70vh", overflowY: "auto", overflowX: "auto" }}>
-      <div ref={contenedorRef} style={{ position: "relative", padding: 8 }}>
-        <svg
-          style={{ position: "absolute", inset: 0, width: "100%", height: "100%", pointerEvents: "none", overflow: "visible" }}
-          aria-hidden="true"
+    <div>
+      {/* Controles de zoom -- fuera del área con scroll, para que no se
+          escale ni se desplace junto con el diagrama. */}
+      <div className="flex items-center gap-2 mb-3">
+        <button
+          onClick={() => ajustarZoom(zoom - 0.1)}
+          disabled={zoom <= ZOOM_MIN}
+          className="w-7 h-7 flex items-center justify-center rounded border border-slate-300 bg-white text-slate-600 text-sm font-medium disabled:opacity-40 disabled:cursor-not-allowed hover:border-slate-400"
+        >
+          −
+        </button>
+        <span className="text-xs text-slate-500 w-10 text-center" style={{ fontFamily: "'JetBrains Mono', monospace" }}>
+          {Math.round(zoom * 100)}%
+        </span>
+        <button
+          onClick={() => ajustarZoom(zoom + 0.1)}
+          disabled={zoom >= ZOOM_MAX}
+          className="w-7 h-7 flex items-center justify-center rounded border border-slate-300 bg-white text-slate-600 text-sm font-medium disabled:opacity-40 disabled:cursor-not-allowed hover:border-slate-400"
+        >
+          +
+        </button>
+        <button
+          onClick={ajustarAPantalla}
+          className="ml-1 px-3 h-7 flex items-center rounded border border-slate-300 bg-white text-slate-600 text-xs font-medium hover:border-slate-400"
+        >
+          Ajustar a pantalla
+        </button>
+      </div>
+
+      {/* Red de seguridad para estrategias con muchos conjuntos/anuncios --
+          scroll VERTICAL contenido (nunca horizontal como flujo principal;
+          overflowX:auto queda solo de escape para pantallas angostas). */}
+      <div ref={scrollWrapperRef} style={{ maxHeight: "70vh", overflowY: "auto", overflowX: "auto" }}>
+        <div ref={contenedorRef} style={{ position: "relative", padding: 8, transform: `scale(${zoom})`, transformOrigin: "top left" }}>
+          <svg
+            style={{ position: "absolute", inset: 0, width: "100%", height: "100%", pointerEvents: "none", overflow: "visible" }}
+            aria-hidden="true"
         >
           {lineas.map((l, i) => {
             const midX = (l.x1 + l.x2) / 2;
@@ -421,6 +478,7 @@ function DiagramaEstrategia({ estrategia }) {
             ));
           })}
         </div>
+      </div>
       </div>
     </div>
   );
