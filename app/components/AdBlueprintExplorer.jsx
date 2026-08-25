@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, useRef, useEffect, useLayoutEffect, useCallback } from "react";
 import {
   Target, Layers, Image as ImageIcon, Users, Wallet, Sparkles,
   ChevronDown, ChevronRight, Check, ArrowRight, TrendingUp, MapPin, Loader2
@@ -114,6 +114,15 @@ const ESTRATEGIAS = [
 const fmtCOP = (n) =>
   n == null ? "—" : new Intl.NumberFormat("es-CO", { style: "currency", currency: "COP", maximumFractionDigits: 0 }).format(n);
 
+// Ancho fijo de cada columna del diagrama -- igual al w-96/w-80/w-72 que ya
+// usaban las cards en la versión vertical, ahora usados también para
+// calcular grid-template-columns.
+const ANCHO_CAMPANA = 384;
+const ANCHO_CONJUNTO = 320;
+const ANCHO_ANUNCIO = 288;
+const COLUMN_GAP = 64;
+const ROW_GAP = 24;
+
 function CornerMarks({ colorClass }) {
   const base = `absolute w-3 h-3 border-slate-300 ${colorClass}`;
   return (
@@ -137,22 +146,9 @@ function SpecTag({ children }) {
   );
 }
 
-function Connector({ children, isRow }) {
+function AnuncioCard({ anuncio, cardRef }) {
   return (
-    <div className="flex flex-col items-center w-full">
-      <div className="w-px h-6 border-l-2 border-dashed border-slate-300" />
-      <div
-        className={`w-full flex ${isRow ? "flex-row flex-wrap justify-center" : "flex-col items-center"} gap-6 border-t-2 border-dashed border-slate-300 pt-6`}
-      >
-        {children}
-      </div>
-    </div>
-  );
-}
-
-function AnuncioCard({ anuncio }) {
-  return (
-    <div className="relative w-72 bg-white rounded-lg border border-amber-200 shadow-sm p-4">
+    <div ref={cardRef} className="relative w-72 bg-white rounded-lg border border-amber-200 shadow-sm p-4">
       <CornerMarks colorClass="!border-amber-300" />
       <div className="flex items-center gap-2 mb-2">
         <ImageIcon className="w-4 h-4 text-amber-600" />
@@ -171,54 +167,54 @@ function AnuncioCard({ anuncio }) {
   );
 }
 
-function ConjuntoCard({ conjunto }) {
-  const [open, setOpen] = useState(true);
+// Controlado desde afuera (open/onToggle) en vez de manejar su propio estado
+// -- el diagrama horizontal necesita saber qué conjuntos están
+// colapsados/expandidos para calcular cuántas filas de grid ocupa cada uno.
+// Ya NO renderiza sus propios anuncios (eso lo hace DiagramaEstrategia
+// directo en la columna 3, para que cada AnuncioCard sea un hijo del grid
+// en su propia fila).
+function ConjuntoCard({ conjunto, open, onToggle, cardRef }) {
   return (
-    <div className="flex flex-col items-center">
-      <div className="relative w-80 bg-white rounded-lg border border-teal-200 shadow-sm p-4">
-        <CornerMarks colorClass="!border-teal-300" />
-        <button
-          onClick={() => setOpen((o) => !o)}
-          className="w-full flex items-center justify-between gap-2 text-left"
-        >
-          <div className="flex items-center gap-2 min-w-0">
-            <Layers className="w-4 h-4 text-teal-600 shrink-0" />
-            <span className="text-sm font-medium text-slate-900 truncate">{conjunto.nombre}</span>
-          </div>
-          {open ? <ChevronDown className="w-4 h-4 text-slate-400 shrink-0" /> : <ChevronRight className="w-4 h-4 text-slate-400 shrink-0" />}
-        </button>
-
-        <div className="flex flex-wrap gap-1.5 mt-3">
-          <SpecTag><Users className="w-3 h-3" />{conjunto.segmentacion.edad} · {conjunto.segmentacion.genero}</SpecTag>
-          <SpecTag><MapPin className="w-3 h-3" />{conjunto.segmentacion.ubicacion}</SpecTag>
-          {conjunto.presupuesto_diario_cop && (
-            <SpecTag><Wallet className="w-3 h-3" />{fmtCOP(conjunto.presupuesto_diario_cop)}/día</SpecTag>
-          )}
+    <div ref={cardRef} className="relative w-80 bg-white rounded-lg border border-teal-200 shadow-sm p-4">
+      <CornerMarks colorClass="!border-teal-300" />
+      <button
+        onClick={onToggle}
+        className="w-full flex items-center justify-between gap-2 text-left"
+      >
+        <div className="flex items-center gap-2 min-w-0">
+          <Layers className="w-4 h-4 text-teal-600 shrink-0" />
+          <span className="text-sm font-medium text-slate-900 truncate">{conjunto.nombre}</span>
         </div>
-        <div className="mt-2">
-          <p className="text-[9px] uppercase tracking-wide text-slate-400 mb-1">Ideas de ángulo creativo</p>
-          <div className="flex flex-wrap gap-1">
-            {conjunto.segmentacion.intereses.map((i) => (
-              <span key={i} className="text-[10px] px-1.5 py-0.5 rounded-full bg-teal-50 text-teal-700">{i}</span>
-            ))}
-          </div>
+        {open ? <ChevronDown className="w-4 h-4 text-slate-400 shrink-0" /> : <ChevronRight className="w-4 h-4 text-slate-400 shrink-0" />}
+      </button>
+
+      <div className="flex flex-wrap gap-1.5 mt-3">
+        <SpecTag><Users className="w-3 h-3" />{conjunto.segmentacion.edad} · {conjunto.segmentacion.genero}</SpecTag>
+        <SpecTag><MapPin className="w-3 h-3" />{conjunto.segmentacion.ubicacion}</SpecTag>
+        {conjunto.presupuesto_diario_cop && (
+          <SpecTag><Wallet className="w-3 h-3" />{fmtCOP(conjunto.presupuesto_diario_cop)}/día</SpecTag>
+        )}
+      </div>
+      <div className="mt-2">
+        <p className="text-[9px] uppercase tracking-wide text-slate-400 mb-1">Ideas de ángulo creativo</p>
+        <div className="flex flex-wrap gap-1">
+          {conjunto.segmentacion.intereses.map((i) => (
+            <span key={i} className="text-[10px] px-1.5 py-0.5 rounded-full bg-teal-50 text-teal-700">{i}</span>
+          ))}
         </div>
       </div>
-
-      {open && (
-        <Connector isRow>
-          {conjunto.anuncios.map((a) => (
-            <AnuncioCard key={a.nombre} anuncio={a} />
-          ))}
-        </Connector>
+      {!open && (
+        <p className="text-[10px] text-slate-400 italic mt-2 pt-2 border-t border-slate-100">
+          {conjunto.anuncios.length} anuncio{conjunto.anuncios.length !== 1 ? "s" : ""} colapsado{conjunto.anuncios.length !== 1 ? "s" : ""}
+        </p>
       )}
     </div>
   );
 }
 
-function CampanaNode({ campana }) {
+function CampanaNode({ campana, cardRef }) {
   return (
-    <div className="relative w-96 bg-indigo-50 rounded-xl border border-indigo-200 shadow-sm p-5">
+    <div ref={cardRef} className="relative w-96 bg-indigo-50 rounded-xl border border-indigo-200 shadow-sm p-5">
       <CornerMarks colorClass="!border-indigo-300" />
       <div className="flex items-center gap-2">
         <Target className="w-5 h-5 text-indigo-600" />
@@ -237,6 +233,194 @@ function CampanaNode({ campana }) {
       <div className="mt-3 pt-3 border-t border-indigo-100 flex gap-1.5">
         <Sparkles className="w-3.5 h-3.5 text-indigo-500 shrink-0 mt-0.5" />
         <p className="text-xs text-slate-600 italic leading-relaxed">{campana.argumento_estrategico}</p>
+      </div>
+    </div>
+  );
+}
+
+// Reparte los conjuntos/anuncios en filas de grid: cada AnuncioCard visible
+// ocupa 1 fila; un conjunto colapsado aporta 1 sola fila "placeholder" (su
+// propia card, sin anuncios). Devuelve, por conjunto, el rango de filas que
+// ocupa (para el grid-row: span N + align-self:center de su ConjuntoCard).
+function calcularFilas(conjuntos, conjuntosAbiertos) {
+  let filaActual = 1;
+  const conjuntoFilas = [];
+  conjuntos.forEach((conjunto, ci) => {
+    const abierto = conjuntosAbiertos[ci];
+    const anuncios = conjunto.anuncios || [];
+    const filaInicio = filaActual;
+    if (abierto && anuncios.length > 0) {
+      filaActual += anuncios.length;
+    } else {
+      filaActual += 1;
+    }
+    conjuntoFilas.push({ filaInicio, filaFin: filaActual - 1 });
+  });
+  return { conjuntoFilas, totalFilas: Math.max(filaActual - 1, 1) };
+}
+
+// Diagrama horizontal: Campaña (col 1) -> Conjuntos (col 2) -> Anuncios
+// (col 3), con líneas punteadas conectando cada nivel. La alineación
+// vertical (conjunto centrado frente a SUS anuncios) la resuelve el propio
+// CSS Grid (grid-row: span N + align-self:center) -- no depende de medir el
+// DOM. Las líneas conectoras sí necesitan coordenadas reales (el alto de
+// cada card es variable según su contenido), así que se miden con refs +
+// getBoundingClientRect en un overlay SVG, recalculado con ResizeObserver.
+function DiagramaEstrategia({ estrategia }) {
+  const [conjuntosAbiertos, setConjuntosAbiertos] = useState(() => (estrategia.conjuntos || []).map(() => true));
+
+  // Reinicia el colapso (todo abierto) cada vez que cambia la estrategia
+  // seleccionada -- no arrastra el estado de una estrategia a otra.
+  useEffect(() => {
+    setConjuntosAbiertos((estrategia.conjuntos || []).map(() => true));
+  }, [estrategia]);
+
+  const toggleConjunto = (idx) => {
+    setConjuntosAbiertos((prev) => prev.map((v, i) => (i === idx ? !v : v)));
+  };
+
+  const contenedorRef = useRef(null); // wrapper relative que crece al alto total del contenido (el que scrollea es su padre)
+  const campanaRef = useRef(null);
+  const conjuntoRefs = useRef([]);
+  const anuncioRefs = useRef([]); // anuncioRefs.current[ci][ai]
+  const [lineas, setLineas] = useState([]);
+
+  const recalcularLineas = useCallback(() => {
+    const contEl = contenedorRef.current;
+    if (!contEl) return;
+    const contRect = contEl.getBoundingClientRect();
+
+    // getBoundingClientRect ya es relativo al viewport considerando el
+    // scroll de todos los ancestros -- restar contRect da coordenadas
+    // relativas al contenedor sin necesidad de sumar scrollTop/scrollLeft
+    // a mano.
+    const puntoDerecho = (el) => {
+      const r = el.getBoundingClientRect();
+      return { x: r.right - contRect.left, y: r.top - contRect.top + r.height / 2 };
+    };
+    const puntoIzquierdo = (el) => {
+      const r = el.getBoundingClientRect();
+      return { x: r.left - contRect.left, y: r.top - contRect.top + r.height / 2 };
+    };
+
+    const nuevasLineas = [];
+    if (campanaRef.current) {
+      const pCampana = puntoDerecho(campanaRef.current);
+      conjuntoRefs.current.forEach((el) => {
+        if (!el) return;
+        const pConjunto = puntoIzquierdo(el);
+        nuevasLineas.push({ x1: pCampana.x, y1: pCampana.y, x2: pConjunto.x, y2: pConjunto.y });
+      });
+    }
+    conjuntoRefs.current.forEach((elConjunto, ci) => {
+      if (!elConjunto || !conjuntosAbiertos[ci]) return;
+      const pConjunto = puntoDerecho(elConjunto);
+      (anuncioRefs.current[ci] || []).forEach((elAnuncio) => {
+        if (!elAnuncio) return;
+        const pAnuncio = puntoIzquierdo(elAnuncio);
+        nuevasLineas.push({ x1: pConjunto.x, y1: pConjunto.y, x2: pAnuncio.x, y2: pAnuncio.y });
+      });
+    });
+    setLineas(nuevasLineas);
+  }, [conjuntosAbiertos]);
+
+  // Recalcula ANTES del paint (evita el parpadeo de líneas mal ubicadas un
+  // frame) cuando cambia la estrategia o se colapsa/expande un conjunto.
+  useLayoutEffect(() => {
+    recalcularLineas();
+  }, [recalcularLineas, estrategia]);
+
+  // Recalcula también si el contenido cambia de alto sin que nuestro propio
+  // estado cambie (ej. el navegador re-envuelve texto al redimensionar la
+  // ventana).
+  useEffect(() => {
+    const contEl = contenedorRef.current;
+    if (!contEl || typeof ResizeObserver === "undefined") return;
+    const ro = new ResizeObserver(() => recalcularLineas());
+    ro.observe(contEl);
+    window.addEventListener("resize", recalcularLineas);
+    return () => {
+      ro.disconnect();
+      window.removeEventListener("resize", recalcularLineas);
+    };
+  }, [recalcularLineas]);
+
+  const conjuntos = estrategia.conjuntos || [];
+  const { conjuntoFilas, totalFilas } = calcularFilas(conjuntos, conjuntosAbiertos);
+
+  return (
+    // Red de seguridad para estrategias con muchos conjuntos/anuncios --
+    // scroll VERTICAL contenido (nunca horizontal como flujo principal;
+    // overflowX:auto queda solo de escape para pantallas angostas).
+    <div style={{ maxHeight: "70vh", overflowY: "auto", overflowX: "auto" }}>
+      <div ref={contenedorRef} style={{ position: "relative", padding: 8 }}>
+        <svg
+          style={{ position: "absolute", inset: 0, width: "100%", height: "100%", pointerEvents: "none", overflow: "visible" }}
+          aria-hidden="true"
+        >
+          {lineas.map((l, i) => {
+            const midX = (l.x1 + l.x2) / 2;
+            return (
+              <path
+                key={i}
+                d={`M ${l.x1} ${l.y1} C ${midX} ${l.y1}, ${midX} ${l.y2}, ${l.x2} ${l.y2}`}
+                fill="none"
+                stroke="#cbd5e1"
+                strokeWidth="2"
+                strokeDasharray="4 4"
+              />
+            );
+          })}
+        </svg>
+
+        <div
+          style={{
+            display: "grid",
+            gridTemplateColumns: `${ANCHO_CAMPANA}px ${ANCHO_CONJUNTO}px ${ANCHO_ANUNCIO}px`,
+            gridTemplateRows: `repeat(${totalFilas}, auto)`,
+            columnGap: COLUMN_GAP,
+            rowGap: ROW_GAP,
+            position: "relative",
+          }}
+        >
+          <div style={{ gridColumn: 1, gridRow: `1 / ${totalFilas + 1}`, alignSelf: "center", justifySelf: "start" }}>
+            <CampanaNode campana={estrategia.campana} cardRef={campanaRef} />
+          </div>
+
+          {conjuntos.map((conjunto, ci) => {
+            const { filaInicio, filaFin } = conjuntoFilas[ci];
+            const abierto = conjuntosAbiertos[ci];
+            return (
+              <div
+                key={conjunto.nombre}
+                style={{ gridColumn: 2, gridRow: `${filaInicio} / ${filaFin + 1}`, alignSelf: "center", justifySelf: "start" }}
+              >
+                <ConjuntoCard
+                  conjunto={conjunto}
+                  open={abierto}
+                  onToggle={() => toggleConjunto(ci)}
+                  cardRef={(el) => { conjuntoRefs.current[ci] = el; }}
+                />
+              </div>
+            );
+          })}
+
+          {conjuntos.map((conjunto, ci) => {
+            if (!conjuntosAbiertos[ci]) return null;
+            const { filaInicio } = conjuntoFilas[ci];
+            return (conjunto.anuncios || []).map((anuncio, ai) => (
+              <div key={`${conjunto.nombre}-${anuncio.nombre}`} style={{ gridColumn: 3, gridRow: filaInicio + ai, alignSelf: "center", justifySelf: "start" }}>
+                <AnuncioCard
+                  anuncio={anuncio}
+                  cardRef={(el) => {
+                    if (!anuncioRefs.current[ci]) anuncioRefs.current[ci] = [];
+                    anuncioRefs.current[ci][ai] = el;
+                  }}
+                />
+              </div>
+            ));
+          })}
+        </div>
       </div>
     </div>
   );
@@ -313,14 +497,7 @@ export default function AdBlueprintExplorer({ estrategias = ESTRATEGIAS, onPubli
           ))}
         </div>
 
-        <div className="flex flex-col items-center">
-          <CampanaNode campana={selected.campana} />
-          <Connector isRow>
-            {selected.conjuntos.map((c) => (
-              <ConjuntoCard key={c.nombre} conjunto={c} />
-            ))}
-          </Connector>
-        </div>
+        <DiagramaEstrategia key={selected.id} estrategia={selected} />
       </div>
 
       <div className="sticky bottom-4 flex justify-center mt-4">
