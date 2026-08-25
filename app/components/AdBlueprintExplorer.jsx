@@ -484,8 +484,22 @@ function DiagramaEstrategia({ estrategia }) {
   );
 }
 
+// Clases completas escritas literales (no template strings tipo
+// `text-${color}-600`) -- Tailwind v4 genera el CSS escaneando el código en
+// busca de nombres de clase literales, no ejecuta JS, así que un nombre
+// armado en runtime con interpolación nunca se compila. text-amber-600/500
+// "funcionaban" antes solo porque esos strings ya aparecían sueltos en
+// otro lado del archivo (los íconos de AnuncioCard) -- emerald y rose
+// nunca tuvieron esa suerte y caían al color heredado (se veían grises).
+const COLOR_EFECTIVIDAD = {
+  emerald: { numero: "text-emerald-600", icono: "text-emerald-500" },
+  amber: { numero: "text-amber-600", icono: "text-amber-500" },
+  rose: { numero: "text-rose-600", icono: "text-rose-500" },
+};
+
 function EstrategiaSelector({ estrategia, selected, onSelect }) {
-  const color = estrategia.efectividad >= 85 ? "emerald" : estrategia.efectividad >= 70 ? "amber" : "rose";
+  const colorKey = estrategia.efectividad >= 85 ? "emerald" : estrategia.efectividad >= 70 ? "amber" : "rose";
+  const { numero, icono } = COLOR_EFECTIVIDAD[colorKey];
   return (
     <button
       onClick={() => onSelect(estrategia.id)}
@@ -499,8 +513,8 @@ function EstrategiaSelector({ estrategia, selected, onSelect }) {
         </span>
       )}
       <div className="flex items-center justify-between">
-        <span className={`text-2xl font-medium text-${color}-600`}>{estrategia.efectividad}</span>
-        <TrendingUp className={`w-4 h-4 text-${color}-500`} />
+        <span className={`text-2xl font-medium ${numero}`}>{estrategia.efectividad}</span>
+        <TrendingUp className={`w-4 h-4 ${icono}`} />
       </div>
       <p className="text-xs text-slate-500 mt-0.5">efectividad estimada</p>
       <p className="text-sm font-medium text-slate-900 mt-2 leading-snug">{estrategia.campana.nombre}</p>
