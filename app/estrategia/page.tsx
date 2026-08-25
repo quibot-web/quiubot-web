@@ -8,7 +8,7 @@ import TourGuiado from "@/app/components/TourGuiado";
 import ProgresoPasos from "@/app/components/ProgresoPasos";
 import EsperaCreativos from "@/app/components/EsperaCreativos";
 import CargandoQuiubot from "@/app/components/CargandoQuiubot";
-import { urlDescargaCloudinary } from "@/app/lib/cloudinaryUrl";
+import { urlDescargaCloudinary, extraerFramesVideo } from "@/app/lib/cloudinaryUrl";
 
 function IconoWhatsApp() {
   return (
@@ -1893,6 +1893,11 @@ function EstrategiaContent() {
         conjunto_nombre: ang.conjunto_nombre,
         anuncio_nombre: ang.anuncio_nombre,
         argumentacion: ang.argumentacion,
+        // Analizar un video completo con IA de visión no es viable/barato --
+        // se mandan 3 frames fijos (inicio/mitad/casi-final) para que n8n
+        // los use directo en el modelo de visión, sin tener que armar URLs
+        // de Cloudinary de su lado. Solo aplica a video, undefined en imagen.
+        ...(it.tipo === "video" ? { frame_urls: extraerFramesVideo(it.url_imagen) } : {}),
       };
     });
     // Ojo: ya NO se hace setCreativos(nuevosCreativos) acá -- este álbum
@@ -1938,6 +1943,15 @@ function EstrategiaContent() {
       const it = asignaciones[i];
       const clave = angulosClaves[i];
       if (it && clave) {
+        // Para video, si el análisis devolvió una argumentación generada a
+        // partir de lo que el video realmente muestra (mismo índice que se
+        // mandó a analizar), esa reemplaza a la recomendación original de
+        // la estrategia -- para imagen no cambia nada, sigue usando ang.argumentacion.
+        const detalleItem = analisisResultado?.detalle?.[i];
+        const argumentacionFinal =
+          it.tipo === "video" && detalleItem?.argumentacion_generada
+            ? detalleItem.argumentacion_generada
+            : ang.argumentacion;
         acumulado[clave] = {
           id: it.public_id || `album_${i}`,
           tipo: it.tipo,
@@ -1948,7 +1962,7 @@ function EstrategiaContent() {
           cta: ang.cta,
           conjunto_nombre: ang.conjunto_nombre,
           anuncio_nombre: ang.anuncio_nombre,
-          argumentacion: ang.argumentacion,
+          argumentacion: argumentacionFinal,
         };
       }
     });
