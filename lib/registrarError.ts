@@ -1,6 +1,6 @@
 import "server-only";
 import { supabaseAdmin } from "@/lib/supabase";
-import { enviarCorreoErrorSistema } from "@/lib/email";
+import { enviarCorreoErrorSistema, obtenerEmailsAdmins } from "@/lib/email";
 
 // Funcion central para registrar CUALQUIER error de Quiubot -- no solo
 // los de publicar estrategia. Cualquier endpoint que pueda fallar de
@@ -57,19 +57,7 @@ async function notificarAdmins(datos: {
   errorMensaje: string;
   campanaNombre?: string | null;
 }) {
-  const { data: contactos } = await supabaseAdmin
-    .from("admin_contactos")
-    .select("email")
-    .eq("activo", true);
-
-  const destinatarios = (contactos || []).map((c) => c.email);
-
-  // Si todavia no hay contactos registrados en el panel, se usa el
-  // ADMIN_EMAIL de las variables de entorno como respaldo -- asi nunca se
-  // quedan sin notificacion mientras nadie configura la tabla nueva.
-  if (destinatarios.length === 0 && process.env.ADMIN_EMAIL) {
-    destinatarios.push(process.env.ADMIN_EMAIL);
-  }
+  const destinatarios = await obtenerEmailsAdmins();
 
   for (const destinatario of destinatarios) {
     await enviarCorreoErrorSistema({

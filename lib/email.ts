@@ -1,4 +1,5 @@
 import "server-only";
+import { supabaseAdmin } from "@/lib/supabase";
 
 const RESEND_API_KEY = process.env.RESEND_API_KEY;
 const REMITENTE = "Quiubot <noreply@quiubot.site>";
@@ -321,4 +322,44 @@ export async function enviarCorreoErrorSistema(datos: {
       </a>
     </div>`
   );
+}
+
+// Resuelve a quién avisar: cada contacto activo en admin_contactos, o
+// ADMIN_EMAIL como respaldo si esa tabla todavía está vacía. Extraída de
+// lib/registrarError.ts (que la sigue usando) para que cualquier otro aviso
+// a admins -- no solo "un usuario tuvo un error" -- tenga una sola fuente
+// de verdad de a quién llegarle.
+export async function obtenerEmailsAdmins(): Promise<string[]> {
+  const { data: contactos } = await supabaseAdmin
+    .from("admin_contactos")
+    .select("email")
+    .eq("activo", true);
+
+  const destinatarios = (contactos || []).map((c) => c.email);
+
+  if (destinatarios.length === 0 && process.env.ADMIN_EMAIL) {
+    destinatarios.push(process.env.ADMIN_EMAIL);
+  }
+
+  return destinatarios;
+}
+
+// Aviso operativo a TODOS los admins activos con asunto/cuerpo libres -- a
+// diferencia de enviarCorreoErrorSistema (plantilla fija para "un usuario
+// tuvo un error"), esta es para alertas puntuales que necesitan su propio
+// texto (ej. un proveedor externo sin saldo). Usada hoy desde
+// /api/internal/notificar-error-kling.
+export async function enviarCorreoAlertaAdmin(asunto: string, mensajeTexto: string) {
+  const destinatarios = await obtenerEmailsAdmins();
+
+  for (const destinatario of destinatarios) {
+    await enviarCorreo(
+      destinatario,
+      asunto,
+      `<div style="font-family: system-ui, sans-serif; max-width: 480px; margin: 0 auto; padding: 24px;">
+        <h2 style="color:#17152B;">${asunto}</h2>
+        <p style="color:#333; font-size:14px; line-height:1.6; white-space: pre-line;">${mensajeTexto}</p>
+      </div>`
+    );
+  }
 }
