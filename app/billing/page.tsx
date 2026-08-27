@@ -6,6 +6,10 @@ import Link from "next/link"
 import CargandoQuiubot from "@/app/components/CargandoQuiubot"
 
 import { OBJETIVOS_INFO } from "@/app/lib/objetivosInfo"
+// Alias para no chocar con el PLANES local de este archivo (features de
+// marketing hardcodeadas) -- este es el de verdad, con los límites reales
+// por plan (videosPorMes, etc.), fuente única para no desincronizarse.
+import { PLANES as PLANES_CONFIG, type PlanId } from "@/app/lib/planesConfig"
 
 const TU_WHATSAPP = "573243490766"
 
@@ -363,6 +367,25 @@ export default function BillingPage() {
                       </span>
                     </div>
                   )}
+                  {/* Videos con IA -- calculado desde planesConfig.ts (fuente real de los
+                      límites), mismo patrón que Objetivos arriba, no hardcodeado en
+                      features. Arranque lo muestra explícito como bloqueado en vez de
+                      omitirlo -- mostrar lo que falta funciona mejor como incentivo de
+                      upgrade que no mencionarlo. */}
+                  {(() => {
+                    const videosPorMes = PLANES_CONFIG[plan.id as PlanId]?.videosPorMes ?? 0
+                    return videosPorMes > 0 ? (
+                      <div style={{ display: "flex", alignItems: "flex-start", gap: 8, fontSize: 13, color: "#333" }}>
+                        <span style={{ color: "#10b981", fontWeight: 700, flexShrink: 0 }}>✓</span>
+                        <span>{videosPorMes} video{videosPorMes !== 1 ? "s" : ""} con IA al mes</span>
+                      </div>
+                    ) : (
+                      <div style={{ display: "flex", alignItems: "flex-start", gap: 8, fontSize: 13, color: "#999" }}>
+                        <span style={{ color: "#ccc", fontWeight: 700, flexShrink: 0 }}>✕</span>
+                        <span>Video con IA (no disponible en este plan)</span>
+                      </div>
+                    )
+                  })()}
                   {plan.features.map((f, i) => {
                     const esObjeto = typeof f !== "string"
                     const texto = esObjeto ? (f as Exclude<FeaturePlan, string>).texto : f
