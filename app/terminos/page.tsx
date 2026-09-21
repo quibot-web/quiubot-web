@@ -101,6 +101,27 @@ export default function TerminosPage() {
               necesarios para operar la plataforma (como Google, para autenticación, y Supabase, como
               base de datos).
             </p>
+            <p>
+              <strong>Datos de tu cuenta de Meta.</strong> Si conectas tu cuenta de Facebook/Instagram,
+              Quiubot guarda el token de acceso y los datos de tu cuenta publicitaria, página y píxel
+              que autorizas al conectarla. Estos datos se usan exclusivamente para publicar y
+              monitorear tus campañas de Meta Ads desde la plataforma, y no se comparten con terceros
+              distintos a los proveedores necesarios para operar el servicio.
+            </p>
+            <p>
+              <strong>Retención de datos.</strong> Conservamos tus datos mientras tu cuenta esté activa
+              y por el tiempo necesario para cumplir obligaciones legales o resolver disputas. Si
+              cancelas tu cuenta, tus datos se conservan hasta que solicites su eliminación (ver más
+              abajo) o hasta que dejen de ser necesarios para los fines para los que se recolectaron.
+            </p>
+            <p>
+              <strong>Tus derechos.</strong> Como titular de tus datos personales, tienes derecho a
+              acceder a ellos, solicitar su corrección, y solicitar su eliminación. Puedes ejercer
+              estos derechos escribiendo a{" "}
+              <a href="mailto:admin@quiubot.site" style={linkStyle}>admin@quiubot.site</a>. Para el
+              detalle del proceso de eliminación, qué datos se borran, y cuánto tarda, consulta nuestra{" "}
+              <a href="/eliminar-datos" style={linkStyle}>página de eliminación de datos</a>.
+            </p>
           </section>
 
           <section style={{ marginBottom: 28 }}>
