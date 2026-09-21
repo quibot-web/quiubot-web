@@ -18,6 +18,10 @@ export default auth(async (req) => {
   const isLoginPage = pathname === "/login"
   const isBienvenidaPage = pathname === "/bienvenida"
   const isTerminosPage = pathname === "/terminos"
+  // Meta necesita poder ver esta página sin sesión para aprobar la revisión
+  // de Acceso Avanzado (URL de instrucciones de eliminación de datos) --
+  // mismo caso que /terminos, no expone nada sensible.
+  const isEliminarDatosPage = pathname === "/eliminar-datos"
   const isRegistroPage = pathname === "/registro"
   const isOlvidePasswordPage = pathname === "/olvide-password"
   const isResetearPasswordPage = pathname === "/resetear-password"
@@ -55,7 +59,7 @@ export default auth(async (req) => {
 
   if (isActivarRoute || isWebhookRoute || isCronRoute) return NextResponse.next()
 
-  if (!isLoggedIn && !isLoginPage && !isBienvenidaPage && !isTerminosPage && !isTutorialesPublicosRoute && !isRegistroPage && !isOlvidePasswordPage && !isResetearPasswordPage && !isPricingPage && !isBillingPage && !isBillingRoute) {
+  if (!isLoggedIn && !isLoginPage && !isBienvenidaPage && !isTerminosPage && !isEliminarDatosPage && !isTutorialesPublicosRoute && !isRegistroPage && !isOlvidePasswordPage && !isResetearPasswordPage && !isPricingPage && !isBillingPage && !isBillingRoute) {
     return NextResponse.redirect(new URL("/login", req.nextUrl))
   }
 
