@@ -1,27 +1,74 @@
 import "server-only";
 import { supabaseAdmin } from "@/lib/supabase";
+import { registrarError } from "@/lib/registrarError";
 
 const RESEND_API_KEY = process.env.RESEND_API_KEY;
 const REMITENTE = "Quiubot <noreply@quiubot.site>";
 
-async function enviarCorreo(destinatario: string, asunto: string, html: string) {
+// Enmascara el destinatario antes de guardarlo en errores_publicacion (que
+// alimenta /admin/errores) -- ahi solo hace falta ver a quien no le llego
+// el correo, no su direccion completa.
+function enmascararCorreo(destinatario: string) {
+  return destinatario.replace(/^(.{2}).+(@.+)$/, "$1***$2");
+}
+
+// Deja visibilidad en /admin/errores (y avisa a los admins) cuando Resend
+// falla, usando el mismo canal que ya usa el resto de la app. Nunca debe
+// tumbar el flujo que llamo a enviarCorreo (ej. el registro de un usuario),
+// por eso va en su propio try/catch.
+async function registrarFalloEnvio(destinatario: string, asunto: string, detalle: string) {
+  try {
+    await registrarError({
+      origen: "envio_correo_fallido",
+      email: null,
+      errorTitulo: "Fallo al enviar correo con Resend",
+      errorMensaje: `No se pudo enviar "${asunto}" a ${enmascararCorreo(destinatario)}: ${detalle}`,
+    });
+  } catch (err) {
+    console.error("Error registrando fallo de envío de correo:", err);
+  }
+}
+
+// esNotificacionDeError: true cuando el correo que se intenta enviar ES EN
+// SI MISMO un aviso a los admins (enviarCorreoErrorSistema / enviarCorreoAlertaAdmin).
+// Si ese envio falla, NO hay que registrar otro error -- eso volveria a
+// notificar a los admins por el mismo camino (registrarError -> notificarAdmins
+// -> enviarCorreoErrorSistema -> enviarCorreo) y, si Resend esta caido, esa
+// segunda notificacion fallaria tambien. Con el flag, un fallo aqui solo
+// queda en console.error.
+async function enviarCorreo(
+  destinatario: string,
+  asunto: string,
+  html: string,
+  opts?: { esNotificacionDeError?: boolean }
+) {
   if (!RESEND_API_KEY) {
     console.error("Falta la variable RESEND_API_KEY — no se pudo enviar el correo a", destinatario);
     return;
   }
 
-  const res = await fetch("https://api.resend.com/emails", {
-    method: "POST",
-    headers: {
-      Authorization: `Bearer ${RESEND_API_KEY}`,
-      "Content-Type": "application/json",
-    },
-    body: JSON.stringify({ from: REMITENTE, to: destinatario, subject: asunto, html }),
-  });
+  try {
+    const res = await fetch("https://api.resend.com/emails", {
+      method: "POST",
+      headers: {
+        Authorization: `Bearer ${RESEND_API_KEY}`,
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify({ from: REMITENTE, to: destinatario, subject: asunto, html }),
+    });
 
-  if (!res.ok) {
-    const data = await res.json().catch(() => ({}));
-    console.error("Error enviando correo con Resend:", data);
+    if (!res.ok) {
+      const data = await res.json().catch(() => ({}));
+      console.error("Error enviando correo con Resend:", data);
+      if (!opts?.esNotificacionDeError) {
+        await registrarFalloEnvio(destinatario, asunto, JSON.stringify(data));
+      }
+    }
+  } catch (err) {
+    console.error("Excepción enviando correo con Resend:", err);
+    if (!opts?.esNotificacionDeError) {
+      await registrarFalloEnvio(destinatario, asunto, err instanceof Error ? err.message : String(err));
+    }
   }
 }
 
@@ -320,7 +367,8 @@ export async function enviarCorreoErrorSistema(datos: {
       <a href="https://quiubot.site/admin/errores" style="display:inline-block; background:#534AB7; color:#fff; padding:12px 24px; border-radius:10px; text-decoration:none; font-weight:600; margin-top:16px;">
         Ver en el panel de admin
       </a>
-    </div>`
+    </div>`,
+    { esNotificacionDeError: true }
   );
 }
 
@@ -359,7 +407,8 @@ export async function enviarCorreoAlertaAdmin(asunto: string, mensajeTexto: stri
       `<div style="font-family: system-ui, sans-serif; max-width: 480px; margin: 0 auto; padding: 24px;">
         <h2 style="color:#17152B;">${asunto}</h2>
         <p style="color:#333; font-size:14px; line-height:1.6; white-space: pre-line;">${mensajeTexto}</p>
-      </div>`
+      </div>`,
+      { esNotificacionDeError: true }
     );
   }
 }
