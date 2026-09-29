@@ -125,7 +125,24 @@ export default function TerminosPage() {
           </section>
 
           <section style={{ marginBottom: 28 }}>
-            <h2 style={sectionTitle}>8. Limitación de responsabilidad</h2>
+            <h2 style={sectionTitle}>8. Solicitudes de autoridades públicas</h2>
+            <p>
+              Si Quiubot recibe una solicitud de una autoridad pública para acceder a datos
+              personales de sus usuarios, incluidos los datos obtenidos a través de Meta:
+            </p>
+            <ul style={{ margin: "8px 0 0", paddingLeft: 20 }}>
+              <li>Revisaremos la legalidad de la solicitud antes de responder, con asesoría legal cuando sea necesario.</li>
+              <li>Impugnaremos o rechazaremos las solicitudes que consideremos ilícitas, excesivas o sin fundamento legal suficiente.</li>
+              <li>Divulgaremos únicamente la información mínima estrictamente necesaria para cumplir una solicitud válida.</li>
+              <li>Documentaremos cada solicitud recibida, nuestra respuesta, las partes involucradas y el fundamento jurídico aplicado.</li>
+            </ul>
+            <p>
+              Hasta la fecha, Quiubot no ha recibido solicitudes de este tipo.
+            </p>
+          </section>
+
+          <section style={{ marginBottom: 28 }}>
+            <h2 style={sectionTitle}>9. Limitación de responsabilidad</h2>
             <p>
               Quiubot genera estrategias y creativos con apoyo de inteligencia artificial. No garantiza
               resultados específicos de ventas, alcance o rendimiento publicitario, ya que estos dependen
@@ -135,7 +152,7 @@ export default function TerminosPage() {
           </section>
 
           <section style={{ marginBottom: 28 }}>
-            <h2 style={sectionTitle}>9. Modificaciones a estos términos</h2>
+            <h2 style={sectionTitle}>10. Modificaciones a estos términos</h2>
             <p>
               Estos términos pueden actualizarse periódicamente. Los cambios entran en vigencia desde su
               publicación en esta misma página. El uso continuado de la plataforma después de una
@@ -144,7 +161,7 @@ export default function TerminosPage() {
           </section>
 
           <section>
-            <h2 style={sectionTitle}>10. Contacto</h2>
+            <h2 style={sectionTitle}>11. Contacto</h2>
             <p>
               Para cualquier pregunta sobre estos términos, puedes escribir a{" "}
               <a href="mailto:admin@quiubot.site" style={linkStyle}>admin@quiubot.site</a>.
