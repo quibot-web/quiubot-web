@@ -31,7 +31,7 @@ export default function TerminosPage() {
               en Colombia. El servicio se presta a través del sitio web <strong>quiubot.site</strong>.
             </p>
             <p>
-              Correo de contacto: <a href="mailto:admin@quiubot.site" style={linkStyle}>admin@quiubot.site</a><br />
+              Correo de contacto: <a href="mailto:juanjosepalaciosvillarreal@gmail.com" style={linkStyle}>juanjosepalaciosvillarreal@gmail.com</a><br />
               Teléfono de contacto: <strong>+57 324 349 0766</strong>
             </p>
           </section>
@@ -118,7 +118,7 @@ export default function TerminosPage() {
               <strong>Tus derechos.</strong> Como titular de tus datos personales, tienes derecho a
               acceder a ellos, solicitar su corrección, y solicitar su eliminación. Puedes ejercer
               estos derechos escribiendo a{" "}
-              <a href="mailto:admin@quiubot.site" style={linkStyle}>admin@quiubot.site</a>. Para el
+              <a href="mailto:juanjosepalaciosvillarreal@gmail.com" style={linkStyle}>juanjosepalaciosvillarreal@gmail.com</a>. Para el
               detalle del proceso de eliminación, qué datos se borran, y cuánto tarda, consulta nuestra{" "}
               <a href="/eliminar-datos" style={linkStyle}>página de eliminación de datos</a>.
             </p>
@@ -164,7 +164,7 @@ export default function TerminosPage() {
             <h2 style={sectionTitle}>11. Contacto</h2>
             <p>
               Para cualquier pregunta sobre estos términos, puedes escribir a{" "}
-              <a href="mailto:admin@quiubot.site" style={linkStyle}>admin@quiubot.site</a>.
+              <a href="mailto:juanjosepalaciosvillarreal@gmail.com" style={linkStyle}>juanjosepalaciosvillarreal@gmail.com</a>.
             </p>
           </section>
 

@@ -74,8 +74,8 @@ export default function EliminarDatosPage() {
             <p>
               Hoy la eliminación de cuenta todavía no está disponible como un botón dentro de
               la plataforma — para solicitarla, escríbenos a{" "}
-              <a href="mailto:admin@quiubot.site?subject=Solicitud%20de%20eliminaci%C3%B3n%20de%20datos" style={linkStyle}>
-                admin@quiubot.site
+              <a href="mailto:juanjosepalaciosvillarreal@gmail.com?subject=Solicitud%20de%20eliminaci%C3%B3n%20de%20datos" style={linkStyle}>
+                juanjosepalaciosvillarreal@gmail.com
               </a>{" "}
               desde el mismo correo con el que tienes tu cuenta registrada, indicando que
               quieres eliminar tu cuenta y tus datos.
