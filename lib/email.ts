@@ -44,6 +44,9 @@ async function enviarCorreo(
 ) {
   if (!RESEND_API_KEY) {
     console.error("Falta la variable RESEND_API_KEY — no se pudo enviar el correo a", destinatario);
+    if (!opts?.esNotificacionDeError) {
+      await registrarFalloEnvio(destinatario, asunto, "RESEND_API_KEY no configurada en este entorno");
+    }
     return;
   }
 
