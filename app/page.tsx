@@ -1106,13 +1106,17 @@ export default function Home() {
                     <div style={{ fontSize: 12, color: "#666", marginTop: 4 }}>{n.mensaje}</div>
                     {n.tipo === "sugerencia" && n.estado === "pendiente" && (
                       <div style={{ display: "flex", gap: 8, marginTop: 8 }}>
-                        <button
-                          onClick={(e) => { e.stopPropagation(); handleAceptarNoti(n.id); }}
-                          disabled={procesandoNoti === n.id}
-                          style={{ flex: 1, background: "#534AB7", color: "#fff", border: "none", padding: "6px 10px", borderRadius: 6, fontSize: 12, fontWeight: 600, cursor: "pointer" }}
-                        >
-                          {procesandoNoti === n.id ? "Aplicando..." : "✅ Aceptar"}
-                        </button>
+                        {/* Sin accion_sugerida no hay nada que aplicar -- es un
+                            aviso informativo, solo queda la opcion de descartar. */}
+                        {n.accion_sugerida && (
+                          <button
+                            onClick={(e) => { e.stopPropagation(); handleAceptarNoti(n.id); }}
+                            disabled={procesandoNoti === n.id}
+                            style={{ flex: 1, background: "#534AB7", color: "#fff", border: "none", padding: "6px 10px", borderRadius: 6, fontSize: 12, fontWeight: 600, cursor: "pointer" }}
+                          >
+                            {procesandoNoti === n.id ? "Aplicando..." : "✅ Aceptar"}
+                          </button>
+                        )}
                         <button
                           onClick={(e) => { e.stopPropagation(); handleDescartarNoti(n.id); }}
                           disabled={procesandoNoti === n.id}

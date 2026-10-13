@@ -23,6 +23,10 @@ export async function POST(
     return NextResponse.json({ error: "Notificación no encontrada" }, { status: 404 });
   }
 
+  if (!notificacion.accion_sugerida) {
+    return NextResponse.json({ error: "Esta notificación no tiene una acción para aplicar." }, { status: 400 });
+  }
+
   const { data: usuario } = await supabaseAdmin
     .from("usuarios")
     .select("meta_access_token")

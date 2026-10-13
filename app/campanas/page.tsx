@@ -32,6 +32,7 @@ function CampanasContent() {
         tipo: "sugerencia",
         titulo: "Esta campana esta funcionando muy bien",
         mensaje: "El sistema recomienda aumentar el presupuesto diario un 20% para escalar resultados.",
+        accion_sugerida: { accion: "aumentar_presupuesto" },
       },
     },
     {
@@ -45,6 +46,7 @@ function CampanasContent() {
         tipo: "alerta",
         titulo: "Bajo rendimiento estimado",
         mensaje: "Esta campana tiene una efectividad estimada baja. Sugerimos pausarla y revisar los creativos.",
+        accion_sugerida: { accion: "pausar" },
       },
     },
     {
@@ -122,6 +124,21 @@ function CampanasContent() {
       if (notiId) {
         await fetch("/api/notificaciones/" + notiId + "/aceptar", { method: "POST" });
       }
+      cargar();
+    } finally {
+      setProcesando(null);
+    }
+  };
+
+  // A diferencia de handleAceptarSugerencia (que busca el id buscando por
+  // campana_id, de antes de que sugerencia_preview expusiera notificacion_id),
+  // este ya tiene el id directo -- no hace falta el viaje extra a
+  // /api/notificaciones.
+  const handleDescartarSugerencia = async (notificacionId: string | undefined, campanaId: string) => {
+    if (!notificacionId) return; // modo demo -- sin notificacion real que descartar
+    setProcesando(campanaId);
+    try {
+      await fetch("/api/notificaciones/" + notificacionId + "/descartar", { method: "POST" });
       cargar();
     } finally {
       setProcesando(null);
@@ -330,23 +347,44 @@ function CampanasContent() {
                   <div style={{ fontSize: 12, color: "rgb(102, 102, 102)", marginTop: 4, lineHeight: 1.5 }}>
                     {sugerencia.mensaje}
                   </div>
-                  <button
-                    onClick={function () { handleAceptarSugerencia(c.id); }}
-                    disabled={procesando === c.id}
-                    style={{
-                      marginTop: 10,
-                      background: "rgb(83, 74, 183)",
-                      color: "rgb(255, 255, 255)",
-                      border: "none",
-                      padding: "8px 16px",
-                      borderRadius: 8,
-                      fontSize: 12,
-                      fontWeight: 600,
-                      cursor: procesando === c.id ? "not-allowed" : "pointer",
-                    }}
-                  >
-                    {procesando === c.id ? "Aplicando..." : "Aplicar sugerencia"}
-                  </button>
+                  <div style={{ display: "flex", gap: 8, marginTop: 10 }}>
+                    {/* Sin accion_sugerida no hay nada que aplicar -- es un
+                        aviso informativo, solo queda la opcion de descartar. */}
+                    {sugerencia.accion_sugerida && (
+                      <button
+                        onClick={function () { handleAceptarSugerencia(c.id); }}
+                        disabled={procesando === c.id}
+                        style={{
+                          background: "rgb(83, 74, 183)",
+                          color: "rgb(255, 255, 255)",
+                          border: "none",
+                          padding: "8px 16px",
+                          borderRadius: 8,
+                          fontSize: 12,
+                          fontWeight: 600,
+                          cursor: procesando === c.id ? "not-allowed" : "pointer",
+                        }}
+                      >
+                        {procesando === c.id ? "Aplicando..." : "Aplicar sugerencia"}
+                      </button>
+                    )}
+                    <button
+                      onClick={function () { handleDescartarSugerencia(sugerencia.notificacion_id, c.id); }}
+                      disabled={procesando === c.id}
+                      style={{
+                        background: "rgb(255, 255, 255)",
+                        color: "rgb(102, 102, 102)",
+                        border: "1px solid rgb(221, 221, 221)",
+                        padding: "8px 16px",
+                        borderRadius: 8,
+                        fontSize: 12,
+                        fontWeight: 600,
+                        cursor: procesando === c.id ? "not-allowed" : "pointer",
+                      }}
+                    >
+                      Descartar
+                    </button>
+                  </div>
                 </div>
               ) : null}
             </div>
