@@ -1256,6 +1256,7 @@ function EstrategiaContent() {
           url_imagen: data.video_final_url,
           titulo: anuncio?.copy?.titulo || "",
           texto: anuncio?.copy?.texto || "",
+          descripcion: anuncio?.copy?.descripcion || "",
           cta: anuncio?.copy?.cta || "Comprar ahora",
           conjunto_nombre: anuncio ? estrategiaRestaurada.conjuntos[ci].nombre : "",
           anuncio_nombre: anuncio?.nombre || "",
@@ -1345,6 +1346,7 @@ function EstrategiaContent() {
           url_imagen: data.video_final_url,
           titulo: anuncio?.copy?.titulo || "",
           texto: anuncio?.copy?.texto || "",
+          descripcion: anuncio?.copy?.descripcion || "",
           cta: anuncio?.copy?.cta || "Comprar ahora",
           conjunto_nombre: anuncio ? estrategiaSeleccionada.conjuntos[ci].nombre : "",
           anuncio_nombre: anuncio?.nombre || "",
@@ -1836,6 +1838,7 @@ function EstrategiaContent() {
             anuncio_nombre: anuncio.nombre,
             titulo: anuncio.copy?.titulo || "",
             texto: anuncio.copy?.texto || "",
+            descripcion: anuncio.copy?.descripcion || "",
             cta: anuncio.copy?.cta || "Comprar ahora",
             argumentacion: anuncio.argumentacion || "",
           });
@@ -1918,6 +1921,7 @@ function EstrategiaContent() {
         url_imagen: it.url_imagen,
         titulo: ang.titulo,
         texto: ang.texto,
+        descripcion: ang.descripcion,
         cta: ang.cta,
         conjunto_nombre: ang.conjunto_nombre,
         anuncio_nombre: ang.anuncio_nombre,
@@ -1988,6 +1992,7 @@ function EstrategiaContent() {
           url_imagen: it.url_imagen,
           titulo: ang.titulo,
           texto: ang.texto,
+          descripcion: ang.descripcion,
           cta: ang.cta,
           conjunto_nombre: ang.conjunto_nombre,
           anuncio_nombre: ang.anuncio_nombre,
@@ -2016,12 +2021,25 @@ function EstrategiaContent() {
         tiposUnicos.size > 1 ? "mixto" : colaDeTipos[0] === "imagen" ? "ia" : colaDeTipos[0] || "ia";
       const efectividadFinal =
         colaDeTipos.length === 1 && colaDeTipos[0] === "album" ? analisisResultado?.score : estrategiaSeleccionada?.efectividad;
+      // Si el creativo ya trae descripcion (se le asignó al crearlo, o el
+      // usuario la editó -- incluso a "" a propósito) se respeta tal cual:
+      // eso debe ganarle al valor de la estrategia. Solo cuando el campo
+      // nunca se pobló (hoy, origen "imagen" -- su shape viene tal cual de
+      // n8n) se busca en la estrategia por conjunto_nombre + anuncio_nombre.
+      // Estrategias viejas sin copy.descripcion quedan en "" -- n8n omite
+      // el campo si llega vacío, sigue publicando igual.
+      const creativosConDescripcion = (creativos || []).map((c: any) => {
+        if (c.descripcion !== undefined) return c;
+        const conjunto = (estrategiaSeleccionada?.conjuntos || []).find((cj: any) => cj.nombre === c.conjunto_nombre);
+        const anuncio = conjunto?.anuncios?.find((a: any) => a.nombre === c.anuncio_nombre);
+        return { ...c, descripcion: anuncio?.copy?.descripcion || "" };
+      });
       const res = await fetch("/api/publicar-estrategia", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           estrategia: estrategiaSeleccionada,
-          creativos,
+          creativos: creativosConDescripcion,
           fuente_creativos: fuenteCreativosFinal,
           efectividad_final: efectividadFinal,
         }),
@@ -2974,7 +2992,17 @@ function EstrategiaContent() {
                           {c.origen === "album" || c.origen === "video" ? (
                             <>
                               <input placeholder="Título del anuncio" value={c.titulo} onChange={(e) => actualizarCreativo(idx, "titulo", e.target.value)} style={{ padding: 8, borderRadius: 6, border: "1px solid #e0e0e0", fontSize: 13, fontWeight: 600 }} />
-                              <textarea placeholder="Texto / descripción" value={c.texto} onChange={(e) => actualizarCreativo(idx, "texto", e.target.value)} style={{ padding: 8, borderRadius: 6, border: "1px solid #e0e0e0", fontSize: 12, resize: "none", minHeight: 50 }} />
+                              <div>
+                                <input
+                                  placeholder="Descripción corta (opcional)"
+                                  value={c.descripcion || ""}
+                                  maxLength={27}
+                                  onChange={(e) => actualizarCreativo(idx, "descripcion", e.target.value)}
+                                  style={{ width: "100%", padding: 8, borderRadius: 6, border: "1px solid #e0e0e0", fontSize: 12, boxSizing: "border-box" }}
+                                />
+                                <div style={{ fontSize: 10, color: "#999", textAlign: "right", marginTop: 2 }}>{(c.descripcion || "").length}/27</div>
+                              </div>
+                              <textarea placeholder="Texto principal" value={c.texto} onChange={(e) => actualizarCreativo(idx, "texto", e.target.value)} style={{ padding: 8, borderRadius: 6, border: "1px solid #e0e0e0", fontSize: 12, resize: "none", minHeight: 50 }} />
                               {/* El CTA de video ya no es editable -- lo decide el guion con
                                   IA (AIDA) según el objetivo de campaña. Álbum sigue con su
                                   campo de CTA editable de siempre, sin tocar. */}
