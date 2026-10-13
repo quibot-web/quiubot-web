@@ -31,12 +31,23 @@ export async function POST(req: NextRequest) {
 
   const { data: usuario } = await supabaseAdmin
     .from("usuarios")
-    .select("id, plan, en_trial, trial_termina_en, cloudinary_name, cloudinary_key, cloudinary_secret, openai_key")
+    .select("id, rol, plan, en_trial, trial_termina_en, cloudinary_name, cloudinary_key, cloudinary_secret, openai_key")
     .eq("email", emailBusqueda)
     .single();
 
   if (!usuario) {
     return NextResponse.json({ error: "Usuario no encontrado" }, { status: 404 });
+  }
+
+  // Video es admin-only por ahora (ver plan "Video como Próximamente") --
+  // /video/page.tsx ya no deja llegar hasta aquí a un no-admin, esto es el
+  // respaldo real: aunque alguien llame esta ruta directo, sin pasar por la
+  // UI, queda bloqueado igual.
+  if (usuario.rol !== "admin") {
+    return NextResponse.json(
+      { error: "La generación de video todavía no está disponible — muy pronto la abrimos para todos." },
+      { status: 403 }
+    );
   }
 
   // Limite de videos por mes/prueba -- a diferencia de estrategiasPorMes y

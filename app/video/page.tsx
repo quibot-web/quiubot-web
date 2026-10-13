@@ -1,7 +1,7 @@
 "use client";
 import { useEffect, useRef, useState, Suspense } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
-import { Dna, Zap } from "lucide-react";
+import { Dna, Zap, Clock } from "lucide-react";
 import CargandoQuiubot from "@/app/components/CargandoQuiubot";
 import { OBJETIVOS_INFO } from "@/app/lib/objetivosInfo";
 import { urlDescargaCloudinary } from "@/app/lib/cloudinaryUrl";
@@ -240,6 +240,11 @@ function VideoContent() {
   // Aunque venga con ?returnTo=estrategia (donde ya se pasó ese gate en
   // el wizard), se revisa igual del lado de /video, por si acaso.
   const [tieneAdn, setTieneAdn] = useState<boolean | null>(null);
+  // Video es admin-only por ahora (ver plan "Video como Próximamente") --
+  // el bloqueo real está en el servidor (/api/generar-video responde 403),
+  // esto es solo para no mostrarle el formulario completo a quien de
+  // todas formas no puede usarlo.
+  const [esAdmin, setEsAdmin] = useState<boolean | null>(null);
   const [segmentos, setSegmentos] = useState<Segmento[]>([]);
   const [regeneracionesUsadas, setRegeneracionesUsadas] = useState(0);
   const [videoFinalUrl, setVideoFinalUrl] = useState<string | null>(null);
@@ -255,6 +260,13 @@ function VideoContent() {
       .then((r) => r.json())
       .then((data) => setTieneAdn(!!data.tieneAdn))
       .catch(() => setTieneAdn(false));
+  }, []);
+
+  useEffect(() => {
+    fetch("/api/usuario/rol")
+      .then((r) => r.json())
+      .then((data) => setEsAdmin(data.rol === "admin"))
+      .catch(() => setEsAdmin(false));
   }, []);
 
   // Si el usuario llega desde una notificación (?job=<id>), retoma el
@@ -592,6 +604,38 @@ function VideoContent() {
     setSegmentoSeleccionado(0);
     setProgreso(0);
   };
+
+  // Video es admin-only por ahora -- se revisa antes que el ADN de marca,
+  // para que un no-admin vea "Próximamente" directo en vez del paso
+  // intermedio de "sintetiza tu ADN" que de todas formas no le serviría.
+  if (esAdmin === null) {
+    return <CargandoQuiubot mensaje="Verificando tu acceso" />;
+  }
+
+  if (esAdmin === false) {
+    return (
+      <div style={{ minHeight: "100vh", background: "#f9f9f8", fontFamily: "system-ui, sans-serif", display: "flex", alignItems: "center", justifyContent: "center", padding: "2rem" }}>
+        <div style={{ maxWidth: 480, width: "100%", background: "#fff", borderRadius: 20, border: "1px solid #e8e8e6", padding: "2.5rem 2rem", textAlign: "center", boxShadow: "0 8px 30px rgba(0,0,0,0.06)" }}>
+          <div style={{ width: 64, height: 64, borderRadius: "50%", background: "#F3F2FE", display: "flex", alignItems: "center", justifyContent: "center", margin: "0 auto 1.25rem" }}>
+            <Clock size={28} color="#534AB7" strokeWidth={2} aria-hidden="true" />
+          </div>
+          <h1 style={{ fontSize: 20, fontWeight: 700, color: "#1a1a1a", margin: "0 0 10px" }}>
+            Video con IA — Próximamente
+          </h1>
+          <p style={{ fontSize: 14, color: "#666", lineHeight: 1.6, margin: "0 0 24px" }}>
+            Todavía estamos puliendo la generación de video con IA. Muy pronto la abrimos para todos — por ahora
+            puedes seguir generando tus creativos con imagen o álbum.
+          </p>
+          <button
+            onClick={() => router.push("/")}
+            style={{ display: "block", width: "100%", padding: "13px", borderRadius: 10, background: "#534AB7", color: "#fff", fontSize: 14, fontWeight: 700, border: "none", cursor: "pointer" }}
+          >
+            Volver al panel principal
+          </button>
+        </div>
+      </div>
+    );
+  }
 
   // Mismo gate que estrategia/page.tsx:1362-1396 -- mientras se confirma
   // si tiene ADN de marca, no mostramos ni el formulario ni el bloqueo

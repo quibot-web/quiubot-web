@@ -885,7 +885,10 @@ function EstrategiaContent() {
   const [slotEligiendo, setSlotEligiendo] = useState<number | null>(null);
 
   const [objetivosActivos, setObjetivosActivos] = useState<string[] | null>(null);
-  const [esAdminObjetivos, setEsAdminObjetivos] = useState(false);
+  // null = todavía no sabemos el rol (falta la respuesta de
+  // /api/objetivos-activos) -- distinto de false, para no tratar a un admin
+  // como no-admin durante esa ventana (le borraría un video restaurado).
+  const [esAdminObjetivos, setEsAdminObjetivos] = useState<boolean | null>(null);
   const [planUsuario, setPlanUsuario] = useState<string>("arranque");
   const [planMinimoPorId, setPlanMinimoPorId] = useState<Record<string, string>>({});
   const [tutorialListo, setTutorialListo] = useState(false);
@@ -1411,6 +1414,25 @@ function EstrategiaContent() {
       })
       .catch(() => setObjetivosActivos([]));
   }, []);
+
+  // Video es admin-only (ver plan "Video como Próximamente"). Si el rol ya
+  // se confirmó como no-admin y queda algún "video" asignado (restaurado de
+  // localStorage, de una sesión vieja de antes de este cambio), lo
+  // regresamos a "imagen" -- depende de esAdminObjetivos Y tiposPorAnuncio
+  // para no importar cuál de los dos termine de cargar primero. No se
+  // dispara si esAdminObjetivos todavía es null (rol desconocido) ni si es
+  // true (admin) -- a un admin nunca se le toca su video restaurado.
+  useEffect(() => {
+    if (esAdminObjetivos !== false) return;
+    setTiposPorAnuncio((prev) => {
+      if (!Object.values(prev).includes("video")) return prev;
+      const actualizado: Record<string, TipoCreativo> = {};
+      for (const [clave, tipo] of Object.entries(prev)) {
+        actualizado[clave] = tipo === "video" ? "imagen" : tipo;
+      }
+      return actualizado;
+    });
+  }, [esAdminObjetivos, tiposPorAnuncio]);
 
   const handleFile = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
@@ -2417,9 +2439,9 @@ function EstrategiaContent() {
                   const planRequerido = planMinimoPorId[opt.id] || "arranque";
                   const ORDEN_PLANES = ["arranque", "crecimiento", "escala"];
                   const planAlcanza = ORDEN_PLANES.indexOf(planUsuario) >= ORDEN_PLANES.indexOf(planRequerido);
-                  const soloVisualParaAdmin = esAdminObjetivos && !estaActivo;
+                  const soloVisualParaAdmin = !!esAdminObjetivos && !estaActivo;
                   const bloqueadoPorPlan = estaActivo && !planAlcanza && !esAdminObjetivos;
-                  const clicable = (estaActivo && planAlcanza) || esAdminObjetivos;
+                  const clicable = (estaActivo && planAlcanza) || !!esAdminObjetivos;
                   const grisDelTodo = !estaActivo || bloqueadoPorPlan;
 
                   let etiqueta: string | null = null;
@@ -2623,7 +2645,13 @@ function EstrategiaContent() {
 
                     <div className="qbf-deck">
                       {(["imagen", "video", "album"] as TipoCreativo[]).map((tipo, pos) => {
-                        const bloqueada = tipo === "video" && hayVideoEnOtroLado && tipoActual !== "video";
+                        // Video es admin-only por ahora -- esAdminObjetivos === false
+                        // (estricto, no solo falsy) para no bloquear mientras el rol
+                        // todavía se está cargando (null). Para un admin, el único
+                        // motivo de bloqueo sigue siendo "ya usado en otro anuncio".
+                        const videoProximamente = tipo === "video" && esAdminObjetivos === false;
+                        const videoYaUsado = tipo === "video" && hayVideoEnOtroLado && tipoActual !== "video";
+                        const bloqueada = videoProximamente || videoYaUsado;
                         const activo = tipoActual === tipo;
                         const nombreTipo = tipo === "imagen" ? "Imagen" : tipo === "video" ? "Video" : "Álbum";
                         const IconoTipo = bloqueada ? Lock : tipo === "imagen" ? ImageIcon : tipo === "video" ? Play : Upload;
@@ -2633,9 +2661,13 @@ function EstrategiaContent() {
                             data-pos={pos}
                             onClick={() => seleccionarTipoQbf(it.clave, tipo, bloqueada)}
                             disabled={bloqueada}
-                            title={bloqueada ? "Solo se puede generar 1 video por estrategia" : undefined}
+                            title={videoProximamente ? "Próximamente" : videoYaUsado ? "Solo se puede generar 1 video por estrategia" : undefined}
                             className={`qbf-card${activo ? " active" : bloqueada ? " locked" : " recede"}`}
                           >
+                            {/* Mismos tokens que el badge "Próximamente" del paso de
+                                objetivo (fondo gris claro, texto gris, 10px/600) --
+                                distintivo visible, no solo el title al pasar el mouse. */}
+                            {videoProximamente && <span className="qbf-badge-proximamente">Próximamente</span>}
                             <div className="qbf-glow" />
                             {/* Badge "clay" morado sólido siempre (activa o no) -- lo
                                 que cambia entre estados es el borde/sombra de la card
@@ -3210,6 +3242,13 @@ function EstrategiaContent() {
         .qbf-badge-video {
           background: #DCFCE7; color: #15803D; font-size: 10px; font-weight: 600;
           padding: 3px 8px; border-radius: 20px; white-space: nowrap; flex-shrink: 0;
+        }
+        /* Mismos tokens que el badge "Próximamente" de TarjetaObjetivo (paso
+           de objetivo publicitario) -- gris neutro, no rojo/error. */
+        .qbf-badge-proximamente {
+          position: absolute; top: 4px; right: 4px; z-index: 3;
+          background: #e5e7eb; color: #666; font-size: 10px; font-weight: 600;
+          padding: 2px 8px; border-radius: 10px; white-space: nowrap;
         }
 
         /* Stepper de "asignar-tipos" -- un solo .qbf-row a la vez en vez de
