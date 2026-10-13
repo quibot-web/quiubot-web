@@ -804,6 +804,11 @@ function EstrategiaContent() {
   const [imagenesBase64, setImagenesBase64] = useState<string[]>([]);
   const [objetivo, setObjetivo] = useState<typeof OBJETIVOS[number] | null>(null);
   const [presupuestoDiario, setPresupuestoDiario] = useState<number>(50000);
+  // Estructura de la campaña (motor Andromeda): "advantage" (default, 1
+  // conjunto amplio, Meta reparte el presupuesto) o "prueba_conceptos"
+  // (modo avanzado, 1 concepto por conjunto con presupuesto igual).
+  const [modoEstructura, setModoEstructura] = useState<"advantage" | "prueba_conceptos">("advantage");
+  const [modoEstructuraAjustado, setModoEstructuraAjustado] = useState(false);
   const [cargandoEstrategia, setCargandoEstrategia] = useState(false);
   const [cargandoCreativos, setCargandoCreativos] = useState(false);
   const [publicando, setPublicando] = useState(false);
@@ -942,6 +947,7 @@ function EstrategiaContent() {
         if (data.imagenesBase64) setImagenesBase64(data.imagenesBase64);
         if (data.objetivo) setObjetivo(data.objetivo);
         if (data.presupuestoDiario) setPresupuestoDiario(data.presupuestoDiario);
+        if (data.modoEstructura) setModoEstructura(data.modoEstructura);
         if (data.estrategiasGeneradas) setEstrategiasGeneradas(data.estrategiasGeneradas);
         if (data.estrategiaSeleccionada) setEstrategiaSeleccionada(data.estrategiaSeleccionada);
         if (data.descripcionVisual) setDescripcionVisual(data.descripcionVisual);
@@ -980,6 +986,7 @@ function EstrategiaContent() {
           imagenesBase64,
           objetivo,
           presupuestoDiario,
+          modoEstructura,
           estrategiasGeneradas,
           estrategiaSeleccionada,
           descripcionVisual,
@@ -1003,6 +1010,7 @@ function EstrategiaContent() {
     imagenesBase64,
     objetivo,
     presupuestoDiario,
+    modoEstructura,
     estrategiasGeneradas,
     estrategiaSeleccionada,
     descripcionVisual,
@@ -1016,6 +1024,18 @@ function EstrategiaContent() {
     creativos,
     analisisResultado,
   ]);
+
+  // Si el usuario tenía activo el modo avanzado y baja el presupuesto por
+  // debajo del mínimo (2 conceptos x 30.000 c/u), lo regresamos a
+  // Advantage+ en vez de dejarlo seleccionado pero deshabilitado-con-valor-
+  // viejo -- evita que generar la estrategia dependa de que el usuario se
+  // haya dado cuenta de que la opción ya no aplica.
+  const MINIMO_PRUEBA_CONCEPTOS = 60000;
+  useEffect(() => {
+    if (modoEstructura === "prueba_conceptos" && presupuestoDiario < MINIMO_PRUEBA_CONCEPTOS) {
+      setModoEstructura("advantage");
+    }
+  }, [presupuestoDiario, modoEstructura]);
 
   function limpiarProgresoGuardado() {
     try {
@@ -1405,6 +1425,7 @@ function EstrategiaContent() {
     setCargandoEstrategia(true);
     setErrorMsg(null);
     setErrorTitulo(null);
+    setModoEstructuraAjustado(false);
     try {
       const res = await fetch("/api/generar-estrategia", {
         method: "POST",
@@ -1415,6 +1436,7 @@ function EstrategiaContent() {
           presupuesto_diario_cop: presupuestoDiario,
           tipo_contenido: tipoContenido,
           descripcion_servicio: tipoContenido === "servicio" ? descripcionServicio : null,
+          modo_estructura: modoEstructura,
         }),
       });
       const data = await res.json().catch(() => ({}));
@@ -1429,6 +1451,7 @@ function EstrategiaContent() {
       }
       setEstrategiasGeneradas(data.campanas || []);
       setDescripcionVisual(data.descripcion_visual_producto || "");
+      setModoEstructuraAjustado(!!data.modo_estructura_ajustado);
       try { localStorage.setItem("quiubot_descripcion_visual_producto", data.descripcion_visual_producto || ""); } catch {}
       setStep("resultado");
     } catch (e) {
@@ -2416,6 +2439,64 @@ function EstrategiaContent() {
                 </div>
               )}
             </div>
+
+            <div style={{ background: "#fff", border: "2px solid #e0e0e0", borderRadius: 14, padding: "1.25rem 1.5rem" }}>
+              <p style={{ fontSize: 13, color: "#666", margin: 0 }}>
+                {modoEstructura === "prueba_conceptos"
+                  ? "Modo prueba de conceptos: cada idea tendrá su propio conjunto con el mismo presupuesto, para compararlas de forma justa."
+                  : "Por defecto usamos Advantage+: Meta mueve tu presupuesto en tiempo real hacia los anuncios que mejor funcionan."}
+              </p>
+              <div style={{ marginTop: 14, paddingTop: 14, borderTop: "1px solid #f0f0f0" }}>
+                <button
+                  type="button"
+                  onClick={() => {
+                    if (presupuestoDiario < MINIMO_PRUEBA_CONCEPTOS) return;
+                    setModoEstructura((m) => (m === "prueba_conceptos" ? "advantage" : "prueba_conceptos"));
+                  }}
+                  disabled={presupuestoDiario < MINIMO_PRUEBA_CONCEPTOS}
+                  style={{
+                    display: "flex",
+                    alignItems: "flex-start",
+                    gap: 10,
+                    border: "none",
+                    background: "none",
+                    width: "100%",
+                    textAlign: "left",
+                    cursor: presupuestoDiario < MINIMO_PRUEBA_CONCEPTOS ? "not-allowed" : "pointer",
+                    opacity: presupuestoDiario < MINIMO_PRUEBA_CONCEPTOS ? 0.5 : 1,
+                  }}
+                >
+                  <div
+                    style={{
+                      width: 18,
+                      height: 18,
+                      borderRadius: 5,
+                      marginTop: 1,
+                      flexShrink: 0,
+                      border: modoEstructura === "prueba_conceptos" ? "none" : "2px solid #ccc",
+                      background: modoEstructura === "prueba_conceptos" ? "#534AB7" : "transparent",
+                      display: "flex",
+                      alignItems: "center",
+                      justifyContent: "center",
+                    }}
+                  >
+                    {modoEstructura === "prueba_conceptos" && (
+                      <span style={{ color: "#fff", fontSize: 12, fontWeight: 700 }}>✓</span>
+                    )}
+                  </div>
+                  <div>
+                    <p style={{ fontSize: 13, fontWeight: 600, color: "#333", margin: 0 }}>
+                      Modo avanzado: prueba de conceptos
+                    </p>
+                    <p style={{ fontSize: 12, color: "#888", margin: "2px 0 0" }}>
+                      {presupuestoDiario < MINIMO_PRUEBA_CONCEPTOS
+                        ? "Necesitas al menos $60.000 COP/día: $30.000 por concepto."
+                        : "Gasta lo mismo en cada idea para compararlas de forma justa — útil si ya sabes leer resultados."}
+                    </p>
+                  </div>
+                </button>
+              </div>
+            </div>
             {cargandoEstrategia && (
               <ProgresoPasos
                 activo={cargandoEstrategia}
@@ -2447,6 +2528,11 @@ function EstrategiaContent() {
             <button onClick={() => setStep("presupuesto")} style={{ marginBottom: 16, background: "none", border: "none", color: "#7F77DD", cursor: "pointer", fontSize: 13 }}>
               ← Cambiar presupuesto
             </button>
+            {modoEstructuraAjustado && (
+              <div style={{ marginBottom: 16, padding: "10px 14px", background: "#fef3c7", borderRadius: 10, fontSize: 13, color: "#92400e" }}>
+                Usamos Advantage+ para esta estrategia: el presupuesto no alcanzaba para probar varios conceptos por separado.
+              </div>
+            )}
             <AdBlueprintExplorer estrategias={estrategiasGeneradas ?? undefined} onPublish={handleSeleccionarEstrategia} />
           </div>
         )}
@@ -2924,7 +3010,7 @@ function EstrategiaContent() {
                       tituloEnCurso="Publicando tu campaña"
                       pasos={[
                         "Creando la campaña en Meta",
-                        "Armando los conjuntos de anuncios",
+                        "Configurando tu conjunto de anuncios",
                         "Subiendo tus creativos",
                         "Activando los anuncios",
                       ]}

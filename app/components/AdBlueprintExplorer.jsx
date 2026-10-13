@@ -215,7 +215,7 @@ function AnuncioCard({ anuncio, cardRef }) {
 // Ya NO renderiza sus propios anuncios (eso lo hace DiagramaEstrategia
 // directo en la columna 3, para que cada AnuncioCard sea un hijo del grid
 // en su propia fila).
-function ConjuntoCard({ conjunto, open, onToggle, cardRef }) {
+function ConjuntoCard({ conjunto, tipoPresupuesto, open, onToggle, cardRef }) {
   return (
     <div ref={cardRef} className="relative w-80 bg-white rounded-lg border border-teal-200 shadow-sm p-4">
       <CornerMarks colorClass="!border-teal-300" />
@@ -233,7 +233,11 @@ function ConjuntoCard({ conjunto, open, onToggle, cardRef }) {
       <div className="flex flex-wrap gap-1.5 mt-3">
         <SpecTag><Users className="w-3 h-3" />{conjunto.segmentacion.edad} · {conjunto.segmentacion.genero}</SpecTag>
         <SpecTag><MapPin className="w-3 h-3" />{conjunto.segmentacion.ubicacion}</SpecTag>
-        {conjunto.presupuesto_diario_cop && (
+        {/* En CBO el presupuesto vive en la campaña (ver CampanaNode), no en
+            el conjunto -- aunque n8n mande este campo de todas formas, no
+            lo mostramos aquí para no sugerir que este conjunto tiene su
+            propio presupuesto independiente. */}
+        {conjunto.presupuesto_diario_cop && tipoPresupuesto !== "CBO" && (
           <SpecTag><Wallet className="w-3 h-3" />{fmtCOP(conjunto.presupuesto_diario_cop)}/día</SpecTag>
         )}
       </div>
@@ -496,6 +500,7 @@ function DiagramaEstrategia({ estrategia }) {
               >
                 <ConjuntoCard
                   conjunto={conjunto}
+                  tipoPresupuesto={estrategia.campana.tipo_presupuesto}
                   open={abierto}
                   onToggle={() => toggleConjunto(ci)}
                   cardRef={(el) => { conjuntoRefs.current[ci] = el; }}

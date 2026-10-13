@@ -22,6 +22,7 @@ export async function POST(req: NextRequest) {
     presupuesto_diario_cop,
     tipo_contenido,       // "producto" | "servicio" — nuevo
     descripcion_servicio, // opcional, solo aplica si tipo_contenido === "servicio"
+    modo_estructura,      // "advantage" | "prueba_conceptos" — nuevo (estructura Andromeda)
   } = await req.json();
 
   if (!Array.isArray(imagenes_base64) || imagenes_base64.length < MIN_IMAGENES || imagenes_base64.length > MAX_IMAGENES) {
@@ -45,6 +46,12 @@ export async function POST(req: NextRequest) {
     tipoContenidoFinal === "servicio" && typeof descripcion_servicio === "string"
       ? descripcion_servicio.trim().slice(0, 500) || null
       : null;
+
+  // Mismo patrón que tipo_contenido: si no llega o llega con un valor
+  // inesperado, caemos al default "advantage" en vez de rechazar la
+  // llamada -- n8n ya hace lo mismo si no le llega este campo.
+  const modoEstructuraFinal: "advantage" | "prueba_conceptos" =
+    modo_estructura === "prueba_conceptos" ? "prueba_conceptos" : "advantage";
 
   const { data: usuario } = await supabaseAdmin
     .from("usuarios")
@@ -141,6 +148,7 @@ export async function POST(req: NextRequest) {
         openai_key: openaiKeyDescifrada,
         tipo_contenido: tipoContenidoFinal,
         descripcion_servicio: descripcionServicioFinal,
+        modo_estructura: modoEstructuraFinal,
       }),
     });
 
