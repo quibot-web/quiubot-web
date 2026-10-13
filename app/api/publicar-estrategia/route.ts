@@ -87,22 +87,69 @@ export async function POST(req: NextRequest) {
 
     if (!n8nRes.ok) {
       const text = await n8nRes.text();
-      const { paso, subcode, mensajeMeta } = extraerDetalleMeta(text);
-      const amigable = subcode ? MENSAJES_AMIGABLES[subcode] : null;
-      const mensajeFinal = amigable?.mensaje || mensajeMeta || `Error de n8n: ${text}`;
+      console.error("Error al publicar estrategia (n8n respondió no-ok):", text);
+
+      let paso: string | null = null;
+      let subcode: number | null = null;
+      let tituloAmigable: string | null = null;
+      let accionTexto: string | null = null;
+      let accionUrl: string | null = null;
+      let mensajeFinal: string;
+      let metaCampaignId: string | null = null;
+      let anunciosFallidos: unknown = null;
+
+      // Formato nuevo de publicar_estrategia (ej. paso "crear_anuncios"):
+      // JSON con ok:false y un error ya legible -- se usa tal cual, sin
+      // pasar por extraerDetalleMeta (que es para el formato viejo, errores
+      // de Meta anidados en texto). Para cualquier otra cosa (no es JSON,
+      // o no trae ok:false + error string) se conserva la lógica de
+      // siempre.
+      let parseado: any = null;
+      try {
+        parseado = JSON.parse(text);
+      } catch {
+        parseado = null;
+      }
+
+      if (parseado && parseado.ok === false && typeof parseado.error === "string") {
+        paso = typeof parseado.paso === "string" ? parseado.paso : null;
+        metaCampaignId = typeof parseado.meta_campaign_id === "string" ? parseado.meta_campaign_id : null;
+        anunciosFallidos = Array.isArray(parseado.anuncios_fallidos) ? parseado.anuncios_fallidos : null;
+        mensajeFinal = parseado.error;
+        if (paso === "crear_anuncios") {
+          mensajeFinal +=
+            " La campaña quedó creada en tu cuenta de Meta pero sin anuncios, así que no está gastando dinero — puedes eliminarla desde el Administrador de anuncios antes de volver a intentar.";
+        }
+      } else {
+        const detalle = extraerDetalleMeta(text);
+        paso = detalle.paso;
+        subcode = detalle.subcode;
+        const amigable = subcode ? MENSAJES_AMIGABLES[subcode] : null;
+        tituloAmigable = amigable?.titulo ?? null;
+        accionTexto = amigable?.accionTexto ?? null;
+        accionUrl = amigable?.accionUrl ?? null;
+        // Nunca se manda el texto/JSON crudo al usuario -- si no hay un
+        // mensaje amigable conocido, mensaje genérico. El texto crudo queda
+        // solo en el console.error de arriba y en detalleTecnico (admin).
+        mensajeFinal =
+          amigable?.mensaje || detalle.mensajeMeta || "No se pudo publicar la estrategia en Meta. Intenta de nuevo en unos minutos.";
+      }
 
       // Registro central: guarda en errores_publicacion Y notifica a los
       // contactos de admin -- una sola llamada, reutilizable desde
-      // cualquier endpoint de Quiubot.
+      // cualquier endpoint de Quiubot. meta_campaign_id y anuncios_fallidos
+      // van en detalleTecnico (no hay un campo propio para ellos) para que
+      // el admin pueda diagnosticar sin tener que ir a buscar el texto
+      // crudo en los logs del servidor.
       registrarError({
         origen: "publicar_estrategia",
         userId: usuario?.id ?? null,
         email: emailBusqueda,
         paso,
         errorSubcode: subcode,
-        errorTitulo: amigable?.titulo ?? null,
+        errorTitulo: tituloAmigable,
         errorMensaje: mensajeFinal,
-        detalleTecnico: text,
+        detalleTecnico: JSON.stringify({ meta_campaign_id: metaCampaignId, anuncios_fallidos: anunciosFallidos, raw: text }),
         campanaNombre: estrategia?.campana?.nombre ?? null,
         objetivoId: estrategia?.campana?.objetivo_id ?? null,
       });
@@ -110,12 +157,11 @@ export async function POST(req: NextRequest) {
       return NextResponse.json(
         {
           error: mensajeFinal,
-          error_titulo: amigable?.titulo || null,
-          error_accion_texto: amigable?.accionTexto || null,
-          error_accion_url: amigable?.accionUrl || null,
-          detalle_tecnico: text,
+          error_titulo: tituloAmigable,
+          error_accion_texto: accionTexto,
+          error_accion_url: accionUrl,
         },
-        { status: 502 }
+        { status: n8nRes.status || 502 }
       );
     }
 

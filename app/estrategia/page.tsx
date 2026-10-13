@@ -815,6 +815,12 @@ function EstrategiaContent() {
   const [publicado, setPublicado] = useState(false);
   const [metaCampaignId, setMetaCampaignId] = useState<string | null>(null);
   const [metaAdAccountId, setMetaAdAccountId] = useState<string | null>(null);
+  // Éxito parcial: publicar_estrategia puede responder ok:true con algunos
+  // anuncios creados y otros no (en vez de todo-o-nada). anunciosFallidos
+  // vacío = publicación completa, igual que antes.
+  const [anunciosCreados, setAnunciosCreados] = useState(0);
+  const [anunciosFallidos, setAnunciosFallidos] = useState<{ titulo?: string; error?: string }[]>([]);
+  const [detalleFallidosAbierto, setDetalleFallidosAbierto] = useState(false);
   const [errorMsg, setErrorMsg] = useState<string | null>(null);
   const [errorTitulo, setErrorTitulo] = useState<string | null>(null);
   const [errorAccion, setErrorAccion] = useState<{ texto: string; url: string } | null>(null);
@@ -2105,6 +2111,8 @@ function EstrategiaContent() {
         return;
       }
       setMetaCampaignId(data.meta_campaign_id || null);
+      setAnunciosCreados(typeof data.anuncios_creados === "number" ? data.anuncios_creados : 0);
+      setAnunciosFallidos(Array.isArray(data.anuncios_fallidos) ? data.anuncios_fallidos : []);
       setPublicado(true);
       // Ya se publicó -- limpiamos el estado persistido (el de retomar un
       // job por notificacion, y el progreso general del wizard) para que
@@ -3106,26 +3114,65 @@ function EstrategiaContent() {
                       ]}
                     />
                   ) : publicado ? (
-                    <div style={{ background: "#F0FDF4", border: "1px solid #86EFAC", borderRadius: 12, padding: "1.25rem", display: "flex", flexDirection: "column", alignItems: "center", textAlign: "center", gap: 10 }}>
-                      <div style={{ width: 44, height: 44, borderRadius: "50%", background: "#10b981", display: "flex", alignItems: "center", justifyContent: "center" }}>
-                        <Check size={22} color="#fff" strokeWidth={3} aria-hidden="true" />
-                      </div>
-                      <div>
-                        <div style={{ fontSize: 15, fontWeight: 700, color: "#15803D" }}>Campaña publicada en Meta</div>
-                        <div style={{ fontSize: 12.5, color: "#3f6d54", marginTop: 2 }}>
-                          Ya está creada directamente en tu cuenta de Meta Ads Manager, en pausa para que la revises antes de activarla.
+                    anunciosFallidos.length > 0 ? (
+                      <div style={{ background: "#FFFBEB", border: "1px solid #FDE68A", borderRadius: 12, padding: "1.25rem", display: "flex", flexDirection: "column", alignItems: "center", textAlign: "center", gap: 10 }}>
+                        <div style={{ width: 44, height: 44, borderRadius: "50%", background: "#F59E0B", display: "flex", alignItems: "center", justifyContent: "center" }}>
+                          <Check size={22} color="#fff" strokeWidth={3} aria-hidden="true" />
                         </div>
+                        <div>
+                          <div style={{ fontSize: 15, fontWeight: 700, color: "#92400E" }}>Campaña publicada con algunos anuncios pendientes</div>
+                          <div style={{ fontSize: 12.5, color: "#92400E", marginTop: 2 }}>
+                            Se publicaron {anunciosCreados} de {anunciosCreados + anunciosFallidos.length} anuncios. La campaña ya está creada en tu cuenta de Meta Ads Manager, en pausa para que la revises.
+                          </div>
+                        </div>
+                        <a
+                          href={linkMetaAdsManager(metaCampaignId, metaAdAccountId)}
+                          target="_blank"
+                          rel="noopener noreferrer"
+                          style={{ display: "inline-flex", alignItems: "center", gap: 8, background: "#1877F2", color: "#fff", textDecoration: "none", padding: "10px 18px", borderRadius: 8, fontSize: 13.5, fontWeight: 600, marginTop: 4 }}
+                        >
+                          <LogoMetaInline size={16} />
+                          Ver campaña en Meta Ads Manager
+                        </a>
+                        <button
+                          onClick={() => setDetalleFallidosAbierto((v) => !v)}
+                          style={{ background: "none", border: "none", color: "#92400E", fontSize: 12.5, fontWeight: 600, cursor: "pointer", padding: 0 }}
+                        >
+                          {detalleFallidosAbierto ? "Ocultar detalle ▴" : "Ver detalle ▾"}
+                        </button>
+                        {detalleFallidosAbierto && (
+                          <div style={{ width: "100%", textAlign: "left", background: "#fff", border: "1px solid #FDE68A", borderRadius: 8, padding: "0.75rem 1rem", display: "flex", flexDirection: "column", gap: 8 }}>
+                            {anunciosFallidos.map((af, i) => (
+                              <div key={i} style={{ fontSize: 12.5 }}>
+                                <div style={{ fontWeight: 600, color: "#1a1a1a" }}>{af.titulo || `Anuncio ${i + 1}`}</div>
+                                <div style={{ color: "#666" }}>{af.error || "Sin detalle del error."}</div>
+                              </div>
+                            ))}
+                          </div>
+                        )}
                       </div>
-                      <a
-                        href={linkMetaAdsManager(metaCampaignId, metaAdAccountId)}
-                        target="_blank"
-                        rel="noopener noreferrer"
-                        style={{ display: "inline-flex", alignItems: "center", gap: 8, background: "#1877F2", color: "#fff", textDecoration: "none", padding: "10px 18px", borderRadius: 8, fontSize: 13.5, fontWeight: 600, marginTop: 4 }}
-                      >
-                        <LogoMetaInline size={16} />
-                        Ver campaña en Meta Ads Manager
-                      </a>
-                    </div>
+                    ) : (
+                      <div style={{ background: "#F0FDF4", border: "1px solid #86EFAC", borderRadius: 12, padding: "1.25rem", display: "flex", flexDirection: "column", alignItems: "center", textAlign: "center", gap: 10 }}>
+                        <div style={{ width: 44, height: 44, borderRadius: "50%", background: "#10b981", display: "flex", alignItems: "center", justifyContent: "center" }}>
+                          <Check size={22} color="#fff" strokeWidth={3} aria-hidden="true" />
+                        </div>
+                        <div>
+                          <div style={{ fontSize: 15, fontWeight: 700, color: "#15803D" }}>Campaña publicada en Meta</div>
+                          <div style={{ fontSize: 12.5, color: "#3f6d54", marginTop: 2 }}>
+                            Ya está creada directamente en tu cuenta de Meta Ads Manager, en pausa para que la revises antes de activarla.
+                          </div>
+                        </div>
+                        <a
+                          href={linkMetaAdsManager(metaCampaignId, metaAdAccountId)}
+                          target="_blank"
+                          rel="noopener noreferrer"
+                          style={{ display: "inline-flex", alignItems: "center", gap: 8, background: "#1877F2", color: "#fff", textDecoration: "none", padding: "10px 18px", borderRadius: 8, fontSize: 13.5, fontWeight: 600, marginTop: 4 }}
+                        >
+                          <LogoMetaInline size={16} />
+                          Ver campaña en Meta Ads Manager
+                        </a>
+                      </div>
+                    )
                   ) : (
                     <button
                       onClick={handlePublicarEnMeta}
