@@ -1159,7 +1159,13 @@ function EstrategiaContent() {
         });
         const acumulado = { ...acumuladoRestaurado };
         clavesImagen.forEach((clave, i) => {
-          if (creativosListos[i]) acumulado[clave] = { ...creativosListos[i], origen: "imagen" };
+          if (creativosListos[i]) {
+            acumulado[clave] = {
+              ...creativosListos[i],
+              origen: "imagen",
+              descripcion: creativosListos[i].descripcion || descripcionPorClave(estrategiaRestaurada, clave),
+            };
+          }
         });
         setCreativosPorClave(acumulado);
         setMostrandoTransicionTipo(true);
@@ -1515,6 +1521,15 @@ function EstrategiaContent() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [estrategiaSeleccionada]);
 
+  // La respuesta cruda de crear_creativos (origen "imagen") no trae
+  // descripcion -- se rellena desde la estrategia original usando la misma
+  // clave "ci-ai" con la que ya se identifica cada anuncio en todo el
+  // wizard, para no depender de que n8n la devuelva.
+  function descripcionPorClave(estrategia: any, clave: string): string {
+    const [ci, ai] = clave.split("-").map(Number);
+    return estrategia?.conjuntos?.[ci]?.anuncios?.[ai]?.copy?.descripcion || "";
+  }
+
   // Recorre estrategiaSeleccionada.conjuntos[].anuncios[] en orden y arma
   // (a) el objeto estrategia filtrado a solo los anuncios con ese tipo, y
   // (b) las claves "ci-ai" correspondientes, en el mismo orden -- función
@@ -1691,7 +1706,13 @@ function EstrategiaContent() {
       localStorage.removeItem("quiubot_job_creativos_activo");
       const acumulado = { ...acumuladoInicial };
       claves.forEach((clave, i) => {
-        if (creativosListos[i]) acumulado[clave] = { ...creativosListos[i], origen: "imagen" };
+        if (creativosListos[i]) {
+          acumulado[clave] = {
+            ...creativosListos[i],
+            origen: "imagen",
+            descripcion: creativosListos[i].descripcion || descripcionPorClave(estrategiaSeleccionada, clave),
+          };
+        }
       });
       marcarTipoCompletado(acumulado);
     } catch (e: any) {
@@ -1735,7 +1756,13 @@ function EstrategiaContent() {
       );
       const acumulado = { ...creativosPorClave };
       claves.forEach((clave, i) => {
-        if (creativosListos[i]) acumulado[clave] = { ...creativosListos[i], origen: "imagen" };
+        if (creativosListos[i]) {
+          acumulado[clave] = {
+            ...creativosListos[i],
+            origen: "imagen",
+            descripcion: creativosListos[i].descripcion || descripcionPorClave(estrategiaSeleccionada, clave),
+          };
+        }
       });
       setCreativosPorClave(acumulado);
       ensamblarCreativosDesde(estrategiaSeleccionada, acumulado);
@@ -1762,7 +1789,7 @@ function EstrategiaContent() {
             anuncios: [
               {
                 nombre: creativo.anuncio_nombre,
-                copy: { titulo: creativo.titulo, texto: creativo.texto, cta: creativo.cta },
+                copy: { titulo: creativo.titulo, texto: creativo.texto, descripcion: creativo.descripcion, cta: creativo.cta },
                 argumentacion: creativo.argumentacion,
               },
             ],
@@ -1804,8 +1831,10 @@ function EstrategiaContent() {
         const nuevos = [...prev];
         // origen se fija a mano -- este botón solo existe en cards de
         // origen "imagen" (ver el branch de render en el paso 6), y la
-        // respuesta cruda de crear-creativos no trae ese campo.
-        nuevos[idx] = { ...creativosListos[0], origen: "imagen" };
+        // respuesta cruda de crear-creativos no trae ese campo. descripcion
+        // tampoco viene en esa respuesta -- se conserva la que ya tenía
+        // este creativo antes de regenerarlo.
+        nuevos[idx] = { ...creativosListos[0], origen: "imagen", descripcion: creativosListos[0].descripcion || creativo.descripcion };
         return nuevos;
       });
     } catch (e: any) {
@@ -3013,6 +3042,7 @@ function EstrategiaContent() {
                           ) : (
                             <>
                               <div style={{ fontWeight: 600, fontSize: 14, color: "#1a1a1a" }}>{c.titulo}</div>
+                              {c.descripcion && <div style={{ fontSize: 12, color: "#666" }}>{c.descripcion}</div>}
                               <div style={{ fontSize: 12, color: "#666" }}>{c.texto}</div>
                               <span style={{ display: "inline-block", background: "#f3f2fe", color: "#534AB7", fontSize: 12, fontWeight: 600, padding: "4px 10px", borderRadius: 20, width: "fit-content" }}>{c.cta}</span>
                               <button
