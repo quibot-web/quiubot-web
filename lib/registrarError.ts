@@ -57,6 +57,14 @@ async function notificarAdmins(datos: {
   errorMensaje: string;
   campanaNombre?: string | null;
 }) {
+  // Apagado por defecto: los errores de usuarios quedan solo en
+  // errores_publicacion (arriba, en registrarError) y visibles en
+  // /admin/errores -- ya no se avisan por correo. Poner esta variable en
+  // "true" (ej. en Coolify) reactiva los correos sin tocar código. No
+  // afecta la alerta de Kling (enviarCorreoAlertaAdmin), que es un camino
+  // separado y sigue enviándose siempre.
+  if (process.env.NOTIFICAR_ERRORES_POR_CORREO !== "true") return;
+
   const destinatarios = await obtenerEmailsAdmins();
 
   for (const destinatario of destinatarios) {

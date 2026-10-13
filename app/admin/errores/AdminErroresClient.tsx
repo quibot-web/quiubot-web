@@ -56,7 +56,7 @@ function formatearFecha(iso: string) {
   return new Date(iso).toLocaleString("es-CO", { dateStyle: "medium", timeStyle: "short" });
 }
 
-function SeccionContactos() {
+function SeccionContactos({ notificarPorCorreo }: { notificarPorCorreo: boolean }) {
   const [contactos, setContactos] = useState<Contacto[]>([]);
   const [cargando, setCargando] = useState(true);
   const [nombre, setNombre] = useState("");
@@ -117,7 +117,9 @@ function SeccionContactos() {
         <div>
           <span style={{ fontSize: 13, fontWeight: 700, color: "#534AB7" }}>📧 Contactos que reciben notificación de errores</span>
           <p style={{ fontSize: 11.5, color: "#666", margin: "4px 0 0" }}>
-            Cada vez que ocurre un error, cada uno de estos correos recibe un aviso. Si no agregas ninguno, se usa ADMIN_EMAIL por defecto.
+            {notificarPorCorreo
+              ? "Cada vez que ocurre un error, cada uno de estos correos recibe un aviso. Si no agregas ninguno, se usa ADMIN_EMAIL por defecto."
+              : "Los avisos de errores de usuarios por correo están desactivados; solo se registran aquí. Estos contactos reciben únicamente alertas críticas del sistema (ej. Kling sin saldo)."}
           </p>
         </div>
         <span style={{ fontSize: 12, color: "#534AB7", fontWeight: 600 }}>{abierto ? "Ocultar ▲" : "Administrar ▼"}</span>
@@ -177,7 +179,7 @@ function SeccionContactos() {
   );
 }
 
-export default function AdminErroresClient() {
+export default function AdminErroresClient({ notificarPorCorreo }: { notificarPorCorreo: boolean }) {
   const [errores, setErrores] = useState<ErrorPublicacion[]>([]);
   const [total, setTotal] = useState(0);
   const [pagina, setPagina] = useState(1);
@@ -253,7 +255,7 @@ export default function AdminErroresClient() {
         para poder contactar al usuario de forma proactiva.
       </p>
 
-      <SeccionContactos />
+      <SeccionContactos notificarPorCorreo={notificarPorCorreo} />
 
       <form onSubmit={handleBuscar} style={{ background: "#f9fafb", borderRadius: 12, padding: 16, marginBottom: 20, display: "flex", flexWrap: "wrap", gap: 10, alignItems: "flex-end" }}>
         <div style={{ flex: "1 1 220px" }}>

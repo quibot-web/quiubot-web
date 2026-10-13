@@ -19,5 +19,7 @@ export default async function AdminErroresPage() {
     redirect("/");
   }
 
-  return <AdminErroresClient />;
+  const notificarPorCorreo = process.env.NOTIFICAR_ERRORES_POR_CORREO === "true";
+
+  return <AdminErroresClient notificarPorCorreo={notificarPorCorreo} />;
 }
