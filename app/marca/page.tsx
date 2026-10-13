@@ -261,80 +261,140 @@ function SelectorPais({ valor, onChange }: { valor: string; onChange: (codigo: s
   );
 }
 
-// Input de "chips": el usuario escribe una ciudad, presiona Enter (o coma)
-// y aparece como pastilla removible -- mucho más claro que pedirle que
-// escriba texto separado por comas a mano, y elimina errores de formato
-// (espacios de más, comas dobles, etc.) porque cada ciudad ya queda
-// guardada como un elemento propio de la lista, no como texto libre.
-function InputChipsCiudades({ ciudades, onChange }: { ciudades: string[]; onChange: (nuevas: string[]) => void }) {
-  const [borrador, setBorrador] = useState("");
+type CiudadSeleccionada = { nombre: string; key?: string; region?: string };
+type ResultadoBusquedaCiudad = { key: string; name: string; region: string | null };
 
-  const agregarCiudad = () => {
-    const limpia = borrador.trim();
-    if (!limpia) return;
-    const yaExiste = ciudades.some((c) => c.toLowerCase() === limpia.toLowerCase());
-    if (!yaExiste) onChange([...ciudades, limpia]);
-    setBorrador("");
+// Buscador de ciudades reales de Meta (/api/marca/buscar-ciudades) con
+// debounce -- reemplaza el input de texto libre de antes: ahora cada
+// ciudad elegida trae el código exacto de Meta (key), así
+// publicar_estrategia no tiene que adivinarlo a partir del nombre. Las
+// pastillas "viejas" (de antes de este buscador, solo texto, sin key) se
+// muestran en gris con un aviso para que el usuario las vuelva a elegir.
+function SelectorCiudadesConBusqueda({
+  pais,
+  ciudades,
+  onChange,
+}: {
+  pais: string;
+  ciudades: CiudadSeleccionada[];
+  onChange: (nuevas: CiudadSeleccionada[]) => void;
+}) {
+  const [query, setQuery] = useState("");
+  const [resultados, setResultados] = useState<ResultadoBusquedaCiudad[]>([]);
+  const [buscando, setBuscando] = useState(false);
+  const [abierto, setAbierto] = useState(false);
+  const wrapRef = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    if (!abierto) return;
+    const cerrarSiAfuera = (e: MouseEvent) => {
+      if (wrapRef.current && !wrapRef.current.contains(e.target as Node)) setAbierto(false);
+    };
+    document.addEventListener("mousedown", cerrarSiAfuera);
+    return () => document.removeEventListener("mousedown", cerrarSiAfuera);
+  }, [abierto]);
+
+  // Debounce de 350ms -- mismo patrón que cualquier buscador en vivo,
+  // evita una llamada a Meta por cada tecla.
+  useEffect(() => {
+    const limpio = query.trim();
+    if (limpio.length < 2) {
+      setResultados([]);
+      setBuscando(false);
+      return;
+    }
+    setBuscando(true);
+    const idTimeout = setTimeout(() => {
+      fetch(`/api/marca/buscar-ciudades?country_code=${pais}&q=${encodeURIComponent(limpio)}`)
+        .then((r) => r.json())
+        .then((data) => setResultados(data.ciudades || []))
+        .catch(() => setResultados([]))
+        .finally(() => setBuscando(false));
+    }, 350);
+    return () => clearTimeout(idTimeout);
+  }, [query, pais]);
+
+  const agregarCiudad = (r: ResultadoBusquedaCiudad) => {
+    const yaExiste = ciudades.some((c) => (c.key && c.key === r.key) || c.nombre.toLowerCase() === r.name.toLowerCase());
+    if (!yaExiste) onChange([...ciudades, { nombre: r.name, key: r.key, region: r.region || undefined }]);
+    setQuery("");
+    setResultados([]);
+    setAbierto(false);
   };
 
   const quitarCiudad = (idx: number) => {
     onChange(ciudades.filter((_, i) => i !== idx));
   };
 
-  const handleKeyDown = (e: React.KeyboardEvent<HTMLInputElement>) => {
-    if (e.key === "Enter" || e.key === ",") {
-      e.preventDefault();
-      agregarCiudad();
-    } else if (e.key === "Backspace" && borrador === "" && ciudades.length > 0) {
-      // Borrar la última pastilla con Backspace cuando el campo de texto
-      // ya está vacío -- comportamiento esperado en este tipo de input.
-      onChange(ciudades.slice(0, -1));
-    }
-  };
-
   return (
-    <div
-      onClick={(e) => {
-        const input = (e.currentTarget.querySelector("input") as HTMLInputElement | null);
-        input?.focus();
-      }}
-      style={{
-        display: "flex", flexWrap: "wrap", gap: 6, alignItems: "center",
-        padding: "8px 10px", borderRadius: 8, border: "1px solid #e0e0e0", background: "#fff",
-        cursor: "text", boxSizing: "border-box", minHeight: 42,
-      }}
-    >
-      {ciudades.map((ciudad, idx) => (
-        <span
-          key={`${ciudad}-${idx}`}
-          style={{
-            display: "inline-flex", alignItems: "center", gap: 5,
-            background: "#F3F2FE", color: "#534AB7", fontSize: 12.5, fontWeight: 600,
-            padding: "4px 6px 4px 10px", borderRadius: 20,
-          }}
-        >
-          {ciudad}
-          <button
-            type="button"
-            onClick={(e) => { e.stopPropagation(); quitarCiudad(idx); }}
-            title={`Quitar ${ciudad}`}
-            style={{
-              width: 16, height: 16, borderRadius: "50%", border: "none", background: "#534AB7", color: "#fff",
-              fontSize: 10, lineHeight: 1, cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0,
-            }}
-          >
-            ✕
-          </button>
-        </span>
-      ))}
-      <input
-        value={borrador}
-        onChange={(e) => setBorrador(e.target.value)}
-        onKeyDown={handleKeyDown}
-        onBlur={agregarCiudad}
-        placeholder={ciudades.length === 0 ? "Escribe una ciudad y presiona Enter..." : "Agregar otra..."}
-        style={{ flex: "1 1 140px", minWidth: 120, border: "none", outline: "none", fontSize: 13, padding: "4px 2px" }}
-      />
+    <div>
+      {ciudades.length > 0 && (
+        <div style={{ display: "flex", flexWrap: "wrap", gap: 6, marginBottom: 8 }}>
+          {ciudades.map((ciudad, idx) => {
+            const esVieja = !ciudad.key;
+            return (
+              <span
+                key={`${ciudad.nombre}-${idx}`}
+                title={esVieja ? "Guardada antes del buscador -- vuelve a elegirla de la lista para que la segmentación sea exacta" : undefined}
+                style={{
+                  display: "inline-flex", alignItems: "center", gap: 5,
+                  background: esVieja ? "#f3f4f6" : "#F3F2FE", color: esVieja ? "#666" : "#534AB7",
+                  fontSize: 12.5, fontWeight: 600, padding: "4px 6px 4px 10px", borderRadius: 20,
+                }}
+              >
+                {ciudad.nombre}
+                {ciudad.region && <span style={{ fontWeight: 400, opacity: 0.75 }}>· {ciudad.region}</span>}
+                {esVieja && <span style={{ fontWeight: 400, fontStyle: "italic" }}>(vuelve a elegirla)</span>}
+                <button
+                  type="button"
+                  onClick={(e) => { e.stopPropagation(); quitarCiudad(idx); }}
+                  title={`Quitar ${ciudad.nombre}`}
+                  style={{
+                    width: 16, height: 16, borderRadius: "50%", border: "none",
+                    background: esVieja ? "#999" : "#534AB7", color: "#fff",
+                    fontSize: 10, lineHeight: 1, cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0,
+                  }}
+                >
+                  ✕
+                </button>
+              </span>
+            );
+          })}
+        </div>
+      )}
+      <div ref={wrapRef} style={{ position: "relative" }}>
+        <input
+          value={query}
+          onChange={(e) => { setQuery(e.target.value); setAbierto(true); }}
+          onFocus={() => setAbierto(true)}
+          placeholder="Escribe el nombre de una ciudad..."
+          style={{ width: "100%", padding: "10px 12px", borderRadius: 8, border: "1px solid #e0e0e0", fontSize: 13, boxSizing: "border-box" }}
+        />
+        {abierto && query.trim().length >= 2 && (
+          <div style={{ position: "absolute", top: "calc(100% + 4px)", left: 0, right: 0, zIndex: 20, background: "#fff", border: "1px solid #e0e0e0", borderRadius: 10, boxShadow: "0 8px 24px rgba(0,0,0,0.12)", maxHeight: 220, overflowY: "auto", padding: 4 }}>
+            {buscando ? (
+              <div style={{ display: "flex", alignItems: "center", gap: 6, padding: "10px 8px", fontSize: 12.5, color: "#999" }}>
+                <Loader2 size={14} className="adn-spin" /> Buscando...
+              </div>
+            ) : resultados.length === 0 ? (
+              <div style={{ padding: "10px 8px", fontSize: 12.5, color: "#999" }}>Sin resultados.</div>
+            ) : (
+              resultados.map((r) => (
+                <div
+                  key={r.key}
+                  onClick={() => agregarCiudad(r)}
+                  style={{ padding: "8px 10px", borderRadius: 6, cursor: "pointer", fontSize: 13, color: "#1a1a1a" }}
+                  onMouseEnter={(e) => { e.currentTarget.style.background = "#f9f9f8"; }}
+                  onMouseLeave={(e) => { e.currentTarget.style.background = "transparent"; }}
+                >
+                  {r.name}
+                  {r.region && <span style={{ color: "#999" }}> · {r.region}</span>}
+                </div>
+              ))
+            )}
+          </div>
+        )}
+      </div>
     </div>
   );
 }
@@ -345,7 +405,7 @@ function InputChipsCiudades({ ciudades, onChange }: { ciudades: string[]; onChan
 // de solo lectura.
 function CoberturaCiudades() {
   const [pais, setPais] = useState("CO");
-  const [ciudades, setCiudades] = useState<string[]>([]);
+  const [ciudades, setCiudades] = useState<CiudadSeleccionada[]>([]);
   const [cargando, setCargando] = useState(true);
   const [guardando, setGuardando] = useState(false);
   const [guardado, setGuardado] = useState(false);
@@ -354,7 +414,21 @@ function CoberturaCiudades() {
     fetch("/api/marca/cobertura")
       .then((r) => r.json())
       .then((data) => {
-        setCiudades(data.ciudades_cobertura || []);
+        const nombres: string[] = data.ciudades_cobertura || [];
+        // ciudades_cobertura_meta sigue el mismo orden que ciudades_cobertura,
+        // pero es un subconjunto (solo las que tienen código de Meta) -- se
+        // reconstruye por nombre, sin asumir que las dos listas tengan el
+        // mismo largo ni estén alineadas por índice.
+        const metaDisponible: { key: string; name: string; region: string | null }[] = [
+          ...(data.ciudades_cobertura_meta || []),
+        ];
+        const reconstruidas: CiudadSeleccionada[] = nombres.map((nombre) => {
+          const idx = metaDisponible.findIndex((m) => m.name.toLowerCase() === nombre.toLowerCase());
+          if (idx === -1) return { nombre }; // vieja, guardada antes del buscador -- sin key
+          const [m] = metaDisponible.splice(idx, 1);
+          return { nombre: m.name, key: m.key, region: m.region || undefined };
+        });
+        setCiudades(reconstruidas);
         setPais(data.pais_cobertura || "CO");
       })
       .catch(() => {})
@@ -368,7 +442,15 @@ function CoberturaCiudades() {
       await fetch("/api/marca/cobertura", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ ciudades_cobertura: ciudades, pais_cobertura: pais }),
+        body: JSON.stringify({
+          ciudades_cobertura: ciudades.map((c) => c.nombre),
+          pais_cobertura: pais,
+          // Solo las que sí tienen código de Meta -- las viejas (sin key)
+          // quedan afuera de este array a propósito.
+          ciudades_cobertura_meta: ciudades
+            .filter((c) => c.key)
+            .map((c) => ({ key: c.key, name: c.nombre, region: c.region || null })),
+        }),
       });
       setGuardado(true);
     } finally {
@@ -390,18 +472,26 @@ function CoberturaCiudades() {
         <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
           <div>
             <label style={{ fontSize: 12, fontWeight: 600, color: "#666", display: "block", marginBottom: 4 }}>País</label>
-            <SelectorPais valor={pais} onChange={(codigo) => { setPais(codigo); setGuardado(false); }} />
+            <SelectorPais
+              valor={pais}
+              onChange={(codigo) => {
+                setPais(codigo);
+                setCiudades([]); // cambiar de país invalida las ciudades elegidas en el país anterior
+                setGuardado(false);
+              }}
+            />
           </div>
           <div>
             <label style={{ fontSize: 12, fontWeight: 600, color: "#666", display: "block", marginBottom: 4 }}>
               Ciudades <span style={{ fontWeight: 400, color: "#999" }}>(opcional — sin ninguna = todo el país)</span>
             </label>
-            <InputChipsCiudades
+            <SelectorCiudadesConBusqueda
+              pais={pais}
               ciudades={ciudades}
               onChange={(nuevas) => { setCiudades(nuevas); setGuardado(false); }}
             />
             <p style={{ fontSize: 11, color: "#999", margin: "6px 0 0" }}>
-              Escribe el nombre de una ciudad y presiona <strong>Enter</strong> para agregarla como pastilla. Repite para cada ciudad. Haz clic en la ✕ de una pastilla para quitarla.
+              Escribe el nombre de una ciudad y elige una de la lista. Repite para cada ciudad. Haz clic en la ✕ de una pastilla para quitarla.
             </p>
           </div>
           <button
