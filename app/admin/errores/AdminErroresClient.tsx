@@ -50,6 +50,7 @@ const NOMBRES_PASO: Record<string, string> = {
   crear_ad_creative: "Crear creativo",
   crear_anuncio: "Crear anuncio",
   conexion_con_n8n: "Conexión con n8n",
+  diversidad_conceptos: "Diversidad de conceptos",
 };
 
 function formatearFecha(iso: string) {

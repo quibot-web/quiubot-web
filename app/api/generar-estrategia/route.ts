@@ -148,20 +148,37 @@ export async function POST(req: NextRequest) {
 
     if (!n8nRes.ok || data.ok === false) {
       const mensajeError = data.error || "No se pudo generar la estrategia";
+      // Paso propio para diversidad_conceptos (motor Andromeda, ver
+      // code-conceptos-andromeda.md): no es un bug del sistema, es nuestra
+      // propia validación de diversidad en el workflow generar_estrategia
+      // de n8n, que tras 2 intentos de reparación no logró conceptos
+      // distintos entre los anuncios -- se sigue registrando (sin correo,
+      // ver NOTIFICAR_ERRORES_POR_CORREO) para medir qué tan seguido pasa y
+      // ajustar el prompt, pero con su propio paso para no mezclarlo con
+      // fallas reales de conexión/webhook.
+      const paso = data.tipo_error === "diversidad_conceptos" ? "diversidad_conceptos" : "webhook_generar_estrategia";
 
       registrarError({
         origen: "generar_estrategia",
         userId: usuario.id,
         email: emailBusqueda,
-        paso: "webhook_generar_estrategia",
+        paso,
         errorMensaje: mensajeError,
         detalleTecnico: JSON.stringify(data),
         objetivoId: objetivo?.id ?? null,
       });
 
+      // n8n siempre responde HTTP 200 en su nodo "Respond to Webhook" de
+      // éxito, incluso para data.ok === false (ej. diversidad_conceptos) --
+      // por eso n8nRes.status no sirve para distinguir ese caso. Si n8n
+      // respondió OK pero el body dice ok:false, es un 422 (la petición
+      // estaba bien, el resultado no se pudo generar); si n8n mismo falló
+      // (HTTP no-2xx), se conserva su status.
+      const status = n8nRes.ok ? 422 : (n8nRes.status || 502);
+
       return NextResponse.json(
-        { error: mensajeError },
-        { status: n8nRes.status || 502 }
+        { ok: false, error: mensajeError, tipo_error: data.tipo_error ?? null },
+        { status }
       );
     }
 

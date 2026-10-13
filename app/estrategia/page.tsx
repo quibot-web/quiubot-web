@@ -1404,6 +1404,7 @@ function EstrategiaContent() {
     if (imagenesBase64.length < MIN_IMAGENES_PRODUCTO || !objetivo || presupuestoDiario < 20000 || !tipoContenido) return;
     setCargandoEstrategia(true);
     setErrorMsg(null);
+    setErrorTitulo(null);
     try {
       const res = await fetch("/api/generar-estrategia", {
         method: "POST",
@@ -1419,6 +1420,11 @@ function EstrategiaContent() {
       const data = await res.json().catch(() => ({}));
       if (!res.ok || data.ok === false) {
         setErrorMsg(data.error || "No se pudo generar la estrategia. Intenta de nuevo.");
+        // Diversidad_conceptos (motor Andromeda) no es una falla técnica --
+        // es Meta pidiendo conceptos menos parecidos entre sí. Título propio
+        // para que no se lea como un error del sistema; el botón "Generar
+        // Estrategia" de este mismo paso ya sirve como reintento.
+        setErrorTitulo(data.tipo_error === "diversidad_conceptos" ? "Conceptos muy parecidos" : null);
         return;
       }
       setEstrategiasGeneradas(data.campanas || []);
@@ -2432,7 +2438,7 @@ function EstrategiaContent() {
                 </button>
               </div>
             )}
-            {errorMsg && <ErrorConAccion mensaje={errorMsg} />}
+            {errorMsg && <ErrorConAccion mensaje={errorMsg} titulo={errorTitulo} />}
           </div>
         )}
 

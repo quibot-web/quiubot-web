@@ -146,6 +146,42 @@ function SpecTag({ children }) {
   );
 }
 
+// Traduce los ids del campo "concepto" (motor Andromeda, diversidad de
+// conceptos entre anuncios) a texto amigable para el usuario -- ver
+// code-conceptos-andromeda.md. Si llega un id nuevo que no está en el mapa,
+// se muestra el id tal cual en vez de ocultarlo, para no perder visibilidad
+// silenciosamente.
+const NOMBRES_ANGULO = {
+  dolor_problema: "Dolor / problema",
+  aspiracion_transformacion: "Aspiración / transformación",
+  prueba_social: "Prueba social",
+  demostracion_producto: "Demostración de producto",
+  antes_despues: "Antes y después",
+  objecion_resuelta: "Objeción resuelta",
+  oferta_urgencia_real: "Oferta con urgencia",
+  identidad_pertenencia: "Identidad / pertenencia",
+  curiosidad_intriga: "Curiosidad / intriga",
+  momento_de_uso: "Momento de uso",
+  comparacion_alternativas: "Comparación con alternativas",
+  autoridad_experto: "Autoridad / experto",
+  regalo_ocasion_especial: "Regalo / ocasión especial",
+};
+
+const NOMBRES_FORMATO_VISUAL = {
+  estilo_de_vida: "Estilo de vida",
+  producto_primer_plano: "Producto en primer plano",
+  ugc_casero: "Estilo UGC casero",
+  antes_despues_visual: "Antes/después visual",
+  infografia_beneficios: "Infografía de beneficios",
+  testimonio_tarjeta: "Testimonio en tarjeta",
+  escena_de_uso: "Escena de uso",
+  detalle_textura: "Detalle / textura",
+  flat_lay: "Flat lay",
+  comparativo_lado_a_lado: "Comparativo lado a lado",
+  manos_ritual: "Manos / ritual",
+  editorial_aspiracional: "Editorial aspiracional",
+};
+
 function AnuncioCard({ anuncio, cardRef }) {
   return (
     <div ref={cardRef} className="relative w-72 bg-white rounded-lg border border-amber-200 shadow-sm p-4">
@@ -156,8 +192,14 @@ function AnuncioCard({ anuncio, cardRef }) {
       </div>
       <p className="text-sm font-medium text-slate-900 leading-snug">{anuncio.copy.titulo}</p>
       <p className="text-xs text-slate-500 mt-1 leading-relaxed">{anuncio.copy.texto}</p>
-      <div className="mt-2">
+      <div className="mt-2 flex flex-wrap gap-1.5">
         <SpecTag>{anuncio.copy.cta}</SpecTag>
+        {anuncio.concepto && (
+          <>
+            <SpecTag>{NOMBRES_ANGULO[anuncio.concepto.angulo] || anuncio.concepto.angulo}</SpecTag>
+            <SpecTag>{NOMBRES_FORMATO_VISUAL[anuncio.concepto.formato_visual] || anuncio.concepto.formato_visual}</SpecTag>
+          </>
+        )}
       </div>
       <div className="mt-3 pt-3 border-t border-slate-100 flex gap-1.5">
         <Sparkles className="w-3.5 h-3.5 text-amber-500 shrink-0 mt-0.5" />
