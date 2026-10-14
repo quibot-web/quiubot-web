@@ -9,6 +9,7 @@ import ProgresoPasos from "@/app/components/ProgresoPasos";
 import EsperaCreativos from "@/app/components/EsperaCreativos";
 import CargandoQuiubot from "@/app/components/CargandoQuiubot";
 import { urlDescargaCloudinary, extraerFramesVideo } from "@/app/lib/cloudinaryUrl";
+import { comprimirSiHaceFalta, esArchivoDeImagen } from "@/app/lib/imagenes";
 
 function IconoWhatsApp() {
   return (
@@ -46,65 +47,6 @@ const TEMA_OBJETIVO: Record<string, { color: string; colorClaro: string; iconos:
   leads: { color: "#D97706", colorClaro: "#FEF3C7", iconos: [Target, Users, Send, CheckCircle2] },
   trafico_mensajes: { color: "#0891B2", colorClaro: "#CFFAFE", iconos: [MousePointerClick, TrendingUp, Zap, Globe] },
 };
-
-// Redimensiona y comprime la imagen SOLO cuando hace falta -- fotos de
-// celular modernas pueden pesar varios MB, y en base64 eso crece un 33%
-// mas, lo cual puede chocar contra limites de tamano de body (Next.js,
-// n8n) o de localStorage (usado para guardar el progreso del wizard) y
-// terminar produciendo un base64 truncado/invalido en OpenAI. Pero si la
-// imagen ya es liviana y de tamano razonable, se manda tal cual: convertir
-// todo a JPEG siempre le quitaria la transparencia a un PNG (ej. un
-// producto recortado con fondo transparente), y seria trabajo innecesario
-// para algo que ya esta bien.
-const LADO_MAXIMO_IMAGEN = 1600;
-const CALIDAD_JPEG = 0.85;
-const PESO_MAXIMO_SIN_COMPRIMIR = 800 * 1024; // 800KB
-
-function fileToBase64(file: File): Promise<string> {
-  return new Promise((resolve, reject) => {
-    const reader = new FileReader();
-    reader.onload = () => resolve(reader.result as string);
-    reader.onerror = reject;
-    reader.readAsDataURL(file);
-  });
-}
-
-function comprimirSiHaceFalta(file: File): Promise<string> {
-  return new Promise((resolve, reject) => {
-    const img = new Image();
-    const url = URL.createObjectURL(file);
-    img.onload = () => {
-      const yaEsLiviana = file.size <= PESO_MAXIMO_SIN_COMPRIMIR && img.width <= LADO_MAXIMO_IMAGEN && img.height <= LADO_MAXIMO_IMAGEN;
-      if (yaEsLiviana) {
-        URL.revokeObjectURL(url);
-        fileToBase64(file).then(resolve).catch(reject);
-        return;
-      }
-      let { width, height } = img;
-      if (width > LADO_MAXIMO_IMAGEN || height > LADO_MAXIMO_IMAGEN) {
-        const escala = LADO_MAXIMO_IMAGEN / Math.max(width, height);
-        width = Math.round(width * escala);
-        height = Math.round(height * escala);
-      }
-      const canvas = document.createElement("canvas");
-      canvas.width = width;
-      canvas.height = height;
-      const ctx = canvas.getContext("2d");
-      URL.revokeObjectURL(url);
-      if (!ctx) {
-        reject(new Error("No se pudo procesar la imagen"));
-        return;
-      }
-      ctx.drawImage(img, 0, 0, width, height);
-      resolve(canvas.toDataURL("image/jpeg", CALIDAD_JPEG));
-    };
-    img.onerror = () => {
-      URL.revokeObjectURL(url);
-      reject(new Error("No se pudo leer esa imagen"));
-    };
-    img.src = url;
-  });
-}
 
 // Consulta /api/creativos-jobs/[id] cada 5s hasta que el job quede "listo" o "error".
 // Se usa tanto para generar todos los creativos como para regenerar uno solo,
@@ -808,6 +750,8 @@ function EstrategiaContent() {
   const [mostrarPrecio, setMostrarPrecio] = useState(false);
   const [precio, setPrecio] = useState<number | null>(null);
   const [imagenesBase64, setImagenesBase64] = useState<string[]>([]);
+  const [procesandoImagenes, setProcesandoImagenes] = useState(false);
+  const [arrastrandoImagenes, setArrastrandoImagenes] = useState(false);
   const [objetivo, setObjetivo] = useState<typeof OBJETIVOS[number] | null>(null);
   const [presupuestoDiario, setPresupuestoDiario] = useState<number>(50000);
   // Estructura de la campaña (motor Andromeda): "advantage" (default, 1
@@ -1452,16 +1396,54 @@ function EstrategiaContent() {
     });
   }, [esAdminObjetivos, tiposPorAnuncio]);
 
-  const handleFile = async (e: React.ChangeEvent<HTMLInputElement>) => {
-    const file = e.target.files?.[0];
-    if (!file || imagenesBase64.length >= MAX_IMAGENES_PRODUCTO) return;
+  // Admite elegir (o soltar) varias imágenes a la vez -- se agregan en el
+  // orden en que llegaron, hasta donde alcance el cupo. Un archivo que no
+  // es imagen o que no se puede leer no cancela el resto del lote: cada
+  // uno se procesa por separado (Promise.allSettled, no Promise.all).
+  const handleFiles = async (archivos: File[]) => {
+    if (archivos.length === 0 || imagenesBase64.length >= MAX_IMAGENES_PRODUCTO) return;
     if (fileRef.current) fileRef.current.value = "";
+
+    const cupoLibre = MAX_IMAGENES_PRODUCTO - imagenesBase64.length;
+    const imagenesValidas = archivos.filter(esArchivoDeImagen);
+    const noImagenes = archivos.length - imagenesValidas.length;
+    const candidatos = imagenesValidas.slice(0, cupoLibre);
+    const descartadosPorCupo = imagenesValidas.length - candidatos.length;
+
+    setErrorMsg(null);
+    setProcesandoImagenes(true);
     try {
-      const base64 = await comprimirSiHaceFalta(file);
-      setImagenesBase64((prev) => [...prev, base64]);
-    } catch {
-      setErrorMsg("No se pudo leer esa imagen. Intenta con otro archivo.");
+      const resultados = await Promise.allSettled(candidatos.map(comprimirSiHaceFalta));
+      const agregadas: string[] = [];
+      let fallidas = 0;
+      resultados.forEach((r) => {
+        if (r.status === "fulfilled") agregadas.push(r.value);
+        else fallidas++;
+      });
+      if (agregadas.length > 0) setImagenesBase64((prev) => [...prev, ...agregadas]);
+
+      const avisos: string[] = [];
+      if (descartadosPorCupo > 0) {
+        avisos.push(`Solo se agregaron ${agregadas.length} de ${imagenesValidas.length} imágenes: el máximo es ${MAX_IMAGENES_PRODUCTO}.`);
+      }
+      if (noImagenes > 0 || fallidas > 0) {
+        const n = noImagenes + fallidas;
+        avisos.push(`${n} archivo${n !== 1 ? "s" : ""} no se pudo${n !== 1 ? "ieron" : ""} agregar: no es una imagen válida.`);
+      }
+      if (avisos.length > 0) setErrorMsg(avisos.join(" "));
+    } finally {
+      setProcesandoImagenes(false);
     }
+  };
+
+  const handleFile = (e: React.ChangeEvent<HTMLInputElement>) => {
+    handleFiles(Array.from(e.target.files || []));
+  };
+
+  const handleDropImagenes = (e: React.DragEvent<HTMLDivElement>) => {
+    e.preventDefault();
+    setArrastrandoImagenes(false);
+    handleFiles(Array.from(e.dataTransfer.files || []));
   };
 
   const handleQuitarImagen = (idx: number) => {
@@ -2401,17 +2383,36 @@ function EstrategiaContent() {
               {imagenesBase64.length < MAX_IMAGENES_PRODUCTO && (
                 <div
                   onClick={() => fileRef.current?.click()}
-                  style={{ aspectRatio: "1", border: "1.5px dashed #7F77DD", borderRadius: 12, display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", cursor: "pointer", background: "#fcfcff", gap: 6 }}
+                  onDragOver={(e) => { e.preventDefault(); setArrastrandoImagenes(true); }}
+                  onDragLeave={() => setArrastrandoImagenes(false)}
+                  onDrop={handleDropImagenes}
+                  style={{
+                    aspectRatio: "1",
+                    border: arrastrandoImagenes ? "1.5px dashed #534AB7" : "1.5px dashed #7F77DD",
+                    borderRadius: 12, display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center",
+                    cursor: "pointer", background: arrastrandoImagenes ? "#F3F2FE" : "#fcfcff", gap: 6,
+                  }}
                 >
-                  <Camera size={22} color="#534AB7" strokeWidth={2} aria-hidden="true" />
-                  <span style={{ fontSize: 11, color: "#534AB7", fontWeight: 500, textAlign: "center", padding: "0 8px" }}>
-                    {imagenesBase64.length === 0
-                      ? (tipoContenido === "servicio" ? "Subir pieza gráfica" : "Subir foto del producto")
-                      : "Subir otra"}
-                  </span>
+                  {procesandoImagenes ? (
+                    <>
+                      <div className="spinner-estrategia" style={{ width: 22, height: 22, borderWidth: 2 }}></div>
+                      <span style={{ fontSize: 11, color: "#534AB7", fontWeight: 500 }}>Procesando...</span>
+                    </>
+                  ) : (
+                    <>
+                      <Camera size={22} color="#534AB7" strokeWidth={2} aria-hidden="true" />
+                      <span style={{ fontSize: 11, color: "#534AB7", fontWeight: 500, textAlign: "center", padding: "0 8px" }}>
+                        {arrastrandoImagenes
+                          ? "Suelta tus imágenes aquí"
+                          : imagenesBase64.length === 0
+                            ? (tipoContenido === "servicio" ? "Subir pieza gráfica" : "Subir foto del producto")
+                            : "Subir otra"}
+                      </span>
+                    </>
+                  )}
                 </div>
               )}
-              <input ref={fileRef} type="file" accept="image/*" style={{ display: "none" }} onChange={handleFile} />
+              <input ref={fileRef} type="file" accept="image/*" multiple style={{ display: "none" }} onChange={handleFile} />
             </div>
 
             <p style={{ fontSize: 12, color: "#999", marginTop: -12 }}>

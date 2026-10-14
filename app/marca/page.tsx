@@ -5,6 +5,7 @@ import EscenaParticulasADN3D from "@/app/components/EscenaParticulasADN3D";
 import TutorialVideo from "@/app/components/TutorialVideo";
 import TourGuiado from "@/app/components/TourGuiado";
 import CargandoQuiubot from "@/app/components/CargandoQuiubot";
+import { comprimirSiHaceFalta, esArchivoDeImagen } from "@/app/lib/imagenes";
 
 const MIN_IMAGENES = 3;
 const MAX_IMAGENES = 5;
@@ -520,6 +521,7 @@ export default function MarcaPage() {
 
   const [imagenes, setImagenes] = useState<File[]>([]);
   const [previews, setPreviews] = useState<string[]>([]);
+  const [arrastrandoImagenes, setArrastrandoImagenes] = useState(false);
   const fileRef = useRef<HTMLInputElement>(null);
 
   const [analizando, setAnalizando] = useState(false);
@@ -558,26 +560,50 @@ export default function MarcaPage() {
       .finally(() => setCargandoInicial(false));
   }, []);
 
-  const handleFile = (e: React.ChangeEvent<HTMLInputElement>) => {
-    const file = e.target.files?.[0];
-    if (!file || imagenes.length >= MAX_IMAGENES) return;
-    setImagenes((prev) => [...prev, file]);
-    setPreviews((prev) => [...prev, URL.createObjectURL(file)]);
+  // Admite elegir (o soltar) varias imágenes a la vez, igual que en
+  // /estrategia -- se agregan en el orden en que llegaron, hasta donde
+  // alcance el cupo. No se comprime acá (se guarda el File crudo, igual
+  // que antes, para que la vista previa siga siendo la imagen real) --
+  // se comprime recién al analizar (ver handleAnalizar), que es donde
+  // antes se convertía a base64 sin comprimir.
+  const handleFiles = (archivos: File[]) => {
+    if (archivos.length === 0 || imagenes.length >= MAX_IMAGENES) return;
     if (fileRef.current) fileRef.current.value = "";
+
+    const cupoLibre = MAX_IMAGENES - imagenes.length;
+    const imagenesValidas = archivos.filter(esArchivoDeImagen);
+    const noImagenes = archivos.length - imagenesValidas.length;
+    const candidatos = imagenesValidas.slice(0, cupoLibre);
+    const descartadosPorCupo = imagenesValidas.length - candidatos.length;
+
+    if (candidatos.length > 0) {
+      setImagenes((prev) => [...prev, ...candidatos]);
+      setPreviews((prev) => [...prev, ...candidatos.map((f) => URL.createObjectURL(f))]);
+    }
+
+    const avisos: string[] = [];
+    if (descartadosPorCupo > 0) {
+      avisos.push(`Solo se agregaron ${candidatos.length} de ${imagenesValidas.length} imágenes: el máximo es ${MAX_IMAGENES}.`);
+    }
+    if (noImagenes > 0) {
+      avisos.push(`${noImagenes} archivo${noImagenes !== 1 ? "s" : ""} no se pudo${noImagenes !== 1 ? "ieron" : ""} agregar: no es una imagen válida.`);
+    }
+    setErrorMsg(avisos.length > 0 ? avisos.join(" ") : null);
+  };
+
+  const handleFile = (e: React.ChangeEvent<HTMLInputElement>) => {
+    handleFiles(Array.from(e.target.files || []));
+  };
+
+  const handleDropImagenes = (e: React.DragEvent<HTMLDivElement>) => {
+    e.preventDefault();
+    setArrastrandoImagenes(false);
+    handleFiles(Array.from(e.dataTransfer.files || []));
   };
 
   const handleQuitar = (idx: number) => {
     setImagenes((prev) => prev.filter((_, i) => i !== idx));
     setPreviews((prev) => prev.filter((_, i) => i !== idx));
-  };
-
-  function fileToBase64(file: File): Promise<string> {
-    return new Promise((resolve, reject) => {
-      const reader = new FileReader();
-      reader.onload = () => resolve(reader.result as string);
-      reader.onerror = reject;
-      reader.readAsDataURL(file);
-    });
   }
 
   const handleAnalizar = async () => {
@@ -599,7 +625,11 @@ export default function MarcaPage() {
     });
 
     try {
-      const imagenesBase64 = await Promise.all(imagenes.map(fileToBase64));
+      // Se comprime recién acá (no al agregarlas) -- antes se mandaban los
+      // archivos crudos del celular sin redimensionar, con riesgo real de
+      // reventar el límite de tamaño del body del proxy con varias fotos
+      // de varios MB cada una.
+      const imagenesBase64 = await Promise.all(imagenes.map(comprimirSiHaceFalta));
       const [res] = await Promise.all([
         fetch("/api/marca-adn", {
           method: "POST",
@@ -697,13 +727,23 @@ export default function MarcaPage() {
                 {imagenes.length < MAX_IMAGENES && (
                   <div
                     onClick={() => fileRef.current?.click()}
-                    style={{ aspectRatio: "1", borderRadius: 12, border: "1.5px dashed #7F77DD", display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", cursor: "pointer", background: "#fcfcff", gap: 6 }}
+                    onDragOver={(e) => { e.preventDefault(); setArrastrandoImagenes(true); }}
+                    onDragLeave={() => setArrastrandoImagenes(false)}
+                    onDrop={handleDropImagenes}
+                    style={{
+                      aspectRatio: "1", borderRadius: 12,
+                      border: arrastrandoImagenes ? "1.5px dashed #534AB7" : "1.5px dashed #7F77DD",
+                      display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center",
+                      cursor: "pointer", background: arrastrandoImagenes ? "#F3F2FE" : "#fcfcff", gap: 6,
+                    }}
                   >
                     <Upload size={22} color="#534AB7" strokeWidth={2} />
-                    <span style={{ fontSize: 11, color: "#534AB7", fontWeight: 500, textAlign: "center", padding: "0 8px" }}>Subir creativo</span>
+                    <span style={{ fontSize: 11, color: "#534AB7", fontWeight: 500, textAlign: "center", padding: "0 8px" }}>
+                      {arrastrandoImagenes ? "Suelta tus imágenes aquí" : "Subir creativo"}
+                    </span>
                   </div>
                 )}
-                <input ref={fileRef} type="file" accept="image/*" style={{ display: "none" }} onChange={handleFile} />
+                <input ref={fileRef} type="file" accept="image/*" multiple style={{ display: "none" }} onChange={handleFile} />
               </div>
 
               <p style={{ fontSize: 12, color: "#999", marginBottom: 20 }}>
