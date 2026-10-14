@@ -30,6 +30,9 @@ export async function POST(req: NextRequest) {
     imagenes_producto_base64, // array de 1 a 3 imagenes -- antes era imagen_producto_base64 (singular)
     tipo_contenido,       // "producto" | "servicio" — nuevo
     descripcion_servicio, // opcional, solo aplica si tipo_contenido === "servicio"
+    mostrar_precio,       // boolean — nuevo, n8n reparte el precio entre algunos creativos del lote
+    precio,               // entero en pesos, obligatorio > 0 si mostrar_precio es true
+    forzar_precio,        // boolean opcional — solo en regenerar un anuncio, sin reparto
   } = await req.json();
 
   if (!estrategia || !descripcion_visual_producto) {
@@ -48,6 +51,18 @@ export async function POST(req: NextRequest) {
     tipoContenidoFinal === "servicio" && typeof descripcion_servicio === "string"
       ? descripcion_servicio.trim().slice(0, 500) || null
       : null;
+
+  const mostrarPrecioFinal = mostrar_precio === true;
+
+  if (mostrarPrecioFinal && (typeof precio !== "number" || !Number.isFinite(precio) || precio <= 0)) {
+    return NextResponse.json({ error: "Falta el precio, o no es válido" }, { status: 400 });
+  }
+  const precioFinal = mostrarPrecioFinal ? Math.round(precio) : null;
+
+  // Solo se manda si es estrictamente boolean -- cualquier otro valor
+  // (undefined, string, etc.) se omite del body a n8n en vez de forzar
+  // un valor que nadie pidió.
+  const forzarPrecioFinal: boolean | undefined = typeof forzar_precio === "boolean" ? forzar_precio : undefined;
 
   const { data: usuario } = await supabaseAdmin
     .from("usuarios")
@@ -132,6 +147,9 @@ export async function POST(req: NextRequest) {
         cloudinary_secret: cloudinarySecretDescifrado,
         tipo_contenido: tipoContenidoFinal,
         descripcion_servicio: descripcionServicioFinal,
+        mostrar_precio: mostrarPrecioFinal,
+        precio: precioFinal,
+        forzar_precio: forzarPrecioFinal,
       }),
     });
 

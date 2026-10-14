@@ -801,6 +801,12 @@ function EstrategiaContent() {
   const [tipoContenido, setTipoContenido] = useState<TipoContenido | null>(null);
   const [hoverTipo, setHoverTipo] = useState<TipoContenido | null>(null);
   const [descripcionServicio, setDescripcionServicio] = useState<string>("");
+  // Precio en los creativos (nuevo en crear_creativos): si mostrarPrecio
+  // está marcado, n8n lo pone en algunos de los creativos del lote, no en
+  // todos -- "precio" guarda solo el número (sin formato), el input lo
+  // muestra formateado.
+  const [mostrarPrecio, setMostrarPrecio] = useState(false);
+  const [precio, setPrecio] = useState<number | null>(null);
   const [imagenesBase64, setImagenesBase64] = useState<string[]>([]);
   const [objetivo, setObjetivo] = useState<typeof OBJETIVOS[number] | null>(null);
   const [presupuestoDiario, setPresupuestoDiario] = useState<number>(50000);
@@ -953,6 +959,8 @@ function EstrategiaContent() {
         const data = JSON.parse(guardado);
         if (data.tipoContenido) setTipoContenido(data.tipoContenido);
         if (data.descripcionServicio) setDescripcionServicio(data.descripcionServicio);
+        if (typeof data.mostrarPrecio === "boolean") setMostrarPrecio(data.mostrarPrecio);
+        if (typeof data.precio === "number") setPrecio(data.precio);
         if (data.imagenesBase64) setImagenesBase64(data.imagenesBase64);
         if (data.objetivo) setObjetivo(data.objetivo);
         if (data.presupuestoDiario) setPresupuestoDiario(data.presupuestoDiario);
@@ -992,6 +1000,8 @@ function EstrategiaContent() {
         JSON.stringify({
           tipoContenido,
           descripcionServicio,
+          mostrarPrecio,
+          precio,
           imagenesBase64,
           objetivo,
           presupuestoDiario,
@@ -1016,6 +1026,8 @@ function EstrategiaContent() {
     publicado,
     tipoContenido,
     descripcionServicio,
+    mostrarPrecio,
+    precio,
     imagenesBase64,
     objetivo,
     presupuestoDiario,
@@ -1710,6 +1722,8 @@ function EstrategiaContent() {
           imagenes_producto_base64: imagenesParaEnviar,
           tipo_contenido: tipoContenido,
           descripcion_servicio: tipoContenido === "servicio" ? descripcionServicio : null,
+          mostrar_precio: mostrarPrecio,
+          precio: mostrarPrecio ? precio : null,
         }),
       });
       const data = await res.json().catch(() => ({}));
@@ -1772,6 +1786,8 @@ function EstrategiaContent() {
           imagenes_producto_base64: imagenesParaEnviar,
           tipo_contenido: tipoContenido,
           descripcion_servicio: tipoContenido === "servicio" ? descripcionServicio : null,
+          mostrar_precio: mostrarPrecio,
+          precio: mostrarPrecio ? precio : null,
         }),
       });
       const data = await res.json().catch(() => ({}));
@@ -1833,6 +1849,16 @@ function EstrategiaContent() {
           imagenes_producto_base64: imagenesParaEnviar,
           tipo_contenido: tipoContenido,
           descripcion_servicio: tipoContenido === "servicio" ? descripcionServicio : null,
+          mostrar_precio: mostrarPrecio,
+          precio: mostrarPrecio ? precio : null,
+          // Al regenerar UN solo anuncio no hay reparto que hacer -- con
+          // forzar_precio, n8n no decide: respeta lo que este anuncio ya
+          // tenía (creativo.lleva_precio, guardado del resultado anterior
+          // de crear_creativos; false si no existe -- creativo generado
+          // antes de este campo). Si el usuario desmarcó la casilla
+          // después de generar, mostrar_precio:false gana y sale sin precio
+          // de todas formas, sin importar forzar_precio.
+          forzar_precio: creativo.lleva_precio === true,
         }),
       });
       const data = await res.json().catch(() => ({}));
@@ -2430,7 +2456,50 @@ function EstrategiaContent() {
               </div>
             )}
 
-            <button data-tour="estrategia-siguiente" onClick={() => setStep("objetivo")} disabled={imagenesBase64.length < MIN_IMAGENES_PRODUCTO} style={{ background: imagenesBase64.length < MIN_IMAGENES_PRODUCTO ? "#ccc" : "#534AB7", color: "#fff", border: "none", padding: "16px", borderRadius: 10, fontSize: 16, fontWeight: 600, cursor: imagenesBase64.length < MIN_IMAGENES_PRODUCTO ? "not-allowed" : "pointer" }}>
+            <div>
+              <button
+                type="button"
+                onClick={() => setMostrarPrecio((v) => !v)}
+                style={{ display: "flex", alignItems: "flex-start", gap: 10, border: "none", background: "none", width: "100%", textAlign: "left", cursor: "pointer" }}
+              >
+                <div
+                  style={{
+                    width: 18, height: 18, borderRadius: 5, marginTop: 1, flexShrink: 0,
+                    border: mostrarPrecio ? "none" : "2px solid #ccc",
+                    background: mostrarPrecio ? "#534AB7" : "transparent",
+                    display: "flex", alignItems: "center", justifyContent: "center",
+                  }}
+                >
+                  {mostrarPrecio && <span style={{ color: "#fff", fontSize: 12, fontWeight: 700 }}>✓</span>}
+                </div>
+                <p style={{ fontSize: 13, fontWeight: 600, color: "#333", margin: 0 }}>
+                  Quiero que en mis creativos aparezca el precio
+                </p>
+              </button>
+              {mostrarPrecio && (
+                <div style={{ marginTop: 10, marginLeft: 28 }}>
+                  <div style={{ display: "flex", alignItems: "center", gap: 6, padding: "10px 12px", borderRadius: 8, border: "1.5px solid #e0e0e0", background: "#fcfcff" }}>
+                    <span style={{ fontSize: 15, fontWeight: 600, color: "#666" }}>$</span>
+                    <input
+                      type="text"
+                      inputMode="numeric"
+                      value={precio ? precio.toLocaleString("es-CO") : ""}
+                      onChange={(e) => {
+                        const soloDigitos = e.target.value.replace(/\D/g, "");
+                        setPrecio(soloDigitos ? parseInt(soloDigitos, 10) : null);
+                      }}
+                      placeholder="89.900"
+                      style={{ flex: 1, border: "none", outline: "none", fontSize: 14, color: "#1a1a1a", fontFamily: "inherit", background: "transparent" }}
+                    />
+                  </div>
+                  <p style={{ fontSize: 11, color: "#999", margin: "6px 0 0" }}>
+                    Lo mostraremos en algunos de tus anuncios, no en todos, para combinar conceptos con y sin precio.
+                  </p>
+                </div>
+              )}
+            </div>
+
+            <button data-tour="estrategia-siguiente" onClick={() => setStep("objetivo")} disabled={imagenesBase64.length < MIN_IMAGENES_PRODUCTO || (mostrarPrecio && (!precio || precio <= 0))} style={{ background: (imagenesBase64.length < MIN_IMAGENES_PRODUCTO || (mostrarPrecio && (!precio || precio <= 0))) ? "#ccc" : "#534AB7", color: "#fff", border: "none", padding: "16px", borderRadius: 10, fontSize: 16, fontWeight: 600, cursor: (imagenesBase64.length < MIN_IMAGENES_PRODUCTO || (mostrarPrecio && (!precio || precio <= 0))) ? "not-allowed" : "pointer" }}>
               Siguiente paso
             </button>
           </div>
