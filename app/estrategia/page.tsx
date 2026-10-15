@@ -2545,6 +2545,11 @@ function EstrategiaContent() {
                 })}
               </div>
             )}
+            {objetivo?.id === "venta_directa_whatsapp" && (
+              <div style={{ padding: "10px 14px", background: "#fef3c7", borderRadius: 10, fontSize: 13, color: "#92400e" }}>
+                Requiere que tu página de Facebook tenga WhatsApp vinculado. Verifica en Meta Business Suite → Configuración → WhatsApp.
+              </div>
+            )}
             <div style={{ display: "flex", gap: 10 }}>
               <button onClick={() => setStep("imagen")} style={{ padding: "16px 32px", borderRadius: 10, border: "1px solid #ddd", background: "#fff", cursor: "pointer" }}>Atrás</button>
               <button onClick={() => setStep("presupuesto")} disabled={!objetivo} style={{ flex: 1, background: !objetivo ? "#aaa" : "#534AB7", color: "#fff", border: "none", padding: 16, borderRadius: 10, fontSize: 16, fontWeight: 600, cursor: !objetivo ? "not-allowed" : "pointer" }}>

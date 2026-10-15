@@ -8,6 +8,45 @@ import TutorialVideo from "@/app/components/TutorialVideo";
 import TourGuiado from "@/app/components/TourGuiado";
 import NotificacionIcono from "@/app/components/NotificacionIcono";
 import { urlDescargaCloudinary } from "@/app/lib/cloudinaryUrl";
+import { SelectorPais, CODIGO_TELEFONICO } from "@/app/components/SelectorPais";
+
+// Separa un whatsapp_numero guardado (solo dígitos, ej. "573001318102") en
+// país + número nacional -- probando los códigos más largos primero para
+// no confundir "1" (EE.UU./Canadá/RD/PR) con un prefijo de otro código. Si
+// nada calza, se asume que son solo los dígitos nacionales sin código (dato
+// viejo, de antes de este selector) y se usa Colombia por defecto.
+//
+// Varios países comparten el mismo código ("1": US, CA, DO, PR) -- en ese
+// caso no hay forma de saber cuál es solo con los dígitos, así que se
+// prefiere paisPrevio (el país que ya estaba elegido en el selector) si es
+// uno de los candidatos, y si no, Estados Unidos.
+function separarWhatsapp(guardado: string, paisPrevio?: string): { pais: string; numero: string } {
+  const codigosUnicos = Array.from(new Set(Object.values(CODIGO_TELEFONICO))).sort((a, b) => b.length - a.length);
+  for (const codigo of codigosUnicos) {
+    if (!guardado.startsWith(codigo) || guardado.length <= codigo.length) continue;
+    const numero = guardado.slice(codigo.length);
+    const candidatos = Object.entries(CODIGO_TELEFONICO).filter(([, c]) => c === codigo).map(([pais]) => pais);
+    if (!candidatos.some((p) => validarWhatsapp(p, numero))) continue;
+    const pais = paisPrevio && candidatos.includes(paisPrevio) ? paisPrevio : candidatos.includes("US") ? "US" : candidatos[0];
+    return { pais, numero };
+  }
+  return { pais: paisPrevio || "CO", numero: guardado };
+}
+
+function validarWhatsapp(pais: string, numero: string): boolean {
+  if (!numero) return false;
+  if (pais === "CO") return /^3\d{9}$/.test(numero);
+  return /^\d{7,12}$/.test(numero);
+}
+
+function formatearWhatsapp(pais: string, numero: string): string {
+  const codigo = CODIGO_TELEFONICO[pais] || "";
+  if (!numero) return "";
+  if (pais === "CO" && numero.length === 10) {
+    return `+${codigo} ${numero.slice(0, 3)} ${numero.slice(3, 6)} ${numero.slice(6)}`;
+  }
+  return `+${codigo} ${numero}`;
+}
 
 function Icono({ children }: { children: React.ReactNode }) {
   return (
@@ -253,7 +292,8 @@ export default function Home() {
   const [verificandoCloud, setVerificandoCloud] = useState(false);
   const [destinoVenta, setDestinoVenta] = useState<{ sitio_web: string | null; whatsapp_numero: string | null } | null>(null);
   const [sitioWebInput, setSitioWebInput] = useState("");
-  const [whatsappInput, setWhatsappInput] = useState("");
+  const [whatsappPais, setWhatsappPais] = useState("CO");
+  const [whatsappNumeroInput, setWhatsappNumeroInput] = useState("");
   const [guardandoDestino, setGuardandoDestino] = useState(false);
   const [destinoGuardado, setDestinoGuardado] = useState(false);
   const [guardandoApiKey, setGuardandoApiKey] = useState(false);
@@ -329,7 +369,9 @@ export default function Home() {
       .then((data) => {
         setDestinoVenta(data);
         setSitioWebInput(data?.sitio_web || "");
-        setWhatsappInput(data?.whatsapp_numero || "");
+        const { pais, numero } = separarWhatsapp(data?.whatsapp_numero || "", whatsappPais);
+        setWhatsappPais(pais);
+        setWhatsappNumeroInput(numero);
       });
   };
 
@@ -337,10 +379,13 @@ export default function Home() {
     setGuardandoDestino(true);
     setDestinoGuardado(false);
     try {
+      const whatsappCompleto = whatsappNumeroInput.trim()
+        ? `${CODIGO_TELEFONICO[whatsappPais] || ""}${whatsappNumeroInput.trim()}`
+        : "";
       const res = await fetch("/api/marca", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ sitio_web: sitioWebInput, whatsapp_numero: whatsappInput }),
+        body: JSON.stringify({ sitio_web: sitioWebInput, whatsapp_numero: whatsappCompleto }),
       });
       if (res.ok) {
         setDestinoGuardado(true);
@@ -1345,18 +1390,65 @@ export default function Home() {
                   </div>
                   <div>
                     <label style={{ fontSize: 12, fontWeight: 600, color: "#666", display: "block", marginBottom: 6 }}>WhatsApp de ventas</label>
-                    <input
-                      placeholder="Ej: 573001234567 (con indicativo)"
-                      value={whatsappInput}
-                      onChange={(e) => setWhatsappInput(e.target.value)}
-                      style={{ width: "100%", padding: "12px", borderRadius: "8px", border: "1px solid #e0e0e0", boxSizing: "border-box" }}
-                    />
+                    <div style={{ display: "flex", gap: 8 }}>
+                      <div style={{ width: 130, flexShrink: 0 }}>
+                        <SelectorPais valor={whatsappPais} onChange={(codigo) => { setWhatsappPais(codigo); setDestinoGuardado(false); }} />
+                      </div>
+                      <input
+                        placeholder="Ej: 3001234567"
+                        value={whatsappNumeroInput}
+                        onChange={(e) => {
+                          let limpio = e.target.value.replace(/\D/g, "");
+                          // Si pegó el número con el código ya incluido (ej. "+57 300..."
+                          // o "57300...") no lo duplicamos -- pero solo si quitarlo es lo
+                          // que lo hace válido. Si ya es válido tal cual (ej. en Brasil,
+                          // "55", hay indicativos de área que empiezan igual que el código
+                          // del país, o en EE.UU./Canadá un número que empieza por "1"),
+                          // quitarlo a lo bruto borraría dígitos legítimos.
+                          const codigo = CODIGO_TELEFONICO[whatsappPais] || "";
+                          if (codigo && limpio.startsWith(codigo) && limpio.length > codigo.length) {
+                            const sinCodigo = limpio.slice(codigo.length);
+                            if (!validarWhatsapp(whatsappPais, limpio) && validarWhatsapp(whatsappPais, sinCodigo)) {
+                              limpio = sinCodigo;
+                            }
+                          }
+                          setWhatsappNumeroInput(limpio);
+                          setDestinoGuardado(false);
+                        }}
+                        style={{ flex: 1, padding: "12px", borderRadius: "8px", border: "1px solid #e0e0e0", boxSizing: "border-box" }}
+                      />
+                    </div>
+                    {whatsappNumeroInput.trim() && (
+                      validarWhatsapp(whatsappPais, whatsappNumeroInput.trim()) ? (
+                        <p style={{ fontSize: 12, color: "#666", margin: "6px 0 0" }}>
+                          Quedará como: <strong>{formatearWhatsapp(whatsappPais, whatsappNumeroInput.trim())}</strong>
+                        </p>
+                      ) : (
+                        <p style={{ fontSize: 12, color: "#dc2626", margin: "6px 0 0" }}>
+                          {whatsappPais === "CO"
+                            ? "Para Colombia, deben ser 10 dígitos empezando por 3 (ej. 3001234567)."
+                            : "Revisa el número: debe tener entre 7 y 12 dígitos, sin el código de país."}
+                        </p>
+                      )
+                    )}
+                    <p style={{ fontSize: 11, color: "#999", margin: "8px 0 0", lineHeight: 1.5 }}>
+                      Tus anuncios de WhatsApp abren el chat del número vinculado a tu página de Facebook. Verifica que esté vinculado en Meta Business Suite → Configuración → WhatsApp; si tu página no tiene WhatsApp vinculado, Meta rechazará las campañas de venta por WhatsApp.
+                    </p>
                   </div>
                 </div>
                 <button
                   onClick={handleGuardarDestino}
-                  disabled={guardandoDestino || (!sitioWebInput.trim() && !whatsappInput.trim())}
-                  style={{ width: "100%", padding: "10px", borderRadius: "8px", background: (!sitioWebInput.trim() && !whatsappInput.trim()) ? "#eee" : "#534AB7", color: (!sitioWebInput.trim() && !whatsappInput.trim()) ? "#aaa" : "#fff", border: "none", marginTop: "15px", fontWeight: 600, cursor: (guardandoDestino || (!sitioWebInput.trim() && !whatsappInput.trim())) ? "not-allowed" : "pointer" }}
+                  disabled={
+                    guardandoDestino ||
+                    (whatsappNumeroInput.trim() !== "" && !validarWhatsapp(whatsappPais, whatsappNumeroInput.trim())) ||
+                    (!sitioWebInput.trim() && !whatsappNumeroInput.trim())
+                  }
+                  style={{
+                    width: "100%", padding: "10px", borderRadius: "8px", border: "none", marginTop: "15px", fontWeight: 600,
+                    background: (!sitioWebInput.trim() && !whatsappNumeroInput.trim()) || (whatsappNumeroInput.trim() !== "" && !validarWhatsapp(whatsappPais, whatsappNumeroInput.trim())) ? "#eee" : "#534AB7",
+                    color: (!sitioWebInput.trim() && !whatsappNumeroInput.trim()) || (whatsappNumeroInput.trim() !== "" && !validarWhatsapp(whatsappPais, whatsappNumeroInput.trim())) ? "#aaa" : "#fff",
+                    cursor: guardandoDestino || (!sitioWebInput.trim() && !whatsappNumeroInput.trim()) || (whatsappNumeroInput.trim() !== "" && !validarWhatsapp(whatsappPais, whatsappNumeroInput.trim())) ? "not-allowed" : "pointer",
+                  }}
                 >
                   {guardandoDestino ? "Guardando..." : destinoGuardado ? "Guardado ✓" : "Guardar destino de venta"}
                 </button>
