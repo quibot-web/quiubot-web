@@ -1,6 +1,22 @@
 import { auth } from "@/auth";
 import { NextResponse } from "next/server";
 import { supabaseAdmin } from "@/lib/supabase";
+import { normalizarBloques } from "@/app/lib/configHome";
+
+// Un banner aplica si está dentro de su rango de fechas (o no tiene) Y
+// (no tiene restricción de plan/prueba, O el usuario cae en alguna de las
+// dos). planes y "prueba" son un OR entre sí, no un AND -- un banner con
+// planes:["arranque"] + incluye_prueba:true se le muestra a cualquier
+// usuario de Arranque, Y también a cualquiera en prueba sin importar su plan.
+function bannerAplicaAUsuario(banner: any, hoy: string, plan: string, enTrial: boolean): boolean {
+  if (banner.fecha_inicio && hoy < banner.fecha_inicio) return false;
+  if (banner.fecha_fin && hoy > banner.fecha_fin) return false;
+  const tienePlanes = Array.isArray(banner.planes) && banner.planes.length > 0;
+  if (!tienePlanes && !banner.incluye_prueba) return true;
+  if (tienePlanes && banner.planes.includes(plan)) return true;
+  if (banner.incluye_prueba && enTrial) return true;
+  return false;
+}
 
 export async function GET() {
   const session = await auth();
@@ -10,7 +26,7 @@ export async function GET() {
   const emailBusqueda = session.user.email.trim().toLowerCase();
   const { data: usuario } = await supabaseAdmin
     .from("usuarios")
-    .select("id")
+    .select("id, plan, en_trial")
     .eq("email", emailBusqueda)
     .single();
   if (!usuario) {
@@ -21,7 +37,18 @@ export async function GET() {
   hoyInicio.setHours(0, 0, 0, 0);
   const hace7dias = new Date(Date.now() - 7 * 24 * 60 * 60 * 1000).toISOString();
 
-  const [campanasRes, snapshotsHoyRes, snapshots7diasRes, ultimaSincRes, notisRes, albumRes, novedadesRes] = await Promise.all([
+  const [
+    campanasRes,
+    snapshotsHoyRes,
+    snapshots7diasRes,
+    ultimaSincRes,
+    notisRes,
+    albumRes,
+    novedadesRes,
+    capacitacionesRes,
+    bannersRes,
+    configHomeRes,
+  ] = await Promise.all([
     supabaseAdmin
       .from("campanas_publicadas")
       .select("id, estado, nombre, presupuesto_diario")
@@ -61,9 +88,24 @@ export async function GET() {
       .limit(3),
     supabaseAdmin
       .from("novedades")
-      .select("id, titulo, descripcion, tipo, imagen_url, creado_en")
-      .order("creado_en", { ascending: false })
-      .limit(3),
+      .select("id, titulo, descripcion, tipo, imagen_url, enlace, creado_en")
+      .eq("categoria", "novedad")
+      .eq("activo", true)
+      .order("orden", { ascending: true })
+      .limit(5),
+    supabaseAdmin
+      .from("novedades")
+      .select("id, titulo, descripcion, tipo, imagen_url, enlace, creado_en")
+      .eq("categoria", "capacitacion")
+      .eq("activo", true)
+      .order("orden", { ascending: true })
+      .limit(5),
+    supabaseAdmin
+      .from("banners_home")
+      .select("*")
+      .eq("activo", true)
+      .order("orden", { ascending: true }),
+    supabaseAdmin.from("config_home").select("bloques").eq("id", 1).maybeSingle(),
   ]);
 
   const campanas = campanasRes.data ?? [];
@@ -93,6 +135,11 @@ export async function GET() {
 
   const pendientes = [...pendientesProblemas, ...(notisRes.data ?? [])].slice(0, 5);
 
+  const hoy = new Date().toISOString().slice(0, 10);
+  const plan = usuario.plan || "arranque";
+  const enTrial = !!usuario.en_trial;
+  const banners = (bannersRes.data ?? []).filter((b) => bannerAplicaAUsuario(b, hoy, plan, enTrial));
+
   return NextResponse.json({
     kpis: {
       gasto_activo: gastoActivo,
@@ -105,5 +152,8 @@ export async function GET() {
     pendientes,
     actividad_reciente: (albumRes.data ?? []).map((a) => ({ tipo: "creativo", ...a })),
     novedades: novedadesRes.data ?? [],
+    capacitaciones: capacitacionesRes.data ?? [],
+    banners,
+    bloques: normalizarBloques(configHomeRes.data?.bloques),
   });
 }

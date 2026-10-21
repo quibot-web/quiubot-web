@@ -1,3 +1,12 @@
+// Pide a Cloudinary una versión liviana para mostrar (no para descargar):
+// formato automático (webp/avif cuando el navegador lo soporta), calidad
+// automática, y un ancho máximo -- mismo truco de insertar la transformación
+// justo después de "/upload/" que ya usan urlDescargaCloudinary y
+// extraerFramesVideo. Pensada para banners/miniaturas del Inicio.
+export function urlOptimizadaCloudinary(url: string, anchoMaximo: number): string {
+  return url.replace("/upload/", `/upload/f_auto,q_auto,w_${anchoMaximo}/`);
+}
+
 // Fuerza que el navegador descargue el archivo en vez de reproducirlo/
 // mostrarlo inline -- Cloudinary respeta el flag fl_attachment insertado
 // en la URL de entrega. Funciona igual para /image/upload/ y

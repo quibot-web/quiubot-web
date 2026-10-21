@@ -1,7 +1,28 @@
 "use client";
-import { useEffect, useState, useRef } from "react";
+import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import NotificacionIcono from "@/app/components/NotificacionIcono";
+import { urlOptimizadaCloudinary } from "@/app/lib/cloudinaryUrl";
+import { BLOQUES_DEFAULT, BLOQUES_COLUMNA_DERECHA, type BloqueId } from "@/app/lib/configHome";
+
+// metricas y decisiones_pendientes siempre se renderizan, sin importar lo
+// que diga bloques[].visible -- el panel de admin deshabilita su
+// interruptor, pero esto es el respaldo real: aunque llegue un
+// visible:false desde la base (a mano, por un bug, o lo que sea), estos
+// dos bloques no dependen solo de ese valor.
+const SIEMPRE_VISIBLES = new Set<BloqueId>(["metricas", "decisiones_pendientes"]);
+
+function useEsMovil() {
+  const [esMovil, setEsMovil] = useState(false);
+  useEffect(() => {
+    const mq = window.matchMedia("(max-width: 860px)");
+    const actualizar = () => setEsMovil(mq.matches);
+    actualizar();
+    mq.addEventListener("change", actualizar);
+    return () => mq.removeEventListener("change", actualizar);
+  }, []);
+  return esMovil;
+}
 
 function useContarHasta(valorFinal: number, activo: boolean) {
   const [valor, setValor] = useState(0);
@@ -38,6 +59,10 @@ function tiempoRelativo(iso: string | null): string {
   if (horas < 24) return `hace ${horas} hora${horas === 1 ? "" : "s"}`;
   const dias = Math.floor(horas / 24);
   return `hace ${dias} día${dias === 1 ? "" : "s"}`;
+}
+
+function formatearFechaCorta(iso: string) {
+  return new Date(iso).toLocaleDateString("es-CO", { day: "numeric", month: "short" });
 }
 
 // Iconos simples, en linea con el resto del sistema (mismo estilo lineal
@@ -118,26 +143,21 @@ function TarjetaKpi({
   );
 }
 
-function BannerNovedades({ novedades, visible }: { novedades: any[]; visible: boolean }) {
+// Banner grande con imagen -- reemplaza al viejo "BannerNovedades" (que
+// usaba la tabla novedades para el carrusel principal). Ahora banners_home
+// es su propia cosa, administrable desde /admin/inicio; novedades pasa a
+// ser la lista corta de "Actualizaciones"/"Capacitaciones" (TarjetaListaCorta).
+function CarruselBanners({ banners, visible }: { banners: any[]; visible: boolean }) {
   const [indice, setIndice] = useState(0);
 
   useEffect(() => {
-    if (novedades.length <= 1) return;
-    const intervalo = setInterval(() => {
-      setIndice((i) => (i + 1) % novedades.length);
-    }, 6000);
+    if (banners.length <= 1) return;
+    const intervalo = setInterval(() => setIndice((i) => (i + 1) % banners.length), 7000);
     return () => clearInterval(intervalo);
-  }, [novedades.length]);
+  }, [banners.length]);
 
-  if (novedades.length === 0) return null;
-
-  const n = novedades[indice];
-  const badge =
-    n.tipo === "proximamente"
-      ? { label: "Próximamente", color: "#fff", fondo: "#534AB7" }
-      : n.tipo === "actualizacion"
-      ? { label: "Actualización", color: "#fff", fondo: "#1d4ed8" }
-      : { label: "Nuevo", color: "#fff", fondo: "#16A34A" };
+  if (banners.length === 0) return null;
+  const b = banners[Math.min(indice, banners.length - 1)];
 
   return (
     <div
@@ -145,44 +165,45 @@ function BannerNovedades({ novedades, visible }: { novedades: any[]; visible: bo
         position: "relative",
         borderRadius: 20,
         overflow: "hidden",
-        minHeight: 200,
-        background: "linear-gradient(135deg, #3C3489 0%, #534AB7 55%, #7F77DD 100%)",
-        display: "flex",
-        alignItems: "stretch",
+        minHeight: 260,
+        background: "#ece9fb",
         opacity: visible ? 1 : 0,
         transform: visible ? "translateY(0)" : "translateY(8px)",
         transition: "opacity 0.4s ease, transform 0.4s ease",
       }}
     >
-      {/* Contenido de texto */}
-      <div key={n.id} style={{ flex: 1, padding: "1.8rem 2rem", display: "flex", flexDirection: "column", justifyContent: "center", gap: 10, animation: "qb-fade-in 0.5s ease" }}>
-        <span style={{ alignSelf: "flex-start", fontSize: 11, fontWeight: 700, color: badge.color, background: badge.fondo, padding: "3px 10px", borderRadius: 8, letterSpacing: "0.3px" }}>
-          {badge.label}
-        </span>
-        <p style={{ fontSize: 21, fontWeight: 700, margin: 0, color: "#fff", letterSpacing: "-0.3px", lineHeight: 1.25 }}>{n.titulo}</p>
-        {n.descripcion && <p style={{ fontSize: 13.5, color: "rgba(255,255,255,0.85)", margin: 0, maxWidth: 420, lineHeight: 1.5 }}>{n.descripcion}</p>}
+      <picture>
+        {b.imagen_mobile_url && (
+          <source media="(max-width: 860px)" srcSet={urlOptimizadaCloudinary(b.imagen_mobile_url, 800)} />
+        )}
+        <img
+          key={b.id}
+          src={urlOptimizadaCloudinary(b.imagen_desktop_url, 1600)}
+          alt=""
+          loading="eager"
+          style={{ position: "absolute", inset: 0, width: "100%", height: "100%", objectFit: "cover" }}
+        />
+      </picture>
+      <div style={{ position: "absolute", inset: 0, background: "linear-gradient(90deg, rgba(23,21,43,0.68) 0%, rgba(23,21,43,0.25) 55%, rgba(23,21,43,0) 100%)" }} />
+      <div style={{ position: "relative", zIndex: 1, padding: "2rem", maxWidth: 460, minHeight: 260, display: "flex", flexDirection: "column", justifyContent: "center", gap: 10 }}>
+        <p style={{ fontSize: 22, fontWeight: 700, margin: 0, color: "#fff", letterSpacing: "-0.3px", lineHeight: 1.25 }}>{b.titulo}</p>
+        {b.texto && <p style={{ fontSize: 13.5, color: "rgba(255,255,255,0.88)", margin: 0, lineHeight: 1.5 }}>{b.texto}</p>}
+        {b.boton_texto && b.boton_url && (
+          <a
+            href={b.boton_url}
+            style={{ alignSelf: "flex-start", marginTop: 6, background: "#fff", color: "#17152B", padding: "10px 18px", borderRadius: 8, fontWeight: 600, fontSize: 13, textDecoration: "none" }}
+          >
+            {b.boton_texto}
+          </a>
+        )}
       </div>
-
-      {/* Imagen grande, ocupando toda la mitad derecha */}
-      {n.imagen_url && (
-        <div key={`img-${n.id}`} style={{ flex: 1, position: "relative", minWidth: 220, animation: "qb-fade-in 0.5s ease" }}>
-          <img
-            src={n.imagen_url}
-            alt=""
-            style={{ position: "absolute", inset: 0, width: "100%", height: "100%", objectFit: "cover" }}
-          />
-          <div style={{ position: "absolute", inset: 0, background: "linear-gradient(90deg, rgba(83,74,183,0.55) 0%, rgba(83,74,183,0) 35%)" }} />
-        </div>
-      )}
-
-      {/* Puntitos de navegación, solo si hay mas de una novedad */}
-      {novedades.length > 1 && (
-        <div style={{ position: "absolute", bottom: 14, left: 24, display: "flex", gap: 6 }}>
-          {novedades.map((_, i) => (
+      {banners.length > 1 && (
+        <div style={{ position: "absolute", bottom: 14, left: 24, display: "flex", gap: 6, zIndex: 1 }}>
+          {banners.map((_, i) => (
             <button
               key={i}
               onClick={() => setIndice(i)}
-              aria-label={`Ver novedad ${i + 1}`}
+              aria-label={`Ver banner ${i + 1}`}
               style={{
                 width: i === indice ? 18 : 6,
                 height: 6,
@@ -197,8 +218,53 @@ function BannerNovedades({ novedades, visible }: { novedades: any[]; visible: bo
           ))}
         </div>
       )}
+    </div>
+  );
+}
 
-      <style>{`@keyframes qb-fade-in { from { opacity: 0; } to { opacity: 1; } }`}</style>
+// Lista corta con miniatura + título + fecha + enlace -- usada para
+// "Actualizaciones" y "Capacitaciones" (misma forma de datos, tabla
+// novedades filtrada por categoria). No se renderiza si no hay items --
+// así un bloque "visible" pero vacío no deja una tarjeta vacía en pantalla.
+function TarjetaListaCorta({ titulo, items }: { titulo: string; items: any[] }) {
+  if (!items || items.length === 0) return null;
+  return (
+    <div style={{ background: "#fff", border: "1px solid #ece9f9", borderRadius: 16, padding: "1.25rem" }}>
+      <p style={{ fontSize: 15, fontWeight: 600, margin: "0 0 12px", color: "#1a1a1a" }}>{titulo}</p>
+      <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
+        {items.map((it) => {
+          const contenido = (
+            <>
+              {it.imagen_url ? (
+                <img
+                  src={urlOptimizadaCloudinary(it.imagen_url, 120)}
+                  alt=""
+                  loading="lazy"
+                  style={{ width: 44, height: 44, borderRadius: 8, objectFit: "cover", flexShrink: 0 }}
+                />
+              ) : (
+                <div style={{ width: 44, height: 44, borderRadius: 8, background: "#f3f2fe", flexShrink: 0 }} />
+              )}
+              <div style={{ flex: 1, minWidth: 0 }}>
+                <p style={{ fontSize: 13, fontWeight: 600, margin: 0, color: "#1a1a1a", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
+                  {it.titulo}
+                </p>
+                <p style={{ fontSize: 11.5, color: "#999", margin: "2px 0 0" }}>{formatearFechaCorta(it.creado_en)}</p>
+              </div>
+            </>
+          );
+          const estiloFila: React.CSSProperties = { display: "flex", alignItems: "center", gap: 10, textDecoration: "none", color: "inherit" };
+          return it.enlace ? (
+            <a key={it.id} href={it.enlace} target={it.enlace.startsWith("http") ? "_blank" : undefined} rel="noreferrer" style={estiloFila}>
+              {contenido}
+            </a>
+          ) : (
+            <div key={it.id} style={estiloFila}>
+              {contenido}
+            </div>
+          );
+        })}
+      </div>
     </div>
   );
 }
@@ -207,6 +273,7 @@ export default function HomeInicio({ nombreUsuario }: { nombreUsuario: string })
   const router = useRouter();
   const [datos, setDatos] = useState<any | null>(null);
   const [visible, setVisible] = useState(false);
+  const esMovil = useEsMovil();
 
   useEffect(() => {
     fetch("/api/home-resumen")
@@ -215,7 +282,18 @@ export default function HomeInicio({ nombreUsuario }: { nombreUsuario: string })
         setDatos(data);
         requestAnimationFrame(() => setVisible(true));
       })
-      .catch(() => setDatos({ kpis: {}, pendientes: [], actividad_reciente: [], novedades: [], ultima_sincronizacion: null }));
+      .catch(() =>
+        setDatos({
+          kpis: {},
+          pendientes: [],
+          actividad_reciente: [],
+          novedades: [],
+          capacitaciones: [],
+          banners: [],
+          bloques: BLOQUES_DEFAULT,
+          ultima_sincronizacion: null,
+        })
+      );
   }, []);
 
   const gastoAnimado = useContarHasta(datos?.kpis?.gasto_activo ?? 0, visible);
@@ -232,11 +310,10 @@ export default function HomeInicio({ nombreUsuario }: { nombreUsuario: string })
   const presupuestoTotal = datos.kpis.presupuesto_diario_total || 0;
   const porcentajeGasto = presupuestoTotal > 0 ? (datos.kpis.gasto_activo / presupuestoTotal) * 100 : null;
 
-  return (
-    <div style={{ maxWidth: 960, margin: "0 auto", padding: "2rem", display: "flex", flexDirection: "column", gap: 20 }}>
+  const RENDERERS: Record<string, () => React.ReactNode> = {
+    banners: () => <CarruselBanners banners={datos.banners || []} visible={visible} />,
 
-      {/* Banner de estado -- lo primero que se ve, para transmitir "esto
-          esta vivo y cuidado" antes que cualquier numero */}
+    estado_sistema: () => (
       <div
         style={{
           background: "linear-gradient(135deg, #f3f2fe 0%, #ece9fb 100%)",
@@ -270,7 +347,9 @@ export default function HomeInicio({ nombreUsuario }: { nombreUsuario: string })
           <span style={{ fontSize: 11.5, fontWeight: 600, color: "#166534" }}>Sistema activo</span>
         </div>
       </div>
+    ),
 
+    saludo: () => (
       <div>
         <h1 style={{ fontSize: 27, fontWeight: 600, margin: 0, color: "#1a1a1a", letterSpacing: "-0.5px" }}>
           {saludoSegunHora()}{primerNombre ? `, ${primerNombre}` : ""}
@@ -281,8 +360,10 @@ export default function HomeInicio({ nombreUsuario }: { nombreUsuario: string })
             : "Todo está tranquilo. Quiubot sigue optimizando tus campañas en segundo plano."}
         </p>
       </div>
+    ),
 
-      <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(190px, 1fr))", gap: 12 }}>
+    metricas: () => (
+      <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(170px, 1fr))", gap: 12 }}>
         <TarjetaKpi
           icono={<IconoBilletera size={14} color="#534AB7" />}
           colorFondo="#f0eefb"
@@ -317,9 +398,13 @@ export default function HomeInicio({ nombreUsuario }: { nombreUsuario: string })
           valor={datos.kpis.campanas_activas ?? 0}
         />
       </div>
+    ),
 
-      <BannerNovedades novedades={datos.novedades} visible={visible} />
+    novedades: () => <TarjetaListaCorta titulo="Actualizaciones" items={datos.novedades || []} />,
 
+    capacitaciones: () => <TarjetaListaCorta titulo="Capacitaciones" items={datos.capacitaciones || []} />,
+
+    decisiones_pendientes: () => (
       <div style={{ background: "#fff", border: "1px solid #ece9f9", borderRadius: 16, padding: "1.5rem" }}>
         <p style={{ fontSize: 15, fontWeight: 600, margin: "0 0 14px", color: "#1a1a1a" }}>Decisiones pendientes</p>
         {todoTranquilo && (
@@ -359,18 +444,52 @@ export default function HomeInicio({ nombreUsuario }: { nombreUsuario: string })
           ))}
         </div>
       </div>
+    ),
 
+    actividad_reciente: () => (
       <div style={{ background: "#fff", border: "1px solid #ece9f9", borderRadius: 16, padding: "1.5rem" }}>
         <p style={{ fontSize: 15, fontWeight: 600, margin: "0 0 12px", color: "#1a1a1a" }}>Actividad reciente</p>
         {datos.actividad_reciente.length === 0 && <p style={{ fontSize: 13, color: "#999", margin: 0 }}>Genera tu primera estrategia para ver actividad aquí.</p>}
         {datos.actividad_reciente.map((a: any) => (
           <div key={a.id} style={{ display: "flex", alignItems: "center", gap: 10, marginBottom: 8 }}>
-            <img src={a.url_imagen} alt="" style={{ width: 32, height: 32, borderRadius: 6, objectFit: "cover" }} />
+            <img src={urlOptimizadaCloudinary(a.url_imagen, 120)} alt="" loading="lazy" style={{ width: 32, height: 32, borderRadius: 6, objectFit: "cover" }} />
             <p style={{ fontSize: 13, color: "#666", margin: 0 }}>Creativo nuevo generado</p>
           </div>
         ))}
       </div>
+    ),
+  };
 
+  const bloquesConfig: { id: string; visible: boolean }[] = Array.isArray(datos.bloques) && datos.bloques.length > 0 ? datos.bloques : BLOQUES_DEFAULT;
+  const bloquesVisibles = bloquesConfig.filter((b) => SIEMPRE_VISIBLES.has(b.id as BloqueId) || b.visible);
+
+  const renderBloque = (id: string) => {
+    const render = RENDERERS[id];
+    if (!render) return null; // id desconocido (viejo o de un bloque que ya no existe) -- se ignora sin romper nada
+    const contenido = render();
+    if (!contenido) return null;
+    return <div key={id}>{contenido}</div>;
+  };
+
+  const columnaIzquierda = bloquesVisibles.filter((b) => !BLOQUES_COLUMNA_DERECHA.has(b.id as BloqueId));
+  const columnaDerecha = bloquesVisibles.filter((b) => BLOQUES_COLUMNA_DERECHA.has(b.id as BloqueId));
+
+  return (
+    <div style={{ maxWidth: 1200, margin: "0 auto", padding: "2rem" }}>
+      {esMovil ? (
+        <div style={{ display: "flex", flexDirection: "column", gap: 20 }}>
+          {bloquesVisibles.map((b) => renderBloque(b.id))}
+        </div>
+      ) : (
+        <div style={{ display: "flex", gap: 20, alignItems: "flex-start" }}>
+          <div style={{ flex: 2, display: "flex", flexDirection: "column", gap: 20, minWidth: 0 }}>
+            {columnaIzquierda.map((b) => renderBloque(b.id))}
+          </div>
+          <div style={{ flex: 1, display: "flex", flexDirection: "column", gap: 20, minWidth: 280 }}>
+            {columnaDerecha.map((b) => renderBloque(b.id))}
+          </div>
+        </div>
+      )}
     </div>
   );
 }

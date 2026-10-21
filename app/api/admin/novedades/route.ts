@@ -19,7 +19,8 @@ export async function GET() {
   const { data, error } = await supabaseAdmin
     .from("novedades")
     .select("*")
-    .order("creado_en", { ascending: false });
+    .order("categoria", { ascending: true })
+    .order("orden", { ascending: true });
 
   if (error) {
     return NextResponse.json({ error: "No se pudieron cargar las novedades" }, { status: 500 });
@@ -36,17 +37,33 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ error: "No autorizado" }, { status: 403 });
   }
 
-  const { titulo, descripcion, tipo, imagen_url } = await req.json();
+  const { titulo, descripcion, tipo, imagen_url, categoria, enlace } = await req.json();
 
   if (!titulo || typeof titulo !== "string" || !titulo.trim()) {
     return NextResponse.json({ error: "Falta el título" }, { status: 400 });
   }
+
+  const categoriaFinal = categoria === "capacitacion" ? "capacitacion" : "novedad";
+
+  // Nuevo item al final de su categoría -- max(orden) + 1, calculado solo
+  // entre los de la misma categoría (novedades y capacitaciones se
+  // reordenan por separado, son listas distintas en el Inicio).
+  const { data: ultimo } = await supabaseAdmin
+    .from("novedades")
+    .select("orden")
+    .eq("categoria", categoriaFinal)
+    .order("orden", { ascending: false })
+    .limit(1)
+    .maybeSingle();
 
   const { error } = await supabaseAdmin.from("novedades").insert({
     titulo: titulo.trim(),
     descripcion: descripcion?.trim() || null,
     tipo: tipo || "nuevo",
     imagen_url: imagen_url?.trim() || null,
+    categoria: categoriaFinal,
+    enlace: enlace?.trim() || null,
+    orden: (ultimo?.orden ?? -1) + 1,
   });
 
   if (error) {
