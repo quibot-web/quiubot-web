@@ -2,6 +2,7 @@ import { auth } from "@/auth";
 import { NextResponse } from "next/server";
 import { supabaseAdmin } from "@/lib/supabase";
 import { normalizarBloques } from "@/app/lib/configHome";
+import { hoyBogota } from "@/app/lib/fechaBogota";
 
 // Un banner aplica si está dentro de su rango de fechas (o no tiene) Y
 // (no tiene restricción de plan/prueba, O el usuario cae en alguna de las
@@ -33,8 +34,6 @@ export async function GET() {
     return NextResponse.json({ error: "Usuario no encontrado" }, { status: 404 });
   }
 
-  const hoyInicio = new Date();
-  hoyInicio.setHours(0, 0, 0, 0);
   const hace7dias = new Date(Date.now() - 7 * 24 * 60 * 60 * 1000).toISOString();
 
   const [
@@ -57,7 +56,7 @@ export async function GET() {
       .from("campanas_snapshots")
       .select("spend")
       .eq("user_id", usuario.id)
-      .gte("corrida_en", hoyInicio.toISOString()),
+      .eq("fecha_bogota", hoyBogota()),
     supabaseAdmin
       .from("campanas_snapshots")
       .select("spend, conversiones")

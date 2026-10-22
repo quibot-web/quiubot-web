@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { timingSafeEqual } from "crypto";
 import { supabaseAdmin } from "@/lib/supabase";
 import { registrarError } from "@/lib/registrarError";
+import { hoyBogota, ayerBogota } from "@/app/lib/fechaBogota";
 
 function compararSeguro(a: string, b: string): boolean {
   const bufA = Buffer.from(a);
@@ -51,6 +52,15 @@ function mapearEstado(effectiveStatus: string | undefined): string | null {
 // Llamado periodicamente por un Schedule Trigger en n8n (mismo patron que
 // recordatorio_vencimiento). Protegido con el mismo ADMIN_SECRET que ya
 // usan los otros endpoints de cron.
+//
+// Dos modos, mismo endpoint (?modo=cierre en la URL, default "hoy"):
+// - "hoy" (el de siempre): date_preset=today, actualiza la fila del dia
+//   Bogota en curso -- los numeros de hoy son parciales hasta que cierre.
+// - "cierre": date_preset=yesterday, pensado para correr temprano en la
+//   mañana (ej. 5am Bogota via un segundo Schedule Trigger en n8n) y
+//   sobreescribir la fila de AYER con el valor final de Meta, para no
+//   perder resultados que llegaron entre la ultima corrida del dia y la
+//   medianoche.
 export async function POST(req: NextRequest) {
   const adminSecret = process.env.ADMIN_SECRET;
   if (!adminSecret) {
@@ -62,13 +72,14 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ error: "No autorizado" }, { status: 401 });
   }
 
+  const esCierre = req.nextUrl.searchParams.get("modo") === "cierre";
+  const datePreset = esCierre ? "yesterday" : "today";
+  const fechaBogotaFila = esCierre ? ayerBogota() : hoyBogota();
+
   const { data: usuarios } = await supabaseAdmin
     .from("usuarios")
     .select("id, email, meta_access_token")
     .not("meta_access_token", "is", null);
-
-  const hoyInicio = new Date();
-  hoyInicio.setHours(0, 0, 0, 0);
 
   let campanasActualizadas = 0;
   let campanasConError = 0;
@@ -92,7 +103,7 @@ export async function POST(req: NextRequest) {
         const [insightsRes, statusRes] = await Promise.all([
           fetch(
             `https://graph.facebook.com/v21.0/${campana.meta_campaign_id}/insights` +
-              `?fields=spend,ctr,reach,frequency,impressions,actions&date_preset=today` +
+              `?fields=spend,ctr,reach,frequency,impressions,actions&date_preset=${datePreset}` +
               `&access_token=${usuario.meta_access_token}`
           ),
           fetch(
@@ -134,21 +145,17 @@ export async function POST(req: NextRequest) {
             .eq("id", campana.id);
         }
 
-        // Una sola fila por campaña por dia -- si ya corrio hoy, se
-        // actualiza; si no, se crea. Asi sumar los ultimos 7 dias en
-        // home-resumen da el total real, sin duplicar el gasto de hoy
-        // cada vez que este sync se ejecuta de nuevo.
-        const { data: filaExistente } = await supabaseAdmin
-          .from("campanas_snapshots")
-          .select("id")
-          .eq("campana_id", campana.id)
-          .gte("corrida_en", hoyInicio.toISOString())
-          .maybeSingle();
-
+        // Una sola fila por campaña por dia Bogota (fecha_bogota, no
+        // corrida_en -- corrida_en solo dice cuando se sincronizo por
+        // ultima vez, y la corrida de "cierre" la actualiza al dia
+        // siguiente sin que la fila deje de representar el dia de ayer).
+        // El indice unico (campana_id, fecha_bogota) hace de esto un
+        // upsert real, sin el read-then-write de antes.
         const payload = {
           campana_id: campana.id,
           user_id: usuario.id,
           corrida_en: new Date().toISOString(),
+          fecha_bogota: fechaBogotaFila,
           spend: parseFloat(fila.spend) || 0,
           ctr: fila.ctr ? parseFloat(fila.ctr) : null,
           reach: fila.reach ? parseInt(fila.reach, 10) : null,
@@ -159,11 +166,9 @@ export async function POST(req: NextRequest) {
           raw: fila,
         };
 
-        if (filaExistente) {
-          await supabaseAdmin.from("campanas_snapshots").update(payload).eq("id", filaExistente.id);
-        } else {
-          await supabaseAdmin.from("campanas_snapshots").insert(payload);
-        }
+        await supabaseAdmin
+          .from("campanas_snapshots")
+          .upsert(payload, { onConflict: "campana_id,fecha_bogota" });
 
         campanasActualizadas++;
       } catch (err) {
