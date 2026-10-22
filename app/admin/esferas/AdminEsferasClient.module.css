@@ -1,0 +1,28 @@
+/* Chrome de página copiado verbatim de docs/diseno/esferas_v3.html
+   (:root, body, .wrap, h1, .sub, h2, y la sección PRESENTACIÓN) -- esto
+   NO es parte de la esfera en sí, es el layout de la página de demo
+   para poder comparar lado a lado con el HTML original. */
+.pagina { --bg:#0f0e16; --ink:#f2f1f7; --muted:#a3a0b3; --card:#17151f; --line:#26232f;
+  margin:0; background:var(--bg); color:var(--ink); font-family:-apple-system,"Segoe UI",Inter,Roboto,sans-serif;
+  -webkit-tap-highlight-color:transparent; min-height:100vh; }
+.wrap { max-width:1080px; margin:0 auto; padding:40px 16px 56px; }
+.wrap h1 { font-size:28px; margin:0 0 6px; letter-spacing:-0.02em; }
+.sub { color:var(--muted); margin:0 0 32px; font-size:15px; line-height:1.5; max-width:700px; }
+.wrap h2 { font-size:17px; margin:40px 0 16px; }
+
+.grid { display:grid; grid-template-columns:repeat(auto-fill, minmax(220px, 1fr)); gap:16px; }
+.card { background:var(--card); border:1px solid var(--line); border-radius:18px; padding:14px 18px 20px; display:flex; flex-direction:column; align-items:center; text-align:center; }
+.nombre { font-weight:650; font-size:16px; margin:4px 0 4px; }
+.rol { color:var(--muted); font-size:13px; margin:0 0 6px; line-height:1.4; }
+.badge { font-size:12px; font-weight:600; padding:4px 10px; border-radius:999px; margin-top:4px; }
+.bTrab { background:#123526; color:#7fe0b4; }
+.bEsp { background:#3a2c0c; color:#f5c66a; }
+.bPau { background:#2a2836; color:#bdbacb; }
+.equipo { border-radius:18px; padding:18px 18px 22px; border:1px solid var(--line); background:var(--card); }
+.equipoClaro { background:#ffffff; border-color:#e9e7f2; color:#1a1a1a; }
+.equipoClaro .mini span { color:#6b6878; }
+.fila { display:flex; flex-wrap:wrap; gap:6px 2px; align-items:flex-start; }
+.mini { display:flex; flex-direction:column; align-items:center; width:110px; font-size:12px; text-align:center; }
+.mini b { font-weight:600; margin-top:2px; }
+.mini span { color:var(--muted); }
+.nota { color:var(--muted); font-size:13px; line-height:1.5; margin-top:12px; }

@@ -3,6 +3,8 @@ import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import NotificacionIcono from "@/app/components/NotificacionIcono";
 import TarjetaMeta from "@/app/components/TarjetaMeta";
+import TarjetaEquipo from "@/app/components/TarjetaEquipo";
+import { ProveedorEsferas } from "@/app/components/esferas/ProveedorEsferas";
 import { urlOptimizadaCloudinary } from "@/app/lib/cloudinaryUrl";
 import { BLOQUES_DEFAULT, BLOQUES_COLUMNA_DERECHA, type BloqueId } from "@/app/lib/configHome";
 
@@ -316,6 +318,8 @@ export default function HomeInicio({ nombreUsuario }: { nombreUsuario: string })
 
     meta: () => <TarjetaMeta />,
 
+    equipo: () => <TarjetaEquipo />,
+
     estado_sistema: () => (
       <div
         style={{
@@ -478,21 +482,23 @@ export default function HomeInicio({ nombreUsuario }: { nombreUsuario: string })
   const columnaDerecha = bloquesVisibles.filter((b) => BLOQUES_COLUMNA_DERECHA.has(b.id as BloqueId));
 
   return (
-    <div style={{ maxWidth: 1200, margin: "0 auto", padding: "2rem" }}>
-      {esMovil ? (
-        <div style={{ display: "flex", flexDirection: "column", gap: 20 }}>
-          {bloquesVisibles.map((b) => renderBloque(b.id))}
-        </div>
-      ) : (
-        <div style={{ display: "flex", gap: 20, alignItems: "flex-start" }}>
-          <div style={{ flex: 2, display: "flex", flexDirection: "column", gap: 20, minWidth: 0 }}>
-            {columnaIzquierda.map((b) => renderBloque(b.id))}
+    <ProveedorEsferas>
+      <div style={{ maxWidth: 1200, margin: "0 auto", padding: "2rem" }}>
+        {esMovil ? (
+          <div style={{ display: "flex", flexDirection: "column", gap: 20 }}>
+            {bloquesVisibles.map((b) => renderBloque(b.id))}
           </div>
-          <div style={{ flex: 1, display: "flex", flexDirection: "column", gap: 20, minWidth: 280 }}>
-            {columnaDerecha.map((b) => renderBloque(b.id))}
+        ) : (
+          <div style={{ display: "flex", gap: 20, alignItems: "flex-start" }}>
+            <div style={{ flex: 2, display: "flex", flexDirection: "column", gap: 20, minWidth: 0 }}>
+              {columnaIzquierda.map((b) => renderBloque(b.id))}
+            </div>
+            <div style={{ flex: 1, display: "flex", flexDirection: "column", gap: 20, minWidth: 280 }}>
+              {columnaDerecha.map((b) => renderBloque(b.id))}
+            </div>
           </div>
-        </div>
-      )}
-    </div>
+        )}
+      </div>
+    </ProveedorEsferas>
   );
 }

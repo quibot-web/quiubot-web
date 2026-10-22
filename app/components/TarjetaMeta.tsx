@@ -1,7 +1,8 @@
 "use client";
 import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
-import { Pause, Play, Target } from "lucide-react";
+import { Pause, Play } from "lucide-react";
+import EsferaAsistente from "@/app/components/esferas/EsferaAsistente";
 import type { AvanceMeta, Meta } from "@/app/lib/metas";
 
 const TIPO_LABEL: Record<string, string> = {
@@ -47,7 +48,7 @@ export default function TarjetaMeta() {
     return (
       <div style={{ background: "#fff", border: "1px solid #ece9f9", borderRadius: 16, padding: "1.5rem" }}>
         <div style={{ display: "flex", alignItems: "center", gap: 10, marginBottom: 10 }}>
-          <Target size={18} color="#534AB7" />
+          <EsferaAsistente asistente="director" estado="normal" tamano={64} />
           <p style={{ fontSize: 15, fontWeight: 600, margin: 0, color: "#1a1a1a" }}>Mi meta</p>
         </div>
         <p style={{ fontSize: 13, color: "#666", margin: "0 0 14px" }}>
@@ -94,7 +95,7 @@ export default function TarjetaMeta() {
     <div style={{ background: "#fff", border: "1px solid #ece9f9", borderRadius: 16, padding: "1.5rem" }}>
       <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 14 }}>
         <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
-          <Target size={18} color="#534AB7" />
+          <EsferaAsistente asistente="director" estado={meta.pausado_autopiloto ? "pausa" : "normal"} tamano={64} />
           <p style={{ fontSize: 15, fontWeight: 600, margin: 0, color: "#1a1a1a" }}>Mi meta</p>
         </div>
         <button
