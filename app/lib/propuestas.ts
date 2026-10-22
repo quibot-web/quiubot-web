@@ -478,12 +478,19 @@ async function ejecutarAgregarAnuncios(
   }
 }
 
+const TIMEOUT_GENERANDO_MS = 40 * 60 * 1000;
+
 // Revisa el job de creativos_jobs de una propuesta crear_creativos en
 // etapa "generando" -- la llama tanto el polling desde /decisiones
 // (mientras el cliente sigue ahí, sin esperar la corrida horaria) como
 // el cron de respaldo. Idempotente: si el job ya quedó "listo" y ya
 // existe su propuesta agregar_anuncios (parametros.propuesta_origen_id
-// = esta propuesta), no crea una segunda.
+// = esta propuesta), no crea una segunda. El workflow de n8n puede
+// detenerse sin avisar (sin pasar a "listo" ni a "error"), así que
+// además de revisar el job, vence por tiempo: 40 minutos desde que
+// empezó a generar (resultado.generando_desde, o decidido_en como
+// respaldo para propuestas que quedaron "generando" antes de que ese
+// campo existiera) sin quedar lista -> fallida, con mensaje explícito.
 export async function revisarGeneracionCreativos(propuestaId: string): Promise<{ estado: string; etapa?: string }> {
   const { data: propuesta } = await supabaseAdmin.from("propuestas").select("*").eq("id", propuestaId).single();
   if (!propuesta || propuesta.accion !== "crear_creativos") return { estado: propuesta?.estado || "no_encontrada" };
@@ -491,6 +498,23 @@ export async function revisarGeneracionCreativos(propuestaId: string): Promise<{
   const resultado = (propuesta.resultado as any) || {};
   if (resultado.etapa !== "generando" || !resultado.job_id) {
     return { estado: propuesta.estado, etapa: resultado.etapa };
+  }
+
+  const desde = resultado.generando_desde || propuesta.decidido_en;
+  if (desde && Date.now() - new Date(desde).getTime() > TIMEOUT_GENERANDO_MS) {
+    const mensajeError = "La generación de creativos no terminó en 40 minutos -- el workflow pudo haberse detenido sin avisar.";
+    await supabaseAdmin
+      .from("propuestas")
+      .update({ estado: "fallida", resultado: { etapa: "fallida", error: mensajeError, job_id: resultado.job_id } })
+      .eq("id", propuestaId);
+    await supabaseAdmin.from("bitacora").insert({
+      user_id: propuesta.user_id,
+      meta_id: propuesta.meta_id,
+      propuesta_id: propuestaId,
+      tipo_evento: "propuesta_aprobada_fallo",
+      detalle: { accion: "crear_creativos", error: mensajeError, paso: "timeout_generando" },
+    });
+    return { estado: "fallida" };
   }
 
   const { data: job } = await supabaseAdmin

@@ -86,6 +86,31 @@ const OBJETIVO_META_POR_TIPO: Record<TipoMeta, string> = {
   leads: "OUTCOME_LEADS",
 };
 
+// Mismo objeto que manda /estrategia al webhook generar_estrategia (ver
+// OBJETIVOS en app/estrategia/page.tsx), reconstruido del lado del
+// servidor para la llamada interna que hace el ejecutor de
+// crear_creativos -- sin el campo "icon" (ahí es un componente React,
+// no sirve fuera del cliente).
+export const OBJETIVO_PARA_TIPO: Record<
+  TipoMeta,
+  { id: string; label: string; desc: string; meta_objective: string; destino: string }
+> = {
+  conversaciones_whatsapp: {
+    id: "venta_directa_whatsapp",
+    label: "Venta Directa (WhatsApp)",
+    desc: "Ventas por conversación directa en WhatsApp.",
+    meta_objective: "OUTCOME_ENGAGEMENT",
+    destino: "whatsapp",
+  },
+  leads: {
+    id: "leads",
+    label: "Generación de Leads",
+    desc: "Captura contactos interesados en tu producto.",
+    meta_objective: "OUTCOME_LEADS",
+    destino: "formulario",
+  },
+};
+
 export function campanaCoincideConTipo(
   campana: { objetivo_id: string | null; objetivo: string | null },
   tipo: TipoMeta

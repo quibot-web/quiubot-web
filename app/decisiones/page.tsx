@@ -517,7 +517,7 @@ function PasoSubirFotos({ propuestaId, onListo }: { propuestaId: string; onListo
   const [elegidas, setElegidas] = useState<FotoElegida[]>([]);
   const [descripcion, setDescripcion] = useState("");
   const [subiendo, setSubiendo] = useState(false);
-  const [errorLocal, setErrorLocal] = useState<string | null>(null);
+  const [errorLocal, setErrorLocal] = useState<{ mensaje: string; paso?: string } | null>(null);
 
   useEffect(() => {
     fetch("/api/album")
@@ -545,7 +545,7 @@ function PasoSubirFotos({ propuestaId, onListo }: { propuestaId: string; onListo
         const base64 = await comprimirSiHaceFalta(file);
         setElegidas((prev) => [...prev, { tipo: "base64", valor: base64, preview: base64 }]);
       } catch {
-        setErrorLocal("No se pudo leer una de las fotos.");
+        setErrorLocal({ mensaje: "No se pudo leer una de las fotos." });
       }
     }
   };
@@ -554,7 +554,7 @@ function PasoSubirFotos({ propuestaId, onListo }: { propuestaId: string; onListo
 
   const generar = async () => {
     if (elegidas.length === 0 || !descripcion.trim()) {
-      setErrorLocal("Elige al menos 1 foto y describe lo que se ve en ellas.");
+      setErrorLocal({ mensaje: "Elige al menos 1 foto y describe lo que se ve en ellas." });
       return;
     }
     setSubiendo(true);
@@ -569,10 +569,13 @@ function PasoSubirFotos({ propuestaId, onListo }: { propuestaId: string; onListo
         }),
       });
       const data = await res.json();
-      if (!res.ok) throw new Error(data.error || "No se pudo iniciar la generación.");
+      if (!res.ok) {
+        setErrorLocal({ mensaje: data.error || "No se pudo iniciar la generación.", paso: data.paso });
+        return;
+      }
       onListo();
     } catch (err: any) {
-      setErrorLocal(err.message || "Algo salió mal.");
+      setErrorLocal({ mensaje: err.message || "Algo salió mal." });
     } finally {
       setSubiendo(false);
     }
@@ -620,7 +623,12 @@ function PasoSubirFotos({ propuestaId, onListo }: { propuestaId: string; onListo
         style={{ width: "100%", padding: "8px 10px", borderRadius: 8, border: "1px solid #ddd", fontSize: 12.5, resize: "vertical", marginBottom: 8, boxSizing: "border-box" }}
       />
 
-      {errorLocal && <p style={{ fontSize: 12, color: "#B3261E", margin: "0 0 8px" }}>{errorLocal}</p>}
+      {errorLocal && (
+        <p style={{ fontSize: 12, color: "#B3261E", margin: "0 0 8px" }}>
+          {errorLocal.mensaje}
+          {errorLocal.paso && <span style={{ display: "block", opacity: 0.8 }}>Paso: {errorLocal.paso}</span>}
+        </p>
+      )}
 
       <button
         onClick={generar}
