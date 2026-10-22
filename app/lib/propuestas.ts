@@ -25,6 +25,10 @@ export type PropuestaUnificada = {
   // no pendiente): etapa "esperando_fotos" | "generando", y el job_id
   // una vez que empezó a generar. null para el resto.
   resultado: Record<string, unknown> | null;
+  // Para agregar_anuncios: parametros.creativos trae la vista previa
+  // (título, texto, url_imagen, etc.) que la bandeja muestra y que
+  // Ajustar edita antes de aprobar. null para las de notificaciones.
+  parametros: Record<string, unknown> | null;
 };
 
 export const CATALOGO_ACCIONES: Record<
@@ -146,6 +150,7 @@ export async function obtenerPropuestasPendientes(userId: string): Promise<Propu
     creadoEn: p.creado_en,
     metaId: p.meta_id,
     resultado: p.resultado,
+    parametros: p.parametros,
   }));
 
   // El monitoreo de Meta de hoy no distingue asistente -- se etiqueta
@@ -164,6 +169,7 @@ export async function obtenerPropuestasPendientes(userId: string): Promise<Propu
     creadoEn: n.creado_en,
     metaId: null,
     resultado: null,
+    parametros: null,
   }));
 
   return [...dePropuestas, ...deNotificaciones].sort((a, b) => (a.creadoEn < b.creadoEn ? 1 : -1));

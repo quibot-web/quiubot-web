@@ -8,6 +8,15 @@ import EsferaAsistente from "@/app/components/esferas/EsferaAsistente";
 import { comprimirSiHaceFalta, esArchivoDeImagen } from "@/app/lib/imagenes";
 import type { Asistente, AccionPropuesta } from "@/app/lib/metas";
 
+type CreativoPropuesto = {
+  titulo?: string;
+  texto?: string;
+  descripcion?: string;
+  url_imagen?: string;
+  cta?: string;
+  concepto?: { angulo?: string; hook?: string };
+};
+
 type PropuestaUnificada = {
   id: string;
   origen: "propuesta" | "notificacion";
@@ -21,6 +30,7 @@ type PropuestaUnificada = {
   creadoEn: string;
   metaId: string | null;
   resultado: { etapa?: "esperando_fotos" | "generando" | "completado" | "fallida"; job_id?: string; error?: string } | null;
+  parametros: { creativos?: CreativoPropuesto[]; campana_id?: string; ajuste_porcentaje?: number } | null;
 };
 
 const NOMBRE_ASISTENTE: Record<Asistente, string> = {
@@ -147,14 +157,14 @@ export default function DecisionesPage() {
     }
   };
 
-  const confirmarAjuste = async (p: PropuestaUnificada) => {
+  const confirmarAjuste = async (p: PropuestaUnificada, parametros: Record<string, unknown>) => {
     setProcesandoId(p.id);
     setError(null);
     try {
       const res = await fetch(`/api/propuestas/${p.id}/ajustar`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ parametros: { ajuste_porcentaje: Number(porcentajeAjuste) } }),
+        body: JSON.stringify({ parametros }),
       });
       const data = await res.json();
       if (!res.ok) {
@@ -223,12 +233,13 @@ export default function DecisionesPage() {
           <div style={{ display: "flex", flexDirection: "column", gap: 12 }}>
             {propuestas.map((p) => {
               const procesando = procesandoId === p.id;
-              const puedeAjustar = p.origen === "propuesta" && p.accion === "ajustar_presupuesto";
+              const puedeAjustar = p.origen === "propuesta" && (p.accion === "ajustar_presupuesto" || p.accion === "agregar_anuncios");
               const restante = tiempoRestante(p.venceEn);
+              const creativos = p.accion === "agregar_anuncios" ? p.parametros?.creativos ?? [] : [];
               return (
                 <div key={p.id} style={{ background: "#fff", border: "1px solid #ece9f9", borderRadius: 16, padding: "1.25rem 1.5rem" }}>
                   <div style={{ display: "flex", gap: 14 }}>
-                    <EsferaAsistente asistente={p.asistente} estado="esperando" tamano={48} />
+                    <EsferaAsistente asistente={p.asistente} estado={procesando ? "trabajando" : "esperando"} tamano={48} />
                     <div style={{ flex: 1, minWidth: 0 }}>
                       <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 8, flexWrap: "wrap" }}>
                         <p style={{ fontSize: 11.5, fontWeight: 700, color: "#534AB7", margin: 0, textTransform: "uppercase", letterSpacing: "0.02em" }}>
@@ -247,10 +258,28 @@ export default function DecisionesPage() {
                         <p style={{ fontSize: 12.5, color: "#888", margin: "0 0 10px" }}>Costo estimado: {formatoCop(p.costoEstimadoCop)}</p>
                       )}
 
+                      {creativos.length > 0 && ajustandoId !== p.id && (
+                        <div style={{ display: "flex", gap: 8, flexWrap: "wrap", marginBottom: 10 }}>
+                          {creativos.map((c, i) => (
+                            <div key={i} style={{ width: 92, border: "1px solid #ece9f9", borderRadius: 8, overflow: "hidden" }}>
+                              {c.url_imagen && <img src={c.url_imagen} alt="" style={{ width: "100%", height: 70, objectFit: "cover", display: "block" }} />}
+                              <p style={{ fontSize: 10.5, color: "#666", margin: "4px 6px", lineHeight: 1.3 }}>{c.titulo || c.texto || ""}</p>
+                            </div>
+                          ))}
+                        </div>
+                      )}
+
                       {p.accion === "crear_creativos" && p.resultado?.etapa === "esperando_fotos" ? (
                         <PasoSubirFotos propuestaId={p.id} onListo={cargarPropuestas} />
                       ) : p.accion === "crear_creativos" && p.resultado?.etapa === "generando" ? (
                         <EstadoGenerandoCreativos propuestaId={p.id} onListo={cargarPropuestas} />
+                      ) : ajustandoId === p.id && p.accion === "agregar_anuncios" ? (
+                        <AjusteCreativos
+                          creativos={creativos}
+                          procesando={procesando}
+                          onConfirmar={(editados) => confirmarAjuste(p, { creativos: editados })}
+                          onCancelar={() => setAjustandoId(null)}
+                        />
                       ) : ajustandoId === p.id ? (
                         <div style={{ display: "flex", alignItems: "center", gap: 8, marginTop: 10 }}>
                           <input
@@ -261,7 +290,7 @@ export default function DecisionesPage() {
                           />
                           <span style={{ fontSize: 13, color: "#666" }}>% de ajuste</span>
                           <button
-                            onClick={() => confirmarAjuste(p)}
+                            onClick={() => confirmarAjuste(p, { ajuste_porcentaje: Number(porcentajeAjuste) })}
                             disabled={procesando}
                             style={{ padding: "7px 14px", borderRadius: 8, background: "#534AB7", color: "#fff", border: "none", fontSize: 12.5, fontWeight: 700, cursor: "pointer" }}
                           >
@@ -575,6 +604,74 @@ function EstadoGenerandoCreativos({ propuestaId, onListo }: { propuestaId: strin
   return (
     <div style={{ marginTop: 10, display: "flex", alignItems: "center", gap: 8 }}>
       <CargandoQuiubotInline mensaje="Generando creativos" />
+    </div>
+  );
+}
+
+// "Ajustar" de agregar_anuncios: quitar creativos o editar su texto
+// antes de aprobar. Confirmar manda el array editado a
+// /api/propuestas/[id]/ajustar, que actualiza parametros.creativos y
+// aprueba en el mismo paso (ver app/lib/propuestas.ts).
+function AjusteCreativos({
+  creativos,
+  procesando,
+  onConfirmar,
+  onCancelar,
+}: {
+  creativos: CreativoPropuesto[];
+  procesando: boolean;
+  onConfirmar: (editados: CreativoPropuesto[]) => void;
+  onCancelar: () => void;
+}) {
+  const [items, setItems] = useState<CreativoPropuesto[]>(creativos);
+
+  const quitar = (i: number) => setItems((prev) => prev.filter((_, idx) => idx !== i));
+  const editarTexto = (i: number, campo: "titulo" | "texto", valor: string) =>
+    setItems((prev) => prev.map((it, idx) => (idx === i ? { ...it, [campo]: valor } : it)));
+
+  return (
+    <div style={{ marginTop: 10, background: "#F9F8FD", borderRadius: 10, padding: "12px 14px" }}>
+      {items.length === 0 && (
+        <p style={{ fontSize: 12.5, color: "#B3261E", margin: "0 0 8px" }}>Quitaste todos los creativos -- deja al menos uno.</p>
+      )}
+      <div style={{ display: "flex", flexDirection: "column", gap: 10, marginBottom: 10 }}>
+        {items.map((c, i) => (
+          <div key={i} style={{ display: "flex", gap: 10, alignItems: "flex-start" }}>
+            {c.url_imagen && (
+              <img src={c.url_imagen} style={{ width: 56, height: 56, objectFit: "cover", borderRadius: 8, flexShrink: 0 }} alt="" />
+            )}
+            <div style={{ flex: 1, minWidth: 0 }}>
+              <input
+                value={c.titulo || ""}
+                onChange={(e) => editarTexto(i, "titulo", e.target.value)}
+                placeholder="Título"
+                style={{ width: "100%", padding: "5px 8px", borderRadius: 6, border: "1px solid #ddd", fontSize: 12, marginBottom: 4, boxSizing: "border-box" }}
+              />
+              <input
+                value={c.texto || ""}
+                onChange={(e) => editarTexto(i, "texto", e.target.value)}
+                placeholder="Texto"
+                style={{ width: "100%", padding: "5px 8px", borderRadius: 6, border: "1px solid #ddd", fontSize: 12, boxSizing: "border-box" }}
+              />
+            </div>
+            <button onClick={() => quitar(i)} style={{ background: "none", border: "none", color: "#B3261E", fontSize: 11, cursor: "pointer", flexShrink: 0 }}>
+              Quitar
+            </button>
+          </div>
+        ))}
+      </div>
+      <div style={{ display: "flex", gap: 8 }}>
+        <button
+          onClick={() => onConfirmar(items)}
+          disabled={procesando || items.length === 0}
+          style={{ padding: "7px 14px", borderRadius: 8, background: "#534AB7", color: "#fff", border: "none", fontSize: 12.5, fontWeight: 700, cursor: procesando || items.length === 0 ? "not-allowed" : "pointer" }}
+        >
+          {procesando ? "..." : "Aprobar con estos cambios"}
+        </button>
+        <button onClick={onCancelar} style={{ padding: "7px 10px", borderRadius: 8, background: "none", border: "none", color: "#888", fontSize: 12.5, cursor: "pointer" }}>
+          Cancelar
+        </button>
+      </div>
     </div>
   );
 }
