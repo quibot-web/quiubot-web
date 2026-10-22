@@ -395,6 +395,28 @@ export async function obtenerEmailsAdmins(): Promise<string[]> {
   return destinatarios;
 }
 
+// Se dispara desde /api/cron/avisar-propuestas-pendientes (una vez por
+// hora, vía n8n) cuando un usuario tiene propuestas de Autopiloto
+// esperando su decisión y no se le avisó en las últimas 6 horas -- el
+// cron es el que agrupa y aplica el límite de frecuencia, este correo
+// solo arma el mensaje con el total ya calculado.
+export async function enviarCorreoPropuestasPendientes(datos: { email: string; nombre: string | null; total: number }) {
+  await enviarCorreo(
+    datos.email,
+    `${datos.total} propuesta${datos.total !== 1 ? "s" : ""} esperando tu decisión — Quiubot Autopiloto`,
+    `<div style="font-family: system-ui, sans-serif; max-width: 480px; margin: 0 auto; padding: 24px;">
+      <h2 style="color:#17152B;">Hola${datos.nombre ? " " + datos.nombre : ""} 👋</h2>
+      <p style="color:#333; font-size:14px; line-height:1.6;">
+        Tu equipo de Autopiloto tiene <strong>${datos.total} propuesta${datos.total !== 1 ? "s" : ""}</strong>
+        esperando tu decisión. Nada cambia en tus campañas de Meta hasta que apruebes.
+      </p>
+      <a href="https://quiubot.site/decisiones" style="display:inline-block; background:#534AB7; color:#fff; padding:12px 24px; border-radius:10px; text-decoration:none; font-weight:600; margin-top:8px;">
+        Ir a la bandeja de decisiones
+      </a>
+    </div>`
+  );
+}
+
 // Aviso operativo a TODOS los admins activos con asunto/cuerpo libres -- a
 // diferencia de enviarCorreoErrorSistema (plantilla fija para "un usuario
 // tuvo un error"), esta es para alertas puntuales que necesitan su propio
