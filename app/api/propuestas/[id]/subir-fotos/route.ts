@@ -1,307 +1,151 @@
 import { auth } from "@/auth";
-import { NextRequest, NextResponse } from "next/server";
+import { after, NextRequest, NextResponse } from "next/server";
 import { supabaseAdmin } from "@/lib/supabase";
 import { desencriptarSiHaceFalta } from "@/lib/crypto";
-import { objetivoParaCampana, type TipoMeta } from "@/app/lib/metas";
+import { subirFotoACloudinary } from "@/app/lib/cloudinaryUpload";
+import { aBase64, procesarCreacionCreativos } from "@/app/lib/propuestas";
 
 const MIN_IMAGENES = 1;
 const MAX_IMAGENES = 3;
-const MAX_ANUNCIOS = 3;
+const CARPETA_CLOUDINARY = "quiubot/autopiloto/fotos";
 
 type ImagenEntrada = { tipo: "base64" | "url"; valor: string };
 
-// Convierte una imagen del álbum (URL de Cloudinary) a base64 del lado
-// del servidor -- evita CORS al intentar leerla desde el navegador, y
-// mantiene el cliente simple (solo manda URLs tal cual las tiene).
-async function aBase64(imagen: ImagenEntrada): Promise<string> {
-  if (imagen.tipo === "base64") return imagen.valor;
-  const res = await fetch(imagen.valor);
-  const buffer = await res.arrayBuffer();
-  const contentType = res.headers.get("content-type") || "image/jpeg";
-  return `data:${contentType};base64,${Buffer.from(buffer).toString("base64")}`;
-}
-
-// Deduce los ángulos que la campaña ya tiene a partir de los nombres de
-// sus anuncios en Meta (convención QB_IMG_<Angulo>_...), para pedirle a
-// generar_estrategia que no los repita. Nunca bloquea: si Graph API
-// falla o no hay match, sigue sin ángulos.
-async function obtenerAngulosUsados(metaCampaignId: string, metaAccessToken: string): Promise<string[]> {
-  try {
-    const res = await fetch(
-      `https://graph.facebook.com/v21.0/${metaCampaignId}/ads?fields=name&limit=200&access_token=${metaAccessToken}`
-    );
-    const data = await res.json();
-    if (!res.ok || data.error) return [];
-
-    const angulos = new Set<string>();
-    for (const ad of data.data ?? []) {
-      const match = /^QB_IMG_([^_]+)_/.exec(ad.name || "");
-      if (match) angulos.add(match[1]);
-    }
-    return [...angulos];
-  } catch (err) {
-    console.error("No se pudieron leer los ángulos existentes de la campaña:", err);
-    return [];
-  }
-}
-
-// Paso intermedio de crear_creativos (Opción A del plan de fase 2): no
-// hay fotos de producto ni estrategia guardadas por campaña en ningún
-// lado (ver investigación), así que al aprobar esa propuesta queda en
-// resultado.etapa="esperando_fotos" y este endpoint es el que de verdad
-// dispara la generación, en dos pasos, una vez el cliente eligió o
-// subió las fotos:
-// 1) generar_estrategia (llamada directa al webhook, sin pasar por
-//    /api/generar-estrategia -- así nunca cuenta en estrategias_generadas,
-//    es un refresco que propone el Autopiloto, no una estrategia nueva
-//    del cliente) para conseguir un conjunto con anuncios reales.
-// 2) crear_creativos con esa estrategia real (no una mínima hecha a mano).
+// Paso intermedio de crear_creativos (Opción A del plan de fase 2) --
+// esta ruta YA NO espera a generar_estrategia ni a crear_creativos (1.5
+// a 2 min + 4 a 24 min): el proxy de Coolify corta cualquier conexión
+// HTTP antes de que termine, y confirmado en vivo, eso mata también el
+// trabajo del lado del servidor, no solo lo que ve el navegador. Esta
+// ruta solo hace lo rápido -- validar, subir las fotos al Cloudinary
+// del propio cliente (nunca se guardan en base64 en la propuesta) y
+// marcar la etapa -- y dispara el trabajo largo con after(), que sigue
+// corriendo en el mismo proceso de Node después de responder (Coolify
+// corre esto como next start persistente, no funciones efímeras).
 export async function POST(req: NextRequest, { params }: { params: Promise<{ id: string }> }) {
-  const { id } = await params;
-
-  const session = await auth();
-  if (!session?.user?.email) return NextResponse.json({ error: "No autorizado" }, { status: 401 });
-
-  const emailBusqueda = session.user.email.trim().toLowerCase();
-
-  const { data: usuario } = await supabaseAdmin
-    .from("usuarios")
-    .select("id, rol, openai_key, cloudinary_name, cloudinary_key, cloudinary_secret, meta_access_token")
-    .eq("email", emailBusqueda)
-    .single();
-
-  if (!usuario) return NextResponse.json({ error: "Usuario no encontrado" }, { status: 404 });
-  if (usuario.rol !== "admin") {
-    return NextResponse.json({ error: "Autopiloto todavía no está disponible." }, { status: 403 });
-  }
-
-  const { data: propuesta } = await supabaseAdmin
-    .from("propuestas")
-    .select("*")
-    .eq("id", id)
-    .eq("user_id", usuario.id)
-    .single();
-
-  if (!propuesta) return NextResponse.json({ error: "Propuesta no encontrada" }, { status: 404 });
-  if (propuesta.accion !== "crear_creativos") {
-    return NextResponse.json({ error: "Esta propuesta no es de crear creativos." }, { status: 400 });
-  }
-  const etapaActual = (propuesta.resultado as any)?.etapa;
-  if (propuesta.estado !== "aprobada" || etapaActual !== "esperando_fotos") {
-    return NextResponse.json({ error: "Esta propuesta no está esperando fotos." }, { status: 409 });
-  }
-
-  const { imagenes, tipo_contenido, descripcion_servicio } = await req.json();
-
-  if (!Array.isArray(imagenes) || imagenes.length < MIN_IMAGENES || imagenes.length > MAX_IMAGENES) {
-    return NextResponse.json({ error: `Elige entre ${MIN_IMAGENES} y ${MAX_IMAGENES} fotos.` }, { status: 400 });
-  }
-
-  const campanaId = (propuesta.parametros as any)?.campana_id;
-  const { data: campana } = await supabaseAdmin
-    .from("campanas_publicadas")
-    .select("id, nombre, objetivo, objetivo_id, presupuesto_diario, meta_campaign_id")
-    .eq("id", campanaId)
-    .eq("user_id", usuario.id)
-    .maybeSingle();
-
-  if (!campana) {
-    return NextResponse.json({ error: "Esa campaña no pertenece a tu cuenta." }, { status: 403 });
-  }
-
-  const { data: meta } = await supabaseAdmin
-    .from("metas")
-    .select("tipo")
-    .eq("id", propuesta.meta_id)
-    .maybeSingle();
-
-  if (!usuario.openai_key) {
-    return NextResponse.json({ error: "Necesitas conectar tu API key de OpenAI en Integraciones antes de generar creativos." }, { status: 400 });
-  }
-  if (!usuario.cloudinary_name || !usuario.cloudinary_key || !usuario.cloudinary_secret) {
-    return NextResponse.json({ error: "Necesitas conectar tus credenciales de Cloudinary en Integraciones antes de generar creativos." }, { status: 400 });
-  }
-
-  let openaiKeyDescifrada: string;
-  let cloudinaryKeyDescifrada: string;
-  let cloudinarySecretDescifrado: string;
   try {
-    openaiKeyDescifrada = desencriptarSiHaceFalta(usuario.openai_key);
-    cloudinaryKeyDescifrada = desencriptarSiHaceFalta(usuario.cloudinary_key);
-    cloudinarySecretDescifrado = desencriptarSiHaceFalta(usuario.cloudinary_secret);
-  } catch (err) {
-    console.error("Error al descifrar credenciales:", err);
-    return NextResponse.json({ error: "No se pudieron leer tus credenciales guardadas. Vuelve a conectarlas en Integraciones." }, { status: 500 });
-  }
+    const { id } = await params;
 
-  let imagenesBase64: string[];
-  try {
-    imagenesBase64 = await Promise.all((imagenes as ImagenEntrada[]).map(aBase64));
-  } catch (err) {
-    console.error("Error leyendo imágenes para crear_creativos:", err);
-    return NextResponse.json({ error: "No se pudo leer una de las fotos elegidas." }, { status: 500 });
-  }
+    const session = await auth();
+    if (!session?.user?.email) return NextResponse.json({ error: "No autorizado" }, { status: 401 });
 
-  const tipoContenidoFinal: "producto" | "servicio" = tipo_contenido === "servicio" ? "servicio" : "producto";
-  const descripcionServicioFinal = tipoContenidoFinal === "servicio" ? (descripcion_servicio ?? null) : null;
+    const emailBusqueda = session.user.email.trim().toLowerCase();
 
-  async function marcarFallida(mensajeError: string, paso: string) {
-    await supabaseAdmin
-      .from("propuestas")
-      .update({ estado: "fallida", resultado: { etapa: "fallida", error: mensajeError, paso } })
-      .eq("id", id);
-    await supabaseAdmin.from("bitacora").insert({
-      user_id: usuario!.id,
-      meta_id: propuesta.meta_id,
-      propuesta_id: id,
-      tipo_evento: "propuesta_aprobada_fallo",
-      detalle: { accion: "crear_creativos", error: mensajeError, paso },
-    });
-  }
+    const { data: usuario } = await supabaseAdmin
+      .from("usuarios")
+      .select("id, rol, cloudinary_name, cloudinary_key, cloudinary_secret")
+      .eq("email", emailBusqueda)
+      .single();
 
-  // Paso 1: conceptos nuevos -- generar_estrategia directo (sin pasar
-  // por /api/generar-estrategia, así esto nunca cuenta en
-  // estrategias_generadas: es un refresco que propone el Autopiloto).
-  // El objetivo sale primero de la CAMPAÑA (los anuncios nuevos van
-  // dentro de ella, su texto tiene que coincidir con su destino real --
-  // ej. no invitar a WhatsApp dentro de una campaña de reconocimiento);
-  // el tipo de la meta es solo respaldo si la campaña no resuelve a
-  // ninguno. Ver objetivoParaCampana en app/lib/metas.ts.
-  if (!meta?.tipo) {
-    const mensajeError = "No se pudo determinar el objetivo publicitario de la meta.";
-    await marcarFallida(mensajeError, "objetivo_meta_desconocido");
-    return NextResponse.json({ error: mensajeError, paso: "objetivo_meta_desconocido" }, { status: 400 });
-  }
-  const objetivoParaWebhook = objetivoParaCampana(campana, meta.tipo as TipoMeta);
-
-  const angulosAEvitar =
-    campana.meta_campaign_id && usuario.meta_access_token
-      ? await obtenerAngulosUsados(campana.meta_campaign_id, usuario.meta_access_token)
-      : [];
-
-  // generar_estrategia no responde {ok:false} siempre que falla -- sin
-  // llave de OpenAI responde HTTP 200 con solo {error:"..."} (sin "ok").
-  // Por eso éxito es ÚNICAMENTE data.ok === true, nunca "no vino false".
-  let campanaElegida: any;
-  let conjunto: any;
-  let descripcionVisualGenerada: string | null = null;
-  try {
-    const n8nRes = await fetch("https://n8n.quiubot.site/webhook/generar_estrategia", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({
-        email: emailBusqueda,
-        imagenes_base64: imagenesBase64,
-        objetivo: objetivoParaWebhook,
-        presupuesto_diario_cop: campana.presupuesto_diario,
-        openai_key: openaiKeyDescifrada,
-        tipo_contenido: tipoContenidoFinal,
-        descripcion_servicio: descripcionServicioFinal,
-        modo_estructura: "advantage",
-        angulos_a_evitar: angulosAEvitar,
-      }),
-    });
-
-    const data = await n8nRes.json().catch(() => ({}));
-
-    if (!n8nRes.ok || data.ok !== true) {
-      const mensajeError = data.error || "No se pudo generar los conceptos nuevos.";
-      await marcarFallida(mensajeError, "generar_estrategia");
-      return NextResponse.json({ error: mensajeError, paso: "generar_estrategia" }, { status: n8nRes.ok ? 422 : n8nRes.status || 502 });
+    if (!usuario) return NextResponse.json({ error: "Usuario no encontrado" }, { status: 404 });
+    if (usuario.rol !== "admin") {
+      return NextResponse.json({ error: "Autopiloto todavía no está disponible." }, { status: 403 });
     }
 
-    // data.campanas[] trae varias estrategias candidatas (cada una ya
-    // con su propio campana/conjuntos/efectividad) -- se elige la de
-    // mayor efectividad, igual que haría un humano en /estrategia.
-    const campanas: any[] = Array.isArray(data.campanas) ? data.campanas : [];
-    campanaElegida = campanas.reduce(
-      (mejor: any, actual: any) => (!mejor || (actual?.efectividad ?? 0) > (mejor?.efectividad ?? 0) ? actual : mejor),
-      null
-    );
-    conjunto = campanaElegida?.conjuntos?.[0];
-    // Raíz de la respuesta, no por campaña (igual que /estrategia la lee).
-    descripcionVisualGenerada = typeof data.descripcion_visual_producto === "string" ? data.descripcion_visual_producto : null;
-  } catch (err) {
-    console.error("Error al conectar con n8n (generar_estrategia, desde propuesta):", err);
-    const mensajeError = "No se pudo conectar con el servidor para generar los conceptos.";
-    await marcarFallida(mensajeError, "generar_estrategia");
-    return NextResponse.json({ error: mensajeError, paso: "generar_estrategia" }, { status: 503 });
-  }
+    const { data: propuesta } = await supabaseAdmin
+      .from("propuestas")
+      .select("*")
+      .eq("id", id)
+      .eq("user_id", usuario.id)
+      .single();
 
-  // Al elegir los anuncios: primero los que no repiten un ángulo ya
-  // usado en la campaña (concepto.angulo vs angulos_a_evitar), después
-  // el filtro de copy.titulo/copy.texto obligatorios, máximo 3.
-  const angulosAEvitarSet = new Set(angulosAEvitar);
-  const anunciosConCopy = (conjunto?.anuncios ?? []).filter((a: any) => a?.copy?.titulo && a?.copy?.texto);
-  const sinRepetirAngulo = anunciosConCopy.filter((a: any) => !angulosAEvitarSet.has(a?.concepto?.angulo));
-  const conAnguloRepetido = anunciosConCopy.filter((a: any) => angulosAEvitarSet.has(a?.concepto?.angulo));
-  const anunciosValidos = [...sinRepetirAngulo, ...conAnguloRepetido].slice(0, MAX_ANUNCIOS);
-
-  if (!campanaElegida || !conjunto || anunciosValidos.length === 0) {
-    const mensajeError = "generar_estrategia no devolvió ningún anuncio con título y texto -- no se generaron creativos.";
-    await marcarFallida(mensajeError, "generar_estrategia_sin_anuncios");
-    return NextResponse.json({ error: mensajeError, paso: "generar_estrategia_sin_anuncios" }, { status: 422 });
-  }
-  if (!descripcionVisualGenerada) {
-    const mensajeError = "generar_estrategia no devolvió la descripción visual del producto -- no se puede recrear en las imágenes.";
-    await marcarFallida(mensajeError, "generar_estrategia_sin_descripcion");
-    return NextResponse.json({ error: mensajeError, paso: "generar_estrategia_sin_descripcion" }, { status: 422 });
-  }
-
-  // Paso 2: las imágenes -- crear_creativos con la estrategia real (la
-  // campaña candidata elegida, con su conjunto recortado a los
-  // anuncios elegidos), no una mínima hecha a mano.
-  const estrategiaReal = {
-    ...campanaElegida,
-    conjuntos: [{ ...conjunto, anuncios: anunciosValidos }],
-  };
-
-  try {
-    const n8nRes = await fetch("https://n8n.quiubot.site/webhook/crear_creativos", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({
-        email: emailBusqueda,
-        estrategia: estrategiaReal,
-        descripcion_visual_producto: descripcionVisualGenerada,
-        imagenes_producto_base64: imagenesBase64,
-        openai_key: openaiKeyDescifrada,
-        cloudinary_name: usuario.cloudinary_name,
-        cloudinary_key: cloudinaryKeyDescifrada,
-        cloudinary_secret: cloudinarySecretDescifrado,
-        tipo_contenido: tipoContenidoFinal,
-        descripcion_servicio: descripcionServicioFinal,
-        mostrar_precio: false,
-        precio: null,
-      }),
-    });
-
-    const data = await n8nRes.json().catch(() => ({}));
-
-    if (!n8nRes.ok || data.ok === false || !data.job_id) {
-      const mensajeError = data.error || "No se pudo iniciar la generación de creativos.";
-      await marcarFallida(mensajeError, "crear_creativos");
-      return NextResponse.json({ error: mensajeError, paso: "crear_creativos" }, { status: n8nRes.status || 502 });
+    if (!propuesta) return NextResponse.json({ error: "Propuesta no encontrada" }, { status: 404 });
+    if (propuesta.accion !== "crear_creativos") {
+      return NextResponse.json({ error: "Esta propuesta no es de crear creativos." }, { status: 400 });
+    }
+    const etapaActual = (propuesta.resultado as any)?.etapa;
+    if (propuesta.estado !== "aprobada" || etapaActual !== "esperando_fotos") {
+      return NextResponse.json({ error: "Esta propuesta no está esperando fotos." }, { status: 409 });
     }
 
+    const { imagenes, tipo_contenido, descripcion_servicio } = await req.json();
+
+    if (!Array.isArray(imagenes) || imagenes.length < MIN_IMAGENES || imagenes.length > MAX_IMAGENES) {
+      return NextResponse.json({ error: `Elige entre ${MIN_IMAGENES} y ${MAX_IMAGENES} fotos.` }, { status: 400 });
+    }
+
+    const campanaId = (propuesta.parametros as any)?.campana_id;
+    const { data: campana } = await supabaseAdmin
+      .from("campanas_publicadas")
+      .select("id")
+      .eq("id", campanaId)
+      .eq("user_id", usuario.id)
+      .maybeSingle();
+
+    if (!campana) {
+      return NextResponse.json({ error: "Esa campaña no pertenece a tu cuenta." }, { status: 403 });
+    }
+
+    if (!usuario.cloudinary_name || !usuario.cloudinary_key || !usuario.cloudinary_secret) {
+      return NextResponse.json({ error: "Necesitas conectar tus credenciales de Cloudinary en Integraciones antes de generar creativos." }, { status: 400 });
+    }
+
+    let cloudinaryKeyDescifrada: string;
+    let cloudinarySecretDescifrado: string;
+    try {
+      cloudinaryKeyDescifrada = desencriptarSiHaceFalta(usuario.cloudinary_key);
+      cloudinarySecretDescifrado = desencriptarSiHaceFalta(usuario.cloudinary_secret);
+    } catch (err) {
+      console.error("Error al descifrar credenciales de Cloudinary:", err);
+      return NextResponse.json({ error: "No se pudieron leer tus credenciales guardadas. Vuelve a conectarlas en Integraciones." }, { status: 500 });
+    }
+
+    let fotosUrls: string[];
+    try {
+      fotosUrls = await Promise.all(
+        (imagenes as ImagenEntrada[]).map(async (imagen) => {
+          const base64 = await aBase64(imagen);
+          return subirFotoACloudinary({
+            cloudName: usuario.cloudinary_name!,
+            apiKey: cloudinaryKeyDescifrada,
+            apiSecret: cloudinarySecretDescifrado,
+            base64,
+            folder: CARPETA_CLOUDINARY,
+          });
+        })
+      );
+    } catch (err) {
+      console.error("Error subiendo fotos a Cloudinary:", err);
+      return NextResponse.json({ error: "No se pudo subir una de las fotos a Cloudinary." }, { status: 500 });
+    }
+
+    const ahora = new Date().toISOString();
     await supabaseAdmin
       .from("propuestas")
-      .update({ resultado: { etapa: "generando", job_id: data.job_id, generando_desde: new Date().toISOString() } })
+      .update({
+        resultado: { etapa: "generando_conceptos", fotos_urls: fotosUrls, generando_desde: ahora, intentos: 0 },
+        parametros: {
+          ...(propuesta.parametros as object),
+          tipo_contenido: tipo_contenido === "servicio" ? "servicio" : "producto",
+          descripcion_servicio: tipo_contenido === "servicio" ? descripcion_servicio ?? null : null,
+        },
+      })
       .eq("id", id);
 
     await supabaseAdmin.from("bitacora").insert({
       user_id: usuario.id,
       meta_id: propuesta.meta_id,
       propuesta_id: id,
-      tipo_evento: "propuesta_crear_creativos_iniciada",
-      detalle: { job_id: data.job_id, campana_id: campana.id, angulos_evitados: angulosAEvitar },
+      tipo_evento: "propuesta_fotos_subidas",
+      detalle: { cantidad_fotos: fotosUrls.length },
     });
 
-    return NextResponse.json({ ok: true, job_id: data.job_id });
+    // El trabajo largo corre después de responder, en el mismo proceso
+    // -- .catch() de respaldo para que un rechazo que se nos escape acá
+    // (no dentro de procesarCreacionCreativos, que ya maneja sus propios
+    // errores) nunca quede como una promesa sin atrapar.
+    after(() =>
+      procesarCreacionCreativos(id).catch(async (err) => {
+        console.error("Error no manejado en procesarCreacionCreativos:", err);
+        await supabaseAdmin
+          .from("propuestas")
+          .update({ estado: "fallida", resultado: { etapa: "fallida", error: "Error inesperado generando los creativos." } })
+          .eq("id", id);
+      })
+    );
+
+    return NextResponse.json({ ok: true });
   } catch (err) {
-    console.error("Error al conectar con n8n (crear_creativos, desde propuesta):", err);
-    const mensajeError = "No se pudo conectar con el servidor.";
-    await marcarFallida(mensajeError, "crear_creativos");
-    return NextResponse.json({ error: mensajeError, paso: "crear_creativos" }, { status: 503 });
+    console.error("Error inesperado en /subir-fotos:", err);
+    return NextResponse.json({ error: "Error interno del servidor." }, { status: 500 });
   }
 }

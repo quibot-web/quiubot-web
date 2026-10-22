@@ -1,7 +1,7 @@
-import { NextRequest, NextResponse } from "next/server";
+import { after, NextRequest, NextResponse } from "next/server";
 import { timingSafeEqual } from "crypto";
 import { supabaseAdmin } from "@/lib/supabase";
-import { revisarGeneracionCreativos } from "@/app/lib/propuestas";
+import { revisarGeneracionCreativos, procesarCreacionCreativos } from "@/app/lib/propuestas";
 
 function compararSeguro(a: string, b: string): boolean {
   const bufA = Buffer.from(a);
@@ -67,8 +67,32 @@ export async function POST(req: NextRequest) {
 
   let revisadas = 0;
   for (const propuesta of generando ?? []) {
+    // Solo lee creativos_jobs y escribe en Supabase -- rápido, sin
+    // llamadas externas lentas, así que esperarlo acá no corre el
+    // riesgo de que el proxy corte la conexión.
     await revisarGeneracionCreativos(propuesta.id);
     revisadas++;
+  }
+
+  // Respaldo de procesarCreacionCreativos: si el after() de /subir-fotos
+  // nunca llegó a correr (ej. el proceso se reinició a mitad de camino),
+  // o un intento anterior murió sin avisar, esta corrida las retoma. El
+  // candado adentro de procesarCreacionCreativos decide si de verdad hay
+  // algo que hacer -- llamarla de más acá no causa doble procesamiento.
+  // Nunca se espera synchronamente (sí tarda 1.5-2 min la llamada a
+  // generar_estrategia), por eso va con after(), igual que en /subir-fotos.
+  const { data: generandoConceptos } = await supabaseAdmin
+    .from("propuestas")
+    .select("id")
+    .eq("estado", "aprobada")
+    .eq("accion", "crear_creativos")
+    .eq("resultado->>etapa", "generando_conceptos");
+
+  const idsAReintentar = (generandoConceptos ?? []).map((p) => p.id);
+  if (idsAReintentar.length > 0) {
+    after(async () => {
+      await Promise.allSettled(idsAReintentar.map((propuestaId) => procesarCreacionCreativos(propuestaId)));
+    });
   }
 
   return NextResponse.json({
@@ -76,5 +100,6 @@ export async function POST(req: NextRequest) {
     vencidas: vencidasPendiente?.length ?? 0,
     vencidas_esperando_fotos: vencidasEsperandoFotos?.length ?? 0,
     generando_revisadas: revisadas,
+    generando_conceptos_reintentadas: idsAReintentar.length,
   });
 }

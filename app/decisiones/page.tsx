@@ -29,7 +29,11 @@ type PropuestaUnificada = {
   venceEn: string | null;
   creadoEn: string;
   metaId: string | null;
-  resultado: { etapa?: "esperando_fotos" | "generando" | "completado" | "fallida"; job_id?: string; error?: string } | null;
+  resultado: {
+    etapa?: "esperando_fotos" | "generando_conceptos" | "generando" | "completado" | "fallida";
+    job_id?: string;
+    error?: string;
+  } | null;
   parametros: { creativos?: CreativoPropuesto[]; campana_id?: string; ajuste_porcentaje?: number } | null;
 };
 
@@ -60,6 +64,20 @@ const CATALOGO_LABEL: Record<AccionPropuesta, string> = {
 
 function formatoCop(valor: number): string {
   return new Intl.NumberFormat("es-CO", { style: "currency", currency: "COP", maximumFractionDigits: 0 }).format(valor);
+}
+
+// Lee la respuesta como texto primero -- si el proxy cortó la conexión
+// a mitad de una llamada larga, lo que llega puede ser una página de
+// error HTML (o nada), y res.json() directo tira un parse error críptico
+// (en Safari: "The string did not match the expected pattern"). Esto
+// siempre devuelve algo mostrable.
+async function leerJsonSeguro(res: Response): Promise<any> {
+  const texto = await res.text();
+  try {
+    return texto ? JSON.parse(texto) : {};
+  } catch {
+    return { error: `Error del servidor (código ${res.status})` };
+  }
 }
 
 function tiempoRestante(venceEn: string | null): string | null {
@@ -123,7 +141,7 @@ export default function DecisionesPage() {
     try {
       const url = p.origen === "notificacion" ? `/api/notificaciones/${idReal(p.id)}/aceptar` : `/api/propuestas/${p.id}/aprobar`;
       const res = await fetch(url, { method: "POST" });
-      const data = await res.json();
+      const data = await leerJsonSeguro(res);
       if (!res.ok) {
         setError({ mensaje: data.error || "No se pudo aprobar.", motivo: data.motivo, paso: data.paso });
         return;
@@ -146,7 +164,7 @@ export default function DecisionesPage() {
     try {
       const url = p.origen === "notificacion" ? `/api/notificaciones/${idReal(p.id)}/descartar` : `/api/propuestas/${p.id}/rechazar`;
       const res = await fetch(url, { method: "POST" });
-      const data = await res.json();
+      const data = await leerJsonSeguro(res);
       if (!res.ok) {
         setError({ mensaje: data.error || "No se pudo rechazar." });
         return;
@@ -166,7 +184,7 @@ export default function DecisionesPage() {
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ parametros }),
       });
-      const data = await res.json();
+      const data = await leerJsonSeguro(res);
       if (!res.ok) {
         setError({ mensaje: data.error || "No se pudo ajustar.", motivo: data.motivo, paso: data.paso });
         return;
@@ -278,6 +296,8 @@ export default function DecisionesPage() {
 
                       {p.accion === "crear_creativos" && p.resultado?.etapa === "esperando_fotos" ? (
                         <PasoSubirFotos propuestaId={p.id} onListo={cargarPropuestas} />
+                      ) : p.accion === "crear_creativos" && p.resultado?.etapa === "generando_conceptos" ? (
+                        <EstadoGenerandoConceptos onListo={cargarPropuestas} />
                       ) : p.accion === "crear_creativos" && p.resultado?.etapa === "generando" ? (
                         <EstadoGenerandoCreativos propuestaId={p.id} onListo={cargarPropuestas} />
                       ) : ajustandoId === p.id && p.accion === "agregar_anuncios" ? (
@@ -438,7 +458,7 @@ function HerramientaPruebaPropuesta({ onCreada }: { onCreada: () => void }) {
           creativos_job_id: necesitaJob ? jobId : undefined,
         }),
       });
-      const data = await res.json();
+      const data = await leerJsonSeguro(res);
       if (!res.ok) throw new Error(data.error || "No se pudo crear.");
       setMensaje("Propuesta de prueba creada.");
       onCreada();
@@ -566,7 +586,7 @@ function PasoSubirFotos({ propuestaId, onListo }: { propuestaId: string; onListo
           imagenes: elegidas.map(({ tipo, valor }) => ({ tipo, valor })),
         }),
       });
-      const data = await res.json();
+      const data = await leerJsonSeguro(res);
       if (!res.ok) {
         setErrorLocal({ mensaje: data.error || "No se pudo iniciar la generación.", paso: data.paso });
         return;
@@ -631,6 +651,23 @@ function PasoSubirFotos({ propuestaId, onListo }: { propuestaId: string; onListo
   );
 }
 
+// Mientras está "generando_conceptos", el trabajo real (generar_estrategia
+// + crear_creativos) ya corre solo en el servidor, disparado con after()
+// desde /subir-fotos -- este componente no dispara nada, solo refresca
+// la lista cada pocos segundos para notar apenas cambie de etapa.
+function EstadoGenerandoConceptos({ onListo }: { onListo: () => void }) {
+  useEffect(() => {
+    const intervalo = setInterval(onListo, 5000);
+    return () => clearInterval(intervalo);
+  }, [onListo]);
+
+  return (
+    <div style={{ marginTop: 10, display: "flex", alignItems: "center", gap: 8 }}>
+      <CargandoQuiubotInline mensaje="Pensando conceptos nuevos" />
+    </div>
+  );
+}
+
 // Mientras está "generando", hace polling (como ya hace /estrategia)
 // para que, si el cliente sigue en /decisiones, la propuesta
 // agregar_anuncios aparezca apenas el job termine -- sin esperar la
@@ -641,7 +678,7 @@ function EstadoGenerandoCreativos({ propuestaId, onListo }: { propuestaId: strin
     const revisar = async () => {
       try {
         const res = await fetch(`/api/propuestas/${propuestaId}/revisar-generacion`, { method: "POST" });
-        const data = await res.json();
+        const data = await leerJsonSeguro(res);
         if (cancelado) return;
         if (data.estado === "ejecutada" || data.estado === "fallida") {
           onListo();

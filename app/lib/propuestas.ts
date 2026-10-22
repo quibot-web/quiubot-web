@@ -6,7 +6,8 @@
 // factorizada para reusarla desde /api/propuestas/[id]/aprobar y
 // /ajustar sin duplicar sus verificaciones de seguridad.
 import { supabaseAdmin } from "@/lib/supabase";
-import { inferirObjetivoId } from "@/app/lib/metas";
+import { desencriptarSiHaceFalta } from "@/lib/crypto";
+import { inferirObjetivoId, objetivoParaCampana, type TipoMeta } from "@/app/lib/metas";
 import type { Asistente, AccionPropuesta, Propuesta } from "@/app/lib/metas";
 
 export type PropuestaUnificada = {
@@ -125,7 +126,7 @@ export async function obtenerPropuestasPendientes(userId: string): Promise<Propu
       .eq("user_id", userId)
       .eq("estado", "aprobada")
       .eq("accion", "crear_creativos")
-      .in("resultado->>etapa", ["esperando_fotos", "generando"])
+      .in("resultado->>etapa", ["esperando_fotos", "generando_conceptos", "generando"])
       .order("creado_en", { ascending: false }),
     supabaseAdmin
       .from("notificaciones")
@@ -496,25 +497,36 @@ export async function revisarGeneracionCreativos(propuestaId: string): Promise<{
   if (!propuesta || propuesta.accion !== "crear_creativos") return { estado: propuesta?.estado || "no_encontrada" };
 
   const resultado = (propuesta.resultado as any) || {};
-  if (resultado.etapa !== "generando" || !resultado.job_id) {
-    return { estado: propuesta.estado, etapa: resultado.etapa };
+
+  // El límite de 40 min cuenta desde que se subieron las fotos
+  // (resultado.generando_desde, fijado una sola vez), sin importar si
+  // sigue en "generando_conceptos" o ya pasó a "generando" -- el reloj
+  // no se reinicia entre esas dos etapas.
+  if (resultado.etapa === "generando_conceptos" || resultado.etapa === "generando") {
+    const desde = resultado.generando_desde || propuesta.decidido_en;
+    if (desde && Date.now() - new Date(desde).getTime() > TIMEOUT_GENERANDO_MS) {
+      const mensajeError = "La generación de creativos no terminó en 40 minutos -- el workflow pudo haberse detenido sin avisar.";
+      await supabaseAdmin
+        .from("propuestas")
+        .update({ estado: "fallida", resultado: { etapa: "fallida", error: mensajeError, job_id: resultado.job_id ?? null } })
+        .eq("id", propuestaId);
+      await supabaseAdmin.from("bitacora").insert({
+        user_id: propuesta.user_id,
+        meta_id: propuesta.meta_id,
+        propuesta_id: propuestaId,
+        tipo_evento: "propuesta_aprobada_fallo",
+        detalle: { accion: "crear_creativos", error: mensajeError, paso: "timeout_generando" },
+      });
+      return { estado: "fallida" };
+    }
   }
 
-  const desde = resultado.generando_desde || propuesta.decidido_en;
-  if (desde && Date.now() - new Date(desde).getTime() > TIMEOUT_GENERANDO_MS) {
-    const mensajeError = "La generación de creativos no terminó en 40 minutos -- el workflow pudo haberse detenido sin avisar.";
-    await supabaseAdmin
-      .from("propuestas")
-      .update({ estado: "fallida", resultado: { etapa: "fallida", error: mensajeError, job_id: resultado.job_id } })
-      .eq("id", propuestaId);
-    await supabaseAdmin.from("bitacora").insert({
-      user_id: propuesta.user_id,
-      meta_id: propuesta.meta_id,
-      propuesta_id: propuestaId,
-      tipo_evento: "propuesta_aprobada_fallo",
-      detalle: { accion: "crear_creativos", error: mensajeError, paso: "timeout_generando" },
-    });
-    return { estado: "fallida" };
+  // Si sigue en "generando_conceptos", el candado de procesarCreacionCreativos
+  // es quien decide si reintentarla -- el cron la vuelve a intentar por
+  // su cuenta (ver /api/cron/vencer-propuestas), esto solo cubre el
+  // timeout de arriba para esa etapa.
+  if (resultado.etapa !== "generando" || !resultado.job_id) {
+    return { estado: propuesta.estado, etapa: resultado.etapa };
   }
 
   const { data: job } = await supabaseAdmin
@@ -590,4 +602,323 @@ export async function revisarGeneracionCreativos(propuestaId: string): Promise<{
     .eq("id", propuestaId);
 
   return { estado: "ejecutada", etapa: "completado" };
+}
+
+// ============================================================
+// Generación de creativos en segundo plano (after()) -- ver
+// /api/propuestas/[id]/subir-fotos, que ya no espera nada de esto: solo
+// sube las fotos a Cloudinary y dispara procesarCreacionCreativos sin
+// esperarlo. Nada de lo de acá puede vivir dentro del ciclo de una
+// petición HTTP: generar_estrategia tarda 1.5-2 min y el proxy de
+// Coolify corta la conexión antes de que termine (confirmado: cuando
+// eso pasó, la propuesta se quedó sin avanzar -- no bastaba con que el
+// navegador reintentara, el trabajo del lado del servidor también se
+// abandonó).
+// ============================================================
+
+const MAX_INTENTOS_CREATIVOS = 2;
+const VENTANA_CANDADO_MS = 5 * 60 * 1000;
+
+// Convierte una imagen (base64 o URL de Cloudinary) a base64 -- mismo
+// helper que usaba /subir-fotos, ahora compartido porque tanto la ruta
+// (para subir a Cloudinary) como este archivo (para mandarla a
+// generar_estrategia/crear_creativos) lo necesitan.
+export async function aBase64(imagen: { tipo: "base64" | "url"; valor: string }): Promise<string> {
+  if (imagen.tipo === "base64") return imagen.valor;
+  const res = await fetch(imagen.valor);
+  const buffer = await res.arrayBuffer();
+  const contentType = res.headers.get("content-type") || "image/jpeg";
+  return `data:${contentType};base64,${Buffer.from(buffer).toString("base64")}`;
+}
+
+// Deduce los ángulos que la campaña ya tiene a partir de los nombres de
+// sus anuncios en Meta (convención QB_IMG_<Angulo>_...), para pedirle a
+// generar_estrategia que no los repita. Nunca bloquea: si Graph API
+// falla o no hay match, sigue sin ángulos.
+async function obtenerAngulosUsados(metaCampaignId: string, metaAccessToken: string): Promise<string[]> {
+  try {
+    const res = await fetch(
+      `https://graph.facebook.com/v21.0/${metaCampaignId}/ads?fields=name&limit=200&access_token=${metaAccessToken}`
+    );
+    const data = await res.json();
+    if (!res.ok || data.error) return [];
+
+    const angulos = new Set<string>();
+    for (const ad of data.data ?? []) {
+      const match = /^QB_IMG_([^_]+)_/.exec(ad.name || "");
+      if (match) angulos.add(match[1]);
+    }
+    return [...angulos];
+  } catch (err) {
+    console.error("No se pudieron leer los ángulos existentes de la campaña:", err);
+    return [];
+  }
+}
+
+// Un intento completo: generar_estrategia -> elegir anuncios ->
+// crear_creativos. Tira un Error (con .paso) en cualquier falla -- lo
+// atrapa el loop de reintentos de procesarCreacionCreativos.
+class ErrorPasoCreativos extends Error {
+  paso: string;
+  constructor(mensaje: string, paso: string) {
+    super(mensaje);
+    this.paso = paso;
+  }
+}
+
+async function intentarGenerarYCrearCreativos(datos: {
+  emailBusqueda: string;
+  imagenesBase64: string[];
+  objetivoParaWebhook: ReturnType<typeof objetivoParaCampana>;
+  presupuestoDiario: number | null;
+  openaiKey: string;
+  tipoContenido: "producto" | "servicio";
+  descripcionServicio: string | null;
+  angulosAEvitar: string[];
+  cloudinaryName: string;
+  cloudinaryKey: string;
+  cloudinarySecret: string;
+}): Promise<{ jobId: string }> {
+  // Paso 1: conceptos nuevos. generar_estrategia no responde {ok:false}
+  // siempre que falla -- sin llave de OpenAI responde HTTP 200 con solo
+  // {error:"..."} (sin "ok"). Éxito es ÚNICAMENTE data.ok === true.
+  const n8nRes1 = await fetch("https://n8n.quiubot.site/webhook/generar_estrategia", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({
+      email: datos.emailBusqueda,
+      imagenes_base64: datos.imagenesBase64,
+      objetivo: datos.objetivoParaWebhook,
+      presupuesto_diario_cop: datos.presupuestoDiario,
+      openai_key: datos.openaiKey,
+      tipo_contenido: datos.tipoContenido,
+      descripcion_servicio: datos.descripcionServicio,
+      modo_estructura: "advantage",
+      angulos_a_evitar: datos.angulosAEvitar,
+    }),
+  }).catch((err) => {
+    throw new ErrorPasoCreativos("No se pudo conectar con el servidor para generar los conceptos.", "generar_estrategia");
+  });
+
+  const data1 = await n8nRes1.json().catch(() => ({}));
+  if (!n8nRes1.ok || data1.ok !== true) {
+    throw new ErrorPasoCreativos(data1.error || "No se pudo generar los conceptos nuevos.", "generar_estrategia");
+  }
+
+  // data.campanas[] trae varias estrategias candidatas (cada una ya con
+  // su propio campana/conjuntos/efectividad) -- se elige la de mayor
+  // efectividad, igual que haría un humano en /estrategia.
+  const campanas: any[] = Array.isArray(data1.campanas) ? data1.campanas : [];
+  const campanaElegida = campanas.reduce(
+    (mejor: any, actual: any) => (!mejor || (actual?.efectividad ?? 0) > (mejor?.efectividad ?? 0) ? actual : mejor),
+    null
+  );
+  const conjunto = campanaElegida?.conjuntos?.[0];
+  const descripcionVisualGenerada =
+    typeof data1.descripcion_visual_producto === "string" ? data1.descripcion_visual_producto : null;
+
+  // Al elegir los anuncios: primero los que no repiten un ángulo ya
+  // usado en la campaña, después el filtro de copy.titulo/copy.texto
+  // obligatorios, máximo 3.
+  const angulosAEvitarSet = new Set(datos.angulosAEvitar);
+  const anunciosConCopy = (conjunto?.anuncios ?? []).filter((a: any) => a?.copy?.titulo && a?.copy?.texto);
+  const sinRepetirAngulo = anunciosConCopy.filter((a: any) => !angulosAEvitarSet.has(a?.concepto?.angulo));
+  const conAnguloRepetido = anunciosConCopy.filter((a: any) => angulosAEvitarSet.has(a?.concepto?.angulo));
+  const anunciosValidos = [...sinRepetirAngulo, ...conAnguloRepetido].slice(0, 3);
+
+  if (!campanaElegida || !conjunto || anunciosValidos.length === 0) {
+    throw new ErrorPasoCreativos(
+      "generar_estrategia no devolvió ningún anuncio con título y texto -- no se generaron creativos.",
+      "generar_estrategia_sin_anuncios"
+    );
+  }
+  if (!descripcionVisualGenerada) {
+    throw new ErrorPasoCreativos(
+      "generar_estrategia no devolvió la descripción visual del producto -- no se puede recrear en las imágenes.",
+      "generar_estrategia_sin_descripcion"
+    );
+  }
+
+  // Paso 2: las imágenes -- crear_creativos con la estrategia real (la
+  // campaña candidata elegida, con su conjunto recortado a los
+  // anuncios elegidos). Este webhook responde enseguida con un job_id
+  // (la generación real -- 4 a 24 min -- la termina n8n aparte,
+  // escribiendo directo en creativos_jobs); si algún día respondiera
+  // solo al terminar, el problema sería el mismo que el de arriba, pero
+  // como esta función entera ya corre fuera del ciclo de una petición
+  // HTTP (ver procesarCreacionCreativos), no importa cuánto tarde.
+  const estrategiaReal = { ...campanaElegida, conjuntos: [{ ...conjunto, anuncios: anunciosValidos }] };
+
+  const n8nRes2 = await fetch("https://n8n.quiubot.site/webhook/crear_creativos", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({
+      email: datos.emailBusqueda,
+      estrategia: estrategiaReal,
+      descripcion_visual_producto: descripcionVisualGenerada,
+      imagenes_producto_base64: datos.imagenesBase64,
+      openai_key: datos.openaiKey,
+      cloudinary_name: datos.cloudinaryName,
+      cloudinary_key: datos.cloudinaryKey,
+      cloudinary_secret: datos.cloudinarySecret,
+      tipo_contenido: datos.tipoContenido,
+      descripcion_servicio: datos.descripcionServicio,
+      mostrar_precio: false,
+      precio: null,
+    }),
+  }).catch(() => {
+    throw new ErrorPasoCreativos("No se pudo conectar con el servidor.", "crear_creativos");
+  });
+
+  const data2 = await n8nRes2.json().catch(() => ({}));
+  if (!n8nRes2.ok || data2.ok === false || !data2.job_id) {
+    throw new ErrorPasoCreativos(data2.error || "No se pudo iniciar la generación de creativos.", "crear_creativos");
+  }
+
+  return { jobId: data2.job_id };
+}
+
+// Candado + reintentos + la cadena completa, corriendo fuera del ciclo
+// de la petición que la disparó (ver after() en /subir-fotos y en el
+// cron). Reclama la propuesta con un UPDATE condicional: solo tiene
+// efecto si sigue en "generando_conceptos" y nadie más la tomó hace
+// menos de 5 minutos -- así /subir-fotos, el cron de respaldo, y
+// cualquier reintento futuro pueden llamar a esta misma función sin
+// pisarse ni procesarla dos veces.
+export async function procesarCreacionCreativos(propuestaId: string): Promise<void> {
+  const { data: propuesta } = await supabaseAdmin.from("propuestas").select("*").eq("id", propuestaId).single();
+  if (!propuesta || propuesta.accion !== "crear_creativos") return;
+
+  const resultadoActual = (propuesta.resultado as any) || {};
+  if (resultadoActual.etapa !== "generando_conceptos") return;
+
+  const haceCincoMin = new Date(Date.now() - VENTANA_CANDADO_MS).toISOString();
+  const { data: reclamada } = await supabaseAdmin
+    .from("propuestas")
+    .update({ resultado: { ...resultadoActual, procesando_desde: new Date().toISOString() } })
+    .eq("id", propuestaId)
+    .eq("resultado->>etapa", "generando_conceptos")
+    .or(`resultado->>procesando_desde.is.null,resultado->>procesando_desde.lt.${haceCincoMin}`)
+    .select()
+    .maybeSingle();
+
+  if (!reclamada) return; // ya lo tiene otro, o ya avanzó
+
+  const { data: usuario } = await supabaseAdmin
+    .from("usuarios")
+    .select("id, email, openai_key, cloudinary_name, cloudinary_key, cloudinary_secret, meta_access_token")
+    .eq("id", propuesta.user_id)
+    .single();
+
+  const parametros = (reclamada.parametros as any) || {};
+  const { data: campana } = await supabaseAdmin
+    .from("campanas_publicadas")
+    .select("id, nombre, objetivo, objetivo_id, presupuesto_diario, meta_campaign_id")
+    .eq("id", parametros.campana_id)
+    .maybeSingle();
+
+  const { data: meta } = await supabaseAdmin.from("metas").select("tipo").eq("id", propuesta.meta_id).maybeSingle();
+
+  async function marcarFallida(mensajeError: string, paso: string) {
+    await supabaseAdmin
+      .from("propuestas")
+      .update({ estado: "fallida", resultado: { etapa: "fallida", error: mensajeError, paso } })
+      .eq("id", propuestaId);
+    await supabaseAdmin.from("bitacora").insert({
+      user_id: propuesta.user_id,
+      meta_id: propuesta.meta_id,
+      propuesta_id: propuestaId,
+      tipo_evento: "propuesta_aprobada_fallo",
+      detalle: { accion: "crear_creativos", error: mensajeError, paso },
+    });
+  }
+
+  if (!usuario || !campana || !meta?.tipo) {
+    await marcarFallida("No se pudo recuperar la información necesaria para generar los creativos.", "datos_incompletos");
+    return;
+  }
+
+  let openaiKey: string;
+  let cloudinaryKey: string;
+  let cloudinarySecret: string;
+  try {
+    openaiKey = desencriptarSiHaceFalta(usuario.openai_key);
+    cloudinaryKey = desencriptarSiHaceFalta(usuario.cloudinary_key);
+    cloudinarySecret = desencriptarSiHaceFalta(usuario.cloudinary_secret);
+  } catch (err) {
+    await marcarFallida("No se pudieron leer las credenciales guardadas.", "credenciales");
+    return;
+  }
+
+  let imagenesBase64: string[];
+  try {
+    imagenesBase64 = await Promise.all(
+      (resultadoActual.fotos_urls as string[]).map((url) => aBase64({ tipo: "url", valor: url }))
+    );
+  } catch (err) {
+    await marcarFallida("No se pudo leer una de las fotos guardadas.", "leer_fotos");
+    return;
+  }
+
+  const objetivoParaWebhook = objetivoParaCampana(campana, meta.tipo as TipoMeta);
+  const angulosAEvitar =
+    campana.meta_campaign_id && usuario.meta_access_token
+      ? await obtenerAngulosUsados(campana.meta_campaign_id, usuario.meta_access_token)
+      : [];
+
+  const intentoDesde = (resultadoActual.intentos || 0) + 1;
+  let ultimoError = "No se pudo completar.";
+  let ultimoPaso = "desconocido";
+
+  for (let intento = intentoDesde; intento <= MAX_INTENTOS_CREATIVOS; intento++) {
+    try {
+      const { jobId } = await intentarGenerarYCrearCreativos({
+        emailBusqueda: usuario.email,
+        imagenesBase64,
+        objetivoParaWebhook,
+        presupuestoDiario: campana.presupuesto_diario,
+        openaiKey,
+        tipoContenido: parametros.tipo_contenido === "servicio" ? "servicio" : "producto",
+        descripcionServicio: parametros.tipo_contenido === "servicio" ? parametros.descripcion_servicio ?? null : null,
+        angulosAEvitar,
+        cloudinaryName: usuario.cloudinary_name,
+        cloudinaryKey,
+        cloudinarySecret,
+      });
+
+      await supabaseAdmin
+        .from("propuestas")
+        .update({
+          resultado: { ...resultadoActual, etapa: "generando", job_id: jobId, intentos: intento, procesando_desde: null },
+        })
+        .eq("id", propuestaId);
+
+      await supabaseAdmin.from("bitacora").insert({
+        user_id: propuesta.user_id,
+        meta_id: propuesta.meta_id,
+        propuesta_id: propuestaId,
+        tipo_evento: "propuesta_crear_creativos_iniciada",
+        detalle: { job_id: jobId, campana_id: campana.id, angulos_evitados: angulosAEvitar, intento },
+      });
+      return;
+    } catch (err) {
+      ultimoError = err instanceof ErrorPasoCreativos ? err.message : "No se pudo completar.";
+      ultimoPaso = err instanceof ErrorPasoCreativos ? err.paso : "desconocido";
+
+      await supabaseAdmin.from("bitacora").insert({
+        user_id: propuesta.user_id,
+        meta_id: propuesta.meta_id,
+        propuesta_id: propuestaId,
+        tipo_evento: "propuesta_crear_creativos_intento_fallido",
+        detalle: { intento, error: ultimoError, paso: ultimoPaso },
+      });
+
+      await supabaseAdmin
+        .from("propuestas")
+        .update({ resultado: { ...resultadoActual, intentos: intento, procesando_desde: null } })
+        .eq("id", propuestaId);
+    }
+  }
+
+  await marcarFallida(`No se pudo completar, vuelve a intentarlo. (${ultimoError})`, ultimoPaso);
 }
