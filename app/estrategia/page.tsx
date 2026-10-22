@@ -886,6 +886,26 @@ function EstrategiaContent() {
     return "tipo";
   }
 
+  // Llegada desde "Generar estrategia" en /decisiones (propuesta del
+  // Director, ver app/lib/propuestas.ts) con ?meta_id=... -- precarga el
+  // objetivo según el tipo de la meta activa, para no pedirle al cliente
+  // que lo vuelva a elegir. No toca el resto del wizard (fotos, precio,
+  // etc. las sigue poniendo el cliente); si la restauración de progreso
+  // de abajo encuentra algo guardado en localStorage, esa gana.
+  useEffect(() => {
+    if (!searchParams.get("meta_id")) return;
+    fetch("/api/metas")
+      .then((r) => (r.ok ? r.json() : null))
+      .then((data) => {
+        const tipo = data?.meta?.tipo as "conversaciones_whatsapp" | "leads" | undefined;
+        if (!tipo) return;
+        const idObjetivo = tipo === "conversaciones_whatsapp" ? "venta_directa_whatsapp" : "leads";
+        const match = OBJETIVOS.find((o) => o.id === idObjetivo);
+        if (match) setObjetivo(match);
+      })
+      .catch(() => {});
+  }, [searchParams]);
+
   // Restaura el progreso guardado (si existe) apenas se monta la pagina,
   // ANTES que el efecto de recuperacion de job por notificacion (ese tiene
   // prioridad si el usuario llego con ?job= en la URL, ya que ese es un

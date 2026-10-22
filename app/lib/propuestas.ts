@@ -19,6 +19,11 @@ export type PropuestaUnificada = {
   costoEstimadoCop: number | null;
   venceEn: string | null;
   creadoEn: string;
+  metaId: string | null;
+  // Solo relevante para crear_creativos "en progreso" (estado aprobada,
+  // no pendiente): etapa "esperando_fotos" | "generando", y el job_id
+  // una vez que empezó a generar. null para el resto.
+  resultado: Record<string, unknown> | null;
 };
 
 export const CATALOGO_ACCIONES: Record<
@@ -69,28 +74,53 @@ export const CATALOGO_ACCIONES: Record<
   },
 };
 
+const VENCE_ESPERANDO_FOTOS_MS = 72 * 60 * 60 * 1000;
+
 // Vence al leer: cualquier pendiente con vence_en ya pasado se marca
 // "vencida" antes de construir la lista. El cron horario
 // (/api/cron/vencer-propuestas) cubre el caso de que nadie abra la
-// bandeja -- esto es el respaldo inmediato.
-async function vencerPropuestasDelUsuario(userId: string) {
+// bandeja -- esto es el respaldo inmediato. También vence una
+// crear_creativos aprobada que lleva más de 72h esperando que el
+// cliente suba las fotos (estado "aprobada", no "pendiente" -- ya se
+// decidió, solo falta un dato), para que ninguna quede colgada.
+export async function vencerPropuestasDelUsuario(userId: string) {
   await supabaseAdmin
     .from("propuestas")
     .update({ estado: "vencida" })
     .eq("user_id", userId)
     .eq("estado", "pendiente")
     .lt("vence_en", new Date().toISOString());
+
+  await supabaseAdmin
+    .from("propuestas")
+    .update({ estado: "vencida" })
+    .eq("user_id", userId)
+    .eq("estado", "aprobada")
+    .eq("accion", "crear_creativos")
+    .eq("resultado->>etapa", "esperando_fotos")
+    .lt("decidido_en", new Date(Date.now() - VENCE_ESPERANDO_FOTOS_MS).toISOString());
 }
 
 export async function obtenerPropuestasPendientes(userId: string): Promise<PropuestaUnificada[]> {
   await vencerPropuestasDelUsuario(userId);
 
-  const [propuestasRes, notisRes] = await Promise.all([
+  const [propuestasRes, enProgresoRes, notisRes] = await Promise.all([
     supabaseAdmin
       .from("propuestas")
       .select("*")
       .eq("user_id", userId)
       .eq("estado", "pendiente")
+      .order("creado_en", { ascending: false }),
+    // crear_creativos ya aprobada pero todavía esperando fotos o
+    // generando -- no es "pendiente" (ya se decidió aprobarla), pero
+    // sigue necesitando que el cliente la vea y actúe.
+    supabaseAdmin
+      .from("propuestas")
+      .select("*")
+      .eq("user_id", userId)
+      .eq("estado", "aprobada")
+      .eq("accion", "crear_creativos")
+      .in("resultado->>etapa", ["esperando_fotos", "generando"])
       .order("creado_en", { ascending: false }),
     supabaseAdmin
       .from("notificaciones")
@@ -102,7 +132,7 @@ export async function obtenerPropuestasPendientes(userId: string): Promise<Propu
       .order("creado_en", { ascending: false }),
   ]);
 
-  const dePropuestas: PropuestaUnificada[] = (propuestasRes.data ?? []).map((p) => ({
+  const dePropuestas: PropuestaUnificada[] = [...(propuestasRes.data ?? []), ...(enProgresoRes.data ?? [])].map((p) => ({
     id: p.id,
     origen: "propuesta",
     asistente: p.asistente,
@@ -113,6 +143,8 @@ export async function obtenerPropuestasPendientes(userId: string): Promise<Propu
     costoEstimadoCop: p.costo_estimado_cop,
     venceEn: p.vence_en,
     creadoEn: p.creado_en,
+    metaId: p.meta_id,
+    resultado: p.resultado,
   }));
 
   // El monitoreo de Meta de hoy no distingue asistente -- se etiqueta
@@ -129,6 +161,8 @@ export async function obtenerPropuestasPendientes(userId: string): Promise<Propu
     costoEstimadoCop: null,
     venceEn: null,
     creadoEn: n.creado_en,
+    metaId: null,
+    resultado: null,
   }));
 
   return [...dePropuestas, ...deNotificaciones].sort((a, b) => (a.creadoEn < b.creadoEn ? 1 : -1));
@@ -143,10 +177,28 @@ type ResultadoEjecucion = { ok: true } | { ok: false; error: string; motivo?: st
 // Ejecuta de verdad pausar/ajustar_presupuesto contra Meta (via
 // aplicar_sugerencia), con las verificaciones pedidas: la campaña debe
 // ser del usuario que aprueba, y el Autopiloto de su meta activa no
-// puede estar pausado. Cualquier otra acción del catálogo todavía no
-// tiene ejecutor real (fase 2) -- solo queda "aprobada".
+// puede estar pausado. crear_creativos queda "aprobada" con
+// resultado.etapa="esperando_fotos" (no ejecuta nada todavía -- no hay
+// fotos de producto guardadas por campaña, ver subirFotosCrearCreativos).
+// generar_estrategia y agregar_anuncios (fase 2, pendiente) quedan solo
+// "aprobada" sin más.
 export async function ejecutarPropuesta(propuesta: Propuesta, usuario: UsuarioEjecutor): Promise<ResultadoEjecucion> {
   const ahora = new Date().toISOString();
+
+  if (propuesta.accion === "crear_creativos") {
+    await supabaseAdmin
+      .from("propuestas")
+      .update({ estado: "aprobada", decidido_en: ahora, decidido_por: usuario.id, resultado: { etapa: "esperando_fotos" } })
+      .eq("id", propuesta.id);
+    await supabaseAdmin.from("bitacora").insert({
+      user_id: usuario.id,
+      meta_id: propuesta.meta_id,
+      propuesta_id: propuesta.id,
+      tipo_evento: "propuesta_aprobada",
+      detalle: { accion: propuesta.accion, etapa: "esperando_fotos" },
+    });
+    return { ok: true };
+  }
 
   if (propuesta.accion !== "pausar" && propuesta.accion !== "ajustar_presupuesto") {
     await supabaseAdmin
@@ -281,4 +333,94 @@ export async function ejecutarPropuesta(propuesta: Propuesta, usuario: UsuarioEj
     });
     return { ok: false, error: mensajeError, status: 503 };
   }
+}
+
+// Revisa el job de creativos_jobs de una propuesta crear_creativos en
+// etapa "generando" -- la llama tanto el polling desde /decisiones
+// (mientras el cliente sigue ahí, sin esperar la corrida horaria) como
+// el cron de respaldo. Idempotente: si el job ya quedó "listo" y ya
+// existe su propuesta agregar_anuncios (parametros.propuesta_origen_id
+// = esta propuesta), no crea una segunda.
+export async function revisarGeneracionCreativos(propuestaId: string): Promise<{ estado: string; etapa?: string }> {
+  const { data: propuesta } = await supabaseAdmin.from("propuestas").select("*").eq("id", propuestaId).single();
+  if (!propuesta || propuesta.accion !== "crear_creativos") return { estado: propuesta?.estado || "no_encontrada" };
+
+  const resultado = (propuesta.resultado as any) || {};
+  if (resultado.etapa !== "generando" || !resultado.job_id) {
+    return { estado: propuesta.estado, etapa: resultado.etapa };
+  }
+
+  const { data: job } = await supabaseAdmin
+    .from("creativos_jobs")
+    .select("id, estado, creativos, error_mensaje")
+    .eq("id", resultado.job_id)
+    .maybeSingle();
+
+  if (!job || job.estado === "procesando") {
+    return { estado: propuesta.estado, etapa: "generando" };
+  }
+
+  if (job.estado === "error") {
+    const mensajeError = job.error_mensaje || "La generación de creativos falló.";
+    await supabaseAdmin
+      .from("propuestas")
+      .update({ estado: "fallida", resultado: { etapa: "fallida", error: mensajeError } })
+      .eq("id", propuestaId);
+    await supabaseAdmin.from("bitacora").insert({
+      user_id: propuesta.user_id,
+      meta_id: propuesta.meta_id,
+      propuesta_id: propuestaId,
+      tipo_evento: "propuesta_aprobada_fallo",
+      detalle: { accion: "crear_creativos", error: mensajeError },
+    });
+    return { estado: "fallida" };
+  }
+
+  // job.estado === "listo"
+  const { data: yaExiste } = await supabaseAdmin
+    .from("propuestas")
+    .select("id")
+    .eq("accion", "agregar_anuncios")
+    .eq("parametros->>propuesta_origen_id", propuestaId)
+    .maybeSingle();
+
+  if (!yaExiste) {
+    const venceEn = new Date(Date.now() + 24 * 60 * 60 * 1000).toISOString();
+    const { data: nueva } = await supabaseAdmin
+      .from("propuestas")
+      .insert({
+        meta_id: propuesta.meta_id,
+        user_id: propuesta.user_id,
+        asistente: "publicador",
+        accion: "agregar_anuncios",
+        parametros: {
+          campana_id: (propuesta.parametros as any)?.campana_id ?? null,
+          creativos: job.creativos ?? [],
+          propuesta_origen_id: propuestaId,
+        },
+        titulo: "Agregar los creativos nuevos a la campaña",
+        justificacion: `El Creativo terminó de generar ${(job.creativos ?? []).length} creativo(s) nuevo(s). Revísalos antes de que salgan al aire.`,
+        impacto_esperado: "Anuncios nuevos compitiendo dentro de la misma campaña.",
+        costo_estimado_cop: null,
+        estado: "pendiente",
+        vence_en: venceEn,
+      })
+      .select()
+      .single();
+
+    await supabaseAdmin.from("bitacora").insert({
+      user_id: propuesta.user_id,
+      meta_id: propuesta.meta_id,
+      propuesta_id: nueva?.id ?? null,
+      tipo_evento: "propuesta_creada",
+      detalle: { accion: "agregar_anuncios", origen_propuesta_id: propuestaId },
+    });
+  }
+
+  await supabaseAdmin
+    .from("propuestas")
+    .update({ estado: "ejecutada", resultado: { etapa: "completado", job_id: resultado.job_id } })
+    .eq("id", propuestaId);
+
+  return { estado: "ejecutada", etapa: "completado" };
 }

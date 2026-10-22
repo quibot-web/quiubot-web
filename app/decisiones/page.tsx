@@ -5,6 +5,7 @@ import { Clock } from "lucide-react";
 import CargandoQuiubot, { CargandoQuiubotInline } from "@/app/components/CargandoQuiubot";
 import { ProveedorEsferas } from "@/app/components/esferas/ProveedorEsferas";
 import EsferaAsistente from "@/app/components/esferas/EsferaAsistente";
+import { comprimirSiHaceFalta, esArchivoDeImagen } from "@/app/lib/imagenes";
 import type { Asistente, AccionPropuesta } from "@/app/lib/metas";
 
 type PropuestaUnificada = {
@@ -18,6 +19,8 @@ type PropuestaUnificada = {
   costoEstimadoCop: number | null;
   venceEn: string | null;
   creadoEn: string;
+  metaId: string | null;
+  resultado: { etapa?: "esperando_fotos" | "generando" | "completado" | "fallida"; job_id?: string; error?: string } | null;
 };
 
 const NOMBRE_ASISTENTE: Record<Asistente, string> = {
@@ -113,6 +116,12 @@ export default function DecisionesPage() {
       const data = await res.json();
       if (!res.ok) {
         setError({ mensaje: data.error || "No se pudo aprobar.", motivo: data.motivo });
+        return;
+      }
+      // El Estratega todavía no publica nada solo -- aprobar esto solo
+      // lleva al cliente a /estrategia con el objetivo ya precargado.
+      if (p.accion === "generar_estrategia" && p.metaId) {
+        router.push(`/estrategia?meta_id=${p.metaId}`);
         return;
       }
       cargarPropuestas();
@@ -238,7 +247,11 @@ export default function DecisionesPage() {
                         <p style={{ fontSize: 12.5, color: "#888", margin: "0 0 10px" }}>Costo estimado: {formatoCop(p.costoEstimadoCop)}</p>
                       )}
 
-                      {ajustandoId === p.id ? (
+                      {p.accion === "crear_creativos" && p.resultado?.etapa === "esperando_fotos" ? (
+                        <PasoSubirFotos propuestaId={p.id} onListo={cargarPropuestas} />
+                      ) : p.accion === "crear_creativos" && p.resultado?.etapa === "generando" ? (
+                        <EstadoGenerandoCreativos propuestaId={p.id} onListo={cargarPropuestas} />
+                      ) : ajustandoId === p.id ? (
                         <div style={{ display: "flex", alignItems: "center", gap: 8, marginTop: 10 }}>
                           <input
                             type="number"
@@ -396,6 +409,172 @@ function HerramientaPruebaPropuesta({ onCreada }: { onCreada: () => void }) {
         </button>
       </div>
       {mensaje && <p style={{ fontSize: 12.5, color: mensaje.includes("creada") ? "#15803d" : "#B3261E", margin: "8px 0 0" }}>{mensaje}</p>}
+    </div>
+  );
+}
+
+const MAX_FOTOS = 3;
+
+type FotoElegida = { tipo: "base64" | "url"; valor: string; preview: string };
+
+// Paso intermedio de crear_creativos, una vez aprobada: no hay fotos de
+// producto guardadas por campaña (ver investigación de fase 2), así que
+// esto es lo que de verdad dispara la generación. Ofrece primero las
+// imágenes que ya existen en el Álbum de creativos del cliente (lo más
+// cercano a "fotos del ADN o de la estrategia" que hay guardado hoy) y
+// también deja subir otras nuevas.
+function PasoSubirFotos({ propuestaId, onListo }: { propuestaId: string; onListo: () => void }) {
+  const [album, setAlbum] = useState<{ id: string; url_imagen: string }[]>([]);
+  const [elegidas, setElegidas] = useState<FotoElegida[]>([]);
+  const [descripcion, setDescripcion] = useState("");
+  const [subiendo, setSubiendo] = useState(false);
+  const [errorLocal, setErrorLocal] = useState<string | null>(null);
+
+  useEffect(() => {
+    fetch("/api/album")
+      .then((r) => r.json())
+      .then((d) => setAlbum((d.imagenes ?? d ?? []).slice(0, 8)))
+      .catch(() => setAlbum([]));
+  }, []);
+
+  const alternarDelAlbum = (url: string) => {
+    setElegidas((prev) => {
+      const yaEsta = prev.some((f) => f.tipo === "url" && f.valor === url);
+      if (yaEsta) return prev.filter((f) => !(f.tipo === "url" && f.valor === url));
+      if (prev.length >= MAX_FOTOS) return prev;
+      return [...prev, { tipo: "url", valor: url, preview: url }];
+    });
+  };
+
+  const agregarArchivos = async (files: FileList | null) => {
+    if (!files) return;
+    setErrorLocal(null);
+    const disponibles = MAX_FOTOS - elegidas.length;
+    for (const file of Array.from(files).slice(0, disponibles)) {
+      if (!esArchivoDeImagen(file)) continue;
+      try {
+        const base64 = await comprimirSiHaceFalta(file);
+        setElegidas((prev) => [...prev, { tipo: "base64", valor: base64, preview: base64 }]);
+      } catch {
+        setErrorLocal("No se pudo leer una de las fotos.");
+      }
+    }
+  };
+
+  const quitar = (preview: string) => setElegidas((prev) => prev.filter((f) => f.preview !== preview));
+
+  const generar = async () => {
+    if (elegidas.length === 0 || !descripcion.trim()) {
+      setErrorLocal("Elige al menos 1 foto y describe lo que se ve en ellas.");
+      return;
+    }
+    setSubiendo(true);
+    setErrorLocal(null);
+    try {
+      const res = await fetch(`/api/propuestas/${propuestaId}/subir-fotos`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          imagenes: elegidas.map(({ tipo, valor }) => ({ tipo, valor })),
+          descripcion_visual_producto: descripcion.trim(),
+        }),
+      });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error || "No se pudo iniciar la generación.");
+      onListo();
+    } catch (err: any) {
+      setErrorLocal(err.message || "Algo salió mal.");
+    } finally {
+      setSubiendo(false);
+    }
+  };
+
+  return (
+    <div style={{ marginTop: 10, background: "#F9F8FD", borderRadius: 10, padding: "12px 14px" }}>
+      <p style={{ fontSize: 12.5, fontWeight: 600, color: "#1a1a1a", margin: "0 0 8px" }}>Elige hasta {MAX_FOTOS} fotos</p>
+
+      {album.length > 0 && (
+        <div style={{ display: "flex", gap: 6, flexWrap: "wrap", marginBottom: 8 }}>
+          {album.map((a) => {
+            const seleccionada = elegidas.some((f) => f.tipo === "url" && f.valor === a.url_imagen);
+            return (
+              <img
+                key={a.id}
+                src={a.url_imagen}
+                onClick={() => alternarDelAlbum(a.url_imagen)}
+                style={{ width: 56, height: 56, objectFit: "cover", borderRadius: 8, cursor: "pointer", border: seleccionada ? "2.5px solid #534AB7" : "2.5px solid transparent", opacity: seleccionada ? 1 : 0.75 }}
+                alt=""
+              />
+            );
+          })}
+        </div>
+      )}
+
+      <input type="file" accept="image/*" multiple onChange={(e) => agregarArchivos(e.target.files)} style={{ fontSize: 12, marginBottom: 8 }} />
+
+      {elegidas.length > 0 && (
+        <div style={{ display: "flex", gap: 6, flexWrap: "wrap", marginBottom: 8 }}>
+          {elegidas.map((f) => (
+            <div key={f.preview} style={{ position: "relative" }}>
+              <img src={f.preview} style={{ width: 56, height: 56, objectFit: "cover", borderRadius: 8 }} alt="" />
+              <button onClick={() => quitar(f.preview)} style={{ position: "absolute", top: -6, right: -6, width: 18, height: 18, borderRadius: "50%", background: "#B3261E", color: "#fff", border: "none", fontSize: 11, cursor: "pointer" }}>×</button>
+            </div>
+          ))}
+        </div>
+      )}
+
+      <textarea
+        value={descripcion}
+        onChange={(e) => setDescripcion(e.target.value)}
+        placeholder="¿Qué se ve en estas fotos?"
+        rows={2}
+        style={{ width: "100%", padding: "8px 10px", borderRadius: 8, border: "1px solid #ddd", fontSize: 12.5, resize: "vertical", marginBottom: 8, boxSizing: "border-box" }}
+      />
+
+      {errorLocal && <p style={{ fontSize: 12, color: "#B3261E", margin: "0 0 8px" }}>{errorLocal}</p>}
+
+      <button
+        onClick={generar}
+        disabled={subiendo}
+        style={{ padding: "8px 16px", borderRadius: 8, background: "#534AB7", color: "#fff", border: "none", fontSize: 12.5, fontWeight: 700, cursor: subiendo ? "not-allowed" : "pointer" }}
+      >
+        {subiendo ? "Enviando..." : "Generar creativos"}
+      </button>
+    </div>
+  );
+}
+
+// Mientras está "generando", hace polling (como ya hace /estrategia)
+// para que, si el cliente sigue en /decisiones, la propuesta
+// agregar_anuncios aparezca apenas el job termine -- sin esperar la
+// corrida horaria del cron, que queda solo de respaldo.
+function EstadoGenerandoCreativos({ propuestaId, onListo }: { propuestaId: string; onListo: () => void }) {
+  useEffect(() => {
+    let cancelado = false;
+    const revisar = async () => {
+      try {
+        const res = await fetch(`/api/propuestas/${propuestaId}/revisar-generacion`, { method: "POST" });
+        const data = await res.json();
+        if (cancelado) return;
+        if (data.estado === "ejecutada" || data.estado === "fallida") {
+          onListo();
+          return;
+        }
+      } catch {
+        // red caída puntual -- el siguiente tick reintenta, y el cron queda de respaldo
+      }
+      if (!cancelado) setTimeout(revisar, 5000);
+    };
+    const primerIntento = setTimeout(revisar, 5000);
+    return () => {
+      cancelado = true;
+      clearTimeout(primerIntento);
+    };
+  }, [propuestaId, onListo]);
+
+  return (
+    <div style={{ marginTop: 10, display: "flex", alignItems: "center", gap: 8 }}>
+      <CargandoQuiubotInline mensaje="Generando creativos" />
     </div>
   );
 }
