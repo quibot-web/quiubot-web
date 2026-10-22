@@ -2,6 +2,7 @@
 import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import NotificacionIcono from "@/app/components/NotificacionIcono";
+import TarjetaMeta from "@/app/components/TarjetaMeta";
 import { urlOptimizadaCloudinary } from "@/app/lib/cloudinaryUrl";
 import { BLOQUES_DEFAULT, BLOQUES_COLUMNA_DERECHA, type BloqueId } from "@/app/lib/configHome";
 
@@ -312,6 +313,8 @@ export default function HomeInicio({ nombreUsuario }: { nombreUsuario: string })
 
   const RENDERERS: Record<string, () => React.ReactNode> = {
     banners: () => <CarruselBanners banners={datos.banners || []} visible={visible} />,
+
+    meta: () => <TarjetaMeta />,
 
     estado_sistema: () => (
       <div
