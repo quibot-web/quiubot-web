@@ -15,7 +15,7 @@ const TIPO_LABEL: Record<TipoMeta, string> = {
   leads: "leads",
 };
 
-function formatoCop(valor: number): string {
+export function formatoCop(valor: number): string {
   return new Intl.NumberFormat("es-CO", { style: "currency", currency: "COP", maximumFractionDigits: 0 }).format(valor);
 }
 
