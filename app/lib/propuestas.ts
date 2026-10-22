@@ -5,6 +5,7 @@
 // n8n -- la misma llamada que ya hace /api/notificaciones/[id]/aceptar,
 // factorizada para reusarla desde /api/propuestas/[id]/aprobar y
 // /ajustar sin duplicar sus verificaciones de seguridad.
+import { randomUUID } from "crypto";
 import { supabaseAdmin } from "@/lib/supabase";
 import { desencriptarSiHaceFalta } from "@/lib/crypto";
 import { inferirObjetivoId, objetivoParaCampana, type TipoMeta } from "@/app/lib/metas";
@@ -803,36 +804,52 @@ export async function procesarCreacionCreativos(propuestaId: string): Promise<vo
     return;
   }
 
+  // No confiamos en lo que devuelva este update().select() para saber
+  // si de verdad tomamos el candado -- visto en vivo: el UPDATE puede
+  // aplicarse en la base (procesando_desde cambia de verdad) y aun así
+  // llegar al cliente como si no hubiera devuelto fila. En vez de eso,
+  // cada intento escribe su propio lock_id (uuid) junto con
+  // procesando_desde, e ignora el resultado de este update; lo que de
+  // verdad decide si ganamos el candado es el SELECT de abajo, leyendo
+  // si el lock_id que quedó en la base es el nuestro.
+  const loqueIntentoTomar = randomUUID();
   const haceCincoMin = new Date(Date.now() - VENTANA_CANDADO_MS).toISOString();
-  const { data: reclamada } = await supabaseAdmin
+  await supabaseAdmin
     .from("propuestas")
-    .update({ resultado: { ...resultadoActual, procesando_desde: new Date().toISOString() } })
+    .update({ resultado: { ...resultadoActual, procesando_desde: new Date().toISOString(), lock_id: loqueIntentoTomar } })
     .eq("id", propuestaId)
     .eq("resultado->>etapa", "generando_conceptos")
-    .or(`resultado->>procesando_desde.is.null,resultado->>procesando_desde.lt.${haceCincoMin}`)
-    .select()
-    .maybeSingle();
+    .or(`resultado->>procesando_desde.is.null,resultado->>procesando_desde.lt.${haceCincoMin}`);
 
-  if (!reclamada) {
-    // Ya lo tiene otro intento en curso (procesando_desde reciente), o
-    // ya avanzó de etapa entre que se eligió esta propuesta y que se
+  const { data: trasIntentoClaim } = await supabaseAdmin
+    .from("propuestas")
+    .select("resultado")
+    .eq("id", propuestaId)
+    .single();
+
+  const resultadoTrasClaim = (trasIntentoClaim?.resultado as any) || {};
+  if (resultadoTrasClaim.lock_id !== loqueIntentoTomar) {
+    // Ya lo tiene otro intento en curso (su lock_id quedó en la base),
+    // o ya avanzó de etapa entre que se eligió esta propuesta y que se
     // intentó tomar el candado -- no es necesariamente un error, pero
     // queda en bitacora para poder distinguirlo de una muerte en
     // silencio si vuelve a pasar.
     console.log(
-      `[procesarCreacionCreativos] ${propuestaId}: no se tomó el candado (procesando_desde="${resultadoActual.procesando_desde ?? "null"}"), no hace nada`
+      `[procesarCreacionCreativos] ${propuestaId}: no se tomó el candado (lock actual="${resultadoTrasClaim.lock_id ?? "null"}", el nuestro="${loqueIntentoTomar}")`
     );
     await supabaseAdmin.from("bitacora").insert({
       user_id: propuesta.user_id,
       meta_id: propuesta.meta_id,
       propuesta_id: propuestaId,
       tipo_evento: "propuesta_crear_creativos_candado_no_tomado",
-      detalle: { procesando_desde_actual: resultadoActual.procesando_desde ?? null },
+      detalle: { lock_id_propio: loqueIntentoTomar, lock_id_actual: resultadoTrasClaim.lock_id ?? null },
     });
     return;
   }
 
   console.log(`[procesarCreacionCreativos] ${propuestaId}: candado tomado, empieza a procesar`);
+  resultadoActual.procesando_desde = resultadoTrasClaim.procesando_desde;
+  resultadoActual.lock_id = loqueIntentoTomar;
 
   const { data: usuario } = await supabaseAdmin
     .from("usuarios")
@@ -840,7 +857,7 @@ export async function procesarCreacionCreativos(propuestaId: string): Promise<vo
     .eq("id", propuesta.user_id)
     .single();
 
-  const parametros = (reclamada.parametros as any) || {};
+  const parametros = (propuesta.parametros as any) || {};
   const { data: campana } = await supabaseAdmin
     .from("campanas_publicadas")
     .select("id, nombre, objetivo, objetivo_id, presupuesto_diario, meta_campaign_id")
@@ -920,7 +937,14 @@ export async function procesarCreacionCreativos(propuestaId: string): Promise<vo
       await supabaseAdmin
         .from("propuestas")
         .update({
-          resultado: { ...resultadoActual, etapa: "generando", job_id: jobId, intentos: intento, procesando_desde: null },
+          resultado: {
+            ...resultadoActual,
+            etapa: "generando",
+            job_id: jobId,
+            intentos: intento,
+            procesando_desde: null,
+            lock_id: null,
+          },
         })
         .eq("id", propuestaId);
 
@@ -946,7 +970,7 @@ export async function procesarCreacionCreativos(propuestaId: string): Promise<vo
 
       await supabaseAdmin
         .from("propuestas")
-        .update({ resultado: { ...resultadoActual, intentos: intento, procesando_desde: null } })
+        .update({ resultado: { ...resultadoActual, intentos: intento, procesando_desde: null, lock_id: null } })
         .eq("id", propuestaId);
     }
   }
