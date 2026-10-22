@@ -4,6 +4,7 @@ import { useRouter } from "next/navigation";
 import NotificacionIcono from "@/app/components/NotificacionIcono";
 import TarjetaMeta from "@/app/components/TarjetaMeta";
 import TarjetaEquipo from "@/app/components/TarjetaEquipo";
+import BadgeDecisiones from "@/app/components/BadgeDecisiones";
 import { ProveedorEsferas } from "@/app/components/esferas/ProveedorEsferas";
 import { urlOptimizadaCloudinary } from "@/app/lib/cloudinaryUrl";
 import { BLOQUES_DEFAULT, BLOQUES_COLUMNA_DERECHA, type BloqueId } from "@/app/lib/configHome";
@@ -414,6 +415,7 @@ export default function HomeInicio({ nombreUsuario }: { nombreUsuario: string })
     decisiones_pendientes: () => (
       <div style={{ background: "#fff", border: "1px solid #ece9f9", borderRadius: 16, padding: "1.5rem" }}>
         <p style={{ fontSize: 15, fontWeight: 600, margin: "0 0 14px", color: "#1a1a1a" }}>Decisiones pendientes</p>
+        <BadgeDecisiones />
         {todoTranquilo && (
           <div style={{ display: "flex", alignItems: "center", gap: 10, padding: "8px 2px" }}>
             <div style={{ width: 32, height: 32, borderRadius: "50%", background: "#f0fdf4", display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0 }}>

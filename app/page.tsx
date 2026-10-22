@@ -7,6 +7,7 @@ import HomeInicio from "@/app/components/HomeInicio";
 import TutorialVideo from "@/app/components/TutorialVideo";
 import TourGuiado from "@/app/components/TourGuiado";
 import NotificacionIcono from "@/app/components/NotificacionIcono";
+import BadgeDecisiones from "@/app/components/BadgeDecisiones";
 import { urlDescargaCloudinary } from "@/app/lib/cloudinaryUrl";
 import { SelectorPais, CODIGO_TELEFONICO } from "@/app/components/SelectorPais";
 
@@ -1104,6 +1105,7 @@ export default function Home() {
                   {notificaciones.filter((n) => n.estado === "pendiente").length}
                 </span>
               )}
+              <BadgeDecisiones compacto />
             </button>
 
             {mostrarNotis && (
