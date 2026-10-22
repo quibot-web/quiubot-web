@@ -61,10 +61,31 @@ export async function POST(
     const data = await n8nRes.json().catch(() => ({}));
 
     if (!n8nRes.ok || data.ok === false) {
+      // El Director (fase 2) lee este evento para su enfriamiento de 72h
+      // por campaña -- un intento fallido no cuenta como cambio real, así
+      // que no bloquea nada, pero igual queda en bitacora para auditar.
+      await supabaseAdmin.from("bitacora").insert({
+        user_id: usuario.id,
+        meta_id: null,
+        propuesta_id: null,
+        tipo_evento: "notificacion_aceptada_fallo",
+        detalle: { notificacion_id: id, campana_id: notificacion.campana_id, error: data.error || null },
+      });
       return NextResponse.json({ error: data.error || "No se pudo aplicar la sugerencia en Meta" }, { status: n8nRes.status || 502 });
     }
 
     await supabaseAdmin.from("notificaciones").update({ estado: "aplicada" }).eq("id", id);
+
+    // Mismo evento que ejecutarPropuesta usa para pausar/ajustar_presupuesto
+    // -- el Director (fase 2) necesita ver este cambio para su enfriamiento
+    // de 72h, aunque haya venido del monitoreo viejo y no de una propuesta.
+    await supabaseAdmin.from("bitacora").insert({
+      user_id: usuario.id,
+      meta_id: null,
+      propuesta_id: null,
+      tipo_evento: "propuesta_aprobada_ejecutada",
+      detalle: { origen: "notificacion", notificacion_id: id, campana_id: notificacion.campana_id, accion: notificacion.accion_sugerida },
+    });
 
     return NextResponse.json({ ok: true });
   } catch (err) {
