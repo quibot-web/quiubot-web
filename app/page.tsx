@@ -949,6 +949,10 @@ export default function Home() {
                   <span className="qb-nav-icon"><Icono><path d="M9 18V5l12-2v13" /><circle cx="6" cy="18" r="3" /><circle cx="18" cy="16" r="3" /></Icono></span>
                   Música
                 </a>
+                <a href="/admin/costos-referencia" className="qb-admin-item">
+                  <span className="qb-nav-icon"><Icono><path d="M12 1v22M17 5H9.5a3.5 3.5 0 000 7h5a3.5 3.5 0 010 7H6" /></Icono></span>
+                  Costos de referencia
+                </a>
               </div>
             )}
           </div>
