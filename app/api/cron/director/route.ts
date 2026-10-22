@@ -107,6 +107,45 @@ export async function POST(req: NextRequest) {
       });
     }
 
+    // Overrides opcionales para probar escenarios concretos (ej. "si la
+    // meta fuera más ambiciosa, ¿proponés subir presupuesto?") sin
+    // depender de que el costo de referencia por defecto -- que para un
+    // usuario con una sola campaña real termina siendo básicamente el
+    // costo de ESA misma campaña, por lo que la regla de "va atrasada"
+    // nunca se puede disparar sola. Sin overrides, se sigue usando el
+    // costo de referencia de 3 niveles (igual que /api/metas/previsualizar).
+    const cantidadParam = req.nextUrl.searchParams.get("cantidad");
+    if (cantidadParam != null) {
+      const n = Number(cantidadParam);
+      if (!Number.isFinite(n) || n <= 0) {
+        return NextResponse.json({ error: "cantidad debe ser un número mayor a cero." }, { status: 400 });
+      }
+      metaParaSimular.cantidad_objetivo = n;
+    }
+    const costoObjetivoParam = req.nextUrl.searchParams.get("costo_objetivo_cop");
+    if (costoObjetivoParam != null) {
+      const n = Number(costoObjetivoParam);
+      if (!Number.isFinite(n) || n <= 0) {
+        return NextResponse.json({ error: "costo_objetivo_cop debe ser un número mayor a cero." }, { status: 400 });
+      }
+      metaParaSimular.costo_objetivo_cop = n;
+    }
+    const presupuestoMaximoParam = req.nextUrl.searchParams.get("presupuesto_maximo_cop");
+    if (presupuestoMaximoParam != null) {
+      const n = Number(presupuestoMaximoParam);
+      if (!Number.isFinite(n) || n <= 0) {
+        return NextResponse.json({ error: "presupuesto_maximo_cop debe ser un número mayor a cero." }, { status: 400 });
+      }
+      metaParaSimular.presupuesto_maximo_cop = n;
+    }
+    const fechaFinParam = req.nextUrl.searchParams.get("fecha_fin");
+    if (fechaFinParam != null) {
+      if (!/^\d{4}-\d{2}-\d{2}$/.test(fechaFinParam)) {
+        return NextResponse.json({ error: "fecha_fin debe tener el formato YYYY-MM-DD." }, { status: 400 });
+      }
+      metaParaSimular.fecha_fin = fechaFinParam;
+    }
+
     const resumen = await revisarMeta(metaParaSimular, true);
     return NextResponse.json({
       ok: true,
@@ -276,6 +315,7 @@ async function revisarMeta(meta: Meta, simular: boolean) {
 
   const hastaEfectivo = hoy < meta.fecha_fin ? hoy : meta.fecha_fin;
   const ultimosEjecutados = await obtenerUltimosCambiosEjecutados(meta.user_id);
+  let contadorEstadoDesconocido = 0;
 
   for (const campana of campanasActivas) {
     // El tope diario nunca frena una simulación -- el punto es ver qué
@@ -343,19 +383,27 @@ async function revisarMeta(meta: Meta, simular: boolean) {
       continue;
     }
 
-    // Capa 2 contra el estado cacheado de campanas_publicadas: una
-    // campaña "activa" sin ningún dato real en las últimas 48h (el
-    // último día con snapshot quedó muy atrás) se trata como "estado
-    // desconocido" -- no se confía en que de verdad siga corriendo en
-    // Meta, y no se dispara ninguna regla sobre ella. snapshotsCampana
-    // viene ordenado ascendente por fecha_bogota (ver obtenerSnapshotsDiarios).
+    // Capa 2 contra el estado cacheado de campanas_publicadas: por
+    // GASTO, no por filas -- sync-meta-insights escribe una fila diaria
+    // para toda campaña que no esté "eliminada", incluso con $0 (una
+    // campaña pausada en Meta sigue generando filas), así que "hay una
+    // fila reciente" no prueba que de verdad esté corriendo. Una
+    // campaña "activa" con $0 de gasto en sus últimos 2 días con datos
+    // (o sin ninguna fila en las últimas 48h) se trata como "estado
+    // desconocido" -- no se confía en que siga corriendo en Meta, y no
+    // se dispara ninguna regla sobre ella. snapshotsCampana viene
+    // ordenado ascendente por fecha_bogota (ver obtenerSnapshotsDiarios).
     const ultimoDiaConDatos = snapshotsCampana[snapshotsCampana.length - 1].fecha_bogota;
     const diasDesdeUltimoDato = Date.now() - inicioDiaBogota(ultimoDiaConDatos).getTime();
-    if (diasDesdeUltimoDato > HORAS_SIN_DATOS_ESTADO_DESCONOCIDO_MS) {
-      evaluacion.motivo = "estado_desconocido_sin_datos_recientes";
+    const sinFilasRecientes = diasDesdeUltimoDato > HORAS_SIN_DATOS_ESTADO_DESCONOCIDO_MS;
+    const ultimosDosConDatos = snapshotsCampana.slice(-2);
+    const sinGastoReciente = ultimosDosConDatos.every((f) => f.spend === 0);
+    if (sinFilasRecientes || sinGastoReciente) {
+      evaluacion.motivo = "estado_desconocido_sin_gasto_reciente";
       evaluacion.dias_con_datos = snapshotsCampana.length;
       evaluacion.ultimo_dia_con_datos = ultimoDiaConDatos;
       evaluaciones.push(evaluacion);
+      contadorEstadoDesconocido++;
       continue;
     }
 
@@ -479,6 +527,27 @@ async function revisarMeta(meta: Meta, simular: boolean) {
       evaluacion.motivo = evaluacion.motivo || "ninguna_regla_aplico";
     }
     evaluaciones.push(evaluacion);
+  }
+
+  // Si NINGUNA campaña activa tenía gasto reciente (todas "estado
+  // desconocido"), pausar/ajustar_presupuesto/crear_creativos no se
+  // pudieron evaluar en ninguna -- a efectos prácticos no hay ninguna
+  // campaña corriendo de verdad, así que se trata igual que si
+  // campanasActivas.length fuera 0: se propone generar una estrategia
+  // nueva en vez de quedarse sin proponer nada.
+  if (contadorEstadoDesconocido === campanasActivas.length) {
+    const resultado = await proponerSiNoDuplicado(
+      meta,
+      {
+        asistente: "estratega",
+        accion: "generar_estrategia",
+        parametros: {},
+        texto: textoGenerarEstrategia({ tipo: meta.tipo, cantidadObjetivo: meta.cantidad_objetivo }),
+      },
+      simular
+    );
+    if (resultado.propuso && !simular) propuestasCreadasEnEstaCorrida++;
+    evaluaciones.push({ regla: "ninguna_campana_con_gasto_reciente", propuso: resultado.propuso, propuesta: resultado.propuesta });
   }
 
   await registrarRevision(meta, { evaluaciones, avance_resumen: avanceResumen }, simular);
