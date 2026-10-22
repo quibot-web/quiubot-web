@@ -6,6 +6,7 @@
 // factorizada para reusarla desde /api/propuestas/[id]/aprobar y
 // /ajustar sin duplicar sus verificaciones de seguridad.
 import { supabaseAdmin } from "@/lib/supabase";
+import { inferirObjetivoId } from "@/app/lib/metas";
 import type { Asistente, AccionPropuesta, Propuesta } from "@/app/lib/metas";
 
 export type PropuestaUnificada = {
@@ -174,47 +175,24 @@ type UsuarioEjecutor = { id: string; email: string; meta_access_token: string | 
 // {ok:false, motivo, error} cuando falla -- token_meta | meta | accion).
 type ResultadoEjecucion = { ok: true } | { ok: false; error: string; motivo?: string; status: number };
 
-// Ejecuta de verdad pausar/ajustar_presupuesto contra Meta (via
-// aplicar_sugerencia), con las verificaciones pedidas: la campaña debe
-// ser del usuario que aprueba, y el Autopiloto de su meta activa no
-// puede estar pausado. crear_creativos queda "aprobada" con
-// resultado.etapa="esperando_fotos" (no ejecuta nada todavía -- no hay
-// fotos de producto guardadas por campaña, ver subirFotosCrearCreativos).
-// generar_estrategia y agregar_anuncios (fase 2, pendiente) quedan solo
-// "aprobada" sin más.
-export async function ejecutarPropuesta(propuesta: Propuesta, usuario: UsuarioEjecutor): Promise<ResultadoEjecucion> {
-  const ahora = new Date().toISOString();
+type CampanaEjecucion = {
+  id: string;
+  user_id: string;
+  meta_campaign_id: string | null;
+  meta_adset_id: string | null;
+  presupuesto_diario: number | null;
+  objetivo: string | null;
+  objetivo_id: string | null;
+};
 
-  if (propuesta.accion === "crear_creativos") {
-    await supabaseAdmin
-      .from("propuestas")
-      .update({ estado: "aprobada", decidido_en: ahora, decidido_por: usuario.id, resultado: { etapa: "esperando_fotos" } })
-      .eq("id", propuesta.id);
-    await supabaseAdmin.from("bitacora").insert({
-      user_id: usuario.id,
-      meta_id: propuesta.meta_id,
-      propuesta_id: propuesta.id,
-      tipo_evento: "propuesta_aprobada",
-      detalle: { accion: propuesta.accion, etapa: "esperando_fotos" },
-    });
-    return { ok: true };
-  }
-
-  if (propuesta.accion !== "pausar" && propuesta.accion !== "ajustar_presupuesto") {
-    await supabaseAdmin
-      .from("propuestas")
-      .update({ estado: "aprobada", decidido_en: ahora, decidido_por: usuario.id })
-      .eq("id", propuesta.id);
-    await supabaseAdmin.from("bitacora").insert({
-      user_id: usuario.id,
-      meta_id: propuesta.meta_id,
-      propuesta_id: propuesta.id,
-      tipo_evento: "propuesta_aprobada",
-      detalle: { accion: propuesta.accion },
-    });
-    return { ok: true };
-  }
-
+// Validación compartida por toda acción que de verdad toca Meta
+// (pausar, ajustar_presupuesto, agregar_anuncios): la campaña debe ser
+// del usuario que aprueba, y el Autopiloto de su meta activa no puede
+// estar pausado.
+async function verificarCampanaYAutopiloto(
+  propuesta: Propuesta,
+  usuario: UsuarioEjecutor
+): Promise<{ ok: true; campana: CampanaEjecucion } | { ok: false; error: string; status: number }> {
   const campanaId = (propuesta.parametros as any)?.campana_id;
   if (!campanaId) {
     return { ok: false, error: "A esta propuesta le falta la campaña en sus parámetros.", status: 400 };
@@ -222,7 +200,7 @@ export async function ejecutarPropuesta(propuesta: Propuesta, usuario: UsuarioEj
 
   const { data: campana } = await supabaseAdmin
     .from("campanas_publicadas")
-    .select("id, user_id, meta_campaign_id, meta_adset_id, presupuesto_diario")
+    .select("id, user_id, meta_campaign_id, meta_adset_id, presupuesto_diario, objetivo, objetivo_id")
     .eq("id", campanaId)
     .eq("user_id", usuario.id)
     .maybeSingle();
@@ -260,6 +238,58 @@ export async function ejecutarPropuesta(propuesta: Propuesta, usuario: UsuarioEj
     return { ok: false, error: "Tu cuenta de Meta no está conectada.", status: 400 };
   }
 
+  return { ok: true, campana };
+}
+
+// Ejecuta de verdad pausar/ajustar_presupuesto (via aplicar_sugerencia)
+// y agregar_anuncios (via el webhook nuevo), con la misma verificación
+// de campaña+Autopiloto para las tres. crear_creativos queda "aprobada"
+// con resultado.etapa="esperando_fotos" (no ejecuta nada todavía -- no
+// hay fotos de producto guardadas por campaña, ver
+// /api/propuestas/[id]/subir-fotos). generar_estrategia queda solo
+// "aprobada" -- /decisiones redirige a /estrategia.
+export async function ejecutarPropuesta(propuesta: Propuesta, usuario: UsuarioEjecutor): Promise<ResultadoEjecucion> {
+  const ahora = new Date().toISOString();
+
+  if (propuesta.accion === "crear_creativos") {
+    await supabaseAdmin
+      .from("propuestas")
+      .update({ estado: "aprobada", decidido_en: ahora, decidido_por: usuario.id, resultado: { etapa: "esperando_fotos" } })
+      .eq("id", propuesta.id);
+    await supabaseAdmin.from("bitacora").insert({
+      user_id: usuario.id,
+      meta_id: propuesta.meta_id,
+      propuesta_id: propuesta.id,
+      tipo_evento: "propuesta_aprobada",
+      detalle: { accion: propuesta.accion, etapa: "esperando_fotos" },
+    });
+    return { ok: true };
+  }
+
+  if (propuesta.accion === "generar_estrategia") {
+    await supabaseAdmin
+      .from("propuestas")
+      .update({ estado: "aprobada", decidido_en: ahora, decidido_por: usuario.id })
+      .eq("id", propuesta.id);
+    await supabaseAdmin.from("bitacora").insert({
+      user_id: usuario.id,
+      meta_id: propuesta.meta_id,
+      propuesta_id: propuesta.id,
+      tipo_evento: "propuesta_aprobada",
+      detalle: { accion: propuesta.accion },
+    });
+    return { ok: true };
+  }
+
+  const validacion = await verificarCampanaYAutopiloto(propuesta, usuario);
+  if (!validacion.ok) return validacion;
+  const { campana } = validacion;
+
+  if (propuesta.accion === "agregar_anuncios") {
+    return ejecutarAgregarAnuncios(propuesta, usuario, campana, ahora);
+  }
+
+  // pausar / ajustar_presupuesto, via aplicar_sugerencia.
   // accion.tipo (no "accion.accion") y accion.porcentaje solo para
   // ajustar_presupuesto -- contrato de aplicar_sugerencia en n8n.
   // meta_adset_id solo si la campaña tiene uno.
@@ -330,6 +360,104 @@ export async function ejecutarPropuesta(propuesta: Propuesta, usuario: UsuarioEj
       propuesta_id: propuesta.id,
       tipo_evento: "propuesta_aprobada_fallo",
       detalle: { accion: propuesta.accion, error: mensajeError },
+    });
+    return { ok: false, error: mensajeError, status: 503 };
+  }
+}
+
+// Ejecuta agregar_anuncios contra el webhook nuevo de n8n -- publica los
+// creativos que generó crear_creativos (ya revisados/ajustados por el
+// cliente) como anuncios reales dentro de la campaña existente.
+async function ejecutarAgregarAnuncios(
+  propuesta: Propuesta,
+  usuario: UsuarioEjecutor,
+  campana: CampanaEjecucion,
+  ahora: string
+): Promise<ResultadoEjecucion> {
+  const objetivoId = inferirObjetivoId(campana);
+  const creativos = (propuesta.parametros as any)?.creativos;
+
+  if (!objetivoId || !Array.isArray(creativos) || creativos.length === 0) {
+    return { ok: false, error: "A esta propuesta le faltan los creativos o el objetivo de la campaña.", status: 400 };
+  }
+
+  const payloadN8n: Record<string, unknown> = {
+    email: usuario.email,
+    propuesta_id: propuesta.id,
+    meta_campaign_id: campana.meta_campaign_id,
+    objetivo_id: objetivoId,
+    estado: "ACTIVE",
+    creativos,
+  };
+  if (campana.meta_adset_id) payloadN8n.meta_adset_id = campana.meta_adset_id;
+
+  try {
+    const n8nRes = await fetch("https://n8n.quiubot.site/webhook/agregar_anuncios", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(payloadN8n),
+    });
+
+    const data = await n8nRes.json().catch(() => ({}));
+
+    if (!n8nRes.ok || data.ok === false) {
+      // 422/400 {ok:false, paso, motivo?, error} -- se muestra tal cual,
+      // igual que aplicar_sugerencia. motivo:"token_meta" se traduce a
+      // un aviso concreto de reconectar Meta.
+      const motivo = data.motivo as string | undefined;
+      const mensajeError =
+        motivo === "token_meta"
+          ? "Tu conexión con Meta expiró o no es válida. Reconéctala en Integraciones."
+          : data.error || "No se pudo agregar los anuncios en Meta";
+
+      await supabaseAdmin
+        .from("propuestas")
+        .update({ estado: "fallida", decidido_en: ahora, decidido_por: usuario.id, resultado: { error: mensajeError, motivo, paso: data.paso } })
+        .eq("id", propuesta.id);
+      await supabaseAdmin.from("bitacora").insert({
+        user_id: usuario.id,
+        meta_id: propuesta.meta_id,
+        propuesta_id: propuesta.id,
+        tipo_evento: "propuesta_aprobada_fallo",
+        detalle: { accion: "agregar_anuncios", error: mensajeError, motivo, paso: data.paso },
+      });
+      return { ok: false, error: mensajeError, motivo, status: n8nRes.status || 502 };
+    }
+
+    await supabaseAdmin
+      .from("propuestas")
+      .update({
+        estado: "ejecutada",
+        decidido_en: ahora,
+        decidido_por: usuario.id,
+        resultado: {
+          meta_adset_id: data.meta_adset_id ?? campana.meta_adset_id,
+          anuncios_creados: data.anuncios_creados ?? [],
+          anuncios_fallidos: data.anuncios_fallidos ?? [],
+          omitidos: data.omitidos ?? [],
+        },
+      })
+      .eq("id", propuesta.id);
+    await supabaseAdmin.from("bitacora").insert({
+      user_id: usuario.id,
+      meta_id: propuesta.meta_id,
+      propuesta_id: propuesta.id,
+      tipo_evento: "propuesta_aprobada_ejecutada",
+      detalle: { accion: "agregar_anuncios", campana_id: campana.id, anuncios_creados: (data.anuncios_creados ?? []).length },
+    });
+    return { ok: true };
+  } catch (err) {
+    const mensajeError = "No se pudo conectar con n8n";
+    await supabaseAdmin
+      .from("propuestas")
+      .update({ estado: "fallida", decidido_en: ahora, decidido_por: usuario.id, resultado: { error: mensajeError } })
+      .eq("id", propuesta.id);
+    await supabaseAdmin.from("bitacora").insert({
+      user_id: usuario.id,
+      meta_id: propuesta.meta_id,
+      propuesta_id: propuesta.id,
+      tipo_evento: "propuesta_aprobada_fallo",
+      detalle: { accion: "agregar_anuncios", error: mensajeError },
     });
     return { ok: false, error: mensajeError, status: 503 };
   }

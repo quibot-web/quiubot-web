@@ -94,6 +94,20 @@ export function campanaCoincideConTipo(
   return campana.objetivo === OBJETIVO_META_POR_TIPO[tipo];
 }
 
+// Para el body de agregar_anuncios (necesita objetivo_id siempre, no el
+// objetivo crudo de Meta) -- mismo fallback que campanaCoincideConTipo,
+// pero devolviendo el id en vez de un booleano. Solo cubre los dos tipos
+// de meta que existen hoy (conversaciones_whatsapp, leads); como toda
+// propuesta de agregar_anuncios nace de una campaña ya asociada a una
+// meta, no hace falta cubrir los demás objetivos del catálogo.
+export function inferirObjetivoId(campana: { objetivo_id: string | null; objetivo: string | null }): string | null {
+  if (campana.objetivo_id) return campana.objetivo_id;
+  for (const tipo of Object.keys(OBJETIVO_META_POR_TIPO) as TipoMeta[]) {
+    if (campana.objetivo === OBJETIVO_META_POR_TIPO[tipo]) return OBJETIVO_ID_POR_TIPO[tipo];
+  }
+  return null;
+}
+
 export type CampanaDeMeta = {
   id: string;
   nombre: string;
