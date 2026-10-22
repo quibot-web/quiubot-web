@@ -84,7 +84,7 @@ export default function DecisionesPage() {
   const [procesandoId, setProcesandoId] = useState<string | null>(null);
   const [ajustandoId, setAjustandoId] = useState<string | null>(null);
   const [porcentajeAjuste, setPorcentajeAjuste] = useState("20");
-  const [error, setError] = useState<{ mensaje: string; motivo?: string } | null>(null);
+  const [error, setError] = useState<{ mensaje: string; motivo?: string; paso?: string } | null>(null);
 
   const [mostrarHerramientas, setMostrarHerramientas] = useState(false);
   const [mostrarHistorial, setMostrarHistorial] = useState(false);
@@ -125,7 +125,7 @@ export default function DecisionesPage() {
       const res = await fetch(url, { method: "POST" });
       const data = await res.json();
       if (!res.ok) {
-        setError({ mensaje: data.error || "No se pudo aprobar.", motivo: data.motivo });
+        setError({ mensaje: data.error || "No se pudo aprobar.", motivo: data.motivo, paso: data.paso });
         return;
       }
       // El Estratega todavía no publica nada solo -- aprobar esto solo
@@ -168,7 +168,7 @@ export default function DecisionesPage() {
       });
       const data = await res.json();
       if (!res.ok) {
-        setError({ mensaje: data.error || "No se pudo ajustar.", motivo: data.motivo });
+        setError({ mensaje: data.error || "No se pudo ajustar.", motivo: data.motivo, paso: data.paso });
         return;
       }
       setAjustandoId(null);
@@ -214,10 +214,17 @@ export default function DecisionesPage() {
           {error && (
             <div style={{ background: "#FEF0EF", color: "#B3261E", padding: "10px 14px", borderRadius: 10, fontSize: 13.5, marginBottom: 16 }}>
               {error.mensaje}
-              {error.motivo && (
+              {(error.motivo || error.paso) && (
                 <span style={{ display: "block", fontSize: 12, opacity: 0.8, marginTop: 2 }}>
-                  Motivo: {MOTIVO_LABEL[error.motivo] || error.motivo}
+                  {error.paso && `Paso: ${error.paso}`}
+                  {error.paso && error.motivo && " · "}
+                  {error.motivo && `Motivo: ${MOTIVO_LABEL[error.motivo] || error.motivo}`}
                 </span>
+              )}
+              {error.motivo === "token_meta" && (
+                <a href="/integraciones" style={{ display: "inline-block", marginTop: 6, color: "#B3261E", fontWeight: 600, textDecoration: "underline" }}>
+                  Reconectar mi cuenta de Meta
+                </a>
               )}
             </div>
           )}
@@ -377,6 +384,20 @@ const ASISTENTES: Asistente[] = ["director", "marca", "estratega", "creativo", "
 const ACCIONES: AccionPropuesta[] = ["generar_estrategia", "crear_creativos", "publicar_campana", "pausar", "ajustar_presupuesto", "agregar_anuncios"];
 const ACCIONES_CON_CAMPANA = new Set<AccionPropuesta>(["pausar", "ajustar_presupuesto", "crear_creativos", "agregar_anuncios"]);
 
+// Mismo asistente que usa de verdad el Director/el encadenamiento (ver
+// app/api/cron/director/route.ts y revisarGeneracionCreativos en
+// app/lib/propuestas.ts) -- se sugiere al cambiar de acción en la
+// herramienta de prueba para no crear propuestas con combinaciones que
+// no pasarían en la vida real (ej. agregar_anuncios con "estratega").
+const ASISTENTE_POR_ACCION: Record<AccionPropuesta, Asistente> = {
+  generar_estrategia: "estratega",
+  crear_creativos: "creativo",
+  publicar_campana: "publicador",
+  pausar: "optimizador",
+  ajustar_presupuesto: "optimizador",
+  agregar_anuncios: "publicador",
+};
+
 type JobListo = { id: string; creado_en: string; total_creativos: number; preview_url: string | null };
 
 function HerramientaPruebaPropuesta({ onCreada }: { onCreada: () => void }) {
@@ -437,7 +458,16 @@ function HerramientaPruebaPropuesta({ onCreada }: { onCreada: () => void }) {
         <select value={asistente} onChange={(e) => setAsistente(e.target.value as Asistente)} style={{ padding: "7px 10px", borderRadius: 8, border: "1px solid #ddd", fontSize: 12.5 }}>
           {ASISTENTES.map((a) => <option key={a} value={a}>{NOMBRE_ASISTENTE[a]}</option>)}
         </select>
-        <select value={accion} onChange={(e) => { setAccion(e.target.value as AccionPropuesta); setJobId(""); }} style={{ padding: "7px 10px", borderRadius: 8, border: "1px solid #ddd", fontSize: 12.5 }}>
+        <select
+          value={accion}
+          onChange={(e) => {
+            const nuevaAccion = e.target.value as AccionPropuesta;
+            setAccion(nuevaAccion);
+            setAsistente(ASISTENTE_POR_ACCION[nuevaAccion]);
+            setJobId("");
+          }}
+          style={{ padding: "7px 10px", borderRadius: 8, border: "1px solid #ddd", fontSize: 12.5 }}
+        >
           {ACCIONES.map((a) => <option key={a} value={a}>{CATALOGO_LABEL[a]}</option>)}
         </select>
         {ACCIONES_CON_CAMPANA.has(accion) && (

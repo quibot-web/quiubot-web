@@ -73,7 +73,7 @@ export const CATALOGO_ACCIONES: Record<
   agregar_anuncios: {
     label: "Agregar anuncios",
     titulo: "Agregar anuncios a una campaña",
-    justificacion: "Propuesta de prueba: el Creativo agregaría anuncios nuevos a esta campaña.",
+    justificacion: "Propuesta de prueba: el Publicador agregaría anuncios nuevos a esta campaña.",
     impactoEsperado: "Más variedad de anuncios compitiendo dentro de la misma campaña.",
     requiereCampana: true,
   },
@@ -179,7 +179,7 @@ type UsuarioEjecutor = { id: string; email: string; meta_access_token: string | 
 
 // motivo viene tal cual de n8n (aplicar_sugerencia responde 422
 // {ok:false, motivo, error} cuando falla -- token_meta | meta | accion).
-type ResultadoEjecucion = { ok: true } | { ok: false; error: string; motivo?: string; status: number };
+type ResultadoEjecucion = { ok: true } | { ok: false; error: string; motivo?: string; paso?: string; status: number };
 
 type CampanaEjecucion = {
   id: string;
@@ -380,11 +380,21 @@ async function ejecutarAgregarAnuncios(
   campana: CampanaEjecucion,
   ahora: string
 ): Promise<ResultadoEjecucion> {
-  const objetivoId = inferirObjetivoId(campana);
-  const creativos = (propuesta.parametros as any)?.creativos;
+  // objetivo_id es solo respaldo para el webhook (lo usa cuando el
+  // conjunto todavía no tiene ningún anuncio del que copiar botón/link;
+  // si ya tiene uno, ni lo necesita) -- nunca bloquea acá. Se manda si
+  // se puede resolver (propio o inferido, ver inferirObjetivoId), vacío
+  // si no -- el webhook es quien decide si realmente le hace falta y
+  // responde su propio error claro en ese caso.
+  const objetivoId = inferirObjetivoId(campana) ?? "";
+  const creativosEntrada = (propuesta.parametros as any)?.creativos;
+  const creativosValidos = Array.isArray(creativosEntrada) ? creativosEntrada.filter((c: any) => c?.url_imagen) : [];
 
-  if (!objetivoId || !Array.isArray(creativos) || creativos.length === 0) {
-    return { ok: false, error: "A esta propuesta le faltan los creativos o el objetivo de la campaña.", status: 400 };
+  if (!campana.meta_campaign_id) {
+    return { ok: false, error: "A esta campaña le falta el meta_campaign_id.", status: 400 };
+  }
+  if (creativosValidos.length === 0) {
+    return { ok: false, error: "Ningún creativo de esta propuesta tiene url_imagen.", status: 400 };
   }
 
   const payloadN8n: Record<string, unknown> = {
@@ -393,7 +403,7 @@ async function ejecutarAgregarAnuncios(
     meta_campaign_id: campana.meta_campaign_id,
     objetivo_id: objetivoId,
     estado: "ACTIVE",
-    creativos,
+    creativos: creativosValidos,
   };
   if (campana.meta_adset_id) payloadN8n.meta_adset_id = campana.meta_adset_id;
 
@@ -408,26 +418,25 @@ async function ejecutarAgregarAnuncios(
 
     if (!n8nRes.ok || data.ok === false) {
       // 422/400 {ok:false, paso, motivo?, error} -- se muestra tal cual,
-      // igual que aplicar_sugerencia. motivo:"token_meta" se traduce a
-      // un aviso concreto de reconectar Meta.
+      // sin reescribirlo (igual que aplicar_sugerencia). motivo:"token_meta"
+      // además dispara un aviso de reconectar Meta en la bandeja, sin
+      // reemplazar el mensaje real del webhook.
       const motivo = data.motivo as string | undefined;
-      const mensajeError =
-        motivo === "token_meta"
-          ? "Tu conexión con Meta expiró o no es válida. Reconéctala en Integraciones."
-          : data.error || "No se pudo agregar los anuncios en Meta";
+      const paso = data.paso as string | undefined;
+      const mensajeError = data.error || "No se pudo agregar los anuncios en Meta";
 
       await supabaseAdmin
         .from("propuestas")
-        .update({ estado: "fallida", decidido_en: ahora, decidido_por: usuario.id, resultado: { error: mensajeError, motivo, paso: data.paso } })
+        .update({ estado: "fallida", decidido_en: ahora, decidido_por: usuario.id, resultado: { error: mensajeError, motivo, paso } })
         .eq("id", propuesta.id);
       await supabaseAdmin.from("bitacora").insert({
         user_id: usuario.id,
         meta_id: propuesta.meta_id,
         propuesta_id: propuesta.id,
         tipo_evento: "propuesta_aprobada_fallo",
-        detalle: { accion: "agregar_anuncios", error: mensajeError, motivo, paso: data.paso },
+        detalle: { accion: "agregar_anuncios", error: mensajeError, motivo, paso },
       });
-      return { ok: false, error: mensajeError, motivo, status: n8nRes.status || 502 };
+      return { ok: false, error: mensajeError, motivo, paso, status: n8nRes.status || 502 };
     }
 
     await supabaseAdmin
