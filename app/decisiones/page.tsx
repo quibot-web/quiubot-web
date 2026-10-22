@@ -30,6 +30,12 @@ const NOMBRE_ASISTENTE: Record<Asistente, string> = {
   optimizador: "Optimizador",
 };
 
+const MOTIVO_LABEL: Record<string, string> = {
+  token_meta: "tu conexión con Meta",
+  meta: "la campaña en Meta",
+  accion: "la acción solicitada",
+};
+
 const CATALOGO_LABEL: Record<AccionPropuesta, string> = {
   generar_estrategia: "Generar estrategia",
   crear_creativos: "Crear creativos",
@@ -65,7 +71,7 @@ export default function DecisionesPage() {
   const [procesandoId, setProcesandoId] = useState<string | null>(null);
   const [ajustandoId, setAjustandoId] = useState<string | null>(null);
   const [porcentajeAjuste, setPorcentajeAjuste] = useState("20");
-  const [error, setError] = useState<string | null>(null);
+  const [error, setError] = useState<{ mensaje: string; motivo?: string } | null>(null);
 
   const [mostrarHerramientas, setMostrarHerramientas] = useState(false);
   const [mostrarHistorial, setMostrarHistorial] = useState(false);
@@ -105,10 +111,11 @@ export default function DecisionesPage() {
       const url = p.origen === "notificacion" ? `/api/notificaciones/${idReal(p.id)}/aceptar` : `/api/propuestas/${p.id}/aprobar`;
       const res = await fetch(url, { method: "POST" });
       const data = await res.json();
-      if (!res.ok) throw new Error(data.error || "No se pudo aprobar.");
+      if (!res.ok) {
+        setError({ mensaje: data.error || "No se pudo aprobar.", motivo: data.motivo });
+        return;
+      }
       cargarPropuestas();
-    } catch (err: any) {
-      setError(err.message);
     } finally {
       setProcesandoId(null);
     }
@@ -121,10 +128,11 @@ export default function DecisionesPage() {
       const url = p.origen === "notificacion" ? `/api/notificaciones/${idReal(p.id)}/descartar` : `/api/propuestas/${p.id}/rechazar`;
       const res = await fetch(url, { method: "POST" });
       const data = await res.json();
-      if (!res.ok) throw new Error(data.error || "No se pudo rechazar.");
+      if (!res.ok) {
+        setError({ mensaje: data.error || "No se pudo rechazar." });
+        return;
+      }
       cargarPropuestas();
-    } catch (err: any) {
-      setError(err.message);
     } finally {
       setProcesandoId(null);
     }
@@ -140,11 +148,12 @@ export default function DecisionesPage() {
         body: JSON.stringify({ parametros: { ajuste_porcentaje: Number(porcentajeAjuste) } }),
       });
       const data = await res.json();
-      if (!res.ok) throw new Error(data.error || "No se pudo ajustar.");
+      if (!res.ok) {
+        setError({ mensaje: data.error || "No se pudo ajustar.", motivo: data.motivo });
+        return;
+      }
       setAjustandoId(null);
       cargarPropuestas();
-    } catch (err: any) {
-      setError(err.message);
     } finally {
       setProcesandoId(null);
     }
@@ -185,7 +194,12 @@ export default function DecisionesPage() {
 
           {error && (
             <div style={{ background: "#FEF0EF", color: "#B3261E", padding: "10px 14px", borderRadius: 10, fontSize: 13.5, marginBottom: 16 }}>
-              {error}
+              {error.mensaje}
+              {error.motivo && (
+                <span style={{ display: "block", fontSize: 12, opacity: 0.8, marginTop: 2 }}>
+                  Motivo: {MOTIVO_LABEL[error.motivo] || error.motivo}
+                </span>
+              )}
             </div>
           )}
 

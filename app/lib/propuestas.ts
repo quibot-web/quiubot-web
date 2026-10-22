@@ -136,7 +136,9 @@ export async function obtenerPropuestasPendientes(userId: string): Promise<Propu
 
 type UsuarioEjecutor = { id: string; email: string; meta_access_token: string | null };
 
-type ResultadoEjecucion = { ok: true } | { ok: false; error: string; status: number };
+// motivo viene tal cual de n8n (aplicar_sugerencia responde 422
+// {ok:false, motivo, error} cuando falla -- token_meta | meta | accion).
+type ResultadoEjecucion = { ok: true } | { ok: false; error: string; motivo?: string; status: number };
 
 // Ejecuta de verdad pausar/ajustar_presupuesto contra Meta (via
 // aplicar_sugerencia), con las verificaciones pedidas: la campaña debe
@@ -206,37 +208,50 @@ export async function ejecutarPropuesta(propuesta: Propuesta, usuario: UsuarioEj
     return { ok: false, error: "Tu cuenta de Meta no está conectada.", status: 400 };
   }
 
+  // accion.tipo (no "accion.accion") y accion.porcentaje solo para
+  // ajustar_presupuesto -- contrato de aplicar_sugerencia en n8n.
+  // meta_adset_id solo si la campaña tiene uno.
+  const accionPayload: Record<string, unknown> = { tipo: propuesta.accion };
+  if (propuesta.accion === "ajustar_presupuesto") {
+    const porcentaje = (propuesta.parametros as any)?.ajuste_porcentaje;
+    if (porcentaje != null) accionPayload.porcentaje = porcentaje;
+  }
+  const payloadN8n: Record<string, unknown> = {
+    email: usuario.email,
+    meta_access_token: usuario.meta_access_token,
+    campana_id: campana.id,
+    meta_campaign_id: campana.meta_campaign_id,
+    presupuesto_actual: campana.presupuesto_diario,
+    accion: accionPayload,
+  };
+  if (campana.meta_adset_id) payloadN8n.meta_adset_id = campana.meta_adset_id;
+
   try {
     const n8nRes = await fetch("https://n8n.quiubot.site/webhook/aplicar_sugerencia", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({
-        email: usuario.email,
-        meta_access_token: usuario.meta_access_token,
-        campana_id: campana.id,
-        meta_campaign_id: campana.meta_campaign_id,
-        meta_adset_id: campana.meta_adset_id,
-        presupuesto_actual: campana.presupuesto_diario,
-        accion: { accion: propuesta.accion, ...(propuesta.parametros as object) },
-      }),
+      body: JSON.stringify(payloadN8n),
     });
 
     const data = await n8nRes.json().catch(() => ({}));
 
     if (!n8nRes.ok || data.ok === false) {
+      // n8n responde 422 {ok:false, motivo, error} -- se muestra tal cual,
+      // sin reescribirlo, y motivo (token_meta|meta|accion) queda en bitacora.
       const mensajeError = data.error || "No se pudo aplicar la propuesta en Meta";
+      const motivo = data.motivo as string | undefined;
       await supabaseAdmin
         .from("propuestas")
-        .update({ estado: "fallida", decidido_en: ahora, decidido_por: usuario.id, resultado: { error: mensajeError } })
+        .update({ estado: "fallida", decidido_en: ahora, decidido_por: usuario.id, resultado: { error: mensajeError, motivo } })
         .eq("id", propuesta.id);
       await supabaseAdmin.from("bitacora").insert({
         user_id: usuario.id,
         meta_id: propuesta.meta_id,
         propuesta_id: propuesta.id,
         tipo_evento: "propuesta_aprobada_fallo",
-        detalle: { accion: propuesta.accion, error: mensajeError },
+        detalle: { accion: propuesta.accion, error: mensajeError, motivo },
       });
-      return { ok: false, error: mensajeError, status: n8nRes.status || 502 };
+      return { ok: false, error: mensajeError, motivo, status: n8nRes.status || 502 };
     }
 
     await supabaseAdmin

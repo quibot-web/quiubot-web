@@ -39,7 +39,7 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
 
   const resultado = await ejecutarPropuesta(propuesta, usuario);
   if (!resultado.ok) {
-    return NextResponse.json({ error: resultado.error }, { status: resultado.status });
+    return NextResponse.json({ error: resultado.error, motivo: resultado.motivo }, { status: resultado.status });
   }
   return NextResponse.json({ ok: true });
 }
