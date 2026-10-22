@@ -88,9 +88,9 @@ const OBJETIVO_META_POR_TIPO: Record<TipoMeta, string> = {
 
 // Mismo objeto que manda /estrategia al webhook generar_estrategia (ver
 // OBJETIVOS en app/estrategia/page.tsx), reconstruido del lado del
-// servidor para la llamada interna que hace el ejecutor de
-// crear_creativos -- sin el campo "icon" (ahí es un componente React,
-// no sirve fuera del cliente).
+// servidor -- sin el campo "icon" (ahí es un componente React, no sirve
+// fuera del cliente). Solo respaldo: ver objetivoParaCampana abajo, que
+// es lo que de verdad usa el ejecutor de crear_creativos.
 export const OBJETIVO_PARA_TIPO: Record<
   TipoMeta,
   { id: string; label: string; desc: string; meta_objective: string; destino: string }
@@ -110,6 +110,51 @@ export const OBJETIVO_PARA_TIPO: Record<
     destino: "formulario",
   },
 };
+
+export type ObjetivoCatalogo = { id: string; label: string; desc: string; meta_objective: string; destino: string };
+
+// Catálogo completo de objetivos publicitarios -- igual a OBJETIVOS en
+// app/estrategia/page.tsx, sin "icon". A diferencia de OBJETIVO_PARA_TIPO
+// (solo los 2 tipos de meta de Autopiloto), este cubre los 6 objetivos
+// reales que puede tener cualquier campaña, para no asumir que el
+// objetivo de la meta es el mismo que el de la campaña puntual que se
+// está refrescando.
+export const OBJETIVOS_CATALOGO: ObjetivoCatalogo[] = [
+  { id: "venta_directa_web", label: "Venta Directa", desc: "Ventas inmediatas en tu sitio web.", meta_objective: "OUTCOME_SALES", destino: "sitio_web" },
+  { id: "venta_directa_whatsapp", label: "Venta Directa (WhatsApp)", desc: "Ventas por conversación directa en WhatsApp.", meta_objective: "OUTCOME_ENGAGEMENT", destino: "whatsapp" },
+  { id: "reconocimiento", label: "Reconocimiento", desc: "Más personas conocerán tu marca.", meta_objective: "OUTCOME_AWARENESS", destino: "pagina" },
+  { id: "retargeting", label: "Retargeting", desc: "Impacta a quienes ya te conocen.", meta_objective: "OUTCOME_TRAFFIC", destino: "sitio_web" },
+  { id: "leads", label: "Generación de Leads", desc: "Captura contactos interesados en tu producto.", meta_objective: "OUTCOME_LEADS", destino: "formulario" },
+  { id: "trafico_mensajes", label: "Tráfico", desc: "Lleva más visitas nuevas a tu sitio web.", meta_objective: "OUTCOME_TRAFFIC", destino: "sitio_web" },
+];
+
+const OBJETIVOS_POR_ID = new Map(OBJETIVOS_CATALOGO.map((o) => [o.id, o]));
+
+// El objetivo real de LA CAMPAÑA manda (su objetivo_id, o el que se
+// pueda inferir de su objetivo crudo de Meta) -- los anuncios nuevos
+// van dentro de esa campaña puntual, así que su texto tiene que
+// coincidir con el destino real (ej. no invitar a escribir por
+// WhatsApp dentro de una campaña de reconocimiento). El tipo de la
+// meta solo es respaldo si la campaña no resuelve a ningún objetivo
+// conocido (ninguno de los dos campos sirve). "retargeting" y
+// "trafico_mensajes" comparten OUTCOME_TRAFFIC -- si solo hay objetivo
+// crudo (sin objetivo_id) y es OUTCOME_TRAFFIC, se resuelve al primero
+// del catálogo (retargeting); no hay forma de distinguirlos sin
+// objetivo_id.
+export function objetivoParaCampana(
+  campana: { objetivo_id: string | null; objetivo: string | null },
+  tipoMeta: TipoMeta
+): ObjetivoCatalogo {
+  if (campana.objetivo_id) {
+    const porId = OBJETIVOS_POR_ID.get(campana.objetivo_id);
+    if (porId) return porId;
+  }
+  if (campana.objetivo) {
+    const porMeta = OBJETIVOS_CATALOGO.find((o) => o.meta_objective === campana.objetivo);
+    if (porMeta) return porMeta;
+  }
+  return OBJETIVO_PARA_TIPO[tipoMeta];
+}
 
 export function campanaCoincideConTipo(
   campana: { objetivo_id: string | null; objetivo: string | null },

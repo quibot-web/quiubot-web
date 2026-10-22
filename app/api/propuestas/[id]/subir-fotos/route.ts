@@ -2,7 +2,7 @@ import { auth } from "@/auth";
 import { NextRequest, NextResponse } from "next/server";
 import { supabaseAdmin } from "@/lib/supabase";
 import { desencriptarSiHaceFalta } from "@/lib/crypto";
-import { OBJETIVO_PARA_TIPO, type TipoMeta } from "@/app/lib/metas";
+import { objetivoParaCampana, type TipoMeta } from "@/app/lib/metas";
 
 const MIN_IMAGENES = 1;
 const MAX_IMAGENES = 3;
@@ -165,12 +165,17 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
   // Paso 1: conceptos nuevos -- generar_estrategia directo (sin pasar
   // por /api/generar-estrategia, así esto nunca cuenta en
   // estrategias_generadas: es un refresco que propone el Autopiloto).
-  const objetivoParaWebhook = meta?.tipo ? OBJETIVO_PARA_TIPO[meta.tipo as TipoMeta] : null;
-  if (!objetivoParaWebhook) {
+  // El objetivo sale primero de la CAMPAÑA (los anuncios nuevos van
+  // dentro de ella, su texto tiene que coincidir con su destino real --
+  // ej. no invitar a WhatsApp dentro de una campaña de reconocimiento);
+  // el tipo de la meta es solo respaldo si la campaña no resuelve a
+  // ninguno. Ver objetivoParaCampana en app/lib/metas.ts.
+  if (!meta?.tipo) {
     const mensajeError = "No se pudo determinar el objetivo publicitario de la meta.";
     await marcarFallida(mensajeError, "objetivo_meta_desconocido");
     return NextResponse.json({ error: mensajeError, paso: "objetivo_meta_desconocido" }, { status: 400 });
   }
+  const objetivoParaWebhook = objetivoParaCampana(campana, meta.tipo as TipoMeta);
 
   const angulosAEvitar =
     campana.meta_campaign_id && usuario.meta_access_token
