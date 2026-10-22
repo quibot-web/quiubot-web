@@ -86,12 +86,77 @@ const OBJETIVO_META_POR_TIPO: Record<TipoMeta, string> = {
   leads: "OUTCOME_LEADS",
 };
 
-function campanaCoincideConTipo(
+export function campanaCoincideConTipo(
   campana: { objetivo_id: string | null; objetivo: string | null },
   tipo: TipoMeta
 ): boolean {
   if (campana.objetivo_id) return campana.objetivo_id === OBJETIVO_ID_POR_TIPO[tipo];
   return campana.objetivo === OBJETIVO_META_POR_TIPO[tipo];
+}
+
+export type CampanaDeMeta = {
+  id: string;
+  nombre: string;
+  estado: string;
+  objetivo: string | null;
+  objetivo_id: string | null;
+  meta_campaign_id: string | null;
+  meta_adset_id: string | null;
+  presupuesto_diario: number | null;
+  fecha_publicacion: string | null;
+};
+
+// Campañas del usuario que coinciden con el tipo de una meta -- mismo
+// matcheo que usa sumarResultados (objetivo_id con fallback a objetivo),
+// pero con los campos que necesita el Director para evaluar reglas y
+// armar propuestas, no solo para sumar spend/conversiones.
+export async function obtenerCampanasDeMeta(tipo: TipoMeta, userId: string): Promise<CampanaDeMeta[]> {
+  const { data: campanas } = await supabaseAdmin
+    .from("campanas_publicadas")
+    .select("id, nombre, estado, objetivo, objetivo_id, meta_campaign_id, meta_adset_id, presupuesto_diario, fecha_publicacion")
+    .eq("user_id", userId);
+
+  return (campanas ?? []).filter((c) => campanaCoincideConTipo(c, tipo));
+}
+
+export type SnapshotDiario = {
+  fecha_bogota: string;
+  spend: number;
+  conversiones: number;
+  frequency: number | null;
+  ctr: number | null;
+  impresiones: number | null;
+};
+
+// Snapshots diarios de UNA campaña, deduplicados por día (misma defensa
+// que sumarResultados), con frequency/ctr/impresiones incluidos -- lo
+// que sumarResultados no trae porque solo le hacía falta spend y
+// conversiones. Pensado para que el Director compare "los últimos 3
+// días" contra "los primeros días" de una campaña.
+export async function obtenerSnapshotsDiarios(campanaId: string, desde: string, hasta: string): Promise<SnapshotDiario[]> {
+  const { data: filas } = await supabaseAdmin
+    .from("campanas_snapshots")
+    .select("fecha_bogota, spend, conversiones, frequency, ctr, impresiones, corrida_en")
+    .eq("campana_id", campanaId)
+    .gte("fecha_bogota", desde)
+    .lte("fecha_bogota", hasta);
+
+  const porDia = new Map<string, SnapshotDiario & { corrida_en: string }>();
+  for (const fila of filas ?? []) {
+    const existente = porDia.get(fila.fecha_bogota);
+    if (!existente || fila.corrida_en > existente.corrida_en) {
+      porDia.set(fila.fecha_bogota, {
+        fecha_bogota: fila.fecha_bogota,
+        spend: Number(fila.spend) || 0,
+        conversiones: Number(fila.conversiones) || 0,
+        frequency: fila.frequency != null ? Number(fila.frequency) : null,
+        ctr: fila.ctr != null ? Number(fila.ctr) : null,
+        impresiones: fila.impresiones != null ? Number(fila.impresiones) : null,
+        corrida_en: fila.corrida_en,
+      });
+    }
+  }
+  return [...porDia.values()].sort((a, b) => (a.fecha_bogota < b.fecha_bogota ? -1 : 1));
 }
 
 // Suma spend/conversiones de las campañas de un tipo (de un usuario, o de
