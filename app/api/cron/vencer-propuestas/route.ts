@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { timingSafeEqual } from "crypto";
 import { supabaseAdmin } from "@/lib/supabase";
+import { revisarGeneracionCreativos } from "@/app/lib/propuestas";
 
 function compararSeguro(a: string, b: string): boolean {
   const bufA = Buffer.from(a);
@@ -12,12 +13,16 @@ function compararSeguro(a: string, b: string): boolean {
 const VENCE_ESPERANDO_FOTOS_MS = 72 * 60 * 60 * 1000;
 
 // Llamado cada hora por un Schedule Trigger en n8n (mismo patrón que
-// sync-meta-insights). Dos barridos, ambos respaldo de algo que ya pasa
-// al leer: propuestas "pendiente" con vence_en cumplido (ver
-// obtenerPropuestasPendientes), y crear_creativos "aprobada" que lleva
-// más de 72h esperando que el cliente suba las fotos (ver
-// vencerPropuestasDelUsuario) -- así ninguna queda colgada para
-// siempre aunque el cliente nunca vuelva a abrir la bandeja.
+// sync-meta-insights). Tres cosas, todas respaldo de algo que normalmente
+// ya pasa solo: propuestas "pendiente" con vence_en cumplido (ver
+// obtenerPropuestasPendientes), crear_creativos "aprobada" que lleva más
+// de 72h esperando que el cliente suba las fotos (ver
+// vencerPropuestasDelUsuario), y crear_creativos en etapa "generando" --
+// normalmente el polling de /decisiones (mientras el cliente sigue ahí)
+// ya encadena la propuesta agregar_anuncios apenas el job termina, esto
+// es solo para cuando cerró la pestaña a mitad de la generación.
+// revisarGeneracionCreativos es idempotente, así que no importa si el
+// polling y este cron la revisan casi al mismo tiempo.
 export async function POST(req: NextRequest) {
   const adminSecret = process.env.ADMIN_SECRET;
   if (!adminSecret) {
@@ -53,9 +58,23 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ error: errorEsperandoFotos.message }, { status: 500 });
   }
 
+  const { data: generando } = await supabaseAdmin
+    .from("propuestas")
+    .select("id")
+    .eq("estado", "aprobada")
+    .eq("accion", "crear_creativos")
+    .eq("resultado->>etapa", "generando");
+
+  let revisadas = 0;
+  for (const propuesta of generando ?? []) {
+    await revisarGeneracionCreativos(propuesta.id);
+    revisadas++;
+  }
+
   return NextResponse.json({
     ok: true,
     vencidas: vencidasPendiente?.length ?? 0,
     vencidas_esperando_fotos: vencidasEsperandoFotos?.length ?? 0,
+    generando_revisadas: revisadas,
   });
 }
