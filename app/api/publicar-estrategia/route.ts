@@ -175,6 +175,7 @@ export async function POST(req: NextRequest) {
           user_id: usuario.id,
           nombre: estrategia?.campana?.nombre ?? "Campaña sin nombre",
           objetivo: estrategia?.campana?.objetivo_meta ?? null,
+          objetivo_id: estrategia?.campana?.objetivo_id ?? null,
           presupuesto_diario: estrategia?.campana?.presupuesto_diario_cop ?? null,
           efectividad_estimada: efectividad_final ?? estrategia?.efectividad ?? null,
           estado: "activa",
