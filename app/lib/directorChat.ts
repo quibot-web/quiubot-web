@@ -47,7 +47,10 @@ export function leadInPropuesta(
     case "ajustar_presupuesto":
       return `El Optimizador recomienda ajustar el presupuesto de ${campana}.`;
     case "agregar_anuncios": {
-      const n = cantidadCreativos ?? 0;
+      // Si no sabemos cuántos son, se omite el número -- nunca "0
+      // anuncios" inventado.
+      if (cantidadCreativos == null) return `El Publicador tiene anuncios nuevos listos para ${campana}.`;
+      const n = cantidadCreativos;
       const anuncio = n === 1 ? "anuncio" : "anuncios";
       const nuevo = n === 1 ? "nuevo" : "nuevos";
       const listo = n === 1 ? "listo" : "listos";
@@ -81,8 +84,10 @@ export function cuerpoPropuesta(datos: {
 }
 
 // Confirmación del Director tras ejecutar con éxito -- una por acción,
-// con los números reales. ajustar_presupuesto puede subir o bajar, por
-// eso dice "de $X a $Y" en vez de asumir que siempre sube.
+// con los números reales cuando los hay. Si falta un dato, se omite la
+// frase que lo necesita -- nunca se muestra un 0 o un vacío inventado
+// (ajustar_presupuesto puede subir o bajar, por eso "de $X a $Y" en
+// vez de asumir que siempre sube, pero solo si ambos números existen).
 export function confirmacionExito(
   accion: AccionPropuesta,
   datos: {
@@ -97,9 +102,13 @@ export function confirmacionExito(
     case "pausar":
       return `Listo, el Optimizador pausó ${campana}.`;
     case "ajustar_presupuesto":
-      return `Listo, el Optimizador ajustó el presupuesto de ${campana} de ${formatoCop(datos.presupuestoAntes ?? 0)} a ${formatoCop(datos.presupuestoDespues ?? 0)}.`;
+      if (datos.presupuestoAntes == null || datos.presupuestoDespues == null) {
+        return `Listo, el Optimizador ajustó el presupuesto de ${campana}.`;
+      }
+      return `Listo, el Optimizador ajustó el presupuesto de ${campana} de ${formatoCop(datos.presupuestoAntes)} a ${formatoCop(datos.presupuestoDespues)}.`;
     case "agregar_anuncios": {
-      const n = datos.cantidadAnuncios ?? 0;
+      if (datos.cantidadAnuncios == null) return `Listo, el Publicador agregó los anuncios a ${campana}.`;
+      const n = datos.cantidadAnuncios;
       return `Listo, el Publicador agregó ${n} anuncio${n === 1 ? "" : "s"} a ${campana}.`;
     }
     default:

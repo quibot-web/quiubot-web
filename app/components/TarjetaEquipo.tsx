@@ -53,8 +53,13 @@ export default function TarjetaEquipo() {
         const lista: any[] = propuestasData.propuestas ?? [];
         const conjunto = new Set<AsistenteId>(lista.map((p) => p.asistente));
         setAsistentesEsperando(conjunto);
-        if (lista.length > 0) {
-          const [masReciente, ...resto] = [...lista].sort((a, b) => (a.creadoEn < b.creadoEn ? 1 : -1));
+        // La burbuja muestra la propuesta más reciente -- las campañas
+        // con problema (origen "problema_campana") no compiten por ese
+        // lugar, solo aparecen si no hay ninguna propuesta real.
+        const reales = lista.filter((p) => p.origen !== "problema_campana");
+        const candidatos = reales.length > 0 ? reales : lista;
+        if (candidatos.length > 0) {
+          const [masReciente, ...resto] = [...candidatos].sort((a, b) => (a.creadoEn < b.creadoEn ? 1 : -1));
           setPrevia({ titulo: masReciente.titulo, asistente: masReciente.asistente, extra: resto.length });
         }
       })

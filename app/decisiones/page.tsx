@@ -331,7 +331,13 @@ function DecisionesContenido() {
 
   const estadoPorAsistente = construirEstadoPorAsistente(propuestas, pausado);
 
-  const propuestasFiltradas = filtro ? propuestas.filter((p) => p.asistente === filtro) : propuestas;
+  // Las campañas con problema no van en la línea de tiempo (no tienen
+  // una fecha real de cuándo empezó el problema, y no son "una
+  // conversación" -- son un estado actual) -- se muestran fijas arriba,
+  // aparte.
+  const sinFiltroOAsistente = (p: PropuestaUnificada) => !filtro || p.asistente === filtro;
+  const problemasCampana = propuestas.filter((p) => p.origen === "problema_campana").filter(sinFiltroOAsistente);
+  const propuestasFiltradas = propuestas.filter((p) => p.origen !== "problema_campana").filter(sinFiltroOAsistente);
 
   const idsPendientes = new Set(propuestas.map((p) => p.id));
   const historialFiltrado = (historial?.propuestas ?? [])
@@ -403,9 +409,11 @@ function DecisionesContenido() {
     const campanaNombre = nombreCampanaDe(p);
     const campanaId = campanaIdDe(p);
 
-    // Informativos: campañas con problema / notificaciones sin
-    // accion_sugerida -- un mensaje del Director, sin botones.
-    if (p.origen === "problema_campana" || p.origen === "notificacion_informativa") {
+    // Informativa: notificación sin accion_sugerida -- un mensaje del
+    // Director, sin botones. (Las campañas con problema, origen
+    // "problema_campana", ya no llegan hasta acá -- se muestran en el
+    // bloque fijo de arriba, ver problemasCampana.)
+    if (p.origen === "notificacion_informativa") {
       return (
         <div style={{ display: "flex", gap: 10 }}>
           <EsferaAsistente asistente="director" estado="normal" tamano={40} />
@@ -641,6 +649,27 @@ function DecisionesContenido() {
               </button>
             ))}
           </div>
+
+          {problemasCampana.length > 0 && (
+            <div style={{ background: "#FEF2F2", border: "1px solid #FCDADA", borderRadius: 14, padding: "14px 16px", marginBottom: 16 }}>
+              <p style={{ fontSize: 13, fontWeight: 700, color: "#B3261E", margin: "0 0 8px" }}>Esto sigue pendiente en tus campañas:</p>
+              <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
+                {problemasCampana.map((p) => {
+                  const campanaId = campanaIdDe(p);
+                  return (
+                    <div key={p.id} style={{ fontSize: 13, color: "#1a1a1a", lineHeight: 1.5 }}>
+                      {p.justificacion}
+                      {campanaId && (
+                        <a href={`/campanas?highlight=${campanaId}`} style={{ marginLeft: 6, color: "#B3261E", fontWeight: 600, textDecoration: "underline" }}>
+                          Ver campaña
+                        </a>
+                      )}
+                    </div>
+                  );
+                })}
+              </div>
+            </div>
+          )}
 
           {error && (
             <div style={{ background: "#FEF0EF", color: "#B3261E", padding: "10px 14px", borderRadius: 10, fontSize: 13.5, marginBottom: 16 }}>
