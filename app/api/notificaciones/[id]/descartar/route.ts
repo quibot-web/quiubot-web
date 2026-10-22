@@ -11,10 +11,19 @@ export async function POST(
   const session = await auth();
   if (!session?.user?.email) return NextResponse.json({ error: "No autorizado" }, { status: 401 });
 
+  const { data: usuario } = await supabaseAdmin
+    .from("usuarios")
+    .select("id")
+    .eq("email", session.user.email.trim().toLowerCase())
+    .single();
+
+  if (!usuario) return NextResponse.json({ error: "Usuario no encontrado" }, { status: 401 });
+
   const { error } = await supabaseAdmin
     .from("notificaciones")
     .update({ estado: "descartada" })
-    .eq("id", id);
+    .eq("id", id)
+    .eq("user_id", usuario.id);
 
   if (error) return NextResponse.json({ error: error.message }, { status: 500 });
   return NextResponse.json({ ok: true });

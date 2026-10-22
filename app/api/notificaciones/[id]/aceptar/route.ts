@@ -13,10 +13,21 @@ export async function POST(
 
   const emailBusqueda = session.user.email.trim().toLowerCase();
 
+  const { data: usuario } = await supabaseAdmin
+    .from("usuarios")
+    .select("id, meta_access_token")
+    .eq("email", emailBusqueda)
+    .single();
+
+  if (!usuario) {
+    return NextResponse.json({ error: "Usuario no encontrado" }, { status: 401 });
+  }
+
   const { data: notificacion, error: fetchError } = await supabaseAdmin
     .from("notificaciones")
     .select("*, campanas_publicadas(meta_campaign_id, meta_adset_id, presupuesto_diario)")
     .eq("id", id)
+    .eq("user_id", usuario.id)
     .single();
 
   if (fetchError || !notificacion) {
@@ -27,13 +38,7 @@ export async function POST(
     return NextResponse.json({ error: "Esta notificación no tiene una acción para aplicar." }, { status: 400 });
   }
 
-  const { data: usuario } = await supabaseAdmin
-    .from("usuarios")
-    .select("meta_access_token")
-    .eq("email", emailBusqueda)
-    .single();
-
-  if (!usuario?.meta_access_token) {
+  if (!usuario.meta_access_token) {
     return NextResponse.json({ error: "Tu cuenta de Meta no está conectada" }, { status: 400 });
   }
 
