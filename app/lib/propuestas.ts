@@ -480,83 +480,44 @@ async function ejecutarAgregarAnuncios(
   }
 }
 
-const TIMEOUT_GENERANDO_MS = 40 * 60 * 1000;
+// El límite de generando_conceptos (sin job_id todavía -- generar_estrategia
+// o crear_creativos no han respondido) es más corto que el de generando
+// (ya con job_id, esperando a que n8n termine, 4 a 24 min en lo normal).
+const TIMEOUT_GENERANDO_CONCEPTOS_MS = 40 * 60 * 1000;
+const TIMEOUT_GENERANDO_MS = 60 * 60 * 1000;
 
-// Revisa el job de creativos_jobs de una propuesta crear_creativos en
-// etapa "generando" -- la llama tanto el polling desde /decisiones
-// (mientras el cliente sigue ahí, sin esperar la corrida horaria) como
-// el cron de respaldo. Idempotente: si el job ya quedó "listo" y ya
-// existe su propuesta agregar_anuncios (parametros.propuesta_origen_id
-// = esta propuesta), no crea una segunda. El workflow de n8n puede
-// detenerse sin avisar (sin pasar a "listo" ni a "error"), así que
-// además de revisar el job, vence por tiempo: 40 minutos desde que
-// empezó a generar (resultado.generando_desde, o decidido_en como
-// respaldo para propuestas que quedaron "generando" antes de que ese
-// campo existiera) sin quedar lista -> fallida, con mensaje explícito.
-export async function revisarGeneracionCreativos(propuestaId: string): Promise<{ estado: string; etapa?: string }> {
-  const { data: propuesta } = await supabaseAdmin.from("propuestas").select("*").eq("id", propuestaId).single();
-  if (!propuesta || propuesta.accion !== "crear_creativos") return { estado: propuesta?.estado || "no_encontrada" };
+async function marcarCrearCreativosFallida(
+  propuesta: { user_id: string; meta_id: string | null },
+  propuestaId: string,
+  mensajeError: string,
+  paso: string,
+  jobId?: string | null
+) {
+  await supabaseAdmin
+    .from("propuestas")
+    .update({ estado: "fallida", resultado: { etapa: "fallida", error: mensajeError, job_id: jobId ?? null } })
+    .eq("id", propuestaId);
+  await supabaseAdmin.from("bitacora").insert({
+    user_id: propuesta.user_id,
+    meta_id: propuesta.meta_id,
+    propuesta_id: propuestaId,
+    tipo_evento: "propuesta_aprobada_fallo",
+    detalle: { accion: "crear_creativos", error: mensajeError, paso },
+  });
+}
 
-  const resultado = (propuesta.resultado as any) || {};
-
-  // El límite de 40 min cuenta desde que se subieron las fotos
-  // (resultado.generando_desde, fijado una sola vez), sin importar si
-  // sigue en "generando_conceptos" o ya pasó a "generando" -- el reloj
-  // no se reinicia entre esas dos etapas.
-  if (resultado.etapa === "generando_conceptos" || resultado.etapa === "generando") {
-    const desde = resultado.generando_desde || propuesta.decidido_en;
-    if (desde && Date.now() - new Date(desde).getTime() > TIMEOUT_GENERANDO_MS) {
-      const mensajeError = "La generación de creativos no terminó en 40 minutos -- el workflow pudo haberse detenido sin avisar.";
-      await supabaseAdmin
-        .from("propuestas")
-        .update({ estado: "fallida", resultado: { etapa: "fallida", error: mensajeError, job_id: resultado.job_id ?? null } })
-        .eq("id", propuestaId);
-      await supabaseAdmin.from("bitacora").insert({
-        user_id: propuesta.user_id,
-        meta_id: propuesta.meta_id,
-        propuesta_id: propuestaId,
-        tipo_evento: "propuesta_aprobada_fallo",
-        detalle: { accion: "crear_creativos", error: mensajeError, paso: "timeout_generando" },
-      });
-      return { estado: "fallida" };
-    }
-  }
-
-  // Si sigue en "generando_conceptos", el candado de procesarCreacionCreativos
-  // es quien decide si reintentarla -- el cron la vuelve a intentar por
-  // su cuenta (ver /api/cron/vencer-propuestas), esto solo cubre el
-  // timeout de arriba para esa etapa.
-  if (resultado.etapa !== "generando" || !resultado.job_id) {
-    return { estado: propuesta.estado, etapa: resultado.etapa };
-  }
-
-  const { data: job } = await supabaseAdmin
-    .from("creativos_jobs")
-    .select("id, estado, creativos, error_mensaje")
-    .eq("id", resultado.job_id)
-    .maybeSingle();
-
-  if (!job || job.estado === "procesando") {
-    return { estado: propuesta.estado, etapa: "generando" };
-  }
-
-  if (job.estado === "error") {
-    const mensajeError = job.error_mensaje || "La generación de creativos falló.";
-    await supabaseAdmin
-      .from("propuestas")
-      .update({ estado: "fallida", resultado: { etapa: "fallida", error: mensajeError } })
-      .eq("id", propuestaId);
-    await supabaseAdmin.from("bitacora").insert({
-      user_id: propuesta.user_id,
-      meta_id: propuesta.meta_id,
-      propuesta_id: propuestaId,
-      tipo_evento: "propuesta_aprobada_fallo",
-      detalle: { accion: "crear_creativos", error: mensajeError },
-    });
-    return { estado: "fallida" };
-  }
-
-  // job.estado === "listo"
+// Encadena agregar_anuncios a partir de un creativos_jobs ya "listo" --
+// la usan tanto el polling normal (revisarGeneracionCreativos) como la
+// recuperación manual (recuperarCreativosFallidos, para cuando el
+// timeout alcanzó a marcar fallida la propuesta unos segundos antes de
+// que se viera que el job ya había terminado bien -- las imágenes ya
+// se generaron y se pagaron, no se pierden). Idempotente vía
+// parametros->>propuesta_origen_id.
+async function encadenarAgregarAnuncios(
+  propuesta: { meta_id: string | null; user_id: string; parametros: unknown },
+  propuestaId: string,
+  job: { id: string; creativos: unknown }
+) {
   const { data: yaExiste } = await supabaseAdmin
     .from("propuestas")
     .select("id")
@@ -579,7 +540,7 @@ export async function revisarGeneracionCreativos(propuestaId: string): Promise<{
           propuesta_origen_id: propuestaId,
         },
         titulo: "Agregar los creativos nuevos a la campaña",
-        justificacion: `El Creativo terminó de generar ${(job.creativos ?? []).length} creativo(s) nuevo(s). Revísalos antes de que salgan al aire.`,
+        justificacion: `El Creativo terminó de generar ${((job.creativos as unknown[]) ?? []).length} creativo(s) nuevo(s). Revísalos antes de que salgan al aire.`,
         impacto_esperado: "Anuncios nuevos compitiendo dentro de la misma campaña.",
         costo_estimado_cop: null,
         estado: "pendiente",
@@ -599,10 +560,130 @@ export async function revisarGeneracionCreativos(propuestaId: string): Promise<{
 
   await supabaseAdmin
     .from("propuestas")
-    .update({ estado: "ejecutada", resultado: { etapa: "completado", job_id: resultado.job_id } })
+    .update({ estado: "ejecutada", resultado: { etapa: "completado", job_id: job.id } })
     .eq("id", propuestaId);
+}
 
-  return { estado: "ejecutada", etapa: "completado" };
+// Revisa una propuesta crear_creativos en etapa "generando_conceptos" o
+// "generando" -- la llama tanto el polling desde /decisiones (mientras
+// el cliente sigue ahí, sin esperar la corrida horaria) como el cron de
+// respaldo. El reloj de cada etapa es resultado.intento_desde, fijado
+// por procesarCreacionCreativos cuando ESE intento tomó el candado --
+// nunca resultado.generando_desde (la primera subida de fotos): un
+// reintento que arranca horas después, porque el intento anterior
+// murió sin avisar, no puede heredar el tiempo ya consumido por ese
+// intento muerto (visto en vivo: por eso venció por tiempo un intento
+// que sí había terminado bien).
+export async function revisarGeneracionCreativos(propuestaId: string): Promise<{ estado: string; etapa?: string }> {
+  const { data: propuesta } = await supabaseAdmin.from("propuestas").select("*").eq("id", propuestaId).single();
+  if (!propuesta || propuesta.accion !== "crear_creativos") return { estado: propuesta?.estado || "no_encontrada" };
+
+  const resultado = (propuesta.resultado as any) || {};
+  const desdeIntento = resultado.intento_desde || resultado.generando_desde || propuesta.decidido_en;
+
+  if (resultado.etapa === "generando_conceptos") {
+    // Todavía no hay job_id -- generar_estrategia o crear_creativos no
+    // han respondido. Si sigue acá, el candado de procesarCreacionCreativos
+    // decide si reintentarla (el cron la retoma por su cuenta); esto
+    // solo cubre el timeout.
+    if (desdeIntento && Date.now() - new Date(desdeIntento).getTime() > TIMEOUT_GENERANDO_CONCEPTOS_MS) {
+      await marcarCrearCreativosFallida(
+        propuesta,
+        propuestaId,
+        "La generación de creativos no terminó en 40 minutos -- el workflow pudo haberse detenido sin avisar.",
+        "timeout_generando_conceptos",
+        resultado.job_id
+      );
+      return { estado: "fallida" };
+    }
+    return { estado: propuesta.estado, etapa: resultado.etapa };
+  }
+
+  if (resultado.etapa !== "generando" || !resultado.job_id) {
+    return { estado: propuesta.estado, etapa: resultado.etapa };
+  }
+
+  const { data: job } = await supabaseAdmin
+    .from("creativos_jobs")
+    .select("id, estado, creativos, error_mensaje")
+    .eq("id", resultado.job_id)
+    .maybeSingle();
+
+  // Ya hay job_id -- antes de vencer por tiempo SIEMPRE se revisa el
+  // job real primero: si ya quedó "listo", se encadena aunque el reloj
+  // ya se haya pasado (las imágenes ya se generaron y se pagaron, no
+  // se pierden por un timeout que llegó unos segundos tarde).
+  if (job?.estado === "listo") {
+    await encadenarAgregarAnuncios(propuesta, propuestaId, job as { id: string; creativos: unknown });
+    return { estado: "ejecutada", etapa: "completado" };
+  }
+
+  if (job?.estado === "error") {
+    const mensajeError = job.error_mensaje || "La generación de creativos falló.";
+    await marcarCrearCreativosFallida(propuesta, propuestaId, mensajeError, "job_error", resultado.job_id);
+    return { estado: "fallida" };
+  }
+
+  // Sigue "procesando" en creativos_jobs (o el job todavía no existe) --
+  // 60 min desde el intento actual.
+  if (desdeIntento && Date.now() - new Date(desdeIntento).getTime() > TIMEOUT_GENERANDO_MS) {
+    await marcarCrearCreativosFallida(
+      propuesta,
+      propuestaId,
+      "La generación de creativos no terminó en 60 minutos -- el workflow pudo haberse detenido sin avisar.",
+      "timeout_generando",
+      resultado.job_id
+    );
+    return { estado: "fallida" };
+  }
+
+  return { estado: propuesta.estado, etapa: "generando" };
+}
+
+// Recuperación manual (solo admin, ver /api/propuestas/[id]/recuperar-creativos):
+// para una crear_creativos que quedó "fallida" pero tiene job_id -- por
+// ejemplo porque el timeout la marcó fallida unos segundos antes de que
+// revisarGeneracionCreativos alcanzara a ver que el job ya estaba
+// "listo" (pasó en vivo: las imágenes ya se generaron y se pagaron).
+// Reusa encadenarAgregarAnuncios, que ya protege contra duplicados.
+export async function recuperarCreativosFallidos(propuestaId: string): Promise<{ ok: boolean; mensaje: string }> {
+  const { data: propuesta } = await supabaseAdmin.from("propuestas").select("*").eq("id", propuestaId).single();
+  if (!propuesta || propuesta.accion !== "crear_creativos") {
+    return { ok: false, mensaje: "Esta propuesta no es de crear creativos." };
+  }
+  if (propuesta.estado !== "fallida") {
+    return { ok: false, mensaje: "Esta propuesta no está fallida." };
+  }
+
+  const resultado = (propuesta.resultado as any) || {};
+  const jobId = resultado.job_id;
+  if (!jobId) {
+    return { ok: false, mensaje: "Esta propuesta no tiene un job de creativos asociado para revisar." };
+  }
+
+  const { data: job } = await supabaseAdmin
+    .from("creativos_jobs")
+    .select("id, estado, creativos, error_mensaje")
+    .eq("id", jobId)
+    .maybeSingle();
+
+  if (!job) {
+    return { ok: false, mensaje: "No se encontró el job de creativos asociado." };
+  }
+  if (job.estado !== "listo") {
+    return { ok: false, mensaje: `El job todavía no está listo (estado: ${job.estado}).` };
+  }
+
+  await encadenarAgregarAnuncios(propuesta, propuestaId, job);
+  await supabaseAdmin.from("bitacora").insert({
+    user_id: propuesta.user_id,
+    meta_id: propuesta.meta_id,
+    propuesta_id: propuestaId,
+    tipo_evento: "propuesta_crear_creativos_recuperada",
+    detalle: { job_id: jobId },
+  });
+
+  return { ok: true, mensaje: "Se encontraron los creativos ya listos y se creó la propuesta de agregar anuncios." };
 }
 
 // ============================================================
@@ -813,10 +894,21 @@ export async function procesarCreacionCreativos(propuestaId: string): Promise<vo
   // verdad decide si ganamos el candado es el SELECT de abajo, leyendo
   // si el lock_id que quedó en la base es el nuestro.
   const loqueIntentoTomar = randomUUID();
+  const ahoraClaim = new Date().toISOString();
   const haceCincoMin = new Date(Date.now() - VENTANA_CANDADO_MS).toISOString();
   await supabaseAdmin
     .from("propuestas")
-    .update({ resultado: { ...resultadoActual, procesando_desde: new Date().toISOString(), lock_id: loqueIntentoTomar } })
+    // intento_desde es el reloj de este intento (lo usa revisarGeneracionCreativos
+    // para el timeout) -- nunca generando_desde, que sigue marcando solo
+    // la primera subida de fotos y no se vuelve a tocar.
+    .update({
+      resultado: {
+        ...resultadoActual,
+        procesando_desde: ahoraClaim,
+        lock_id: loqueIntentoTomar,
+        intento_desde: ahoraClaim,
+      },
+    })
     .eq("id", propuestaId)
     .eq("resultado->>etapa", "generando_conceptos")
     .or(`resultado->>procesando_desde.is.null,resultado->>procesando_desde.lt.${haceCincoMin}`);
@@ -850,6 +942,7 @@ export async function procesarCreacionCreativos(propuestaId: string): Promise<vo
   console.log(`[procesarCreacionCreativos] ${propuestaId}: candado tomado, empieza a procesar`);
   resultadoActual.procesando_desde = resultadoTrasClaim.procesando_desde;
   resultadoActual.lock_id = loqueIntentoTomar;
+  resultadoActual.intento_desde = resultadoTrasClaim.intento_desde;
 
   const { data: usuario } = await supabaseAdmin
     .from("usuarios")

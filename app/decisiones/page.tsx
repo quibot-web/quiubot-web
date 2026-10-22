@@ -135,6 +135,29 @@ export default function DecisionesPage() {
       .catch(() => setHistorial({ propuestas: [], bitacora: [] }));
   };
 
+  // "Revisar de nuevo" en el historial: para una crear_creativos que
+  // quedó fallida por timeout pero sí tiene job_id -- si creativos_jobs
+  // ya terminó bien mientras tanto, esto la recupera y crea la
+  // propuesta de agregar_anuncios en vez de perder las imágenes.
+  const recuperarCreativos = async (id: string) => {
+    setProcesandoId(id);
+    try {
+      const res = await fetch(`/api/propuestas/${id}/recuperar-creativos`, { method: "POST" });
+      const data = await leerJsonSeguro(res);
+      if (!res.ok || data.ok === false) {
+        setError({ mensaje: data.mensaje || data.error || "No se pudo revisar de nuevo." });
+      } else {
+        setError(null);
+        cargarHistorial();
+        cargarPropuestas();
+      }
+    } catch {
+      setError({ mensaje: "No se pudo conectar con el servidor." });
+    } finally {
+      setProcesandoId(null);
+    }
+  };
+
   const aprobar = async (p: PropuestaUnificada) => {
     setProcesandoId(p.id);
     setError(null);
@@ -377,6 +400,15 @@ export default function DecisionesPage() {
                   <div key={p.id} style={{ padding: "8px 0", borderBottom: "1px solid #f3f2fe" }}>
                     <p style={{ fontSize: 13, fontWeight: 600, color: "#1a1a1a", margin: 0 }}>{p.titulo} — {p.estado}</p>
                     <p style={{ fontSize: 11.5, color: "#999", margin: "2px 0 0" }}>{new Date(p.decidido_en || p.creado_en).toLocaleString("es-CO")}</p>
+                    {p.accion === "crear_creativos" && p.estado === "fallida" && p.resultado?.job_id && (
+                      <button
+                        onClick={() => recuperarCreativos(p.id)}
+                        disabled={procesandoId === p.id}
+                        style={{ marginTop: 6, padding: "5px 10px", borderRadius: 7, background: "#F3F2FE", color: "#534AB7", border: "none", fontSize: 11.5, fontWeight: 700, cursor: "pointer" }}
+                      >
+                        {procesandoId === p.id ? "Revisando..." : "Revisar de nuevo"}
+                      </button>
+                    )}
                   </div>
                 ))}
               </div>
