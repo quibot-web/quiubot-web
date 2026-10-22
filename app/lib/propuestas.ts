@@ -667,6 +667,7 @@ class ErrorPasoCreativos extends Error {
 }
 
 async function intentarGenerarYCrearCreativos(datos: {
+  propuestaId: string;
   emailBusqueda: string;
   imagenesBase64: string[];
   objetivoParaWebhook: ReturnType<typeof objetivoParaCampana>;
@@ -682,6 +683,7 @@ async function intentarGenerarYCrearCreativos(datos: {
   // Paso 1: conceptos nuevos. generar_estrategia no responde {ok:false}
   // siempre que falla -- sin llave de OpenAI responde HTTP 200 con solo
   // {error:"..."} (sin "ok"). Éxito es ÚNICAMENTE data.ok === true.
+  console.log(`[procesarCreacionCreativos] ${datos.propuestaId}: llamando a generar_estrategia`);
   const n8nRes1 = await fetch("https://n8n.quiubot.site/webhook/generar_estrategia", {
     method: "POST",
     headers: { "Content-Type": "application/json" },
@@ -749,6 +751,7 @@ async function intentarGenerarYCrearCreativos(datos: {
   // HTTP (ver procesarCreacionCreativos), no importa cuánto tarde.
   const estrategiaReal = { ...campanaElegida, conjuntos: [{ ...conjunto, anuncios: anunciosValidos }] };
 
+  console.log(`[procesarCreacionCreativos] ${datos.propuestaId}: llamando a crear_creativos`);
   const n8nRes2 = await fetch("https://n8n.quiubot.site/webhook/crear_creativos", {
     method: "POST",
     headers: { "Content-Type": "application/json" },
@@ -786,11 +789,19 @@ async function intentarGenerarYCrearCreativos(datos: {
 // cualquier reintento futuro pueden llamar a esta misma función sin
 // pisarse ni procesarla dos veces.
 export async function procesarCreacionCreativos(propuestaId: string): Promise<void> {
+  console.log(`[procesarCreacionCreativos] ${propuestaId}: invocada`);
+
   const { data: propuesta } = await supabaseAdmin.from("propuestas").select("*").eq("id", propuestaId).single();
-  if (!propuesta || propuesta.accion !== "crear_creativos") return;
+  if (!propuesta || propuesta.accion !== "crear_creativos") {
+    console.log(`[procesarCreacionCreativos] ${propuestaId}: no existe o no es crear_creativos, no hace nada`);
+    return;
+  }
 
   const resultadoActual = (propuesta.resultado as any) || {};
-  if (resultadoActual.etapa !== "generando_conceptos") return;
+  if (resultadoActual.etapa !== "generando_conceptos") {
+    console.log(`[procesarCreacionCreativos] ${propuestaId}: etapa actual es "${resultadoActual.etapa}", no "generando_conceptos", no hace nada`);
+    return;
+  }
 
   const haceCincoMin = new Date(Date.now() - VENTANA_CANDADO_MS).toISOString();
   const { data: reclamada } = await supabaseAdmin
@@ -802,7 +813,26 @@ export async function procesarCreacionCreativos(propuestaId: string): Promise<vo
     .select()
     .maybeSingle();
 
-  if (!reclamada) return; // ya lo tiene otro, o ya avanzó
+  if (!reclamada) {
+    // Ya lo tiene otro intento en curso (procesando_desde reciente), o
+    // ya avanzó de etapa entre que se eligió esta propuesta y que se
+    // intentó tomar el candado -- no es necesariamente un error, pero
+    // queda en bitacora para poder distinguirlo de una muerte en
+    // silencio si vuelve a pasar.
+    console.log(
+      `[procesarCreacionCreativos] ${propuestaId}: no se tomó el candado (procesando_desde="${resultadoActual.procesando_desde ?? "null"}"), no hace nada`
+    );
+    await supabaseAdmin.from("bitacora").insert({
+      user_id: propuesta.user_id,
+      meta_id: propuesta.meta_id,
+      propuesta_id: propuestaId,
+      tipo_evento: "propuesta_crear_creativos_candado_no_tomado",
+      detalle: { procesando_desde_actual: resultadoActual.procesando_desde ?? null },
+    });
+    return;
+  }
+
+  console.log(`[procesarCreacionCreativos] ${propuestaId}: candado tomado, empieza a procesar`);
 
   const { data: usuario } = await supabaseAdmin
     .from("usuarios")
@@ -873,6 +903,7 @@ export async function procesarCreacionCreativos(propuestaId: string): Promise<vo
   for (let intento = intentoDesde; intento <= MAX_INTENTOS_CREATIVOS; intento++) {
     try {
       const { jobId } = await intentarGenerarYCrearCreativos({
+        propuestaId,
         emailBusqueda: usuario.email,
         imagenesBase64,
         objetivoParaWebhook,

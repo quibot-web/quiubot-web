@@ -63,15 +63,24 @@ export async function POST(req: NextRequest) {
     .select("id")
     .eq("estado", "aprobada")
     .eq("accion", "crear_creativos")
-    .eq("resultado->>etapa", "generando");
+    .in("resultado->>etapa", ["generando", "generando_conceptos"]);
 
+  // revisarGeneracionCreativos aplica el timeout de 40 min a las dos
+  // etapas (generando_conceptos y generando, mismo reloj desde que se
+  // subieron las fotos) -- antes solo se llamaba para "generando", así
+  // que una propuesta atascada en "generando_conceptos" nunca vencía
+  // por tiempo, solo se reintentaba cada hora para siempre.
   let revisadas = 0;
+  const idsAReintentar: string[] = [];
   for (const propuesta of generando ?? []) {
     // Solo lee creativos_jobs y escribe en Supabase -- rápido, sin
     // llamadas externas lentas, así que esperarlo acá no corre el
     // riesgo de que el proxy corte la conexión.
-    await revisarGeneracionCreativos(propuesta.id);
+    const resultado = await revisarGeneracionCreativos(propuesta.id);
     revisadas++;
+    if (resultado.etapa === "generando_conceptos") {
+      idsAReintentar.push(propuesta.id);
+    }
   }
 
   // Respaldo de procesarCreacionCreativos: si el after() de /subir-fotos
@@ -81,14 +90,6 @@ export async function POST(req: NextRequest) {
   // algo que hacer -- llamarla de más acá no causa doble procesamiento.
   // Nunca se espera synchronamente (sí tarda 1.5-2 min la llamada a
   // generar_estrategia), por eso va con after(), igual que en /subir-fotos.
-  const { data: generandoConceptos } = await supabaseAdmin
-    .from("propuestas")
-    .select("id")
-    .eq("estado", "aprobada")
-    .eq("accion", "crear_creativos")
-    .eq("resultado->>etapa", "generando_conceptos");
-
-  const idsAReintentar = (generandoConceptos ?? []).map((p) => p.id);
   if (idsAReintentar.length > 0) {
     after(async () => {
       await Promise.allSettled(idsAReintentar.map((propuestaId) => procesarCreacionCreativos(propuestaId)));
