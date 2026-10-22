@@ -421,12 +421,94 @@ async function revisarMeta(meta: Meta, simular: boolean) {
     evaluacion.costo_por_resultado = costoCampana;
     evaluacion.frecuencia_promedio = frecuenciaPromedio;
 
+    // Se evalúan las 3 reglas SIEMPRE (nunca se corta en la primera que
+    // aplica), para poder reportar en evaluacion.reglas por qué cada
+    // una aplicó o no, con los números exactos -- antes solo quedaba
+    // "ninguna_regla_aplico" sin decir si fue por costo, por proyección,
+    // o por otra cosa.
+
     // 1) Gasta sin resultados -> pausar. Nunca si es la única activa.
-    if (
+    const umbralGastoSinResultados = MULTIPLO_GASTO_SIN_RESULTADOS * meta.costo_objetivo_cop;
+    const regla1Aplica =
       campanasActivas.length > 1 &&
       conversionesCampana === 0 &&
-      gastoCampana >= MULTIPLO_GASTO_SIN_RESULTADOS * meta.costo_objetivo_cop
-    ) {
+      gastoCampana >= umbralGastoSinResultados;
+    const regla1Condicion =
+      campanasActivas.length <= 1
+        ? "no se evalúa: es la única campaña activa de la meta"
+        : conversionesCampana > 0
+        ? `resultados ${conversionesCampana} > 0: no cumple "sin resultados"`
+        : `gasto $${Math.round(gastoCampana)} ${gastoCampana >= umbralGastoSinResultados ? "≥" : "<"} 2× objetivo ($${Math.round(umbralGastoSinResultados)}): ${regla1Aplica ? "cumple" : "no cumple"}`;
+
+    // 2) Funciona y la meta va atrasada -> subir presupuesto 20%.
+    const umbralCostoAjustar = UMBRAL_COSTO_AJUSTAR * meta.costo_objetivo_cop;
+    const costoOk = costoCampana != null && costoCampana <= umbralCostoAjustar;
+    const costoDetalle =
+      costoCampana != null
+        ? `costo $${Math.round(costoCampana)} ${costoOk ? "≤" : ">"} 80% de $${Math.round(meta.costo_objetivo_cop)} ($${Math.round(umbralCostoAjustar)}): ${costoOk ? "cumple" : "no cumple"}`
+        : "sin costo por resultado calculable (0 conversiones)";
+    const proyeccionOk = avance.proyeccion != null && avance.proyeccion < meta.cantidad_objetivo;
+    const proyeccionDetalle =
+      avance.proyeccion != null
+        ? `proyección ${avance.proyeccion} ${proyeccionOk ? "<" : "≥"} objetivo ${meta.cantidad_objetivo}: ${proyeccionOk ? "va atrasada" : "no va atrasada"}`
+        : "proyección no disponible (menos de 3 días completos en la ventana de la meta)";
+
+    let regla2Aplica = false;
+    let regla2Extra = "";
+    let presupuestoNuevo = 0;
+    let proyeccionNueva = 0;
+    if (costoOk && proyeccionOk) {
+      if (campana.presupuesto_diario == null) {
+        regla2Extra = " -- la campaña no tiene presupuesto_diario registrado";
+      } else {
+        presupuestoNuevo = Math.round(campana.presupuesto_diario * (1 + AJUSTE_PRESUPUESTO_PORCENTAJE / 100));
+        proyeccionNueva = Math.round((avance.proyeccion as number) * (1 + AJUSTE_PRESUPUESTO_PORCENTAJE / 100));
+        const cabePresupuesto = avance.spend + presupuestoNuevo * avance.diasRestantes <= meta.presupuesto_maximo_cop;
+        if (cabePresupuesto) {
+          regla2Aplica = true;
+        } else {
+          regla2Extra = ` -- el presupuesto nuevo no cabe en el máximo de la meta ($${Math.round(meta.presupuesto_maximo_cop)})`;
+        }
+      }
+    }
+    const regla2Condicion = `${costoDetalle}; ${proyeccionDetalle}${regla2Extra}`;
+
+    // 3) Se está cansando -> refrescar creativos. Compara los primeros 3
+    // días con datos contra los últimos 3 días con datos dentro de la
+    // ventana de la meta (necesita al menos 6 días para no solaparse).
+    let motivoCansancio: "costo" | "frecuencia" | "ambos" | null = null;
+    let regla3Condicion: string;
+    if (snapshotsCampana.length >= 6) {
+      const primeros = snapshotsCampana.slice(0, 3);
+      const ultimos = snapshotsCampana.slice(-3);
+      const costoPrimeros = costoPorResultado(primeros);
+      const costoUltimos = costoPorResultado(ultimos);
+      const costoSubio = costoPrimeros != null && costoUltimos != null && costoUltimos >= MULTIPLO_COSTO_CANSANCIO * costoPrimeros;
+
+      const frecuenciasUltimos = ultimos.map((f) => f.frequency).filter((f): f is number => f != null);
+      const frecProm = promedio(frecuenciasUltimos);
+      const frecuenciaAlta = frecProm != null && frecProm >= UMBRAL_FRECUENCIA_CANSANCIO;
+
+      if (costoSubio && frecuenciaAlta) motivoCansancio = "ambos";
+      else if (costoSubio) motivoCansancio = "costo";
+      else if (frecuenciaAlta) motivoCansancio = "frecuencia";
+
+      const costoTexto =
+        costoPrimeros != null && costoUltimos != null
+          ? `costo primeros 3 días $${Math.round(costoPrimeros)} vs últimos 3 días $${Math.round(costoUltimos)} (${(((costoUltimos - costoPrimeros) / costoPrimeros) * 100).toFixed(0)}%): ${costoSubio ? "subió ≥30%" : "no subió lo suficiente"}`
+          : "costo de primeros/últimos 3 días no calculable";
+      const frecuenciaTexto =
+        frecProm != null
+          ? `frecuencia promedio últimos 3 días ${frecProm.toFixed(2)} ${frecuenciaAlta ? "≥" : "<"} 3: ${frecuenciaAlta ? "alta" : "normal"}`
+          : "sin frecuencia disponible en los últimos 3 días";
+      regla3Condicion = `${costoTexto}; ${frecuenciaTexto}`;
+    } else {
+      regla3Condicion = `no evaluable: hacen falta 6 días con datos (hay ${snapshotsCampana.length})`;
+    }
+
+    // Prioridad igual que antes: pausar > ajustar_presupuesto > crear_creativos.
+    // Solo se ejecuta (o se simula) la primera que de verdad aplica.
+    if (regla1Aplica) {
       const resultado = await proponerSiNoDuplicado(
         meta,
         {
@@ -441,74 +523,30 @@ async function revisarMeta(meta: Meta, simular: boolean) {
       evaluacion.regla = "gasta_sin_resultados";
       evaluacion.propuso = resultado.propuso;
       evaluacion.propuesta = resultado.propuesta;
-      evaluaciones.push(evaluacion);
-      continue;
-    }
-
-    // 2) Funciona y la meta va atrasada -> subir presupuesto 20%.
-    if (
-      costoCampana != null &&
-      costoCampana <= UMBRAL_COSTO_AJUSTAR * meta.costo_objetivo_cop &&
-      avance.proyeccion != null &&
-      avance.proyeccion < meta.cantidad_objetivo &&
-      campana.presupuesto_diario != null
-    ) {
-      const presupuestoNuevo = Math.round(campana.presupuesto_diario * (1 + AJUSTE_PRESUPUESTO_PORCENTAJE / 100));
-      const cabePresupuesto =
-        avance.spend + presupuestoNuevo * avance.diasRestantes <= meta.presupuesto_maximo_cop;
-
-      if (cabePresupuesto) {
-        const proyeccionNueva = Math.round(avance.proyeccion * (1 + AJUSTE_PRESUPUESTO_PORCENTAJE / 100));
-        const resultado = await proponerSiNoDuplicado(
-          meta,
-          {
-            asistente: "optimizador",
-            accion: "ajustar_presupuesto",
-            parametros: { campana_id: campana.id, ajuste_porcentaje: AJUSTE_PRESUPUESTO_PORCENTAJE },
-            texto: textoAjustarPresupuesto({
-              nombreCampana: campana.nombre,
-              costoActual: costoCampana,
-              costoObjetivo: meta.costo_objetivo_cop,
-              presupuestoActual: campana.presupuesto_diario,
-              presupuestoNuevo,
-              proyeccionNueva,
-              cantidadObjetivo: meta.cantidad_objetivo,
-            }),
-          },
-          simular
-        );
-        if (resultado.propuso && !simular) propuestasCreadasEnEstaCorrida++;
-        evaluacion.regla = "meta_atrasada_sube_presupuesto";
-        evaluacion.propuso = resultado.propuso;
-        evaluacion.propuesta = resultado.propuesta;
-        evaluaciones.push(evaluacion);
-        continue;
-      }
-      evaluacion.motivo = "ajuste_no_cabe_en_presupuesto_maximo";
-    }
-
-    // 3) Se está cansando -> refrescar creativos. Compara los primeros 3
-    // días con datos contra los últimos 3 días con datos dentro de la
-    // ventana de la meta (necesita al menos 6 días para no solaparse).
-    let motivoCansancio: "costo" | "frecuencia" | "ambos" | null = null;
-    if (snapshotsCampana.length >= 6) {
-      const primeros = snapshotsCampana.slice(0, 3);
-      const ultimos = snapshotsCampana.slice(-3);
-      const costoPrimeros = costoPorResultado(primeros);
-      const costoUltimos = costoPorResultado(ultimos);
-      const costoSubio = costoPrimeros != null && costoUltimos != null && costoUltimos >= MULTIPLO_COSTO_CANSANCIO * costoPrimeros;
-
-      const frecuenciasUltimos = ultimos.map((f) => f.frequency).filter((f): f is number => f != null);
-      const frecuenciaAlta =
-        frecuenciasUltimos.length > 0 &&
-        frecuenciasUltimos.reduce((a, b) => a + b, 0) / frecuenciasUltimos.length >= UMBRAL_FRECUENCIA_CANSANCIO;
-
-      if (costoSubio && frecuenciaAlta) motivoCansancio = "ambos";
-      else if (costoSubio) motivoCansancio = "costo";
-      else if (frecuenciaAlta) motivoCansancio = "frecuencia";
-    }
-
-    if (motivoCansancio) {
+    } else if (regla2Aplica) {
+      const resultado = await proponerSiNoDuplicado(
+        meta,
+        {
+          asistente: "optimizador",
+          accion: "ajustar_presupuesto",
+          parametros: { campana_id: campana.id, ajuste_porcentaje: AJUSTE_PRESUPUESTO_PORCENTAJE },
+          texto: textoAjustarPresupuesto({
+            nombreCampana: campana.nombre,
+            costoActual: costoCampana as number,
+            costoObjetivo: meta.costo_objetivo_cop,
+            presupuestoActual: campana.presupuesto_diario as number,
+            presupuestoNuevo,
+            proyeccionNueva,
+            cantidadObjetivo: meta.cantidad_objetivo,
+          }),
+        },
+        simular
+      );
+      if (resultado.propuso && !simular) propuestasCreadasEnEstaCorrida++;
+      evaluacion.regla = "meta_atrasada_sube_presupuesto";
+      evaluacion.propuso = resultado.propuso;
+      evaluacion.propuesta = resultado.propuesta;
+    } else if (motivoCansancio) {
       const resultado = await proponerSiNoDuplicado(
         meta,
         {
@@ -523,9 +561,19 @@ async function revisarMeta(meta: Meta, simular: boolean) {
       evaluacion.regla = "campana_cansada";
       evaluacion.propuso = resultado.propuso;
       evaluacion.propuesta = resultado.propuesta;
-    } else if (!evaluacion.regla) {
-      evaluacion.motivo = evaluacion.motivo || "ninguna_regla_aplico";
+    } else {
+      evaluacion.motivo = "ninguna_regla_aplico";
     }
+
+    // Detalle por regla con la condición exacta y sus números -- igual
+    // en la respuesta que en el detalle del evento director_revision de
+    // la bitácora (ambos leen este mismo objeto evaluacion).
+    evaluacion.reglas = [
+      { regla: "pausar", aplico: regla1Aplica, condicion: regla1Condicion },
+      { regla: "ajustar_presupuesto", aplico: regla2Aplica, condicion: regla2Condicion },
+      { regla: "crear_creativos", aplico: !!motivoCansancio, condicion: regla3Condicion },
+    ];
+
     evaluaciones.push(evaluacion);
   }
 
