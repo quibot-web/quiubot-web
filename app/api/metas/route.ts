@@ -33,14 +33,18 @@ export async function GET() {
 
   if (!meta) return NextResponse.json({ meta: null, avance: null });
 
-  const avance = await calcularAvanceMeta({
-    tipo: meta.tipo,
-    user_id: meta.user_id,
-    fecha_inicio: meta.fecha_inicio,
-    fecha_fin: meta.fecha_fin,
-  });
-
-  return NextResponse.json({ meta, avance });
+  try {
+    const avance = await calcularAvanceMeta({
+      tipo: meta.tipo,
+      user_id: meta.user_id,
+      fecha_inicio: meta.fecha_inicio,
+      fecha_fin: meta.fecha_fin,
+    });
+    return NextResponse.json({ meta, avance });
+  } catch (err) {
+    console.error("Error calculando el avance de la meta:", err);
+    return NextResponse.json({ meta, avance: null, error: "No se pudo calcular el avance en este momento." });
+  }
 }
 
 export async function POST(req: NextRequest) {

@@ -218,12 +218,20 @@ export type SnapshotDiario = {
 // conversiones. Pensado para que el Director compare "los últimos 3
 // días" contra "los primeros días" de una campaña.
 export async function obtenerSnapshotsDiarios(campanaId: string, desde: string, hasta: string): Promise<SnapshotDiario[]> {
-  const { data: filas } = await supabaseAdmin
+  const { data: filas, error } = await supabaseAdmin
     .from("campanas_snapshots")
     .select("fecha_bogota, spend, conversiones, frequency, ctr, impresiones, corrida_en")
     .eq("campana_id", campanaId)
     .gte("fecha_bogota", desde)
     .lte("fecha_bogota", hasta);
+
+  // Nunca tratar un error de la consulta como "0 días de datos" --
+  // visto en vivo: una columna rota devuelve data:null sin lanzar nada
+  // por sí sola, y eso se veía indistinguible de una campaña sin
+  // actividad real.
+  if (error) {
+    throw new Error(`obtenerSnapshotsDiarios(${campanaId}): ${error.message}`);
+  }
 
   const porDia = new Map<string, SnapshotDiario & { corrida_en: string }>();
   for (const fila of filas ?? []) {
@@ -256,7 +264,10 @@ async function sumarResultados(params: {
 }): Promise<{ spend: number; conversiones: number; campanas: number }> {
   let query = supabaseAdmin.from("campanas_publicadas").select("id, objetivo_id, objetivo");
   if (params.userId) query = query.eq("user_id", params.userId);
-  const { data: campanas } = await query;
+  const { data: campanas, error: errorCampanas } = await query;
+  if (errorCampanas) {
+    throw new Error(`sumarResultados (campanas_publicadas): ${errorCampanas.message}`);
+  }
 
   const idsCoinciden = (campanas ?? [])
     .filter((c) => campanaCoincideConTipo(c, params.tipo))
@@ -264,12 +275,18 @@ async function sumarResultados(params: {
 
   if (idsCoinciden.length === 0) return { spend: 0, conversiones: 0, campanas: 0 };
 
-  const { data: filas } = await supabaseAdmin
+  const { data: filas, error: errorSnapshots } = await supabaseAdmin
     .from("campanas_snapshots")
     .select("campana_id, fecha_bogota, spend, conversiones, corrida_en")
     .in("campana_id", idsCoinciden)
     .gte("fecha_bogota", params.desde)
     .lte("fecha_bogota", params.hasta);
+
+  // Mismo principio que obtenerSnapshotsDiarios: un error de la
+  // consulta nunca debe verse igual que "sin resultados todavía".
+  if (errorSnapshots) {
+    throw new Error(`sumarResultados (campanas_snapshots): ${errorSnapshots.message}`);
+  }
 
   const porDia = new Map<string, { spend: number; conversiones: number; corrida_en: string }>();
   for (const fila of filas ?? []) {

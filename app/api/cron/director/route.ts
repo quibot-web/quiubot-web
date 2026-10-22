@@ -32,6 +32,7 @@ const MULTIPLO_COSTO_CANSANCIO = 1.3;
 const UMBRAL_FRECUENCIA_CANSANCIO = 3;
 const VENCE_EN_HORAS = 24;
 const DIAS_META_SIMULADA = 30;
+const HORAS_SIN_DATOS_ESTADO_DESCONOCIDO_MS = 48 * 60 * 60 * 1000;
 
 function sumarSnapshots(filas: SnapshotDiario[]): { spend: number; conversiones: number } {
   return filas.reduce(
@@ -215,13 +216,41 @@ async function revisarMeta(meta: Meta, simular: boolean) {
     }
   }
 
-  const avance = await calcularAvanceMeta({
-    tipo: meta.tipo,
-    user_id: meta.user_id,
-    fecha_inicio: meta.fecha_inicio,
-    fecha_fin: meta.fecha_fin,
-  });
-  const avanceResumen = { conversiones: avance.conversiones, gasto: avance.spend, proyeccion: avance.proyeccion };
+  // calcularAvanceMeta ahora lanza si la consulta de snapshots falla
+  // (ver app/lib/metas.ts) en vez de devolver 0 en silencio -- un error
+  // acá no puede tirar abajo la corrida completa del cron (afectaría a
+  // TODAS las metas, no solo esta), así que se atrapa, se deja
+  // constancia (bitacora si es la corrida real) y se sigue evaluando
+  // con avance "desconocido" -- la regla 2 (meta atrasada) simplemente
+  // no aplica con proyeccion=null, igual que si no hubiera datos.
+  let avance;
+  let errorAvance: string | null = null;
+  try {
+    avance = await calcularAvanceMeta({
+      tipo: meta.tipo,
+      user_id: meta.user_id,
+      fecha_inicio: meta.fecha_inicio,
+      fecha_fin: meta.fecha_fin,
+    });
+  } catch (err) {
+    errorAvance = err instanceof Error ? err.message : "Error desconocido calculando el avance.";
+    avance = { conversiones: 0, spend: 0, diasTranscurridos: 0, diasRestantes: 0, proyeccion: null };
+    if (!simular) {
+      await supabaseAdmin.from("bitacora").insert({
+        user_id: meta.user_id,
+        meta_id: meta.id,
+        propuesta_id: null,
+        tipo_evento: "director_revision_error",
+        detalle: { paso: "calcular_avance", error: errorAvance },
+      });
+    }
+  }
+  const avanceResumen = {
+    conversiones: avance.conversiones,
+    gasto: avance.spend,
+    proyeccion: avance.proyeccion,
+    ...(errorAvance ? { error: errorAvance } : {}),
+  };
 
   const campanas = await obtenerCampanasDeMeta(meta.tipo, meta.user_id);
   const campanasActivas = campanas.filter((c) => c.estado === "activa");
@@ -281,10 +310,51 @@ async function revisarMeta(meta: Meta, simular: boolean) {
       continue;
     }
 
-    const snapshotsCampana = await obtenerSnapshotsDiarios(campana.id, meta.fecha_inicio, hastaEfectivo);
+    // obtenerSnapshotsDiarios ahora lanza si la consulta falla, en vez
+    // de devolver [] -- eso se veía indistinguible de "campaña sin
+    // actividad real" (así se descubrió que fecha_bogota no existía en
+    // la base: toda campaña, sin importar su actividad, veía 0 días).
+    // Un error acá es por campaña, no por meta: se registra y se sigue
+    // con las demás campañas en vez de abortar toda la corrida.
+    let snapshotsCampana;
+    try {
+      snapshotsCampana = await obtenerSnapshotsDiarios(campana.id, meta.fecha_inicio, hastaEfectivo);
+    } catch (err) {
+      const mensaje = err instanceof Error ? err.message : "Error desconocido leyendo los datos de la campaña.";
+      evaluacion.motivo = "error_leyendo_datos";
+      evaluacion.error = mensaje;
+      evaluaciones.push(evaluacion);
+      if (!simular) {
+        await supabaseAdmin.from("bitacora").insert({
+          user_id: meta.user_id,
+          meta_id: meta.id,
+          propuesta_id: null,
+          tipo_evento: "director_revision_error",
+          detalle: { paso: "leer_snapshots", campana_id: campana.id, error: mensaje },
+        });
+      }
+      continue;
+    }
+
     if (snapshotsCampana.length < MIN_DIAS_CON_DATOS) {
       evaluacion.motivo = "sin_suficientes_dias_de_datos";
       evaluacion.dias_con_datos = snapshotsCampana.length;
+      evaluaciones.push(evaluacion);
+      continue;
+    }
+
+    // Capa 2 contra el estado cacheado de campanas_publicadas: una
+    // campaña "activa" sin ningún dato real en las últimas 48h (el
+    // último día con snapshot quedó muy atrás) se trata como "estado
+    // desconocido" -- no se confía en que de verdad siga corriendo en
+    // Meta, y no se dispara ninguna regla sobre ella. snapshotsCampana
+    // viene ordenado ascendente por fecha_bogota (ver obtenerSnapshotsDiarios).
+    const ultimoDiaConDatos = snapshotsCampana[snapshotsCampana.length - 1].fecha_bogota;
+    const diasDesdeUltimoDato = Date.now() - inicioDiaBogota(ultimoDiaConDatos).getTime();
+    if (diasDesdeUltimoDato > HORAS_SIN_DATOS_ESTADO_DESCONOCIDO_MS) {
+      evaluacion.motivo = "estado_desconocido_sin_datos_recientes";
+      evaluacion.dias_con_datos = snapshotsCampana.length;
+      evaluacion.ultimo_dia_con_datos = ultimoDiaConDatos;
       evaluaciones.push(evaluacion);
       continue;
     }

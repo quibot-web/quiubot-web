@@ -39,7 +39,14 @@ export async function POST(req: NextRequest) {
   }
 
   const costoObjetivoCop = presupuesto / cantidad;
-  const costoReferencia = await calcularCostoReferencia(tipo, usuario.id);
+
+  let costoReferencia;
+  try {
+    costoReferencia = await calcularCostoReferencia(tipo, usuario.id);
+  } catch (err) {
+    console.error("Error calculando el costo de referencia:", err);
+    return NextResponse.json({ error: "No se pudo calcular el costo de referencia en este momento." }, { status: 500 });
+  }
 
   const realista = costoReferencia.valorCop <= 0 || costoObjetivoCop >= costoReferencia.valorCop * UMBRAL_REALISMO;
 
