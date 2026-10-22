@@ -5,10 +5,14 @@ import {
   obtenerCampanasDeMeta,
   obtenerSnapshotsDiarios,
   calcularAvanceMeta,
+  calcularCostoReferencia,
+  campanaCoincideConTipo,
   type Meta,
+  type TipoMeta,
   type SnapshotDiario,
 } from "@/app/lib/metas";
-import { hoyBogota, inicioDiaBogota } from "@/app/lib/fechaBogota";
+import { esPropuestaDePrueba } from "@/app/lib/propuestas";
+import { hoyBogota, fechaBogota, inicioDiaBogota } from "@/app/lib/fechaBogota";
 import { textoGenerarEstrategia, textoPausar, textoAjustarPresupuesto, textoCrearCreativos } from "@/app/lib/directorTextos";
 
 function compararSeguro(a: string, b: string): boolean {
@@ -27,6 +31,7 @@ const AJUSTE_PRESUPUESTO_PORCENTAJE = 20;
 const MULTIPLO_COSTO_CANSANCIO = 1.3;
 const UMBRAL_FRECUENCIA_CANSANCIO = 3;
 const VENCE_EN_HORAS = 24;
+const DIAS_META_SIMULADA = 30;
 
 function sumarSnapshots(filas: SnapshotDiario[]): { spend: number; conversiones: number } {
   return filas.reduce(
@@ -40,11 +45,23 @@ function costoPorResultado(filas: SnapshotDiario[]): number | null {
   return conversiones > 0 ? spend / conversiones : null;
 }
 
+function promedio(valores: number[]): number | null {
+  return valores.length > 0 ? valores.reduce((a, b) => a + b, 0) / valores.length : null;
+}
+
 // Llamado una vez al día (8:00am Bogotá) por un Schedule Trigger en n8n
 // -- mismo patrón ADMIN_SECRET que los demás crons. Revisa cada meta
 // activa y sin el Autopiloto pausado, de un usuario admin (Autopiloto
 // sigue oculto para el resto), y propone -- nunca ejecuta nada por sí
 // solo.
+//
+// ?simular=<email>: modo simulación (requiere el mismo ADMIN_SECRET).
+// Corre las mismas reglas sobre las campañas reales de ese usuario (su
+// meta activa si tiene, o una meta ficticia en memoria si no) y
+// devuelve qué propondría, sin escribir nada -- ni propuestas, ni
+// bitácora. Cada función que normalmente inserta recibe `simular` y
+// hace `if (simular) return ...` antes de tocar la base, así que es
+// imposible que esta ruta escriba algo mientras simula.
 export async function POST(req: NextRequest) {
   const adminSecret = process.env.ADMIN_SECRET;
   if (!adminSecret) {
@@ -54,6 +71,50 @@ export async function POST(req: NextRequest) {
   const authHeader = req.headers.get("authorization") || "";
   if (!compararSeguro(authHeader, `Bearer ${adminSecret}`)) {
     return NextResponse.json({ error: "No autorizado" }, { status: 401 });
+  }
+
+  const emailSimular = req.nextUrl.searchParams.get("simular");
+
+  if (emailSimular) {
+    const { data: usuario } = await supabaseAdmin
+      .from("usuarios")
+      .select("id, email")
+      .eq("email", emailSimular.trim().toLowerCase())
+      .maybeSingle();
+
+    if (!usuario) {
+      return NextResponse.json({ error: "No existe un usuario con ese correo." }, { status: 404 });
+    }
+
+    const { data: metaReal } = await supabaseAdmin
+      .from("metas")
+      .select("*")
+      .eq("user_id", usuario.id)
+      .eq("estado", "activa")
+      .maybeSingle();
+
+    const metaParaSimular = (metaReal as Meta | null) ?? (await construirMetaSimulada(usuario.id));
+
+    if (!metaParaSimular) {
+      return NextResponse.json({
+        ok: true,
+        simulado: true,
+        email: emailSimular,
+        meta_usada: null,
+        motivo: "sin_campanas_activas_para_construir_una_meta_ficticia",
+        resumen: null,
+      });
+    }
+
+    const resumen = await revisarMeta(metaParaSimular, true);
+    return NextResponse.json({
+      ok: true,
+      simulado: true,
+      email: emailSimular,
+      meta_usada: metaReal ? "real" : "ficticia",
+      meta: metaParaSimular,
+      resumen,
+    });
   }
 
   const { data: metasActivas } = await supabaseAdmin
@@ -66,28 +127,92 @@ export async function POST(req: NextRequest) {
 
   const resumen: any[] = [];
   for (const meta of metasAdmin) {
-    resumen.push(await revisarMeta(meta));
+    resumen.push(await revisarMeta(meta, false));
   }
 
   return NextResponse.json({ ok: true, metas_evaluadas: metasAdmin.length, resumen });
 }
 
-async function revisarMeta(meta: Meta) {
+// Meta ficticia en memoria para el modo simulación, cuando el usuario
+// no tiene una meta activa de verdad -- nunca se inserta en "metas".
+// Tipo: según el objetivo de sus campañas activas (leads si alguna
+// coincide con ese tipo, si no conversaciones_whatsapp -- son los
+// únicos dos tipos que existen hoy; si ninguna campaña coincide con
+// ninguno, conversaciones_whatsapp queda como default declarado).
+// Ventana: 30 días terminando hoy (para que SÍ haya historial real en
+// campanas_snapshots que las reglas puedan leer -- una ventana que
+// arrancara hoy no tendría ningún día con datos todavía).
+// Presupuesto: gasto diario actual (suma de presupuesto_diario de sus
+// campañas activas del tipo elegido) × 30. Costo objetivo: el mismo
+// costo de referencia de 3 niveles que ya usa /api/metas/previsualizar
+// para sugerir una meta realista cuando no hay un valor explícito.
+async function construirMetaSimulada(userId: string): Promise<Meta | null> {
+  const { data: campanasActivas } = await supabaseAdmin
+    .from("campanas_publicadas")
+    .select("id, estado, objetivo, objetivo_id, presupuesto_diario")
+    .eq("user_id", userId)
+    .eq("estado", "activa");
+
+  if (!campanasActivas || campanasActivas.length === 0) return null;
+
+  const tipo: TipoMeta = campanasActivas.some((c) => campanaCoincideConTipo(c, "leads"))
+    ? "leads"
+    : "conversaciones_whatsapp";
+
+  const campanasDelTipo = campanasActivas.filter((c) => campanaCoincideConTipo(c, tipo));
+  const campanasParaGasto = campanasDelTipo.length > 0 ? campanasDelTipo : campanasActivas;
+  const gastoDiarioActual = campanasParaGasto.reduce((acc, c) => acc + (c.presupuesto_diario || 0), 0);
+
+  const hoy = hoyBogota();
+  const fechaInicio = fechaBogota(new Date(Date.now() - (DIAS_META_SIMULADA - 1) * 24 * 60 * 60 * 1000));
+  const presupuestoMaximo = gastoDiarioActual * DIAS_META_SIMULADA;
+
+  const costoReferencia = await calcularCostoReferencia(tipo, userId);
+  const costoObjetivo = costoReferencia.valorCop > 0 ? costoReferencia.valorCop : 1;
+  const cantidadObjetivo = Math.max(1, Math.round(presupuestoMaximo / costoObjetivo));
+
+  return {
+    id: `simulacion-${userId}`,
+    user_id: userId,
+    tipo,
+    cantidad_objetivo: cantidadObjetivo,
+    fecha_inicio: fechaInicio,
+    fecha_fin: hoy,
+    presupuesto_maximo_cop: presupuestoMaximo,
+    costo_objetivo_cop: costoObjetivo,
+    nivel_autonomia: "copiloto",
+    estado: "activa",
+    pausado_autopiloto: false,
+    creado_en: new Date().toISOString(),
+    actualizado_en: new Date().toISOString(),
+  };
+}
+
+async function revisarMeta(meta: Meta, simular: boolean) {
   const hoy = hoyBogota();
   const inicioHoy = inicioDiaBogota(hoy).toISOString();
 
-  const { count: propuestasHoy } = await supabaseAdmin
-    .from("propuestas")
-    .select("*", { count: "exact", head: true })
-    .eq("meta_id", meta.id)
-    .gte("creado_en", inicioHoy);
-
   let propuestasCreadasEnEstaCorrida = 0;
-  const cupoDisponible = () => (propuestasHoy ?? 0) + propuestasCreadasEnEstaCorrida < MAX_PROPUESTAS_POR_META_POR_DIA;
+  let cupoDisponible = () => true;
 
-  if (!cupoDisponible()) {
-    await registrarRevision(meta, { motivo: "tope_diario_alcanzado", propuestas_hoy: propuestasHoy ?? 0 });
-    return { meta_id: meta.id, propuestas_creadas: 0, motivo: "tope_diario_alcanzado" };
+  if (!simular) {
+    // Cuenta leyendo filas (no un count de cabecera) porque hay que
+    // descartar las de prueba en memoria -- un filtro .neq() sobre un
+    // campo JSON que puede no existir no distingue "false" de "no
+    // existe" en SQL, y contaría de más.
+    const { data: filasHoy } = await supabaseAdmin
+      .from("propuestas")
+      .select("titulo, parametros")
+      .eq("meta_id", meta.id)
+      .gte("creado_en", inicioHoy);
+
+    const propuestasHoy = (filasHoy ?? []).filter((p) => !esPropuestaDePrueba(p)).length;
+    cupoDisponible = () => propuestasHoy + propuestasCreadasEnEstaCorrida < MAX_PROPUESTAS_POR_META_POR_DIA;
+
+    if (!cupoDisponible()) {
+      await registrarRevision(meta, { motivo: "tope_diario_alcanzado", propuestas_hoy: propuestasHoy }, simular);
+      return { meta_id: meta.id, propuestas_creadas: 0, motivo: "tope_diario_alcanzado" };
+    }
   }
 
   const avance = await calcularAvanceMeta({
@@ -96,6 +221,7 @@ async function revisarMeta(meta: Meta) {
     fecha_inicio: meta.fecha_inicio,
     fecha_fin: meta.fecha_fin,
   });
+  const avanceResumen = { conversiones: avance.conversiones, gasto: avance.spend, proyeccion: avance.proyeccion };
 
   const campanas = await obtenerCampanasDeMeta(meta.tipo, meta.user_id);
   const campanasActivas = campanas.filter((c) => c.estado === "activa");
@@ -103,23 +229,29 @@ async function revisarMeta(meta: Meta) {
   const evaluaciones: any[] = [];
 
   if (campanasActivas.length === 0) {
-    const creada = await proponerSiNoDuplicado(meta, {
-      asistente: "estratega",
-      accion: "generar_estrategia",
-      parametros: {},
-      texto: textoGenerarEstrategia({ tipo: meta.tipo, cantidadObjetivo: meta.cantidad_objetivo }),
-    });
-    if (creada) propuestasCreadasEnEstaCorrida++;
-    evaluaciones.push({ regla: "sin_campanas_activas", propuso: creada });
-    await registrarRevision(meta, { evaluaciones });
-    return { meta_id: meta.id, propuestas_creadas: propuestasCreadasEnEstaCorrida, evaluaciones };
+    const resultado = await proponerSiNoDuplicado(
+      meta,
+      {
+        asistente: "estratega",
+        accion: "generar_estrategia",
+        parametros: {},
+        texto: textoGenerarEstrategia({ tipo: meta.tipo, cantidadObjetivo: meta.cantidad_objetivo }),
+      },
+      simular
+    );
+    if (resultado.propuso && !simular) propuestasCreadasEnEstaCorrida++;
+    evaluaciones.push({ regla: "sin_campanas_activas", propuso: resultado.propuso, propuesta: resultado.propuesta });
+    await registrarRevision(meta, { evaluaciones, avance_resumen: avanceResumen }, simular);
+    return { meta_id: meta.id, simulado: simular, propuestas_creadas: propuestasCreadasEnEstaCorrida, avance: avanceResumen, evaluaciones };
   }
 
   const hastaEfectivo = hoy < meta.fecha_fin ? hoy : meta.fecha_fin;
   const ultimosEjecutados = await obtenerUltimosCambiosEjecutados(meta.user_id);
 
   for (const campana of campanasActivas) {
-    if (!cupoDisponible()) break;
+    // El tope diario nunca frena una simulación -- el punto es ver qué
+    // propondría cada campaña con cada regla, no el límite de hoy.
+    if (!simular && !cupoDisponible()) break;
 
     const evaluacion: any = { campana_id: campana.id, campana_nombre: campana.nombre };
 
@@ -152,12 +284,24 @@ async function revisarMeta(meta: Meta) {
     const snapshotsCampana = await obtenerSnapshotsDiarios(campana.id, meta.fecha_inicio, hastaEfectivo);
     if (snapshotsCampana.length < MIN_DIAS_CON_DATOS) {
       evaluacion.motivo = "sin_suficientes_dias_de_datos";
+      evaluacion.dias_con_datos = snapshotsCampana.length;
       evaluaciones.push(evaluacion);
       continue;
     }
 
     const { spend: gastoCampana, conversiones: conversionesCampana } = sumarSnapshots(snapshotsCampana);
     const costoCampana = costoPorResultado(snapshotsCampana);
+    const frecuenciaPromedio = promedio(
+      snapshotsCampana.map((f) => f.frequency).filter((f): f is number => f != null)
+    );
+
+    // Datos que usó esta evaluación -- siempre presentes desde acá en
+    // adelante, sin importar qué regla dispare o no.
+    evaluacion.dias_con_datos = snapshotsCampana.length;
+    evaluacion.gasto = gastoCampana;
+    evaluacion.resultados = conversionesCampana;
+    evaluacion.costo_por_resultado = costoCampana;
+    evaluacion.frecuencia_promedio = frecuenciaPromedio;
 
     // 1) Gasta sin resultados -> pausar. Nunca si es la única activa.
     if (
@@ -165,15 +309,20 @@ async function revisarMeta(meta: Meta) {
       conversionesCampana === 0 &&
       gastoCampana >= MULTIPLO_GASTO_SIN_RESULTADOS * meta.costo_objetivo_cop
     ) {
-      const creada = await proponerSiNoDuplicado(meta, {
-        asistente: "optimizador",
-        accion: "pausar",
-        parametros: { campana_id: campana.id },
-        texto: textoPausar({ nombreCampana: campana.nombre, gasto: gastoCampana, costoObjetivo: meta.costo_objetivo_cop }),
-      });
-      if (creada) propuestasCreadasEnEstaCorrida++;
+      const resultado = await proponerSiNoDuplicado(
+        meta,
+        {
+          asistente: "optimizador",
+          accion: "pausar",
+          parametros: { campana_id: campana.id },
+          texto: textoPausar({ nombreCampana: campana.nombre, gasto: gastoCampana, costoObjetivo: meta.costo_objetivo_cop }),
+        },
+        simular
+      );
+      if (resultado.propuso && !simular) propuestasCreadasEnEstaCorrida++;
       evaluacion.regla = "gasta_sin_resultados";
-      evaluacion.propuso = creada;
+      evaluacion.propuso = resultado.propuso;
+      evaluacion.propuesta = resultado.propuesta;
       evaluaciones.push(evaluacion);
       continue;
     }
@@ -192,23 +341,28 @@ async function revisarMeta(meta: Meta) {
 
       if (cabePresupuesto) {
         const proyeccionNueva = Math.round(avance.proyeccion * (1 + AJUSTE_PRESUPUESTO_PORCENTAJE / 100));
-        const creada = await proponerSiNoDuplicado(meta, {
-          asistente: "optimizador",
-          accion: "ajustar_presupuesto",
-          parametros: { campana_id: campana.id, ajuste_porcentaje: AJUSTE_PRESUPUESTO_PORCENTAJE },
-          texto: textoAjustarPresupuesto({
-            nombreCampana: campana.nombre,
-            costoActual: costoCampana,
-            costoObjetivo: meta.costo_objetivo_cop,
-            presupuestoActual: campana.presupuesto_diario,
-            presupuestoNuevo,
-            proyeccionNueva,
-            cantidadObjetivo: meta.cantidad_objetivo,
-          }),
-        });
-        if (creada) propuestasCreadasEnEstaCorrida++;
+        const resultado = await proponerSiNoDuplicado(
+          meta,
+          {
+            asistente: "optimizador",
+            accion: "ajustar_presupuesto",
+            parametros: { campana_id: campana.id, ajuste_porcentaje: AJUSTE_PRESUPUESTO_PORCENTAJE },
+            texto: textoAjustarPresupuesto({
+              nombreCampana: campana.nombre,
+              costoActual: costoCampana,
+              costoObjetivo: meta.costo_objetivo_cop,
+              presupuestoActual: campana.presupuesto_diario,
+              presupuestoNuevo,
+              proyeccionNueva,
+              cantidadObjetivo: meta.cantidad_objetivo,
+            }),
+          },
+          simular
+        );
+        if (resultado.propuso && !simular) propuestasCreadasEnEstaCorrida++;
         evaluacion.regla = "meta_atrasada_sube_presupuesto";
-        evaluacion.propuso = creada;
+        evaluacion.propuso = resultado.propuso;
+        evaluacion.propuesta = resultado.propuesta;
         evaluaciones.push(evaluacion);
         continue;
       }
@@ -237,23 +391,28 @@ async function revisarMeta(meta: Meta) {
     }
 
     if (motivoCansancio) {
-      const creada = await proponerSiNoDuplicado(meta, {
-        asistente: "creativo",
-        accion: "crear_creativos",
-        parametros: { campana_id: campana.id },
-        texto: textoCrearCreativos({ nombreCampana: campana.nombre, motivo: motivoCansancio }),
-      });
-      if (creada) propuestasCreadasEnEstaCorrida++;
+      const resultado = await proponerSiNoDuplicado(
+        meta,
+        {
+          asistente: "creativo",
+          accion: "crear_creativos",
+          parametros: { campana_id: campana.id },
+          texto: textoCrearCreativos({ nombreCampana: campana.nombre, motivo: motivoCansancio }),
+        },
+        simular
+      );
+      if (resultado.propuso && !simular) propuestasCreadasEnEstaCorrida++;
       evaluacion.regla = "campana_cansada";
-      evaluacion.propuso = creada;
+      evaluacion.propuso = resultado.propuso;
+      evaluacion.propuesta = resultado.propuesta;
     } else if (!evaluacion.regla) {
       evaluacion.motivo = evaluacion.motivo || "ninguna_regla_aplico";
     }
     evaluaciones.push(evaluacion);
   }
 
-  await registrarRevision(meta, { evaluaciones, avance_resumen: { conversiones: avance.conversiones, proyeccion: avance.proyeccion } });
-  return { meta_id: meta.id, propuestas_creadas: propuestasCreadasEnEstaCorrida, evaluaciones };
+  await registrarRevision(meta, { evaluaciones, avance_resumen: avanceResumen }, simular);
+  return { meta_id: meta.id, simulado: simular, propuestas_creadas: propuestasCreadasEnEstaCorrida, avance: avanceResumen, evaluaciones };
 }
 
 // Último cambio EJECUTADO por campaña (de propuestas aprobadas o de
@@ -279,22 +438,26 @@ async function obtenerUltimosCambiosEjecutados(userId: string): Promise<Map<stri
   return ultimoPorCampana;
 }
 
+type TextoPropuesta = { titulo: string; justificacion: string; impactoEsperado: string; costoEstimadoCop: number | null };
+
 // Antiduplicado por (meta, campaña opcional, acción): si ya hay una
-// propuesta pendiente igual, no crea otra. Crea la propuesta y registra
-// bitacora "propuesta_creada" (no confundir con
-// propuesta_aprobada_ejecutada, que es al aprobar).
+// propuesta pendiente igual -- sin contar las de prueba -- no crea
+// otra. En modo simulación nunca inserta: el "if (simular) return"
+// está antes de cualquier .insert(), así que no hay forma de que esta
+// función escriba mientras simula.
 async function proponerSiNoDuplicado(
   meta: Meta,
   datos: {
     asistente: "estratega" | "optimizador" | "creativo";
     accion: "generar_estrategia" | "pausar" | "ajustar_presupuesto" | "crear_creativos";
     parametros: Record<string, unknown>;
-    texto: { titulo: string; justificacion: string; impactoEsperado: string; costoEstimadoCop: number | null };
-  }
-): Promise<boolean> {
+    texto: TextoPropuesta;
+  },
+  simular: boolean
+): Promise<{ propuso: boolean; propuesta?: TextoPropuesta; yaExistiaPendiente?: boolean }> {
   let query = supabaseAdmin
     .from("propuestas")
-    .select("id", { count: "exact", head: true })
+    .select("titulo, parametros")
     .eq("meta_id", meta.id)
     .eq("accion", datos.accion)
     .eq("estado", "pendiente");
@@ -303,8 +466,13 @@ async function proponerSiNoDuplicado(
     query = query.eq("parametros->>campana_id", datos.parametros.campana_id as string);
   }
 
-  const { count } = await query;
-  if ((count ?? 0) > 0) return false;
+  const { data: filasExistentes } = await query;
+  const yaExiste = (filasExistentes ?? []).some((p) => !esPropuestaDePrueba(p));
+  if (yaExiste) return { propuso: false, yaExistiaPendiente: true };
+
+  if (simular) {
+    return { propuso: true, propuesta: datos.texto };
+  }
 
   const venceEn = new Date(Date.now() + VENCE_EN_HORAS * 60 * 60 * 1000).toISOString();
 
@@ -328,7 +496,7 @@ async function proponerSiNoDuplicado(
 
   if (error || !propuesta) {
     console.error("Director: error creando propuesta:", error);
-    return false;
+    return { propuso: false };
   }
 
   await supabaseAdmin.from("bitacora").insert({
@@ -339,10 +507,11 @@ async function proponerSiNoDuplicado(
     detalle: { asistente: datos.asistente, accion: datos.accion, parametros: datos.parametros },
   });
 
-  return true;
+  return { propuso: true, propuesta: datos.texto };
 }
 
-async function registrarRevision(meta: Meta, detalle: Record<string, unknown>) {
+async function registrarRevision(meta: Meta, detalle: Record<string, unknown>, simular: boolean) {
+  if (simular) return; // la simulación nunca escribe en bitacora.
   await supabaseAdmin.from("bitacora").insert({
     user_id: meta.user_id,
     meta_id: meta.id,

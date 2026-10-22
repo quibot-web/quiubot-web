@@ -486,6 +486,18 @@ async function ejecutarAgregarAnuncios(
 const TIMEOUT_GENERANDO_CONCEPTOS_MS = 40 * 60 * 1000;
 const TIMEOUT_GENERANDO_MS = 60 * 60 * 1000;
 
+// Una propuesta es "de prueba" si parametros.es_prueba === true (lo que
+// pone /api/admin/propuestas/prueba al crearla), o -- de respaldo, para
+// las que ya existían antes de que ese campo existiera -- si su título
+// empieza con "[Prueba]". La usan tanto el Director (para no contar
+// estas propuestas en el tope diario ni en los antiduplicados) como
+// encadenarAgregarAnuncios (para que lo que nace de una prueba también
+// quede marcado como prueba).
+export function esPropuestaDePrueba(propuesta: { parametros?: unknown; titulo?: string | null }): boolean {
+  if ((propuesta.parametros as any)?.es_prueba === true) return true;
+  return typeof propuesta.titulo === "string" && propuesta.titulo.startsWith("[Prueba]");
+}
+
 async function marcarCrearCreativosFallida(
   propuesta: { user_id: string; meta_id: string | null },
   propuestaId: string,
@@ -514,7 +526,7 @@ async function marcarCrearCreativosFallida(
 // se generaron y se pagaron, no se pierden). Idempotente vía
 // parametros->>propuesta_origen_id.
 async function encadenarAgregarAnuncios(
-  propuesta: { meta_id: string | null; user_id: string; parametros: unknown },
+  propuesta: { meta_id: string | null; user_id: string; parametros: unknown; titulo?: string | null },
   propuestaId: string,
   job: { id: string; creativos: unknown }
 ) {
@@ -538,6 +550,10 @@ async function encadenarAgregarAnuncios(
           campana_id: (propuesta.parametros as any)?.campana_id ?? null,
           creativos: job.creativos ?? [],
           propuesta_origen_id: propuestaId,
+          // Si el crear_creativos de origen era de prueba, lo que
+          // encadena de ahí también lo es -- no debe contar en el
+          // tope diario ni en los antiduplicados del Director.
+          ...(esPropuestaDePrueba(propuesta) ? { es_prueba: true } : {}),
         },
         titulo: "Agregar los creativos nuevos a la campaña",
         justificacion: `El Creativo terminó de generar ${((job.creativos as unknown[]) ?? []).length} creativo(s) nuevo(s). Revísalos antes de que salgan al aire.`,

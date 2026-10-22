@@ -131,7 +131,10 @@ export async function POST(req: NextRequest) {
 
     const venceEn = new Date(Date.now() + 24 * 60 * 60 * 1000).toISOString();
 
-    const parametros: Record<string, unknown> = {};
+    // es_prueba: true -- para que el Director nunca cuente esto en su
+    // tope diario ni en sus antiduplicados (ver esPropuestaDePrueba en
+    // app/lib/propuestas.ts).
+    const parametros: Record<string, unknown> = { es_prueba: true };
     if (campana_id) parametros.campana_id = campana_id;
     if (accion === "ajustar_presupuesto") parametros.ajuste_porcentaje = 20;
     if (creativosDelJob) parametros.creativos = creativosDelJob;
