@@ -1,5 +1,5 @@
 "use client";
-import { Suspense, useEffect, useState } from "react";
+import { Suspense, useEffect, useRef, useState } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 import { Clock } from "lucide-react";
 import CargandoQuiubot, { CargandoQuiubotInline } from "@/app/components/CargandoQuiubot";
@@ -143,6 +143,9 @@ function DecisionesContenido() {
   const [mostrarHerramientas, setMostrarHerramientas] = useState(false);
   const [historial, setHistorial] = useState<{ propuestas: any[]; bitacora: any[] } | null>(null);
   const [mostrarTodos, setMostrarTodos] = useState(false);
+  const anclaPendientesRef = useRef<HTMLDivElement>(null);
+  const anclaFinalRef = useRef<HTMLDivElement>(null);
+  const yaBajoSolaRef = useRef(false);
 
   // Snapshot de la propuesta + la respuesta justo después de decidir,
   // para mostrar la burbuja de "tú" y la confirmación del Director de
@@ -195,6 +198,19 @@ function DecisionesContenido() {
       })
       .catch(() => {});
   }, [esAdmin]);
+
+  // Al abrir, la conversación baja sola al final -- como un chat --
+  // una sola vez (no en cada recarga posterior de propuestas/historial,
+  // para no saltar la pantalla mientras el cliente está respondiendo
+  // algo arriba). anclaFinalRef vive después de los pendientes, así
+  // que "el final" es justo donde están.
+  useEffect(() => {
+    if (cargando || yaBajoSolaRef.current) return;
+    yaBajoSolaRef.current = true;
+    requestAnimationFrame(() => {
+      anclaFinalRef.current?.scrollIntoView({ behavior: "auto", block: "end" });
+    });
+  }, [cargando]);
 
   // "Revisar de nuevo" en el historial: para una crear_creativos que
   // quedó fallida por timeout pero sí tiene job_id -- si creativos_jobs
@@ -355,9 +371,14 @@ function DecisionesContenido() {
       ? eventosBitacora.find((e) => e.tipo_evento === "director_revision" && revisionNoPropusoNada(e.detalle))
       : undefined;
 
+  // Dos secciones, no una sola línea cronológica: el historial se
+  // puede recortar a las últimas 6 ("Ver anteriores" trae el resto),
+  // pero los PENDIENTES nunca se recortan ni se mezclan con el
+  // historial por fecha -- si uno lleva días sin responder, su
+  // creadoEn viejo lo habría enterrado bajo "Ver anteriores" aunque
+  // siga necesitando una respuesta. Van siempre al final, todos.
   type Item = { orden: string; key: string; render: () => React.ReactNode };
-  const items: Item[] = [
-    ...propuestasFiltradas.map((p) => ({ orden: p.creadoEn, key: `pend-${p.id}`, render: () => renderPendiente(p) })),
+  const itemsHistorial: Item[] = [
     ...historialFiltrado.map((p) => ({ orden: p.decidido_en || p.creado_en, key: `hist-${p.id}`, render: () => renderDecidida(p) })),
     ...eventosMeta.map((e) => ({ orden: e.creado_en, key: `meta-${e.id}`, render: () => renderDirectorSolo(narracionMetaCreada(e.detalle)) })),
     ...eventosAutopiloto.map((e) => ({
@@ -377,8 +398,14 @@ function DecisionesContenido() {
   ].sort((a, b) => (a.orden < b.orden ? -1 : 1));
 
   const VISIBLES_POR_DEFECTO = 6;
-  const itemsVisibles = mostrarTodos ? items : items.slice(-VISIBLES_POR_DEFECTO);
-  const hayMasAnteriores = !mostrarTodos && items.length > itemsVisibles.length;
+  const itemsHistorialVisibles = mostrarTodos ? itemsHistorial : itemsHistorial.slice(-VISIBLES_POR_DEFECTO);
+  const hayMasAnteriores = !mostrarTodos && itemsHistorial.length > itemsHistorialVisibles.length;
+
+  const itemsPendientes: Item[] = [...propuestasFiltradas]
+    .sort((a, b) => (a.creadoEn < b.creadoEn ? -1 : 1))
+    .map((p) => ({ orden: p.creadoEn, key: `pend-${p.id}`, render: () => renderPendiente(p) }));
+
+  const recienDecididasFiltradas = recienDecididas.filter((r) => !filtro || r.propuesta.asistente === filtro);
 
   const sinPendientes = propuestas.length === 0;
   const ultimaDecidida = (historial?.propuestas ?? [])[0];
@@ -650,6 +677,28 @@ function DecisionesContenido() {
             ))}
           </div>
 
+          {itemsPendientes.length > 0 && (
+            <button
+              onClick={() => anclaPendientesRef.current?.scrollIntoView({ behavior: "smooth", block: "start" })}
+              style={{
+                display: "block",
+                width: "100%",
+                textAlign: "center",
+                background: "#F3F2FE",
+                border: "none",
+                borderRadius: 10,
+                padding: "8px 12px",
+                color: "#534AB7",
+                fontSize: 12.5,
+                fontWeight: 700,
+                cursor: "pointer",
+                marginBottom: 16,
+              }}
+            >
+              Tienes {itemsPendientes.length} pendiente{itemsPendientes.length === 1 ? "" : "s"} ↓
+            </button>
+          )}
+
           {problemasCampana.length > 0 && (
             <div style={{ background: "#FEF2F2", border: "1px solid #FCDADA", borderRadius: 14, padding: "14px 16px", marginBottom: 16 }}>
               <p style={{ fontSize: 13, fontWeight: 700, color: "#B3261E", margin: "0 0 8px" }}>Esto sigue pendiente en tus campañas:</p>
@@ -701,8 +750,13 @@ function DecisionesContenido() {
                   Ver anteriores
                 </button>
               )}
-              {itemsVisibles.map((it) => <div key={it.key}>{it.render()}</div>)}
-              {recienDecididas.map((r, i) => (
+              {itemsHistorialVisibles.map((it) => <div key={it.key}>{it.render()}</div>)}
+
+              {/* Los pendientes nunca se recortan -- siempre van todos
+                  acá, al final del historial, sin importar su fecha. */}
+              <div ref={anclaPendientesRef} />
+              {itemsPendientes.map((it) => <div key={it.key}>{it.render()}</div>)}
+              {recienDecididasFiltradas.map((r, i) => (
                 <div key={`reciente-${i}`} style={{ display: "flex", flexDirection: "column", gap: 6 }}>
                   {renderUsuario(r.etiqueta)}
                   <div style={{ display: "flex", gap: 10 }}>
@@ -721,6 +775,7 @@ function DecisionesContenido() {
                   </div>
                 </div>
               ))}
+              <div ref={anclaFinalRef} />
             </div>
           )}
 
