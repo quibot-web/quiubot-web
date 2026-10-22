@@ -47,7 +47,7 @@ export const CATALOGO_ACCIONES: Record<
     titulo: "Crear un nuevo set de creativos",
     justificacion: "Propuesta de prueba: el Creativo generaría imágenes nuevas para probar ángulos distintos.",
     impactoEsperado: "Creativos nuevos disponibles en tu álbum.",
-    requiereCampana: false,
+    requiereCampana: true,
   },
   publicar_campana: {
     label: "Publicar campaña",
@@ -75,7 +75,7 @@ export const CATALOGO_ACCIONES: Record<
     titulo: "Agregar anuncios a una campaña",
     justificacion: "Propuesta de prueba: el Creativo agregaría anuncios nuevos a esta campaña.",
     impactoEsperado: "Más variedad de anuncios compitiendo dentro de la misma campaña.",
-    requiereCampana: false,
+    requiereCampana: true,
   },
 };
 

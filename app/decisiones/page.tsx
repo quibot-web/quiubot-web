@@ -375,13 +375,17 @@ export default function DecisionesPage() {
 
 const ASISTENTES: Asistente[] = ["director", "marca", "estratega", "creativo", "publicador", "analista", "optimizador"];
 const ACCIONES: AccionPropuesta[] = ["generar_estrategia", "crear_creativos", "publicar_campana", "pausar", "ajustar_presupuesto", "agregar_anuncios"];
-const ACCIONES_CON_CAMPANA = new Set<AccionPropuesta>(["pausar", "ajustar_presupuesto"]);
+const ACCIONES_CON_CAMPANA = new Set<AccionPropuesta>(["pausar", "ajustar_presupuesto", "crear_creativos", "agregar_anuncios"]);
+
+type JobListo = { id: string; creado_en: string; total_creativos: number; preview_url: string | null };
 
 function HerramientaPruebaPropuesta({ onCreada }: { onCreada: () => void }) {
   const [asistente, setAsistente] = useState<Asistente>("optimizador");
   const [accion, setAccion] = useState<AccionPropuesta>("pausar");
   const [campanas, setCampanas] = useState<any[]>([]);
   const [campanaId, setCampanaId] = useState("");
+  const [jobsListos, setJobsListos] = useState<JobListo[]>([]);
+  const [jobId, setJobId] = useState("");
   const [creando, setCreando] = useState(false);
   const [mensaje, setMensaje] = useState<string | null>(null);
 
@@ -391,6 +395,14 @@ function HerramientaPruebaPropuesta({ onCreada }: { onCreada: () => void }) {
     }
   }, [accion, campanas.length]);
 
+  useEffect(() => {
+    if (accion === "agregar_anuncios" && jobsListos.length === 0) {
+      fetch("/api/admin/propuestas/prueba").then((r) => r.json()).then((d) => setJobsListos(d.jobs ?? [])).catch(() => setJobsListos([]));
+    }
+  }, [accion, jobsListos.length]);
+
+  const necesitaJob = accion === "agregar_anuncios";
+
   const crear = async () => {
     setCreando(true);
     setMensaje(null);
@@ -398,7 +410,12 @@ function HerramientaPruebaPropuesta({ onCreada }: { onCreada: () => void }) {
       const res = await fetch("/api/admin/propuestas/prueba", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ asistente, accion, campana_id: ACCIONES_CON_CAMPANA.has(accion) ? campanaId : undefined }),
+        body: JSON.stringify({
+          asistente,
+          accion,
+          campana_id: ACCIONES_CON_CAMPANA.has(accion) ? campanaId : undefined,
+          creativos_job_id: necesitaJob ? jobId : undefined,
+        }),
       });
       const data = await res.json();
       if (!res.ok) throw new Error(data.error || "No se pudo crear.");
@@ -420,7 +437,7 @@ function HerramientaPruebaPropuesta({ onCreada }: { onCreada: () => void }) {
         <select value={asistente} onChange={(e) => setAsistente(e.target.value as Asistente)} style={{ padding: "7px 10px", borderRadius: 8, border: "1px solid #ddd", fontSize: 12.5 }}>
           {ASISTENTES.map((a) => <option key={a} value={a}>{NOMBRE_ASISTENTE[a]}</option>)}
         </select>
-        <select value={accion} onChange={(e) => setAccion(e.target.value as AccionPropuesta)} style={{ padding: "7px 10px", borderRadius: 8, border: "1px solid #ddd", fontSize: 12.5 }}>
+        <select value={accion} onChange={(e) => { setAccion(e.target.value as AccionPropuesta); setJobId(""); }} style={{ padding: "7px 10px", borderRadius: 8, border: "1px solid #ddd", fontSize: 12.5 }}>
           {ACCIONES.map((a) => <option key={a} value={a}>{CATALOGO_LABEL[a]}</option>)}
         </select>
         {ACCIONES_CON_CAMPANA.has(accion) && (
@@ -429,9 +446,22 @@ function HerramientaPruebaPropuesta({ onCreada }: { onCreada: () => void }) {
             {campanas.map((c) => <option key={c.id} value={c.id}>{c.nombre}</option>)}
           </select>
         )}
+        {necesitaJob && (
+          <select value={jobId} onChange={(e) => setJobId(e.target.value)} style={{ padding: "7px 10px", borderRadius: 8, border: "1px solid #ddd", fontSize: 12.5, minWidth: 200 }}>
+            <option value="">Elige un lote de creativos listo</option>
+            {jobsListos.map((j) => (
+              <option key={j.id} value={j.id}>
+                {j.total_creativos} creativo(s) · {new Date(j.creado_en).toLocaleDateString("es-CO")}
+              </option>
+            ))}
+          </select>
+        )}
+        {necesitaJob && jobsListos.length === 0 && (
+          <span style={{ fontSize: 11.5, color: "#999" }}>No tienes ningún creativos_jobs "listo" todavía.</span>
+        )}
         <button
           onClick={crear}
-          disabled={creando || (ACCIONES_CON_CAMPANA.has(accion) && !campanaId)}
+          disabled={creando || (ACCIONES_CON_CAMPANA.has(accion) && !campanaId) || (necesitaJob && !jobId)}
           style={{ padding: "7px 14px", borderRadius: 8, background: "#534AB7", color: "#fff", border: "none", fontSize: 12.5, fontWeight: 700, cursor: "pointer" }}
         >
           {creando ? "Creando..." : "Crear propuesta de prueba"}
