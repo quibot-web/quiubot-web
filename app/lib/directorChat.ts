@@ -19,6 +19,29 @@ export const NOMBRE_ASISTENTE: Record<Asistente, string> = {
   optimizador: "Optimizador",
 };
 
+// Mismo asistente que usa de verdad el Director/el encadenamiento (ver
+// app/api/cron/director/route.ts y revisarGeneracionCreativos en
+// app/lib/propuestas.ts) -- una sola fuente de verdad para qué
+// asistente corresponde a cada acción.
+export const ASISTENTE_POR_ACCION: Record<AccionPropuesta, Asistente> = {
+  generar_estrategia: "estratega",
+  crear_creativos: "creativo",
+  publicar_campana: "publicador",
+  pausar: "optimizador",
+  ajustar_presupuesto: "optimizador",
+  agregar_anuncios: "publicador",
+};
+
+// El asistente que de verdad corresponde a un mensaje: si tiene
+// accion, SIEMPRE se deduce de ahí con ASISTENTE_POR_ACCION, nunca del
+// campo asistente guardado en la fila -- así un dato de prueba viejo,
+// o un error futuro al guardar, nunca cambia qué esfera se muestra ni
+// a qué filtro responde. El campo asistente guardado solo se usa
+// cuando no hay accion (notificaciones legadas, campañas con problema).
+export function asistenteDeMensaje(p: { accion: AccionPropuesta | null; asistente: Asistente }): Asistente {
+  return p.accion ? ASISTENTE_POR_ACCION[p.accion] : p.asistente;
+}
+
 function nombreCampanaOFallback(campanaNombre: string | null): string {
   return campanaNombre ? `"${campanaNombre}"` : "esta campaña";
 }

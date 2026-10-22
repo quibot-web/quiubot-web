@@ -11,6 +11,8 @@ import type { Asistente, AccionPropuesta } from "@/app/lib/metas";
 import type { PropuestaUnificada } from "@/app/lib/propuestas";
 import {
   NOMBRE_ASISTENTE,
+  ASISTENTE_POR_ACCION,
+  asistenteDeMensaje,
   leadInPropuesta,
   cuerpoPropuesta,
   confirmacionExito,
@@ -101,11 +103,12 @@ function construirEstadoPorAsistente(propuestas: PropuestaUnificada[], pausado: 
   }
 
   for (const p of propuestas) {
+    const asistente = asistenteDeMensaje(p);
     const etapa = (p.resultado as any)?.etapa;
     if (p.accion === "crear_creativos" && (etapa === "generando_conceptos" || etapa === "generando")) {
-      estado[p.asistente] = "trabajando";
-    } else if (estado[p.asistente] !== "trabajando") {
-      estado[p.asistente] = "esperando";
+      estado[asistente] = "trabajando";
+    } else if (estado[asistente] !== "trabajando") {
+      estado[asistente] = "esperando";
     }
   }
   if ((Object.keys(estado) as Asistente[]).some((a) => a !== "director" && estado[a] !== "normal")) {
@@ -248,7 +251,7 @@ function DecisionesContenido() {
       const res = await fetch(url, { method: "POST" });
       const data = await leerJsonSeguro(res);
       if (!res.ok) {
-        const { texto, avisoReconectarMeta } = confirmacionFalla(p.asistente, data.error || "No se pudo aprobar.", data.motivo);
+        const { texto, avisoReconectarMeta } = confirmacionFalla(asistenteDeMensaje(p), data.error || "No se pudo aprobar.", data.motivo);
         setRecienDecididas((prev) => [...prev, { propuesta: p, etiqueta: "Sí, adelante", confirmacion: { texto, avisoReconectarMeta } }]);
         setError({ mensaje: data.error || "No se pudo aprobar.", motivo: data.motivo, paso: data.paso });
         return;
@@ -305,7 +308,7 @@ function DecisionesContenido() {
       });
       const data = await leerJsonSeguro(res);
       if (!res.ok) {
-        const { texto, avisoReconectarMeta } = confirmacionFalla(p.asistente, data.error || "No se pudo ajustar.", data.motivo);
+        const { texto, avisoReconectarMeta } = confirmacionFalla(asistenteDeMensaje(p), data.error || "No se pudo ajustar.", data.motivo);
         setRecienDecididas((prev) => [...prev, { propuesta: p, etiqueta: "Sí, adelante", confirmacion: { texto, avisoReconectarMeta } }]);
         setError({ mensaje: data.error || "No se pudo ajustar.", motivo: data.motivo, paso: data.paso });
         return;
@@ -351,14 +354,14 @@ function DecisionesContenido() {
   // una fecha real de cuándo empezó el problema, y no son "una
   // conversación" -- son un estado actual) -- se muestran fijas arriba,
   // aparte.
-  const sinFiltroOAsistente = (p: PropuestaUnificada) => !filtro || p.asistente === filtro;
+  const sinFiltroOAsistente = (p: PropuestaUnificada) => !filtro || asistenteDeMensaje(p) === filtro;
   const problemasCampana = propuestas.filter((p) => p.origen === "problema_campana").filter(sinFiltroOAsistente);
   const propuestasFiltradas = propuestas.filter((p) => p.origen !== "problema_campana").filter(sinFiltroOAsistente);
 
   const idsPendientes = new Set(propuestas.map((p) => p.id));
   const historialFiltrado = (historial?.propuestas ?? [])
     .filter((p) => !idsPendientes.has(p.id))
-    .filter((p) => !filtro || p.asistente === filtro);
+    .filter((p) => !filtro || asistenteDeMensaje(p) === filtro);
 
   const eventosBitacora = historial?.bitacora ?? [];
   const eventosMeta = !filtro || filtro === "director" ? eventosBitacora.filter((e) => e.tipo_evento === "meta_creada") : [];
@@ -405,7 +408,7 @@ function DecisionesContenido() {
     .sort((a, b) => (a.creadoEn < b.creadoEn ? -1 : 1))
     .map((p) => ({ orden: p.creadoEn, key: `pend-${p.id}`, render: () => renderPendiente(p) }));
 
-  const recienDecididasFiltradas = recienDecididas.filter((r) => !filtro || r.propuesta.asistente === filtro);
+  const recienDecididasFiltradas = recienDecididas.filter((r) => !filtro || asistenteDeMensaje(r.propuesta) === filtro);
 
   const sinPendientes = propuestas.length === 0;
   const ultimaDecidida = (historial?.propuestas ?? [])[0];
@@ -446,8 +449,8 @@ function DecisionesContenido() {
           <EsferaAsistente asistente="director" estado="normal" tamano={40} />
           <div style={{ background: "#fff", border: "1px solid #ece9f9", borderRadius: "4px 16px 16px 16px", padding: "10px 14px", maxWidth: "calc(100% - 50px)" }}>
             <div style={{ display: "flex", alignItems: "center", gap: 6, marginBottom: 4 }}>
-              <EsferaAsistente asistente={p.asistente} estado="normal" tamano={22} />
-              <span style={{ fontSize: 11, fontWeight: 700, color: "#534AB7", textTransform: "uppercase", letterSpacing: "0.02em" }}>{NOMBRE_ASISTENTE[p.asistente]}</span>
+              <EsferaAsistente asistente={asistenteDeMensaje(p)} estado="normal" tamano={22} />
+              <span style={{ fontSize: 11, fontWeight: 700, color: "#534AB7", textTransform: "uppercase", letterSpacing: "0.02em" }}>{NOMBRE_ASISTENTE[asistenteDeMensaje(p)]}</span>
             </div>
             <p style={{ fontSize: 13.5, color: "#1a1a1a", margin: 0, lineHeight: 1.5 }}>{p.justificacion}</p>
             {campanaId && (
@@ -473,7 +476,7 @@ function DecisionesContenido() {
         <EsferaAsistente asistente="director" estado="normal" tamano={40} />
         <div style={{ background: "#fff", border: "1px solid #ece9f9", borderRadius: "4px 16px 16px 16px", padding: "12px 16px", maxWidth: "calc(100% - 50px)", flex: 1 }}>
           <div style={{ display: "flex", alignItems: "center", gap: 6, marginBottom: 6 }}>
-            <EsferaAsistente asistente={p.asistente} estado={estadoMiniEsfera} tamano={22} />
+            <EsferaAsistente asistente={asistenteDeMensaje(p)} estado={estadoMiniEsfera} tamano={22} />
             <span style={{ fontSize: 13, color: "#1a1a1a" }}>{leadInPropuesta(p.accion as AccionPropuesta, campanaNombre, creativos.length)}</span>
           </div>
 
@@ -594,7 +597,7 @@ function DecisionesContenido() {
       };
     } else if (p.estado === "fallida") {
       etiquetaUsuario = "Sí, adelante";
-      confirmacion = confirmacionFalla(p.asistente, p.resultado?.error || "No se pudo completar.", p.resultado?.motivo);
+      confirmacion = confirmacionFalla(asistenteDeMensaje(p), p.resultado?.error || "No se pudo completar.", p.resultado?.motivo);
     }
 
     return (
@@ -603,7 +606,7 @@ function DecisionesContenido() {
           <EsferaAsistente asistente="director" estado="normal" tamano={40} />
           <div style={{ background: "#fff", border: "1px solid #ece9f9", borderRadius: "4px 16px 16px 16px", padding: "10px 14px", maxWidth: "calc(100% - 50px)" }}>
             <div style={{ display: "flex", alignItems: "center", gap: 6, marginBottom: 4 }}>
-              <EsferaAsistente asistente={p.asistente} estado="normal" tamano={22} />
+              <EsferaAsistente asistente={asistenteDeMensaje(p)} estado="normal" tamano={22} />
               <span style={{ fontSize: 13, color: "#1a1a1a" }}>{p.accion ? leadInPropuesta(p.accion, campanaNombre) : p.titulo}</span>
             </div>
             <p style={{ fontSize: 13.5, fontWeight: 700, color: "#1a1a1a", margin: "0 0 2px" }}>{p.titulo}</p>
@@ -799,20 +802,6 @@ function DecisionesContenido() {
 const ASISTENTES: Asistente[] = ["director", "marca", "estratega", "creativo", "publicador", "analista", "optimizador"];
 const ACCIONES: AccionPropuesta[] = ["generar_estrategia", "crear_creativos", "publicar_campana", "pausar", "ajustar_presupuesto", "agregar_anuncios"];
 const ACCIONES_CON_CAMPANA = new Set<AccionPropuesta>(["pausar", "ajustar_presupuesto", "crear_creativos", "agregar_anuncios"]);
-
-// Mismo asistente que usa de verdad el Director/el encadenamiento (ver
-// app/api/cron/director/route.ts y revisarGeneracionCreativos en
-// app/lib/propuestas.ts) -- se sugiere al cambiar de acción en la
-// herramienta de prueba para no crear propuestas con combinaciones que
-// no pasarían en la vida real (ej. agregar_anuncios con "estratega").
-const ASISTENTE_POR_ACCION: Record<AccionPropuesta, Asistente> = {
-  generar_estrategia: "estratega",
-  crear_creativos: "creativo",
-  publicar_campana: "publicador",
-  pausar: "optimizador",
-  ajustar_presupuesto: "optimizador",
-  agregar_anuncios: "publicador",
-};
 
 type JobListo = { id: string; creado_en: string; total_creativos: number; preview_url: string | null };
 

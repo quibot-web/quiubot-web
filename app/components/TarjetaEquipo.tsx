@@ -3,7 +3,7 @@ import { useEffect, useState } from "react";
 import Link from "next/link";
 import EsferaAsistente from "@/app/components/esferas/EsferaAsistente";
 import type { AsistenteId, EstadoEsfera } from "@/app/components/esferas/esferasShared";
-import { NOMBRE_ASISTENTE } from "@/app/lib/directorChat";
+import { NOMBRE_ASISTENTE, asistenteDeMensaje } from "@/app/lib/directorChat";
 import estilos from "./TarjetaEquipo.module.css";
 
 const EQUIPO: { id: AsistenteId; corto: string; principal?: boolean }[] = [
@@ -51,7 +51,12 @@ export default function TarjetaEquipo() {
         setVisible(true);
         setPausado(!!metaData.meta?.pausado_autopiloto);
         const lista: any[] = propuestasData.propuestas ?? [];
-        const conjunto = new Set<AsistenteId>(lista.map((p) => p.asistente));
+        // El asistente siempre se deduce de la acción cuando la hay
+        // (ASISTENTE_POR_ACCION, vía asistenteDeMensaje) -- nunca del
+        // campo asistente guardado, para que un dato de prueba viejo o
+        // un error futuro al guardar no cambie qué esfera se marca
+        // "esperando".
+        const conjunto = new Set<AsistenteId>(lista.map((p) => asistenteDeMensaje(p)));
         setAsistentesEsperando(conjunto);
         // La burbuja muestra la propuesta más reciente -- las campañas
         // con problema (origen "problema_campana") no compiten por ese
@@ -60,7 +65,7 @@ export default function TarjetaEquipo() {
         const candidatos = reales.length > 0 ? reales : lista;
         if (candidatos.length > 0) {
           const [masReciente, ...resto] = [...candidatos].sort((a, b) => (a.creadoEn < b.creadoEn ? 1 : -1));
-          setPrevia({ titulo: masReciente.titulo, asistente: masReciente.asistente, extra: resto.length });
+          setPrevia({ titulo: masReciente.titulo, asistente: asistenteDeMensaje(masReciente), extra: resto.length });
         }
       })
       .catch(() => setVisible(false))
