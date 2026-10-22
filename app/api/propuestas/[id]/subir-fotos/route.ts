@@ -91,13 +91,10 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
     return NextResponse.json({ error: "Esta propuesta no está esperando fotos." }, { status: 409 });
   }
 
-  const { imagenes, descripcion_visual_producto, tipo_contenido, descripcion_servicio } = await req.json();
+  const { imagenes, tipo_contenido, descripcion_servicio } = await req.json();
 
   if (!Array.isArray(imagenes) || imagenes.length < MIN_IMAGENES || imagenes.length > MAX_IMAGENES) {
     return NextResponse.json({ error: `Elige entre ${MIN_IMAGENES} y ${MAX_IMAGENES} fotos.` }, { status: 400 });
-  }
-  if (typeof descripcion_visual_producto !== "string" || !descripcion_visual_producto.trim()) {
-    return NextResponse.json({ error: "Falta describir lo que se ve en las fotos." }, { status: 400 });
   }
 
   const campanaId = (propuesta.parametros as any)?.campana_id;
@@ -182,7 +179,12 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
       ? await obtenerAngulosUsados(campana.meta_campaign_id, usuario.meta_access_token)
       : [];
 
+  // generar_estrategia no responde {ok:false} siempre que falla -- sin
+  // llave de OpenAI responde HTTP 200 con solo {error:"..."} (sin "ok").
+  // Por eso éxito es ÚNICAMENTE data.ok === true, nunca "no vino false".
+  let campanaElegida: any;
   let conjunto: any;
+  let descripcionVisualGenerada: string | null = null;
   try {
     const n8nRes = await fetch("https://n8n.quiubot.site/webhook/generar_estrategia", {
       method: "POST",
@@ -202,13 +204,23 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
 
     const data = await n8nRes.json().catch(() => ({}));
 
-    if (!n8nRes.ok || data.ok === false) {
+    if (!n8nRes.ok || data.ok !== true) {
       const mensajeError = data.error || "No se pudo generar los conceptos nuevos.";
       await marcarFallida(mensajeError, "generar_estrategia");
       return NextResponse.json({ error: mensajeError, paso: "generar_estrategia" }, { status: n8nRes.ok ? 422 : n8nRes.status || 502 });
     }
 
-    conjunto = data.conjuntos?.[0];
+    // data.campanas[] trae varias estrategias candidatas (cada una ya
+    // con su propio campana/conjuntos/efectividad) -- se elige la de
+    // mayor efectividad, igual que haría un humano en /estrategia.
+    const campanas: any[] = Array.isArray(data.campanas) ? data.campanas : [];
+    campanaElegida = campanas.reduce(
+      (mejor: any, actual: any) => (!mejor || (actual?.efectividad ?? 0) > (mejor?.efectividad ?? 0) ? actual : mejor),
+      null
+    );
+    conjunto = campanaElegida?.conjuntos?.[0];
+    // Raíz de la respuesta, no por campaña (igual que /estrategia la lee).
+    descripcionVisualGenerada = typeof data.descripcion_visual_producto === "string" ? data.descripcion_visual_producto : null;
   } catch (err) {
     console.error("Error al conectar con n8n (generar_estrategia, desde propuesta):", err);
     const mensajeError = "No se pudo conectar con el servidor para generar los conceptos.";
@@ -216,25 +228,31 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
     return NextResponse.json({ error: mensajeError, paso: "generar_estrategia" }, { status: 503 });
   }
 
-  const anunciosValidos = (conjunto?.anuncios ?? [])
-    .filter((a: any) => a?.copy?.titulo && a?.copy?.texto)
-    .slice(0, MAX_ANUNCIOS);
+  // Al elegir los anuncios: primero los que no repiten un ángulo ya
+  // usado en la campaña (concepto.angulo vs angulos_a_evitar), después
+  // el filtro de copy.titulo/copy.texto obligatorios, máximo 3.
+  const angulosAEvitarSet = new Set(angulosAEvitar);
+  const anunciosConCopy = (conjunto?.anuncios ?? []).filter((a: any) => a?.copy?.titulo && a?.copy?.texto);
+  const sinRepetirAngulo = anunciosConCopy.filter((a: any) => !angulosAEvitarSet.has(a?.concepto?.angulo));
+  const conAnguloRepetido = anunciosConCopy.filter((a: any) => angulosAEvitarSet.has(a?.concepto?.angulo));
+  const anunciosValidos = [...sinRepetirAngulo, ...conAnguloRepetido].slice(0, MAX_ANUNCIOS);
 
-  if (!conjunto || anunciosValidos.length === 0) {
+  if (!campanaElegida || !conjunto || anunciosValidos.length === 0) {
     const mensajeError = "generar_estrategia no devolvió ningún anuncio con título y texto -- no se generaron creativos.";
     await marcarFallida(mensajeError, "generar_estrategia_sin_anuncios");
     return NextResponse.json({ error: mensajeError, paso: "generar_estrategia_sin_anuncios" }, { status: 422 });
   }
+  if (!descripcionVisualGenerada) {
+    const mensajeError = "generar_estrategia no devolvió la descripción visual del producto -- no se puede recrear en las imágenes.";
+    await marcarFallida(mensajeError, "generar_estrategia_sin_descripcion");
+    return NextResponse.json({ error: mensajeError, paso: "generar_estrategia_sin_descripcion" }, { status: 422 });
+  }
 
-  // Paso 2: las imágenes -- crear_creativos con la estrategia real (el
-  // conjunto que acaba de generar generar_estrategia), no una mínima.
+  // Paso 2: las imágenes -- crear_creativos con la estrategia real (la
+  // campaña candidata elegida, con su conjunto recortado a los
+  // anuncios elegidos), no una mínima hecha a mano.
   const estrategiaReal = {
-    campana: {
-      nombre: campana.nombre,
-      objetivo_meta: campana.objetivo,
-      objetivo_id: campana.objetivo_id,
-      presupuesto_diario_cop: campana.presupuesto_diario,
-    },
+    ...campanaElegida,
     conjuntos: [{ ...conjunto, anuncios: anunciosValidos }],
   };
 
@@ -245,7 +263,7 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
       body: JSON.stringify({
         email: emailBusqueda,
         estrategia: estrategiaReal,
-        descripcion_visual_producto,
+        descripcion_visual_producto: descripcionVisualGenerada,
         imagenes_producto_base64: imagenesBase64,
         openai_key: openaiKeyDescifrada,
         cloudinary_name: usuario.cloudinary_name,

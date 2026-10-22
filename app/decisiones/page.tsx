@@ -515,7 +515,6 @@ type FotoElegida = { tipo: "base64" | "url"; valor: string; preview: string };
 function PasoSubirFotos({ propuestaId, onListo }: { propuestaId: string; onListo: () => void }) {
   const [album, setAlbum] = useState<{ id: string; url_imagen: string }[]>([]);
   const [elegidas, setElegidas] = useState<FotoElegida[]>([]);
-  const [descripcion, setDescripcion] = useState("");
   const [subiendo, setSubiendo] = useState(false);
   const [errorLocal, setErrorLocal] = useState<{ mensaje: string; paso?: string } | null>(null);
 
@@ -553,8 +552,8 @@ function PasoSubirFotos({ propuestaId, onListo }: { propuestaId: string; onListo
   const quitar = (preview: string) => setElegidas((prev) => prev.filter((f) => f.preview !== preview));
 
   const generar = async () => {
-    if (elegidas.length === 0 || !descripcion.trim()) {
-      setErrorLocal({ mensaje: "Elige al menos 1 foto y describe lo que se ve en ellas." });
+    if (elegidas.length === 0) {
+      setErrorLocal({ mensaje: "Elige al menos 1 foto." });
       return;
     }
     setSubiendo(true);
@@ -565,7 +564,6 @@ function PasoSubirFotos({ propuestaId, onListo }: { propuestaId: string; onListo
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           imagenes: elegidas.map(({ tipo, valor }) => ({ tipo, valor })),
-          descripcion_visual_producto: descripcion.trim(),
         }),
       });
       const data = await res.json();
@@ -614,14 +612,6 @@ function PasoSubirFotos({ propuestaId, onListo }: { propuestaId: string; onListo
           ))}
         </div>
       )}
-
-      <textarea
-        value={descripcion}
-        onChange={(e) => setDescripcion(e.target.value)}
-        placeholder="¿Qué se ve en estas fotos?"
-        rows={2}
-        style={{ width: "100%", padding: "8px 10px", borderRadius: 8, border: "1px solid #ddd", fontSize: 12.5, resize: "vertical", marginBottom: 8, boxSizing: "border-box" }}
-      />
 
       {errorLocal && (
         <p style={{ fontSize: 12, color: "#B3261E", margin: "0 0 8px" }}>
