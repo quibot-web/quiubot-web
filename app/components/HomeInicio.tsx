@@ -289,7 +289,10 @@ export default function HomeInicio({ nombreUsuario }: { nombreUsuario: string })
       .catch(() =>
         setDatos({
           kpis: {},
+          es_admin: false,
           pendientes: [],
+          pendientes_total: 0,
+          director_resumen: null,
           actividad_reciente: [],
           novedades: [],
           capacitaciones: [],
@@ -308,7 +311,11 @@ export default function HomeInicio({ nombreUsuario }: { nombreUsuario: string })
   }
 
   const primerNombre = nombreUsuario?.split(" ")[0] || "";
-  const totalPendientes = datos.pendientes.length;
+  // Admin: el Director es la única conversación -- el saludo cuenta lo
+  // mismo que "Tu Director tiene N cosas" (propuestas + campañas con
+  // problema + notificaciones sin resolver, sin recorte). No-admin: el
+  // total real, aunque la lista de abajo solo muestre las primeras 5.
+  const totalPendientes = datos.es_admin ? datos.director_resumen?.total ?? 0 : datos.pendientes_total ?? datos.pendientes.length;
   const todoTranquilo = totalPendientes === 0;
 
   const presupuestoTotal = datos.kpis.presupuesto_diario_total || 0;
@@ -412,48 +419,82 @@ export default function HomeInicio({ nombreUsuario }: { nombreUsuario: string })
 
     capacitaciones: () => <TarjetaListaCorta titulo="Capacitaciones" items={datos.capacitaciones || []} />,
 
-    decisiones_pendientes: () => (
-      <div style={{ background: "#fff", border: "1px solid #ece9f9", borderRadius: 16, padding: "1.5rem" }}>
-        <p style={{ fontSize: 15, fontWeight: 600, margin: "0 0 14px", color: "#1a1a1a" }}>Decisiones pendientes</p>
-        <BadgeDecisiones />
-        {todoTranquilo && (
-          <div style={{ display: "flex", alignItems: "center", gap: 10, padding: "8px 2px" }}>
-            <div style={{ width: 32, height: 32, borderRadius: "50%", background: "#f0fdf4", display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0 }}>
-              <IconoEscudo size={16} color="#22C55E" />
-            </div>
-            <p style={{ fontSize: 13, color: "#4b5563", margin: 0 }}>
-              Todo bajo control — no hay nada esperando tu revisión ahora mismo.
-            </p>
-          </div>
-        )}
-        <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
-          {datos.pendientes.map((n: any, i: number) => (
-            <div
-              key={n.id}
-              onClick={() => n.campana_id && router.push(`/campanas?highlight=${n.campana_id}`)}
-              style={{
-                display: "flex",
-                alignItems: "center",
-                gap: 10,
-                padding: "10px 12px",
-                borderRadius: 10,
-                background: n.tipo === "alerta" ? "#fef2f2" : "#f3f2fe",
-                cursor: n.campana_id ? "pointer" : "default",
-                opacity: visible ? 1 : 0,
-                transform: visible ? "translateY(0)" : "translateY(6px)",
-                transition: `opacity 0.35s ease ${i * 70}ms, transform 0.35s ease ${i * 70}ms`,
-              }}
-            >
-              <NotificacionIcono tipo={n.tipo} size={32} />
-              <div>
-                <p style={{ fontSize: 13, fontWeight: 600, margin: 0, color: "#1a1a1a" }}>{n.titulo}</p>
-                <p style={{ fontSize: 12, color: "#666", margin: "2px 0 0" }}>{n.mensaje}</p>
-              </div>
-            </div>
-          ))}
+    // Admin: todo pasa por el Director -- esto deja de ser una lista
+    // (campañas con problema y notificaciones viejas ahora entran a la
+    // conversación de /decisiones como mensajes informativos del
+    // Director) y se vuelve una sola entrada con el total real.
+    decisiones_pendientes: () =>
+      datos.es_admin ? (
+        <div
+          onClick={() => router.push("/decisiones")}
+          style={{
+            background: "#fff",
+            border: "1px solid #ece9f9",
+            borderRadius: 16,
+            padding: "1.25rem 1.5rem",
+            display: "flex",
+            alignItems: "center",
+            justifyContent: "space-between",
+            gap: 14,
+            cursor: "pointer",
+          }}
+        >
+          <p style={{ fontSize: 14, color: "#1a1a1a", margin: 0, fontWeight: 600 }}>
+            {todoTranquilo
+              ? "Todo en orden: el equipo está trabajando."
+              : `Tu Director tiene ${totalPendientes} ${totalPendientes === 1 ? "cosa" : "cosas"} para hablar contigo.`}
+          </p>
+          <span style={{ padding: "8px 16px", borderRadius: 8, background: "#534AB7", color: "#fff", fontSize: 12.5, fontWeight: 700, whiteSpace: "nowrap" }}>
+            Ir a la conversación
+          </span>
         </div>
-      </div>
-    ),
+      ) : (
+        <div style={{ background: "#fff", border: "1px solid #ece9f9", borderRadius: 16, padding: "1.5rem" }}>
+          <p style={{ fontSize: 15, fontWeight: 600, margin: "0 0 14px", color: "#1a1a1a" }}>Decisiones pendientes</p>
+          <BadgeDecisiones />
+          {todoTranquilo && (
+            <div style={{ display: "flex", alignItems: "center", gap: 10, padding: "8px 2px" }}>
+              <div style={{ width: 32, height: 32, borderRadius: "50%", background: "#f0fdf4", display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0 }}>
+                <IconoEscudo size={16} color="#22C55E" />
+              </div>
+              <p style={{ fontSize: 13, color: "#4b5563", margin: 0 }}>
+                Todo bajo control — no hay nada esperando tu revisión ahora mismo.
+              </p>
+            </div>
+          )}
+          <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
+            {datos.pendientes.map((n: any, i: number) => (
+              <div
+                key={n.id}
+                onClick={() => n.campana_id && router.push(`/campanas?highlight=${n.campana_id}`)}
+                style={{
+                  display: "flex",
+                  alignItems: "center",
+                  gap: 10,
+                  padding: "10px 12px",
+                  borderRadius: 10,
+                  background: n.tipo === "alerta" ? "#fef2f2" : "#f3f2fe",
+                  cursor: n.campana_id ? "pointer" : "default",
+                  opacity: visible ? 1 : 0,
+                  transform: visible ? "translateY(0)" : "translateY(6px)",
+                  transition: `opacity 0.35s ease ${i * 70}ms, transform 0.35s ease ${i * 70}ms`,
+                }}
+              >
+                <NotificacionIcono tipo={n.tipo} size={32} />
+                <div>
+                  <p style={{ fontSize: 13, fontWeight: 600, margin: 0, color: "#1a1a1a" }}>{n.titulo}</p>
+                  <p style={{ fontSize: 12, color: "#666", margin: "2px 0 0" }}>{n.mensaje}</p>
+                </div>
+              </div>
+            ))}
+            {datos.pendientes_total > datos.pendientes.length && (
+              <p style={{ fontSize: 12, color: "#888", margin: "2px 0 0" }}>
+                y {datos.pendientes_total - datos.pendientes.length} más
+              </p>
+            )}
+          </div>
+        </div>
+      ),
 
     actividad_reciente: () => (
       <div style={{ background: "#fff", border: "1px solid #ece9f9", borderRadius: 16, padding: "1.5rem" }}>

@@ -3,6 +3,7 @@ import { NextResponse } from "next/server";
 import { supabaseAdmin } from "@/lib/supabase";
 import { normalizarBloques } from "@/app/lib/configHome";
 import { hoyBogota } from "@/app/lib/fechaBogota";
+import { obtenerPropuestasPendientes } from "@/app/lib/propuestas";
 
 // Un banner aplica si está dentro de su rango de fechas (o no tiene) Y
 // (no tiene restricción de plan/prueba, O el usuario cae en alguna de las
@@ -27,7 +28,7 @@ export async function GET() {
   const emailBusqueda = session.user.email.trim().toLowerCase();
   const { data: usuario } = await supabaseAdmin
     .from("usuarios")
-    .select("id, plan, en_trial")
+    .select("id, plan, en_trial, rol")
     .eq("email", emailBusqueda)
     .single();
   if (!usuario) {
@@ -72,13 +73,15 @@ export async function GET() {
       .order("corrida_en", { ascending: false })
       .limit(1)
       .maybeSingle(),
+    // Sin .limit() -- el total real (para el saludo y, para admin, para
+    // "Tu Director tiene N cosas") necesita contar TODAS las pendientes,
+    // no solo las primeras 5 que se van a mostrar en la lista.
     supabaseAdmin
       .from("notificaciones")
       .select("id, tipo, titulo, mensaje, campana_id, accion_sugerida")
       .eq("user_id", usuario.id)
       .eq("estado", "pendiente")
-      .order("creado_en", { ascending: false })
-      .limit(5),
+      .order("creado_en", { ascending: false }),
     supabaseAdmin
       .from("album_creativos")
       .select("id, url_imagen, creado_en")
@@ -132,7 +135,29 @@ export async function GET() {
     campana_id: c.id,
   }));
 
-  const pendientes = [...pendientesProblemas, ...(notisRes.data ?? [])].slice(0, 5);
+  const notisPendientes = notisRes.data ?? [];
+  const esAdmin = usuario.rol === "admin";
+
+  // Para admin, todo pasa por el Director: el bloque "Decisiones
+  // pendientes" y el saludo del Inicio dejan de mostrar esta lista y
+  // en su lugar cuentan cuántas cosas tiene el Director para hablar --
+  // propuestas pendientes (ya incluye las notificaciones con
+  // accion_sugerida, vía la misma lectura dual de /decisiones) +
+  // campañas con problema + notificaciones SIN accion_sugerida (para
+  // no contar dos veces las que ya entraron por la lectura dual).
+  let directorTotal: number | null = null;
+  if (esAdmin) {
+    const propuestasPendientes = await obtenerPropuestasPendientes(usuario.id);
+    const notisSinAccion = notisPendientes.filter((n) => !n.accion_sugerida);
+    directorTotal = propuestasPendientes.length + conProblemas.length + notisSinAccion.length;
+  }
+
+  // No-admin: se queda igual que siempre (la lista sigue mostrando como
+  // mucho 5), pero el total ya no se recorta antes de contarlo --
+  // antes "Tienes 5 cosas" salía siempre que hubiera 5 o más, sin decir
+  // cuántas había de verdad.
+  const pendientesTotal = pendientesProblemas.length + notisPendientes.length;
+  const pendientes = esAdmin ? [] : [...pendientesProblemas, ...notisPendientes].slice(0, 5);
 
   const hoy = new Date().toISOString().slice(0, 10);
   const plan = usuario.plan || "arranque";
@@ -148,7 +173,10 @@ export async function GET() {
       resultados_7dias: conversionesTotal,
     },
     ultima_sincronizacion: ultimaSincRes.data?.corrida_en ?? null,
+    es_admin: esAdmin,
     pendientes,
+    pendientes_total: esAdmin ? null : pendientesTotal,
+    director_resumen: esAdmin ? { total: directorTotal } : null,
     actividad_reciente: (albumRes.data ?? []).map((a) => ({ tipo: "creativo", ...a })),
     novedades: novedadesRes.data ?? [],
     capacitaciones: capacitacionesRes.data ?? [],

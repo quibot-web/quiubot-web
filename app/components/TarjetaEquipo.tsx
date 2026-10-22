@@ -1,7 +1,10 @@
 "use client";
 import { useEffect, useState } from "react";
+import Link from "next/link";
 import EsferaAsistente from "@/app/components/esferas/EsferaAsistente";
 import type { AsistenteId, EstadoEsfera } from "@/app/components/esferas/esferasShared";
+import { NOMBRE_ASISTENTE } from "@/app/lib/directorChat";
+import estilos from "./TarjetaEquipo.module.css";
 
 const EQUIPO: { id: AsistenteId; corto: string; principal?: boolean }[] = [
   { id: "director", corto: "Director", principal: true },
@@ -13,6 +16,12 @@ const EQUIPO: { id: AsistenteId; corto: string; principal?: boolean }[] = [
   { id: "optimizador", corto: "Optimizador" },
 ];
 
+const LARGO_MAXIMO_PREVIA = 42;
+
+function textoCorto(titulo: string): string {
+  return titulo.length > LARGO_MAXIMO_PREVIA ? `${titulo.slice(0, LARGO_MAXIMO_PREVIA - 1)}…` : titulo;
+}
+
 // Bloque "equipo" del Inicio -- mismo diseño de tarjeta oscura que la
 // sección "Así se vería el equipo en el inicio" de esferas_v3.html (el
 // brillo de las esferas se pierde sobre blanco). Admin-only: si
@@ -20,11 +29,15 @@ const EQUIPO: { id: AsistenteId; corto: string; principal?: boolean }[] = [
 // de cada asistente es "pausa" si el Autopiloto está pausado,
 // "esperando" si tiene al menos una propuesta pendiente (real, de
 // /api/propuestas -- lectura dual con notificaciones), o "normal".
+// Todas las esferas llevan a la conversación con el Director en
+// /decisiones: el Director a la bandeja general, las demás con
+// ?asistente=<id> para enfocar sus temas ahí.
 export default function TarjetaEquipo() {
   const [cargando, setCargando] = useState(true);
   const [visible, setVisible] = useState(false);
   const [pausado, setPausado] = useState(false);
   const [asistentesEsperando, setAsistentesEsperando] = useState<Set<AsistenteId>>(new Set());
+  const [previa, setPrevia] = useState<{ titulo: string; asistente: AsistenteId; extra: number } | null>(null);
 
   useEffect(() => {
     Promise.all([
@@ -37,8 +50,13 @@ export default function TarjetaEquipo() {
       .then(([metaData, propuestasData]) => {
         setVisible(true);
         setPausado(!!metaData.meta?.pausado_autopiloto);
-        const conjunto = new Set<AsistenteId>((propuestasData.propuestas ?? []).map((p: any) => p.asistente));
+        const lista: any[] = propuestasData.propuestas ?? [];
+        const conjunto = new Set<AsistenteId>(lista.map((p) => p.asistente));
         setAsistentesEsperando(conjunto);
+        if (lista.length > 0) {
+          const [masReciente, ...resto] = [...lista].sort((a, b) => (a.creadoEn < b.creadoEn ? 1 : -1));
+          setPrevia({ titulo: masReciente.titulo, asistente: masReciente.asistente, extra: resto.length });
+        }
       })
       .catch(() => setVisible(false))
       .finally(() => setCargando(false));
@@ -58,14 +76,34 @@ export default function TarjetaEquipo() {
     return "Activo";
   };
 
+  const ariaLabelDe = (id: AsistenteId): string => {
+    const estado = textoDe(id);
+    return id === "director" ? `Hablar con el Director: ${estado}` : `Hablar con el Director sobre el ${NOMBRE_ASISTENTE[id]}: ${estado}`;
+  };
+
   return (
     <div style={{ background: "#17151f", border: "1px solid #26232f", borderRadius: 18, padding: "18px 18px 22px" }}>
       <p style={{ fontSize: 15, fontWeight: 600, margin: "0 0 14px", color: "#f2f1f7" }}>Mi equipo</p>
       <div style={{ display: "flex", flexWrap: "wrap", gap: "6px 2px", alignItems: "flex-start" }}>
         {EQUIPO.map((a) => (
           <div key={a.id} style={{ display: "flex", flexDirection: "column", alignItems: "center", width: 90, fontSize: 12, textAlign: "center" }}>
-            <span style={{ display: "block", marginTop: a.principal ? 0 : 10 }}>
-              <EsferaAsistente asistente={a.id} estado={estadoDe(a.id)} tamano={a.principal ? 78 : 58} />
+            <span
+              className={a.principal ? estilos.contenedorDirector : undefined}
+              style={{ display: "block", marginTop: a.principal ? 0 : 10 }}
+            >
+              {a.principal && previa && (
+                <span className={estilos.burbujaPrevia}>
+                  {textoCorto(previa.titulo)}
+                  {previa.extra > 0 && ` +${previa.extra}`}
+                </span>
+              )}
+              <Link
+                href={a.id === "director" ? "/decisiones" : `/decisiones?asistente=${a.id}`}
+                aria-label={ariaLabelDe(a.id)}
+                className={estilos.enlaceEsfera}
+              >
+                <EsferaAsistente asistente={a.id} estado={estadoDe(a.id)} tamano={a.principal ? 78 : 58} />
+              </Link>
             </span>
             <b style={{ fontWeight: 600, marginTop: 2, color: "#f2f1f7" }}>{a.corto}</b>
             <span style={{ color: "#a3a0b3" }}>{textoDe(a.id)}</span>
