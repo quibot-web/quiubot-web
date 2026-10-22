@@ -13,7 +13,12 @@ import type { Asistente, AccionPropuesta, Propuesta } from "@/app/lib/metas";
 
 export type PropuestaUnificada = {
   id: string; // id real de "propuestas", o "notif-<id>" para las de notificaciones
-  origen: "propuesta" | "notificacion";
+  // "problema_campana" y "notificacion_informativa" son mensajes del
+  // Director solo informativos -- nunca llevan botones de aprobar/
+  // ajustar/rechazar (ver /decisiones). Vienen de campañas rechazada/
+  // con_problemas, y de notificaciones pendientes sin accion_sugerida
+  // (las que sí tienen accion_sugerida ya entran como "notificacion").
+  origen: "propuesta" | "notificacion" | "problema_campana" | "notificacion_informativa";
   asistente: Asistente;
   accion: AccionPropuesta | null; // null para las de notificaciones (su accion_sugerida tiene otra forma)
   titulo: string;
@@ -29,7 +34,9 @@ export type PropuestaUnificada = {
   resultado: Record<string, unknown> | null;
   // Para agregar_anuncios: parametros.creativos trae la vista previa
   // (título, texto, url_imagen, etc.) que la bandeja muestra y que
-  // Ajustar edita antes de aprobar. null para las de notificaciones.
+  // Ajustar edita antes de aprobar. Para problema_campana/
+  // notificacion_informativa, campana_id (si existe) es el enlace a
+  // "Ver campaña". null para el resto.
   parametros: Record<string, unknown> | null;
 };
 
@@ -111,7 +118,7 @@ export async function vencerPropuestasDelUsuario(userId: string) {
 export async function obtenerPropuestasPendientes(userId: string): Promise<PropuestaUnificada[]> {
   await vencerPropuestasDelUsuario(userId);
 
-  const [propuestasRes, enProgresoRes, notisRes] = await Promise.all([
+  const [propuestasRes, enProgresoRes, notisRes, campanasProblemaRes, notisInformativasRes] = await Promise.all([
     supabaseAdmin
       .from("propuestas")
       .select("*")
@@ -136,6 +143,25 @@ export async function obtenerPropuestasPendientes(userId: string): Promise<Propu
       .eq("estado", "pendiente")
       .in("tipo", ["alerta", "sugerencia"])
       .not("accion_sugerida", "is", null)
+      .order("creado_en", { ascending: false }),
+    // Todo pasa por el Director: las campañas que Meta rechazó o
+    // marcó con problema entran a la conversación como mensaje
+    // informativo (sin botones), en vez de vivir en un bloque aparte
+    // del Inicio.
+    supabaseAdmin
+      .from("campanas_publicadas")
+      .select("id, nombre, estado")
+      .eq("user_id", userId)
+      .in("estado", ["rechazada", "con_problemas"]),
+    // Notificaciones pendientes SIN accion_sugerida -- informativas,
+    // ya no tienen un botón de aprobar que ofrecer. Las que sí tienen
+    // accion_sugerida ya entran arriba como "notificacion".
+    supabaseAdmin
+      .from("notificaciones")
+      .select("*")
+      .eq("user_id", userId)
+      .eq("estado", "pendiente")
+      .is("accion_sugerida", null)
       .order("creado_en", { ascending: false }),
   ]);
 
@@ -174,7 +200,41 @@ export async function obtenerPropuestasPendientes(userId: string): Promise<Propu
     parametros: null,
   }));
 
-  return [...dePropuestas, ...deNotificaciones].sort((a, b) => (a.creadoEn < b.creadoEn ? 1 : -1));
+  const deProblemas: PropuestaUnificada[] = (campanasProblemaRes.data ?? []).map((c) => ({
+    id: `problema-${c.id}`,
+    origen: "problema_campana",
+    asistente: "analista",
+    accion: null,
+    titulo: "Meta señaló un problema",
+    justificacion: `El Analista me avisó que Meta ${c.estado === "rechazada" ? "rechazó" : "reportó un problema de configuración o facturación en"} "${c.nombre}".`,
+    impactoEsperado: null,
+    costoEstimadoCop: null,
+    venceEn: null,
+    // No tiene un creado_en propio (es el estado actual de la campaña,
+    // no un evento con fecha) -- va siempre al tope de los informativos.
+    creadoEn: new Date().toISOString(),
+    metaId: null,
+    resultado: null,
+    parametros: { campana_id: c.id },
+  }));
+
+  const deInformativas: PropuestaUnificada[] = (notisInformativasRes.data ?? []).map((n) => ({
+    id: `inform-${n.id}`,
+    origen: "notificacion_informativa",
+    asistente: "analista",
+    accion: null,
+    titulo: n.titulo,
+    justificacion: n.mensaje,
+    impactoEsperado: null,
+    costoEstimadoCop: null,
+    venceEn: null,
+    creadoEn: n.creado_en,
+    metaId: null,
+    resultado: null,
+    parametros: n.campana_id ? { campana_id: n.campana_id } : null,
+  }));
+
+  return [...dePropuestas, ...deNotificaciones, ...deProblemas, ...deInformativas].sort((a, b) => (a.creadoEn < b.creadoEn ? 1 : -1));
 }
 
 type UsuarioEjecutor = { id: string; email: string; meta_access_token: string | null };
@@ -344,9 +404,20 @@ export async function ejecutarPropuesta(propuesta: Propuesta, usuario: UsuarioEj
       return { ok: false, error: mensajeError, motivo, status: n8nRes.status || 502 };
     }
 
+    // Para ajustar_presupuesto, la conversación necesita el "de $X a $Y"
+    // real al momento de ejecutar -- campana.presupuesto_diario sigue
+    // cambiando después (otros ajustes), así que hay que guardarlo
+    // ahora o se pierde para siempre.
+    const resultadoExito: Record<string, unknown> = { ok: true };
+    if (propuesta.accion === "ajustar_presupuesto") {
+      const porcentaje = (propuesta.parametros as any)?.ajuste_porcentaje ?? 0;
+      resultadoExito.presupuesto_antes = campana.presupuesto_diario;
+      resultadoExito.presupuesto_despues = Math.round((campana.presupuesto_diario ?? 0) * (1 + porcentaje / 100));
+    }
+
     await supabaseAdmin
       .from("propuestas")
-      .update({ estado: "ejecutada", decidido_en: ahora, decidido_por: usuario.id, resultado: { ok: true } })
+      .update({ estado: "ejecutada", decidido_en: ahora, decidido_por: usuario.id, resultado: resultadoExito })
       .eq("id", propuesta.id);
     await supabaseAdmin.from("bitacora").insert({
       user_id: usuario.id,

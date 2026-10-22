@@ -1,12 +1,29 @@
 "use client";
-import { useEffect, useState } from "react";
-import { useRouter } from "next/navigation";
+import { Suspense, useEffect, useState } from "react";
+import { useRouter, useSearchParams } from "next/navigation";
 import { Clock } from "lucide-react";
 import CargandoQuiubot, { CargandoQuiubotInline } from "@/app/components/CargandoQuiubot";
 import { ProveedorEsferas } from "@/app/components/esferas/ProveedorEsferas";
 import EsferaAsistente from "@/app/components/esferas/EsferaAsistente";
+import type { EstadoEsfera } from "@/app/components/esferas/esferasShared";
 import { comprimirSiHaceFalta, esArchivoDeImagen } from "@/app/lib/imagenes";
 import type { Asistente, AccionPropuesta } from "@/app/lib/metas";
+import type { PropuestaUnificada } from "@/app/lib/propuestas";
+import {
+  NOMBRE_ASISTENTE,
+  leadInPropuesta,
+  cuerpoPropuesta,
+  confirmacionExito,
+  confirmacionFalla,
+  TEXTO_RECHAZO,
+  TEXTO_VENCIDA,
+  narracionEtapaCreativos,
+  narracionMetaCreada,
+  TEXTO_AUTOPILOTO_PAUSADO,
+  TEXTO_AUTOPILOTO_REANUDADO,
+  narracionRevisionSinPropuestas,
+  revisionNoPropusoNada,
+} from "@/app/lib/directorChat";
 
 type CreativoPropuesto = {
   titulo?: string;
@@ -17,41 +34,7 @@ type CreativoPropuesto = {
   concepto?: { angulo?: string; hook?: string };
 };
 
-type PropuestaUnificada = {
-  id: string;
-  origen: "propuesta" | "notificacion";
-  asistente: Asistente;
-  accion: AccionPropuesta | null;
-  titulo: string;
-  justificacion: string;
-  impactoEsperado: string | null;
-  costoEstimadoCop: number | null;
-  venceEn: string | null;
-  creadoEn: string;
-  metaId: string | null;
-  resultado: {
-    etapa?: "esperando_fotos" | "generando_conceptos" | "generando" | "completado" | "fallida";
-    job_id?: string;
-    error?: string;
-  } | null;
-  parametros: { creativos?: CreativoPropuesto[]; campana_id?: string; ajuste_porcentaje?: number } | null;
-};
-
-const NOMBRE_ASISTENTE: Record<Asistente, string> = {
-  director: "Director",
-  marca: "Analista de marca",
-  estratega: "Estratega",
-  creativo: "Creativo",
-  publicador: "Publicador",
-  analista: "Analista de campañas",
-  optimizador: "Optimizador",
-};
-
-const MOTIVO_LABEL: Record<string, string> = {
-  token_meta: "tu conexión con Meta",
-  meta: "la campaña en Meta",
-  accion: "la acción solicitada",
-};
+const ASISTENTES_EQUIPO: Asistente[] = ["marca", "estratega", "creativo", "publicador", "analista", "optimizador"];
 
 const CATALOGO_LABEL: Record<AccionPropuesta, string> = {
   generar_estrategia: "Generar estrategia",
@@ -62,8 +45,18 @@ const CATALOGO_LABEL: Record<AccionPropuesta, string> = {
   agregar_anuncios: "Agregar anuncios",
 };
 
-function formatoCop(valor: number): string {
-  return new Intl.NumberFormat("es-CO", { style: "currency", currency: "COP", maximumFractionDigits: 0 }).format(valor);
+function tiempoRestante(venceEn: string | null): string | null {
+  if (!venceEn) return null;
+  const msRestantes = new Date(venceEn).getTime() - Date.now();
+  if (msRestantes <= 0) return "vencida";
+  const horas = Math.floor(msRestantes / (60 * 60 * 1000));
+  if (horas < 1) return "vence en menos de 1h";
+  if (horas < 24) return `vence en ${horas}h`;
+  return `vence en ${Math.floor(horas / 24)}d`;
+}
+
+function idReal(id: string): string {
+  return id.startsWith("notif-") ? id.slice(6) : id;
 }
 
 // Lee la respuesta como texto primero -- si el proxy cortó la conexión
@@ -80,33 +73,84 @@ async function leerJsonSeguro(res: Response): Promise<any> {
   }
 }
 
-function tiempoRestante(venceEn: string | null): string | null {
-  if (!venceEn) return null;
-  const msRestantes = new Date(venceEn).getTime() - Date.now();
-  if (msRestantes <= 0) return "vencida";
-  const horas = Math.floor(msRestantes / (60 * 60 * 1000));
-  if (horas < 1) return "vence en menos de 1h";
-  if (horas < 24) return `vence en ${horas}h`;
-  return `vence en ${Math.floor(horas / 24)}d`;
+function campanaIdDe(p: { parametros: Record<string, unknown> | null }): string | null {
+  const id = p.parametros?.campana_id;
+  return typeof id === "string" ? id : null;
 }
 
-function idReal(id: string): string {
-  return id.startsWith("notif-") ? id.slice(6) : id;
+// Estado de cada esfera del equipo para la fila de /decisiones --
+// "trabajando" si tiene un crear_creativos pendiente en etapa
+// generando_conceptos/generando, "esperando" si tiene cualquier otra
+// cosa pendiente, "pausa" si el Autopiloto está pausado. El Director
+// mismo queda "esperando" si cualquiera del equipo lo está (algo que
+// contarle al cliente).
+function construirEstadoPorAsistente(propuestas: PropuestaUnificada[], pausado: boolean): Record<Asistente, EstadoEsfera> {
+  const estado = {
+    director: "normal",
+    marca: "normal",
+    estratega: "normal",
+    creativo: "normal",
+    publicador: "normal",
+    analista: "normal",
+    optimizador: "normal",
+  } as Record<Asistente, EstadoEsfera>;
+
+  if (pausado) {
+    for (const a of Object.keys(estado) as Asistente[]) estado[a] = "pausa";
+    return estado;
+  }
+
+  for (const p of propuestas) {
+    const etapa = (p.resultado as any)?.etapa;
+    if (p.accion === "crear_creativos" && (etapa === "generando_conceptos" || etapa === "generando")) {
+      estado[p.asistente] = "trabajando";
+    } else if (estado[p.asistente] !== "trabajando") {
+      estado[p.asistente] = "esperando";
+    }
+  }
+  if ((Object.keys(estado) as Asistente[]).some((a) => a !== "director" && estado[a] !== "normal")) {
+    estado.director = "esperando";
+  }
+  return estado;
 }
 
+// useSearchParams() exige un límite de Suspense -- sin esto, Next
+// falla el build entero de la página.
 export default function DecisionesPage() {
+  return (
+    <Suspense fallback={<CargandoQuiubot mensaje="Cargando" />}>
+      <DecisionesContenido />
+    </Suspense>
+  );
+}
+
+function DecisionesContenido() {
   const router = useRouter();
+  const searchParams = useSearchParams();
+  const filtro = searchParams.get("asistente") as Asistente | null;
+
   const [esAdmin, setEsAdmin] = useState<boolean | null>(null);
   const [cargando, setCargando] = useState(true);
   const [propuestas, setPropuestas] = useState<PropuestaUnificada[]>([]);
+  const [pausado, setPausado] = useState(false);
+  const [cantidadObjetivo, setCantidadObjetivo] = useState<number | null>(null);
+  const [campanasPorId, setCampanasPorId] = useState<Record<string, string>>({});
   const [procesandoId, setProcesandoId] = useState<string | null>(null);
   const [ajustandoId, setAjustandoId] = useState<string | null>(null);
   const [porcentajeAjuste, setPorcentajeAjuste] = useState("20");
   const [error, setError] = useState<{ mensaje: string; motivo?: string; paso?: string } | null>(null);
 
   const [mostrarHerramientas, setMostrarHerramientas] = useState(false);
-  const [mostrarHistorial, setMostrarHistorial] = useState(false);
   const [historial, setHistorial] = useState<{ propuestas: any[]; bitacora: any[] } | null>(null);
+  const [mostrarTodos, setMostrarTodos] = useState(false);
+
+  // Snapshot de la propuesta + la respuesta justo después de decidir,
+  // para mostrar la burbuja de "tú" y la confirmación del Director de
+  // inmediato -- sin esperar a que /api/propuestas/historial la recoja
+  // en la próxima recarga (donde sí va a verse igual, con los mismos
+  // datos ya guardados).
+  type RespuestaReciente = { propuesta: PropuestaUnificada; etiqueta: string; confirmacion: { texto: string; avisoReconectarMeta?: boolean } };
+  const [recienDecididas, setRecienDecididas] = useState<RespuestaReciente[]>([]);
 
   useEffect(() => {
     fetch("/api/usuario/rol")
@@ -124,16 +168,33 @@ export default function DecisionesPage() {
       .finally(() => setCargando(false));
   };
 
-  useEffect(() => {
-    if (esAdmin) cargarPropuestas();
-  }, [esAdmin]);
-
   const cargarHistorial = () => {
     fetch("/api/propuestas/historial")
       .then((r) => r.json())
       .then((data) => setHistorial(data))
       .catch(() => setHistorial({ propuestas: [], bitacora: [] }));
   };
+
+  useEffect(() => {
+    if (!esAdmin) return;
+    cargarPropuestas();
+    cargarHistorial();
+    fetch("/api/metas")
+      .then((r) => (r.ok ? r.json() : { meta: null }))
+      .then((data) => {
+        setPausado(!!data.meta?.pausado_autopiloto);
+        setCantidadObjetivo(data.meta?.cantidad_objetivo ?? null);
+      })
+      .catch(() => {});
+    fetch("/api/campanas")
+      .then((r) => (r.ok ? r.json() : { campanas: [] }))
+      .then((data) => {
+        const mapa: Record<string, string> = {};
+        for (const c of data.campanas ?? []) mapa[c.id] = c.nombre;
+        setCampanasPorId(mapa);
+      })
+      .catch(() => {});
+  }, [esAdmin]);
 
   // "Revisar de nuevo" en el historial: para una crear_creativos que
   // quedó fallida por timeout pero sí tiene job_id -- si creativos_jobs
@@ -158,6 +219,11 @@ export default function DecisionesPage() {
     }
   };
 
+  const nombreCampanaDe = (p: { parametros: Record<string, unknown> | null }): string | null => {
+    const id = campanaIdDe(p);
+    return id ? campanasPorId[id] ?? null : null;
+  };
+
   const aprobar = async (p: PropuestaUnificada) => {
     setProcesandoId(p.id);
     setError(null);
@@ -166,6 +232,8 @@ export default function DecisionesPage() {
       const res = await fetch(url, { method: "POST" });
       const data = await leerJsonSeguro(res);
       if (!res.ok) {
+        const { texto, avisoReconectarMeta } = confirmacionFalla(p.asistente, data.error || "No se pudo aprobar.", data.motivo);
+        setRecienDecididas((prev) => [...prev, { propuesta: p, etiqueta: "Sí, adelante", confirmacion: { texto, avisoReconectarMeta } }]);
         setError({ mensaje: data.error || "No se pudo aprobar.", motivo: data.motivo, paso: data.paso });
         return;
       }
@@ -174,6 +242,17 @@ export default function DecisionesPage() {
       if (p.accion === "generar_estrategia" && p.metaId) {
         router.push(`/estrategia?meta_id=${p.metaId}`);
         return;
+      }
+      // crear_creativos no tiene una "confirmación" propia acá -- solo
+      // pasa a etapa esperando_fotos, que ya se narra como mensaje aparte.
+      if (p.accion !== "crear_creativos") {
+        const texto = confirmacionExito(p.accion as AccionPropuesta, {
+          campanaNombre: nombreCampanaDe(p),
+          presupuestoAntes: data.resultado?.presupuesto_antes,
+          presupuestoDespues: data.resultado?.presupuesto_despues,
+          cantidadAnuncios: data.resultado?.anuncios_creados?.length,
+        });
+        setRecienDecididas((prev) => [...prev, { propuesta: p, etiqueta: "Sí, adelante", confirmacion: { texto } }]);
       }
       cargarPropuestas();
     } finally {
@@ -192,6 +271,7 @@ export default function DecisionesPage() {
         setError({ mensaje: data.error || "No se pudo rechazar." });
         return;
       }
+      setRecienDecididas((prev) => [...prev, { propuesta: p, etiqueta: "No por ahora", confirmacion: { texto: TEXTO_RECHAZO } }]);
       cargarPropuestas();
     } finally {
       setProcesandoId(null);
@@ -209,9 +289,18 @@ export default function DecisionesPage() {
       });
       const data = await leerJsonSeguro(res);
       if (!res.ok) {
+        const { texto, avisoReconectarMeta } = confirmacionFalla(p.asistente, data.error || "No se pudo ajustar.", data.motivo);
+        setRecienDecididas((prev) => [...prev, { propuesta: p, etiqueta: "Sí, adelante", confirmacion: { texto, avisoReconectarMeta } }]);
         setError({ mensaje: data.error || "No se pudo ajustar.", motivo: data.motivo, paso: data.paso });
         return;
       }
+      const texto = confirmacionExito(p.accion as AccionPropuesta, {
+        campanaNombre: nombreCampanaDe(p),
+        presupuestoAntes: data.resultado?.presupuesto_antes,
+        presupuestoDespues: data.resultado?.presupuesto_despues,
+        cantidadAnuncios: data.resultado?.anuncios_creados?.length,
+      });
+      setRecienDecididas((prev) => [...prev, { propuesta: p, etiqueta: "Sí, adelante", confirmacion: { texto } }]);
       setAjustandoId(null);
       cargarPropuestas();
     } finally {
@@ -240,180 +329,371 @@ export default function DecisionesPage() {
     );
   }
 
+  const estadoPorAsistente = construirEstadoPorAsistente(propuestas, pausado);
+
+  const propuestasFiltradas = filtro ? propuestas.filter((p) => p.asistente === filtro) : propuestas;
+
+  const idsPendientes = new Set(propuestas.map((p) => p.id));
+  const historialFiltrado = (historial?.propuestas ?? [])
+    .filter((p) => !idsPendientes.has(p.id))
+    .filter((p) => !filtro || p.asistente === filtro);
+
+  const eventosBitacora = historial?.bitacora ?? [];
+  const eventosMeta = !filtro || filtro === "director" ? eventosBitacora.filter((e) => e.tipo_evento === "meta_creada") : [];
+  const eventosAutopiloto =
+    !filtro || filtro === "director"
+      ? eventosBitacora.filter((e) => e.tipo_evento === "autopiloto_pausado" || e.tipo_evento === "autopiloto_reanudado")
+      : [];
+  const revisionMasReciente =
+    !filtro || filtro === "director"
+      ? eventosBitacora.find((e) => e.tipo_evento === "director_revision" && revisionNoPropusoNada(e.detalle))
+      : undefined;
+
+  type Item = { orden: string; key: string; render: () => React.ReactNode };
+  const items: Item[] = [
+    ...propuestasFiltradas.map((p) => ({ orden: p.creadoEn, key: `pend-${p.id}`, render: () => renderPendiente(p) })),
+    ...historialFiltrado.map((p) => ({ orden: p.decidido_en || p.creado_en, key: `hist-${p.id}`, render: () => renderDecidida(p) })),
+    ...eventosMeta.map((e) => ({ orden: e.creado_en, key: `meta-${e.id}`, render: () => renderDirectorSolo(narracionMetaCreada(e.detalle)) })),
+    ...eventosAutopiloto.map((e) => ({
+      orden: e.creado_en,
+      key: `auto-${e.id}`,
+      render: () => renderDirectorSolo(e.tipo_evento === "autopiloto_pausado" ? TEXTO_AUTOPILOTO_PAUSADO : TEXTO_AUTOPILOTO_REANUDADO),
+    })),
+    ...(revisionMasReciente
+      ? [
+          {
+            orden: revisionMasReciente.creado_en,
+            key: `revision-${revisionMasReciente.id}`,
+            render: () => renderDirectorSolo(narracionRevisionSinPropuestas(revisionMasReciente.detalle?.avance_resumen ?? null, cantidadObjetivo)),
+          },
+        ]
+      : []),
+  ].sort((a, b) => (a.orden < b.orden ? -1 : 1));
+
+  const VISIBLES_POR_DEFECTO = 6;
+  const itemsVisibles = mostrarTodos ? items : items.slice(-VISIBLES_POR_DEFECTO);
+  const hayMasAnteriores = !mostrarTodos && items.length > itemsVisibles.length;
+
+  const sinPendientes = propuestas.length === 0;
+  const ultimaDecidida = (historial?.propuestas ?? [])[0];
+
+  function renderDirectorSolo(texto: string) {
+    return (
+      <div style={{ display: "flex", gap: 10 }}>
+        <EsferaAsistente asistente="director" estado="normal" tamano={40} />
+        <div style={{ background: "#fff", border: "1px solid #ece9f9", borderRadius: "4px 16px 16px 16px", padding: "10px 14px", maxWidth: "calc(100% - 50px)" }}>
+          <p style={{ fontSize: 13.5, color: "#1a1a1a", margin: 0, lineHeight: 1.5 }}>{texto}</p>
+        </div>
+      </div>
+    );
+  }
+
+  function renderUsuario(texto: string) {
+    return (
+      <div style={{ display: "flex", justifyContent: "flex-end" }}>
+        <div style={{ background: "#534AB7", color: "#fff", borderRadius: "16px 16px 4px 16px", padding: "8px 14px", fontSize: 13, fontWeight: 600, maxWidth: "80%" }}>
+          {texto}
+        </div>
+      </div>
+    );
+  }
+
+  function renderPendiente(p: PropuestaUnificada) {
+    const procesando = procesandoId === p.id;
+    const campanaNombre = nombreCampanaDe(p);
+    const campanaId = campanaIdDe(p);
+
+    // Informativos: campañas con problema / notificaciones sin
+    // accion_sugerida -- un mensaje del Director, sin botones.
+    if (p.origen === "problema_campana" || p.origen === "notificacion_informativa") {
+      return (
+        <div style={{ display: "flex", gap: 10 }}>
+          <EsferaAsistente asistente="director" estado="normal" tamano={40} />
+          <div style={{ background: "#fff", border: "1px solid #ece9f9", borderRadius: "4px 16px 16px 16px", padding: "10px 14px", maxWidth: "calc(100% - 50px)" }}>
+            <div style={{ display: "flex", alignItems: "center", gap: 6, marginBottom: 4 }}>
+              <EsferaAsistente asistente={p.asistente} estado="normal" tamano={22} />
+              <span style={{ fontSize: 11, fontWeight: 700, color: "#534AB7", textTransform: "uppercase", letterSpacing: "0.02em" }}>{NOMBRE_ASISTENTE[p.asistente]}</span>
+            </div>
+            <p style={{ fontSize: 13.5, color: "#1a1a1a", margin: 0, lineHeight: 1.5 }}>{p.justificacion}</p>
+            {campanaId && (
+              <a href={`/campanas?highlight=${campanaId}`} style={{ display: "inline-block", marginTop: 6, fontSize: 12.5, color: "#534AB7", fontWeight: 600, textDecoration: "underline" }}>
+                Ver campaña
+              </a>
+            )}
+          </div>
+        </div>
+      );
+    }
+
+    const puedeAjustar = p.origen === "propuesta" && (p.accion === "ajustar_presupuesto" || p.accion === "agregar_anuncios");
+    const restante = tiempoRestante(p.venceEn);
+    const creativos = p.accion === "agregar_anuncios" ? ((p.parametros?.creativos as CreativoPropuesto[]) ?? []) : [];
+    const etapa = (p.resultado as any)?.etapa as string | undefined;
+
+    const estadoMiniEsfera: EstadoEsfera =
+      p.accion === "crear_creativos" && (etapa === "generando_conceptos" || etapa === "generando") ? "trabajando" : "normal";
+
+    return (
+      <div style={{ display: "flex", gap: 10 }}>
+        <EsferaAsistente asistente="director" estado="normal" tamano={40} />
+        <div style={{ background: "#fff", border: "1px solid #ece9f9", borderRadius: "4px 16px 16px 16px", padding: "12px 16px", maxWidth: "calc(100% - 50px)", flex: 1 }}>
+          <div style={{ display: "flex", alignItems: "center", gap: 6, marginBottom: 6 }}>
+            <EsferaAsistente asistente={p.asistente} estado={estadoMiniEsfera} tamano={22} />
+            <span style={{ fontSize: 13, color: "#1a1a1a" }}>{leadInPropuesta(p.accion as AccionPropuesta, campanaNombre, creativos.length)}</span>
+          </div>
+
+          {creativos.length > 0 && ajustandoId !== p.id && (
+            <div style={{ display: "flex", gap: 8, flexWrap: "wrap", marginBottom: 10 }}>
+              {creativos.map((c, i) => (
+                <div key={i} style={{ width: 92, border: "1px solid #ece9f9", borderRadius: 8, overflow: "hidden" }}>
+                  {c.url_imagen && <img src={c.url_imagen} alt="" style={{ width: "100%", height: 70, objectFit: "cover", display: "block" }} />}
+                  <p style={{ fontSize: 10.5, color: "#666", margin: "4px 6px", lineHeight: 1.3 }}>{c.titulo || c.texto || ""}</p>
+                </div>
+              ))}
+            </div>
+          )}
+
+          {p.accion === "crear_creativos" && etapa === "esperando_fotos" ? (
+            <>
+              <p style={{ fontSize: 13.5, color: "#1a1a1a", margin: "0 0 2px", lineHeight: 1.5 }}>{narracionEtapaCreativos("esperando_fotos")}</p>
+              <PasoSubirFotos propuestaId={p.id} onListo={cargarPropuestas} />
+            </>
+          ) : p.accion === "crear_creativos" && etapa === "generando_conceptos" ? (
+            <>
+              <p style={{ fontSize: 13.5, color: "#1a1a1a", margin: 0, lineHeight: 1.5 }}>{narracionEtapaCreativos("generando_conceptos")}</p>
+              <EstadoGenerandoConceptos onListo={cargarPropuestas} />
+            </>
+          ) : p.accion === "crear_creativos" && etapa === "generando" ? (
+            <>
+              <p style={{ fontSize: 13.5, color: "#1a1a1a", margin: 0, lineHeight: 1.5 }}>{narracionEtapaCreativos("generando")}</p>
+              <EstadoGenerandoCreativos propuestaId={p.id} onListo={cargarPropuestas} />
+            </>
+          ) : (
+            <>
+              <p style={{ fontSize: 14, fontWeight: 700, color: "#1a1a1a", margin: "0 0 4px" }}>{p.titulo}</p>
+              <p style={{ fontSize: 13, color: "#444", margin: "0 0 4px", lineHeight: 1.5 }}>{p.justificacion}</p>
+              {p.impactoEsperado && <p style={{ fontSize: 13, color: "#444", margin: "0 0 4px", lineHeight: 1.5 }}>{cuerpoPropuesta(p).impacto}</p>}
+              <p style={{ fontSize: 13, color: "#1a1a1a", fontWeight: 600, margin: "4px 0 10px" }}>{cuerpoPropuesta(p).pregunta}</p>
+
+              {ajustandoId === p.id && p.accion === "agregar_anuncios" ? (
+                <AjusteCreativos
+                  creativos={creativos}
+                  procesando={procesando}
+                  onConfirmar={(editados) => confirmarAjuste(p, { creativos: editados })}
+                  onCancelar={() => setAjustandoId(null)}
+                />
+              ) : ajustandoId === p.id ? (
+                <div style={{ display: "flex", alignItems: "center", gap: 8, flexWrap: "wrap" }}>
+                  <input
+                    type="number"
+                    value={porcentajeAjuste}
+                    onChange={(e) => setPorcentajeAjuste(e.target.value)}
+                    style={{ width: 70, padding: "7px 8px", borderRadius: 8, border: "1px solid #ddd", fontSize: 13 }}
+                  />
+                  <span style={{ fontSize: 13, color: "#666" }}>% de ajuste</span>
+                  <button
+                    onClick={() => confirmarAjuste(p, { ajuste_porcentaje: Number(porcentajeAjuste) })}
+                    disabled={procesando}
+                    style={{ padding: "7px 14px", borderRadius: 8, background: "#534AB7", color: "#fff", border: "none", fontSize: 12.5, fontWeight: 700, cursor: "pointer" }}
+                  >
+                    {procesando ? "..." : "Aplicar ajuste"}
+                  </button>
+                  <button onClick={() => setAjustandoId(null)} style={{ padding: "7px 10px", borderRadius: 8, background: "none", border: "none", color: "#888", fontSize: 12.5, cursor: "pointer" }}>
+                    Cancelar
+                  </button>
+                </div>
+              ) : (
+                <div style={{ display: "flex", gap: 8, flexWrap: "wrap", alignItems: "center" }}>
+                  <button
+                    onClick={() => aprobar(p)}
+                    disabled={procesando}
+                    style={{ padding: "8px 16px", borderRadius: 8, background: "#534AB7", color: "#fff", border: "none", fontSize: 12.5, fontWeight: 700, cursor: procesando ? "not-allowed" : "pointer" }}
+                  >
+                    {procesando ? "..." : "Sí, adelante"}
+                  </button>
+                  {puedeAjustar && (
+                    <button
+                      onClick={() => { setAjustandoId(p.id); setPorcentajeAjuste("20"); }}
+                      disabled={procesando}
+                      style={{ padding: "8px 16px", borderRadius: 8, background: "#fff", color: "#534AB7", border: "1px solid #534AB7", fontSize: 12.5, fontWeight: 700, cursor: "pointer" }}
+                    >
+                      Ajustar
+                    </button>
+                  )}
+                  <button
+                    onClick={() => rechazar(p)}
+                    disabled={procesando}
+                    style={{ padding: "8px 16px", borderRadius: 8, background: "#fff", color: "#888", border: "1px solid #ddd", fontSize: 12.5, fontWeight: 700, cursor: "pointer" }}
+                  >
+                    No por ahora
+                  </button>
+                  {restante && <span style={{ fontSize: 11.5, color: restante === "vencida" ? "#B3261E" : "#999" }}>{restante}</span>}
+                </div>
+              )}
+            </>
+          )}
+        </div>
+      </div>
+    );
+  }
+
+  function renderDecidida(p: any) {
+    const campanaNombre = nombreCampanaDe(p);
+    let etiquetaUsuario: string | null = null;
+    let confirmacion: { texto: string; avisoReconectarMeta?: boolean } | null = null;
+
+    if (p.estado === "rechazada") {
+      etiquetaUsuario = "No por ahora";
+      confirmacion = { texto: TEXTO_RECHAZO };
+    } else if (p.estado === "vencida") {
+      confirmacion = { texto: TEXTO_VENCIDA };
+    } else if (p.estado === "ejecutada") {
+      etiquetaUsuario = "Sí, adelante";
+      confirmacion = {
+        texto: confirmacionExito(p.accion, {
+          campanaNombre,
+          presupuestoAntes: p.resultado?.presupuesto_antes,
+          presupuestoDespues: p.resultado?.presupuesto_despues,
+          cantidadAnuncios: p.resultado?.anuncios_creados?.length,
+        }),
+      };
+    } else if (p.estado === "fallida") {
+      etiquetaUsuario = "Sí, adelante";
+      confirmacion = confirmacionFalla(p.asistente, p.resultado?.error || "No se pudo completar.", p.resultado?.motivo);
+    }
+
+    return (
+      <div style={{ display: "flex", flexDirection: "column", gap: 6 }}>
+        <div style={{ display: "flex", gap: 10 }}>
+          <EsferaAsistente asistente="director" estado="normal" tamano={40} />
+          <div style={{ background: "#fff", border: "1px solid #ece9f9", borderRadius: "4px 16px 16px 16px", padding: "10px 14px", maxWidth: "calc(100% - 50px)" }}>
+            <div style={{ display: "flex", alignItems: "center", gap: 6, marginBottom: 4 }}>
+              <EsferaAsistente asistente={p.asistente} estado="normal" tamano={22} />
+              <span style={{ fontSize: 13, color: "#1a1a1a" }}>{p.accion ? leadInPropuesta(p.accion, campanaNombre) : p.titulo}</span>
+            </div>
+            <p style={{ fontSize: 13.5, fontWeight: 700, color: "#1a1a1a", margin: "0 0 2px" }}>{p.titulo}</p>
+            <p style={{ fontSize: 13, color: "#555", margin: 0, lineHeight: 1.5 }}>{p.justificacion}</p>
+          </div>
+        </div>
+        {etiquetaUsuario && renderUsuario(etiquetaUsuario)}
+        {confirmacion && (
+          <div style={{ display: "flex", gap: 10 }}>
+            <EsferaAsistente asistente="director" estado="normal" tamano={40} />
+            <div style={{ background: "#fff", border: "1px solid #ece9f9", borderRadius: "4px 16px 16px 16px", padding: "10px 14px", maxWidth: "calc(100% - 50px)" }}>
+              <p style={{ fontSize: 13.5, color: "#1a1a1a", margin: 0, lineHeight: 1.5 }}>{confirmacion.texto}</p>
+              {confirmacion.avisoReconectarMeta && (
+                <>
+                  <p style={{ fontSize: 13.5, color: "#1a1a1a", margin: "4px 0 0", lineHeight: 1.5 }}>Necesito que reconectes tu cuenta de Meta para seguir trabajando.</p>
+                  <a href="/integraciones" style={{ display: "inline-block", marginTop: 4, color: "#534AB7", fontWeight: 600, fontSize: 12.5, textDecoration: "underline" }}>
+                    Reconectar mi cuenta de Meta
+                  </a>
+                </>
+              )}
+            </div>
+          </div>
+        )}
+      </div>
+    );
+  }
+
   return (
     <ProveedorEsferas>
-      <div style={{ minHeight: "100vh", background: "#f9f9f8", fontFamily: "system-ui, sans-serif", padding: "2rem" }}>
+      <div style={{ minHeight: "100vh", background: "#f9f9f8", fontFamily: "system-ui, sans-serif", padding: "2rem 1rem" }}>
         <div style={{ maxWidth: 720, margin: "0 auto" }}>
           <button onClick={() => router.push("/")} style={{ background: "none", border: "none", color: "#7F77DD", fontSize: 14, cursor: "pointer", marginBottom: 20, padding: 0 }}>
             ← Volver al panel principal
           </button>
-          <h1 style={{ fontSize: 22, fontWeight: 700, color: "#1a1a1a", margin: "0 0 4px" }}>Bandeja de decisiones</h1>
-          <p style={{ fontSize: 13.5, color: "#666", margin: "0 0 24px" }}>
-            Nada de esto cambia tus campañas en Meta hasta que apruebes.
-          </p>
+
+          <div style={{ display: "flex", alignItems: "center", gap: 14, marginBottom: 8 }}>
+            <EsferaAsistente asistente="director" estado={estadoPorAsistente.director} tamano={64} />
+            <div>
+              <h1 style={{ fontSize: 20, fontWeight: 700, color: "#1a1a1a", margin: 0 }}>Director</h1>
+              <p style={{ fontSize: 13, color: "#666", margin: "2px 0 0" }}>Coordina a tu equipo y cuida tu meta</p>
+            </div>
+          </div>
+
+          <div style={{ display: "flex", gap: 8, overflowX: "auto", paddingBottom: 6, marginBottom: 20 }}>
+            <button
+              onClick={() => router.push("/decisiones")}
+              style={{
+                flexShrink: 0,
+                padding: "6px 14px",
+                borderRadius: 20,
+                border: filtro ? "1px solid #ddd" : "1px solid #534AB7",
+                background: filtro ? "#fff" : "#534AB7",
+                color: filtro ? "#666" : "#fff",
+                fontSize: 12.5,
+                fontWeight: 700,
+                cursor: "pointer",
+              }}
+            >
+              Todos
+            </button>
+            {ASISTENTES_EQUIPO.map((a) => (
+              <button
+                key={a}
+                onClick={() => router.push(`/decisiones?asistente=${a}`)}
+                style={{ flexShrink: 0, display: "flex", flexDirection: "column", alignItems: "center", width: 64, background: "none", border: "none", cursor: "pointer", padding: 0 }}
+                aria-label={`Filtrar por ${NOMBRE_ASISTENTE[a]}: ${estadoPorAsistente[a] === "pausa" ? "en pausa" : estadoPorAsistente[a] === "esperando" ? "te necesita" : estadoPorAsistente[a] === "trabajando" ? "trabajando" : "activo"}`}
+              >
+                <EsferaAsistente asistente={a} estado={estadoPorAsistente[a]} tamano={44} />
+                <span style={{ fontSize: 10.5, color: filtro === a ? "#534AB7" : "#888", fontWeight: filtro === a ? 700 : 500, marginTop: 2 }}>{NOMBRE_ASISTENTE[a]}</span>
+              </button>
+            ))}
+          </div>
 
           {error && (
             <div style={{ background: "#FEF0EF", color: "#B3261E", padding: "10px 14px", borderRadius: 10, fontSize: 13.5, marginBottom: 16 }}>
               {error.mensaje}
-              {(error.motivo || error.paso) && (
-                <span style={{ display: "block", fontSize: 12, opacity: 0.8, marginTop: 2 }}>
-                  {error.paso && `Paso: ${error.paso}`}
-                  {error.paso && error.motivo && " · "}
-                  {error.motivo && `Motivo: ${MOTIVO_LABEL[error.motivo] || error.motivo}`}
-                </span>
-              )}
-              {error.motivo === "token_meta" && (
-                <a href="/integraciones" style={{ display: "inline-block", marginTop: 6, color: "#B3261E", fontWeight: 600, textDecoration: "underline" }}>
-                  Reconectar mi cuenta de Meta
-                </a>
+              {error.paso && <span style={{ display: "block", fontSize: 12, opacity: 0.8, marginTop: 2 }}>Paso: {error.paso}</span>}
+            </div>
+          )}
+
+          {sinPendientes && !filtro && (
+            <div style={{ background: "#fff", border: "1px solid #ece9f9", borderRadius: 16, padding: "1.25rem 1.5rem", marginBottom: 16 }}>
+              <p style={{ fontSize: 14, color: "#1a1a1a", margin: 0, fontWeight: 600 }}>Todo en orden por ahora 👌</p>
+              {ultimaDecidida && (
+                <p style={{ fontSize: 13, color: "#666", margin: "4px 0 0" }}>
+                  Lo último que hizo el equipo: {ultimaDecidida.titulo}
+                </p>
               )}
             </div>
           )}
 
-          {cargando && <CargandoQuiubotInline mensaje="Cargando propuestas" />}
+          {cargando && <CargandoQuiubotInline mensaje="Cargando la conversación" />}
 
-          {!cargando && propuestas.length === 0 && (
-            <div style={{ background: "#fff", border: "1px solid #ece9f9", borderRadius: 16, padding: "2rem", textAlign: "center", color: "#666", fontSize: 14 }}>
-              No tienes propuestas esperando tu decisión.
-            </div>
-          )}
-
-          <div style={{ display: "flex", flexDirection: "column", gap: 12 }}>
-            {propuestas.map((p) => {
-              const procesando = procesandoId === p.id;
-              const puedeAjustar = p.origen === "propuesta" && (p.accion === "ajustar_presupuesto" || p.accion === "agregar_anuncios");
-              const restante = tiempoRestante(p.venceEn);
-              const creativos = p.accion === "agregar_anuncios" ? p.parametros?.creativos ?? [] : [];
-              return (
-                <div key={p.id} style={{ background: "#fff", border: "1px solid #ece9f9", borderRadius: 16, padding: "1.25rem 1.5rem" }}>
-                  <div style={{ display: "flex", gap: 14 }}>
-                    <EsferaAsistente asistente={p.asistente} estado={procesando ? "trabajando" : "esperando"} tamano={48} />
-                    <div style={{ flex: 1, minWidth: 0 }}>
-                      <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 8, flexWrap: "wrap" }}>
-                        <p style={{ fontSize: 11.5, fontWeight: 700, color: "#534AB7", margin: 0, textTransform: "uppercase", letterSpacing: "0.02em" }}>
-                          {NOMBRE_ASISTENTE[p.asistente]}{p.accion ? ` · ${CATALOGO_LABEL[p.accion]}` : ""}
-                        </p>
-                        {restante && (
-                          <span style={{ fontSize: 11.5, color: restante === "vencida" ? "#B3261E" : "#999" }}>{restante}</span>
-                        )}
-                      </div>
-                      <p style={{ fontSize: 15, fontWeight: 600, color: "#1a1a1a", margin: "4px 0 4px" }}>{p.titulo}</p>
-                      <p style={{ fontSize: 13, color: "#666", margin: "0 0 6px", lineHeight: 1.5 }}>{p.justificacion}</p>
-                      {p.impactoEsperado && (
-                        <p style={{ fontSize: 12.5, color: "#888", margin: "0 0 4px" }}>Impacto esperado: {p.impactoEsperado}</p>
-                      )}
-                      {p.costoEstimadoCop != null && (
-                        <p style={{ fontSize: 12.5, color: "#888", margin: "0 0 10px" }}>Costo estimado: {formatoCop(p.costoEstimadoCop)}</p>
-                      )}
-
-                      {creativos.length > 0 && ajustandoId !== p.id && (
-                        <div style={{ display: "flex", gap: 8, flexWrap: "wrap", marginBottom: 10 }}>
-                          {creativos.map((c, i) => (
-                            <div key={i} style={{ width: 92, border: "1px solid #ece9f9", borderRadius: 8, overflow: "hidden" }}>
-                              {c.url_imagen && <img src={c.url_imagen} alt="" style={{ width: "100%", height: 70, objectFit: "cover", display: "block" }} />}
-                              <p style={{ fontSize: 10.5, color: "#666", margin: "4px 6px", lineHeight: 1.3 }}>{c.titulo || c.texto || ""}</p>
-                            </div>
-                          ))}
-                        </div>
-                      )}
-
-                      {p.accion === "crear_creativos" && p.resultado?.etapa === "esperando_fotos" ? (
-                        <PasoSubirFotos propuestaId={p.id} onListo={cargarPropuestas} />
-                      ) : p.accion === "crear_creativos" && p.resultado?.etapa === "generando_conceptos" ? (
-                        <EstadoGenerandoConceptos onListo={cargarPropuestas} />
-                      ) : p.accion === "crear_creativos" && p.resultado?.etapa === "generando" ? (
-                        <EstadoGenerandoCreativos propuestaId={p.id} onListo={cargarPropuestas} />
-                      ) : ajustandoId === p.id && p.accion === "agregar_anuncios" ? (
-                        <AjusteCreativos
-                          creativos={creativos}
-                          procesando={procesando}
-                          onConfirmar={(editados) => confirmarAjuste(p, { creativos: editados })}
-                          onCancelar={() => setAjustandoId(null)}
-                        />
-                      ) : ajustandoId === p.id ? (
-                        <div style={{ display: "flex", alignItems: "center", gap: 8, marginTop: 10 }}>
-                          <input
-                            type="number"
-                            value={porcentajeAjuste}
-                            onChange={(e) => setPorcentajeAjuste(e.target.value)}
-                            style={{ width: 70, padding: "7px 8px", borderRadius: 8, border: "1px solid #ddd", fontSize: 13 }}
-                          />
-                          <span style={{ fontSize: 13, color: "#666" }}>% de ajuste</span>
-                          <button
-                            onClick={() => confirmarAjuste(p, { ajuste_porcentaje: Number(porcentajeAjuste) })}
-                            disabled={procesando}
-                            style={{ padding: "7px 14px", borderRadius: 8, background: "#534AB7", color: "#fff", border: "none", fontSize: 12.5, fontWeight: 700, cursor: "pointer" }}
-                          >
-                            {procesando ? "..." : "Aplicar ajuste"}
-                          </button>
-                          <button onClick={() => setAjustandoId(null)} style={{ padding: "7px 10px", borderRadius: 8, background: "none", border: "none", color: "#888", fontSize: 12.5, cursor: "pointer" }}>
-                            Cancelar
-                          </button>
-                        </div>
-                      ) : (
-                        <div style={{ display: "flex", gap: 8, marginTop: 10 }}>
-                          <button
-                            onClick={() => aprobar(p)}
-                            disabled={procesando}
-                            style={{ padding: "8px 16px", borderRadius: 8, background: "#534AB7", color: "#fff", border: "none", fontSize: 12.5, fontWeight: 700, cursor: procesando ? "not-allowed" : "pointer" }}
-                          >
-                            {procesando ? "..." : "Aprobar"}
-                          </button>
-                          {puedeAjustar && (
-                            <button
-                              onClick={() => { setAjustandoId(p.id); setPorcentajeAjuste("20"); }}
-                              disabled={procesando}
-                              style={{ padding: "8px 16px", borderRadius: 8, background: "#fff", color: "#534AB7", border: "1px solid #534AB7", fontSize: 12.5, fontWeight: 700, cursor: "pointer" }}
-                            >
-                              Ajustar
-                            </button>
-                          )}
-                          <button
-                            onClick={() => rechazar(p)}
-                            disabled={procesando}
-                            style={{ padding: "8px 16px", borderRadius: 8, background: "#fff", color: "#888", border: "1px solid #ddd", fontSize: 12.5, fontWeight: 700, cursor: "pointer" }}
-                          >
-                            Rechazar
-                          </button>
-                        </div>
+          {!cargando && (
+            <div style={{ display: "flex", flexDirection: "column", gap: 14 }}>
+              {hayMasAnteriores && (
+                <button
+                  onClick={() => setMostrarTodos(true)}
+                  style={{ alignSelf: "center", background: "none", border: "none", color: "#534AB7", fontSize: 12.5, fontWeight: 600, cursor: "pointer", padding: "6px 0" }}
+                >
+                  Ver anteriores
+                </button>
+              )}
+              {itemsVisibles.map((it) => <div key={it.key}>{it.render()}</div>)}
+              {recienDecididas.map((r, i) => (
+                <div key={`reciente-${i}`} style={{ display: "flex", flexDirection: "column", gap: 6 }}>
+                  {renderUsuario(r.etiqueta)}
+                  <div style={{ display: "flex", gap: 10 }}>
+                    <EsferaAsistente asistente="director" estado="normal" tamano={40} />
+                    <div style={{ background: "#fff", border: "1px solid #ece9f9", borderRadius: "4px 16px 16px 16px", padding: "10px 14px", maxWidth: "calc(100% - 50px)" }}>
+                      <p style={{ fontSize: 13.5, color: "#1a1a1a", margin: 0, lineHeight: 1.5 }}>{r.confirmacion.texto}</p>
+                      {r.confirmacion.avisoReconectarMeta && (
+                        <>
+                          <p style={{ fontSize: 13.5, color: "#1a1a1a", margin: "4px 0 0", lineHeight: 1.5 }}>Necesito que reconectes tu cuenta de Meta para seguir trabajando.</p>
+                          <a href="/integraciones" style={{ display: "inline-block", marginTop: 4, color: "#534AB7", fontWeight: 600, fontSize: 12.5, textDecoration: "underline" }}>
+                            Reconectar mi cuenta de Meta
+                          </a>
+                        </>
                       )}
                     </div>
                   </div>
                 </div>
-              );
-            })}
-          </div>
-
-          <div style={{ marginTop: 28 }}>
-            <button
-              onClick={() => setMostrarHistorial((v) => { if (!v) cargarHistorial(); return !v; })}
-              style={{ background: "none", border: "none", color: "#534AB7", fontSize: 13.5, fontWeight: 600, cursor: "pointer", padding: 0 }}
-            >
-              {mostrarHistorial ? "Ocultar historial" : "Ver historial"}
-            </button>
-            {mostrarHistorial && historial && (
-              <div style={{ marginTop: 14, background: "#fff", border: "1px solid #ece9f9", borderRadius: 16, padding: "1.25rem 1.5rem" }}>
-                {historial.propuestas.length === 0 && historial.bitacora.length === 0 && (
-                  <p style={{ fontSize: 13, color: "#999", margin: 0 }}>Todavía no hay historial.</p>
-                )}
-                {historial.propuestas.map((p: any) => (
-                  <div key={p.id} style={{ padding: "8px 0", borderBottom: "1px solid #f3f2fe" }}>
-                    <p style={{ fontSize: 13, fontWeight: 600, color: "#1a1a1a", margin: 0 }}>{p.titulo} — {p.estado}</p>
-                    <p style={{ fontSize: 11.5, color: "#999", margin: "2px 0 0" }}>{new Date(p.decidido_en || p.creado_en).toLocaleString("es-CO")}</p>
-                    {p.accion === "crear_creativos" && p.estado === "fallida" && p.resultado?.job_id && (
-                      <button
-                        onClick={() => recuperarCreativos(p.id)}
-                        disabled={procesandoId === p.id}
-                        style={{ marginTop: 6, padding: "5px 10px", borderRadius: 7, background: "#F3F2FE", color: "#534AB7", border: "none", fontSize: 11.5, fontWeight: 700, cursor: "pointer" }}
-                      >
-                        {procesandoId === p.id ? "Revisando..." : "Revisar de nuevo"}
-                      </button>
-                    )}
-                  </div>
-                ))}
-              </div>
-            )}
-          </div>
+              ))}
+            </div>
+          )}
 
           <div style={{ marginTop: 28, borderTop: "1px solid #e8e8e6", paddingTop: 20 }}>
             <button
@@ -463,15 +743,18 @@ function HerramientaPruebaPropuesta({ onCreada }: { onCreada: () => void }) {
   const [mensaje, setMensaje] = useState<string | null>(null);
 
   useEffect(() => {
-    if (ACCIONES_CON_CAMPANA.has(accion) && campanas.length === 0) {
-      fetch("/api/campanas").then((r) => r.json()).then((d) => setCampanas(d.campanas ?? [])).catch(() => setCampanas([]));
-    }
-  }, [accion, campanas.length]);
+    fetch("/api/campanas")
+      .then((r) => (r.ok ? r.json() : { campanas: [] }))
+      .then((d) => setCampanas(d.campanas ?? []))
+      .catch(() => setCampanas([]));
+  }, []);
 
   useEffect(() => {
-    if (accion === "agregar_anuncios" && jobsListos.length === 0) {
-      fetch("/api/admin/propuestas/prueba").then((r) => r.json()).then((d) => setJobsListos(d.jobs ?? [])).catch(() => setJobsListos([]));
-    }
+    if (accion !== "agregar_anuncios") return;
+    fetch("/api/admin/propuestas/prueba")
+      .then((r) => (r.ok ? r.json() : { jobs: [] }))
+      .then((d) => setJobsListos(d.jobs ?? []))
+      .catch(() => setJobsListos([]));
   }, [accion, jobsListos.length]);
 
   const necesitaJob = accion === "agregar_anuncios";

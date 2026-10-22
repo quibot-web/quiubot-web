@@ -140,16 +140,15 @@ export async function GET() {
 
   // Para admin, todo pasa por el Director: el bloque "Decisiones
   // pendientes" y el saludo del Inicio dejan de mostrar esta lista y
-  // en su lugar cuentan cuántas cosas tiene el Director para hablar --
-  // propuestas pendientes (ya incluye las notificaciones con
-  // accion_sugerida, vía la misma lectura dual de /decisiones) +
-  // campañas con problema + notificaciones SIN accion_sugerida (para
-  // no contar dos veces las que ya entraron por la lectura dual).
+  // en su lugar cuentan cuántas cosas tiene el Director para hablar.
+  // obtenerPropuestasPendientes ya trae las 4 categorías (propuestas,
+  // notificaciones con accion_sugerida, campañas con problema,
+  // notificaciones sin accion_sugerida) en un solo arreglo sin
+  // duplicar nada -- su length es directamente el total.
   let directorTotal: number | null = null;
   if (esAdmin) {
     const propuestasPendientes = await obtenerPropuestasPendientes(usuario.id);
-    const notisSinAccion = notisPendientes.filter((n) => !n.accion_sugerida);
-    directorTotal = propuestasPendientes.length + conProblemas.length + notisSinAccion.length;
+    directorTotal = propuestasPendientes.length;
   }
 
   // No-admin: se queda igual que siempre (la lista sigue mostrando como
