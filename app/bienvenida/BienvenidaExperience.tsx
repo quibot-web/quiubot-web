@@ -1,6 +1,7 @@
 "use client";
 
 import Link from "next/link";
+import Image from "next/image";
 import { useEffect, useRef, useState, type ReactNode } from "react";
 import RevealObserver from "@/app/components/RevealObserver";
 import { trackEvento } from "@/app/components/MetaPixel";
@@ -138,29 +139,61 @@ function PanelContenido({ paso }: { paso: number }) {
     <div className="panel-fade" key={paso}>
       {paso === 0 && (
         <div className="panel-escena panel-escena-captura">
-          <img src="/marca/resultado-adn.jpg" alt="ADN de marca sintetizado por Quiubot" className="captura-real" />
+          <div className="captura-real-wrap">
+            <Image src="/marca/resultado-adn.jpg" alt="ADN de marca sintetizado por Quiubot" fill sizes="480px" style={{ objectFit: "cover", objectPosition: "top" }} />
+          </div>
           <div className="badge-ok">✓ Identidad de marca guardada — captura real</div>
         </div>
       )}
       {paso === 1 && (
         <div className="panel-escena panel-escena-captura">
-          <img src="/marca/resultado-objetivo.jpg" alt="Seleccion de objetivo publicitario en Quiubot" className="captura-real" />
+          <div className="captura-real-wrap">
+            <Image src="/marca/resultado-objetivo.jpg" alt="Seleccion de objetivo publicitario en Quiubot" fill sizes="480px" style={{ objectFit: "cover", objectPosition: "top" }} />
+          </div>
         </div>
       )}
       {paso === 2 && (
         <div className="panel-escena panel-escena-captura">
-          <img src="/marca/resultado-creativos.jpg" alt="Creativos generados por Quiubot para una campana real" className="captura-real" />
+          <div className="captura-real-wrap">
+            <Image src="/marca/resultado-creativos.jpg" alt="Creativos generados por Quiubot para una campana real" fill sizes="480px" style={{ objectFit: "cover", objectPosition: "top" }} />
+          </div>
           <div style={{ fontSize: 13, color: "var(--muted)", fontWeight: 500 }}>Generados y auditados por IA — captura real de la app</div>
         </div>
       )}
       {paso === 3 && (
         <div className="panel-escena panel-escena-captura">
-          <img src="/marca/resultado-publicado-check.jpg" alt="Confirmacion de campana publicada en Meta desde Quiubot" className="captura-real" />
+          <div className="captura-real-wrap">
+            <Image src="/marca/resultado-publicado-check.jpg" alt="Confirmacion de campana publicada en Meta desde Quiubot" fill sizes="480px" style={{ objectFit: "cover", objectPosition: "top" }} />
+          </div>
           <div className="badge-ok">✓ Publicada directo en tu cuenta de Meta — captura real</div>
         </div>
       )}
     </div>
   );
+}
+
+// Sprite de glow precomputado UNA sola vez por color -- ctx.shadowBlur
+// es de las operaciones mas caras que existen en canvas (recalcula un
+// blur de software), y antes se pagaba por cada particula en CADA
+// frame. Ahora el blur se paga una sola vez al crear el sprite, y
+// pintar una particula es solo un drawImage (un blit barato).
+const TAM_SPRITE_GLOW = 32;
+function crearSpriteGlow(color: string, blur: number): HTMLCanvasElement {
+  const off = document.createElement("canvas");
+  off.width = TAM_SPRITE_GLOW;
+  off.height = TAM_SPRITE_GLOW;
+  const octx = off.getContext("2d");
+  if (octx) {
+    const centro = TAM_SPRITE_GLOW / 2;
+    octx.beginPath();
+    octx.arc(centro, centro, TAM_SPRITE_GLOW * 0.16, 0, Math.PI * 2);
+    octx.fillStyle = color;
+    octx.shadowColor = color;
+    octx.shadowBlur = blur;
+    octx.globalAlpha = 0.78;
+    octx.fill();
+  }
+  return off;
 }
 
 function CoreOrb() {
@@ -173,12 +206,14 @@ function CoreOrb() {
     if (!ctx) return;
 
     const reduce = window.matchMedia("(prefers-reduced-motion: reduce)").matches;
+    const esMovil = window.matchMedia("(max-width: 640px)").matches;
     const W = canvas.width;
     const H = canvas.height;
     const cx = W / 2;
     const cy = H / 2;
     const colores = ["#7F77DD", "#4A3FAE", "#1FA97C", "#C4BFF0"];
-    const particulas = Array.from({ length: 42 }).map(() => ({
+    const sprites = new Map(colores.map((c) => [c, crearSpriteGlow(c, 9)]));
+    const particulas = Array.from({ length: esMovil ? 18 : 42 }).map(() => ({
       angulo: Math.random() * Math.PI * 2,
       radio: 26 + Math.random() * 92,
       velocidad: (Math.random() * 0.006 + 0.0025) * (Math.random() < 0.5 ? 1 : -1),
@@ -186,6 +221,15 @@ function CoreOrb() {
       color: colores[Math.floor(Math.random() * colores.length)],
       fase: Math.random() * Math.PI * 2,
     }));
+
+    let raf = 0;
+    // Solo se anima mientras el nucleo del hero esta en pantalla -- una
+    // vez que el visitante baja mas allá del hero, no tiene sentido
+    // seguir quemando CPU/batería en una animacion que nadie ve. raf
+    // vuelve a 0 apenas el loop decide no re-programarse, asi que
+    // "esta corriendo" siempre se puede leer como raf !== 0 -- nunca
+    // queda un id viejo y cancelado bloqueando el reinicio.
+    let enPantalla = true;
 
     const pintar = () => {
       ctx.clearRect(0, 0, W, H);
@@ -197,21 +241,30 @@ function CoreOrb() {
         const r = p.radio + Math.sin(p.fase) * 6;
         const x = cx + Math.cos(p.angulo) * r;
         const y = cy + Math.sin(p.angulo) * r * 0.85;
-        ctx.beginPath();
-        ctx.arc(x, y, p.tam, 0, Math.PI * 2);
-        ctx.fillStyle = p.color;
-        ctx.shadowColor = p.color;
-        ctx.shadowBlur = 9;
-        ctx.globalAlpha = 0.78;
-        ctx.fill();
+        const sprite = sprites.get(p.color)!;
+        const destino = 20 + p.tam * 3;
+        ctx.globalAlpha = 1;
+        ctx.drawImage(sprite, x - destino / 2, y - destino / 2, destino, destino);
       });
-      if (!reduce) raf = requestAnimationFrame(pintar);
+      raf = !reduce && enPantalla ? requestAnimationFrame(pintar) : 0;
     };
 
-    let raf = 0;
     pintar();
-    if (reduce) return;
-    return () => cancelAnimationFrame(raf);
+
+    const observer = new IntersectionObserver(
+      ([entry]) => {
+        enPantalla = entry.isIntersecting;
+        if (enPantalla && !reduce && raf === 0) raf = requestAnimationFrame(pintar);
+      },
+      { threshold: 0 }
+    );
+    observer.observe(canvas);
+
+    if (reduce) return () => observer.disconnect();
+    return () => {
+      cancelAnimationFrame(raf);
+      observer.disconnect();
+    };
   }, []);
 
   return <canvas ref={canvasRef} width={340} height={340} className="core-canvas" />;
@@ -228,7 +281,9 @@ function DisolucionCanvas() {
     if (!ctx) return;
 
     const reduce = window.matchMedia("(prefers-reduced-motion: reduce)").matches;
+    const esMovil = window.matchMedia("(max-width: 640px)").matches;
     const colores = ["#7F77DD", "#4A3FAE", "#1FA97C", "#C4BFF0"];
+    const sprites = new Map(colores.map((c) => [c, crearSpriteGlow(c, 8)]));
     const CICLO = 14;
 
     let W = 0;
@@ -248,7 +303,7 @@ function DisolucionCanvas() {
 
     // Muestrea los pixeles del logo real para que las particulas lo dibujen
     let puntosLogo: { x: number; y: number }[] = [];
-    const img = new Image();
+    const img = new window.Image();
     img.src = "/marca/icono-quiubot.svg";
     img.onload = () => {
       const tam = 96;
@@ -275,7 +330,7 @@ function DisolucionCanvas() {
       { dx: -0.26, dy: 0.22 },
     ];
 
-    const particulas = Array.from({ length: 90 }).map(() => {
+    const particulas = Array.from({ length: esMovil ? 40 : 90 }).map(() => {
       const grupo = origenesRel[Math.floor(Math.random() * origenesRel.length)];
       const jitterX = (Math.random() - 0.5) * 0.08;
       const jitterY = (Math.random() - 0.5) * 0.08;
@@ -295,6 +350,11 @@ function DisolucionCanvas() {
     });
 
     let raf = 0;
+    // Mismo criterio que CoreOrb: solo anima mientras esta en pantalla
+    // -- esta vive en la seccion oscura, muy abajo del hero, asi que
+    // sin esto seguiria dibujando 90 particulas por frame para siempre
+    // aunque el visitante ya haya llegado al precio.
+    let enPantalla = true;
     const inicio = performance.now();
 
     const dibujar = (ahora: number) => {
@@ -358,13 +418,10 @@ function DisolucionCanvas() {
           }
 
           if (alpha > 0.01) {
-            ctx.beginPath();
-            ctx.arc(x, y, p.tam, 0, Math.PI * 2);
-            ctx.fillStyle = p.color;
-            ctx.shadowColor = p.color;
-            ctx.shadowBlur = 8;
+            const sprite = sprites.get(p.color)!;
+            const destino = p.tam * 7;
             ctx.globalAlpha = alpha * 0.85;
-            ctx.fill();
+            ctx.drawImage(sprite, x - destino / 2, y - destino / 2, destino, destino);
           }
         });
 
@@ -381,14 +438,30 @@ function DisolucionCanvas() {
         }
         ctx.globalAlpha = 1;
       }
-      if (!reduce) raf = requestAnimationFrame(dibujar);
+      raf = !reduce && enPantalla ? requestAnimationFrame(dibujar) : 0;
     };
 
     dibujar(performance.now());
-    if (reduce) return () => window.removeEventListener("resize", medir);
+
+    const observer = new IntersectionObserver(
+      ([entry]) => {
+        enPantalla = entry.isIntersecting;
+        if (enPantalla && !reduce && raf === 0) raf = requestAnimationFrame(dibujar);
+      },
+      { threshold: 0 }
+    );
+    observer.observe(canvas);
+
+    if (reduce) {
+      return () => {
+        window.removeEventListener("resize", medir);
+        observer.disconnect();
+      };
+    }
     return () => {
       cancelAnimationFrame(raf);
       window.removeEventListener("resize", medir);
+      observer.disconnect();
     };
   }, []);
 
@@ -816,11 +889,11 @@ export default function BienvenidaExperience() {
         .qb-lp .hud-line:nth-child(3) { animation-delay: 4s; }
         .qb-lp .hud-line:nth-child(4) { animation-delay: 6s; }
         @keyframes qbHudPulse {
-          0% { opacity: 0.4; color: var(--muted); font-weight: 500; }
-          6% { opacity: 1; color: var(--ink); font-weight: 600; }
-          20% { opacity: 1; color: var(--ink); font-weight: 600; }
-          26% { opacity: 0.4; color: var(--muted); font-weight: 500; }
-          100% { opacity: 0.4; color: var(--muted); font-weight: 500; }
+          0% { opacity: 0.4; }
+          6% { opacity: 1; }
+          20% { opacity: 1; }
+          26% { opacity: 0.4; }
+          100% { opacity: 0.4; }
         }
         .qb-lp .hud-line:nth-child(1) .dot { background: var(--purple); }
         .qb-lp .hud-line:nth-child(2) .dot { background: var(--purple-deep); }
@@ -892,13 +965,17 @@ export default function BienvenidaExperience() {
         .qb-lp .video-card { position: relative; max-width: 860px; margin: 0 auto; border-radius: 20px; overflow: hidden; aspect-ratio: 16 / 9; background: linear-gradient(135deg, var(--purple-deep), var(--purple)); cursor: pointer; border: 1px solid #ECE9F7; box-shadow: 0 24px 60px rgba(74,63,174,0.18); }
         .qb-lp .video-thumb { width: 100%; height: 100%; object-fit: cover; display: block; }
         .qb-lp .video-thumb-fallback { width: 100%; height: 100%; background-image: radial-gradient(rgba(255,255,255,0.16) 1px, transparent 1px); background-size: 22px 22px; }
-        .qb-lp .video-play-btn { position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%); width: 72px; height: 72px; border-radius: 50%; background: #fff; display: flex; align-items: center; justify-content: center; box-shadow: 0 10px 30px rgba(0,0,0,0.25); animation: qbPlayPulse 2.4s infinite; transition: transform .2s ease; }
-        .qb-lp .video-play-btn svg { margin-left: 3px; }
+        .qb-lp .video-play-btn { position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%); width: 72px; height: 72px; border-radius: 50%; background: #fff; display: flex; align-items: center; justify-content: center; box-shadow: 0 10px 30px rgba(0,0,0,0.25); transition: transform .2s ease; }
+        .qb-lp .video-play-btn svg { margin-left: 3px; position: relative; z-index: 1; }
         .qb-lp .video-card:hover .video-play-btn { transform: translate(-50%, -50%) scale(1.07); }
+        /* Mismo efecto de "ripple" que antes, pero animando transform/opacity
+           de un anillo en vez de box-shadow -- box-shadow fuerza pintar de
+           nuevo en cada frame; transform/opacity corren en el compositor. */
+        .qb-lp .video-play-btn::before { content: ""; position: absolute; inset: 0; border-radius: 50%; border: 2px solid rgba(255,255,255,0.6); animation: qbPlayPulse 2.4s infinite; }
         @keyframes qbPlayPulse {
-          0% { box-shadow: 0 0 0 0 rgba(255,255,255,0.5), 0 10px 30px rgba(0,0,0,0.25); }
-          70% { box-shadow: 0 0 0 18px rgba(255,255,255,0), 0 10px 30px rgba(0,0,0,0.25); }
-          100% { box-shadow: 0 0 0 0 rgba(255,255,255,0), 0 10px 30px rgba(0,0,0,0.25); }
+          0% { transform: scale(1); opacity: 0.6; }
+          70% { transform: scale(1.35); opacity: 0; }
+          100% { transform: scale(1.35); opacity: 0; }
         }
         .qb-lp .video-modal-backdrop { position: fixed; inset: 0; background: rgba(23,21,43,0.75); z-index: 2000; display: flex; align-items: center; justify-content: center; padding: 24px; }
         .qb-lp .video-modal { width: 100%; max-width: 860px; background: #000; border-radius: 16px; overflow: hidden; position: relative; }
@@ -993,7 +1070,7 @@ export default function BienvenidaExperience() {
         @keyframes qbPanelFade { from { opacity: 0; transform: translateY(10px); } to { opacity: 1; transform: none; } }
         .qb-lp .panel-escena { display: flex; flex-direction: column; gap: 16px; width: 100%; }
         .qb-lp .panel-escena-captura { gap: 10px; }
-        .qb-lp .captura-real { width: 100%; height: 190px; object-fit: cover; object-position: top; border-radius: 10px; box-shadow: 0 0 0 1px #ECE9F7; }
+        .qb-lp .captura-real-wrap { position: relative; width: 100%; height: 190px; border-radius: 10px; box-shadow: 0 0 0 1px #ECE9F7; overflow: hidden; }
         .qb-lp .avatar-marca { width: 54px; height: 54px; border-radius: 16px; background: linear-gradient(135deg, var(--purple), var(--purple-light)); }
         .qb-lp .paleta { display: flex; gap: 6px; }
         .qb-lp .paleta span { width: 16px; height: 16px; border-radius: 5px; }
@@ -1054,7 +1131,6 @@ export default function BienvenidaExperience() {
         .qb-lp .sello-box p.lead { max-width: 560px; margin: 14px auto 0; }
         .qb-lp .founder-note { display: flex; align-items: center; gap: 18px; text-align: left; background: var(--bg-alt); border-radius: 16px; padding: 20px 24px; margin: 26px auto 0; max-width: 600px; }
         .qb-lp .founder-photo-wrap { position: relative; width: 64px; height: 64px; border-radius: 50%; flex-shrink: 0; overflow: hidden; box-shadow: 0 6px 16px rgba(74,63,174,0.2), 0 0 0 3px #fff, 0 0 0 5px #1FA97C; }
-        .qb-lp .founder-photo { width: 100%; height: 100%; object-fit: cover; display: block; }
         .qb-lp .founder-fallback { position: absolute; inset: 0; display: none; align-items: center; justify-content: center; background: var(--purple-deep); color: #fff; font-weight: 700; font-size: 19px; font-family: var(--font-display), sans-serif; }
         .qb-lp .founder-fallback.visible { display: flex; }
         .qb-lp .founder-quote { font-size: 14.5px; color: var(--ink); line-height: 1.5; font-style: italic; margin: 0 0 8px; }
@@ -1413,10 +1489,12 @@ export default function BienvenidaExperience() {
           </p>
           <div className="founder-note">
             <div className="founder-photo-wrap">
-              <img
+              <Image
                 src="/marca/fundador-juan-jose.jpg"
                 alt="Juan José Palacios Villarreal, fundador de Quiubot"
-                className="founder-photo"
+                fill
+                sizes="64px"
+                style={{ objectFit: "cover" }}
                 onError={(e) => {
                   e.currentTarget.style.display = "none";
                   e.currentTarget.nextElementSibling?.classList.add("visible");
