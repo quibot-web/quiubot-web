@@ -59,6 +59,10 @@ export async function POST(req: NextRequest) {
     .upsert({
       email,
       activo: true,
+      // Activar un plan pago aqui tambien saca a la persona de en_trial,
+      // por la misma razon que en el webhook de Bold: que no quede
+      // marcada como "en prueba" alguien que ya esta pagando.
+      en_trial: false,
       fecha_pago: fechaPago.toISOString(),
       fecha_vencimiento: fechaVencimiento.toISOString(),
     }, { onConflict: "email" })

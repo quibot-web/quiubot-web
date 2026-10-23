@@ -132,6 +132,10 @@ export async function POST(req: NextRequest) {
       .update({
         plan: orden.plan_id,
         activo: true,
+        // Quien paga de verdad deja de estar en_trial, aunque antes nunca
+        // se le hubiera marcado false -- asi ningun proceso lo confunde
+        // con alguien en prueba.
+        en_trial: false,
         fecha_pago: fechaPago.toISOString(),
         fecha_vencimiento: fechaVencimiento.toISOString(),
         // Se resetea aqui -- cada renovacion tiene su propia fecha de
