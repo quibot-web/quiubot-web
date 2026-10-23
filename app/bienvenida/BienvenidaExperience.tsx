@@ -60,36 +60,43 @@ const CHIPS_CONFIANZA = ["Cero curva de aprendizaje", "Tú apruebas cada cambio"
 // número. Se repite tal cual en garantías y en precios.
 const AVISO_OPENAI = "Quiubot usa tu propia cuenta de OpenAI: el uso de IA lo pagas directo a OpenAI, sin ningún margen nuestro encima.";
 
-const PLANES = [
-  {
-    nombre: "Arranque",
-    precio: "Gratis",
-    detalle: "Para empezar sin riesgo",
-    features: ["1 estrategia al mes", "Creativos generados con IA", "Vigilancia basica de campaña"],
-    icono: "cohete",
-  },
-  {
-    nombre: "Crecimiento",
-    precio: "$149.900",
-    detalle: "Para negocios que ya están en marcha.",
-    features: ["4 estrategias al mes", "Todos los objetivos publicitarios", "Vigilancia y ajustes ilimitados", "Soporte prioritario"],
-    icono: "crecimiento",
-  },
-  {
-    nombre: nombreVisiblePlan("escala"),
-    precio: "$249.900",
-    detalle: "El más completo para quien no quiere límites.",
-    features: [
-      ...(AUTOPILOTO_PUBLICO ? BENEFICIOS_AUTOPILOTO : []),
-      "Estrategias ilimitadas",
-      "Campañas vigiladas sin limite",
-      "Plantillas publicitarias premium",
-      "Soporte dedicado",
-    ],
-    icono: "corona",
-    destacado: true,
-  },
-];
+// Función (no una constante) porque mostrarAutopiloto puede venir del
+// interruptor real (AUTOPILOTO_PUBLICO) O de la vista previa de
+// staging (?vista=autopiloto, ver app/bienvenida/page.tsx) -- un array
+// a nivel de módulo se calcularía una sola vez al cargar el módulo y
+// nunca podría reaccionar a esa vista previa por request.
+function construirPlanes(mostrarAutopiloto: boolean) {
+  return [
+    {
+      nombre: "Arranque",
+      precio: "Gratis",
+      detalle: "Para empezar sin riesgo",
+      features: ["1 estrategia al mes", "Creativos generados con IA", "Vigilancia basica de campaña"],
+      icono: "cohete",
+    },
+    {
+      nombre: "Crecimiento",
+      precio: "$149.900",
+      detalle: "Para negocios que ya están en marcha.",
+      features: ["4 estrategias al mes", "Todos los objetivos publicitarios", "Vigilancia y ajustes ilimitados", "Soporte prioritario"],
+      icono: "crecimiento",
+    },
+    {
+      nombre: mostrarAutopiloto ? "Autopiloto" : nombreVisiblePlan("escala"),
+      precio: "$249.900",
+      detalle: "El más completo para quien no quiere límites.",
+      features: [
+        ...(mostrarAutopiloto ? BENEFICIOS_AUTOPILOTO : []),
+        "Estrategias ilimitadas",
+        "Campañas vigiladas sin limite",
+        "Plantillas publicitarias premium",
+        "Soporte dedicado",
+      ],
+      icono: "corona",
+      destacado: true,
+    },
+  ];
+}
 
 const ICONOS_PLAN: Record<string, ReactNode> = {
   cohete: (
@@ -798,7 +805,14 @@ function BarraConfianzaTemprana() {
   );
 }
 
-export default function BienvenidaExperience() {
+// forzarAutopiloto: solo lo manda app/bienvenida/page.tsx, y solo en
+// staging con ?vista=autopiloto -- ver ese archivo para el chequeo de
+// COOLIFY_BRANCH. Nunca sustituye a AUTOPILOTO_PUBLICO, solo lo
+// complementa para poder revisar la Parte B sin tocar el interruptor
+// real ni afectar producción.
+export default function BienvenidaExperience({ forzarAutopiloto = false }: { forzarAutopiloto?: boolean }) {
+  const mostrarAutopiloto = AUTOPILOTO_PUBLICO || forzarAutopiloto;
+  const planes = construirPlanes(mostrarAutopiloto);
   const [pasoActivo, setPasoActivo] = useState(0);
   const [progreso, setProgreso] = useState(0);
   const [navScrolled, setNavScrolled] = useState(false);
@@ -1362,20 +1376,20 @@ export default function BienvenidaExperience() {
       <section className="hero" style={{ paddingBottom: 0 }}>
         <div>
           <p className="eyebrow">Publicidad con IA · Meta Ads</p>
-          {AUTOPILOTO_PUBLICO ? (
+          {mostrarAutopiloto ? (
             <h1>Un equipo de publicidad trabajando por tu meta. <span className="grad">Tú solo apruebas.</span></h1>
           ) : (
             <h1>Tu próxima campaña <span className="grad">no la armas tú.</span></h1>
           )}
           <p className="sub">
-            {AUTOPILOTO_PUBLICO
+            {mostrarAutopiloto
               ? "Dile a Quiubot cuántas conversaciones o clientes quieres este mes. Siete asistentes crean, publican y cuidan tus campañas de Meta todos los días, y el Director te consulta cada cambio antes de hacerlo."
               : "Estrategia, creativos y publicación para Meta Ads generados con IA — y un motor que vigila tus campañas todo el tiempo para que nunca quemes presupuesto sin darte cuenta."}
           </p>
           <CtaLink href="/login" ubicacion="hero" className="btn-cta">Iniciar prueba gratuita de 7 días →</CtaLink>
           <p className="micro">Sin tarjeta de crédito. Cancela cuando quieras.</p>
         </div>
-        {AUTOPILOTO_PUBLICO ? (
+        {mostrarAutopiloto ? (
           <div className="hero-equipo-visual">
             <div className="hero-director-card">
               <div className="hero-director-head">
@@ -1573,7 +1587,7 @@ export default function BienvenidaExperience() {
       </section>
 
       {/* 6b. ASI TRABAJA TU EQUIPO (solo con AUTOPILOTO_PUBLICO) */}
-      {AUTOPILOTO_PUBLICO && (
+      {mostrarAutopiloto && (
         <section className="alt">
           <div className="section-head qb-reveal" style={{ textAlign: "left", maxWidth: 1160, margin: "0 auto 40px" }}>
             <h2>Así trabaja tu equipo</h2>
@@ -1592,7 +1606,7 @@ export default function BienvenidaExperience() {
 
       {/* 7. QUE PASA DESPUES DE PUBLICAR (o "Conoce a tu equipo" con AUTOPILOTO_PUBLICO) + segundo CTA intermedio */}
       <section>
-        {AUTOPILOTO_PUBLICO ? (
+        {mostrarAutopiloto ? (
           <>
             <div className="section-head qb-reveal" style={{ textAlign: "left", maxWidth: 720, margin: "0 auto 44px" }}>
               <p className="eyebrow">Conoce a tu equipo</p>
@@ -1756,7 +1770,7 @@ export default function BienvenidaExperience() {
           <h2>Elige el plan que se ajuste a tu negocio.</h2>
         </div>
         <div className="planes">
-          {PLANES.map((p, i) => (
+          {planes.map((p, i) => (
             <div className={`plan-card ${p.destacado ? "destacado" : ""} qb-reveal qb-reveal-delay-${i + 1}`} key={p.nombre}>
               {p.destacado && <div className="tag">✦ Mas elegido</div>}
               <div className="plan-icono">
@@ -1784,12 +1798,12 @@ export default function BienvenidaExperience() {
       {/* 10. CTA FINAL */}
       <section>
         <div className="cta-final qb-reveal">
-          {AUTOPILOTO_PUBLICO && (
+          {mostrarAutopiloto && (
             <div style={{ display: "flex", justifyContent: "center", marginBottom: 8 }}>
               <EsferaAsistente asistente="director" estado="normal" tamano={72} />
             </div>
           )}
-          <h2>{AUTOPILOTO_PUBLICO ? "Tu equipo está listo para empezar. ¿Cuál es tu meta?" : "Tus primeros 7 días con Quiubot ya están pagados. Por nosotros."}</h2>
+          <h2>{mostrarAutopiloto ? "Tu equipo está listo para empezar. ¿Cuál es tu meta?" : "Tus primeros 7 días con Quiubot ya están pagados. Por nosotros."}</h2>
           <CtaLink href="/login" ubicacion="cta_final" className="btn-cta">Iniciar prueba gratuita de 7 días →</CtaLink>
           <p className="micro">Sin tarjeta de crédito. Cancela cuando quieras.</p>
         </div>
