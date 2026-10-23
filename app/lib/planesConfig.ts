@@ -55,19 +55,71 @@ export const BENEFICIOS_AUTOPILOTO: string[] = [
 // cliente siempre (columna beta_autopiloto, la activa un humano por
 // SQL), y si no, solo cuando el interruptor está encendido Y el plan
 // es "escala" Y el pago está vigente (pagado con fecha_vencimiento
-// futura, o en_trial -- la prueba gratis de 14 días todavía no existe,
-// pero en_trial ya es un campo real en usuarios).
+// futura, o en_trial con trial_termina_en todavía no vencido).
+//
+// El chequeo de trial_termina_en es a propósito, aunque el workflow de
+// n8n "bajar_planes_vencidos" ya pase en_trial a false y baje a
+// Arranque las pruebas vencidas todos los días a las 6 a.m.: este
+// código no depende de que ese workflow haya corrido todavía. Sin
+// esto, alguien cuya prueba venció por fecha pero que el workflow
+// diario aún no alcanzó a procesar seguiría teniendo Autopiloto
+// completo hasta esa corrida.
 export function tieneAutopiloto(usuario: {
   rol?: string | null;
   beta_autopiloto?: boolean | null;
   plan?: string | null;
   en_trial?: boolean | null;
+  trial_termina_en?: string | null;
   fecha_vencimiento?: string | null;
 }): boolean {
   if (usuario.rol === "admin") return true;
   if (usuario.beta_autopiloto) return true;
   if (!AUTOPILOTO_PUBLICO) return false;
   if (usuario.plan !== "escala") return false;
-  if (usuario.en_trial) return true;
+  if (usuario.en_trial) {
+    return !!usuario.trial_termina_en && new Date(usuario.trial_termina_en) >= new Date();
+  }
   return !!usuario.fecha_vencimiento && new Date(usuario.fecha_vencimiento) >= new Date();
+}
+
+// Duración de la prueba gratis -- 14 días solo con el interruptor
+// encendido, 7 el resto del tiempo (el default de la columna en la
+// base se queda en 7 días como respaldo; estos valores se escriben
+// explícitos en cada registro nuevo para no depender de ese default).
+export const DIAS_PRUEBA = AUTOPILOTO_PUBLICO ? 14 : 7;
+
+// Precios del lanzamiento de Autopiloto -- solo aplican con el
+// interruptor encendido; apagado, todo sigue costando lo de PLANES
+// (149900/249900) igual que hoy. Única fuente de verdad: crear-link,
+// /billing y /bienvenida llaman a precioMensual()/precioAnual() en vez
+// de tener su propio número.
+const PRECIOS_LANZAMIENTO: Record<"crecimiento" | "escala", number> = {
+  crecimiento: 169900,
+  escala: 399900,
+};
+
+// Precio de fundador -- primeros 50 negocios que pagan Autopiloto,
+// vigente 12 meses desde su primer pago (ver usuarios.fundador_hasta).
+export const PRECIO_FUNDADOR = 299900;
+export const CUPOS_FUNDADOR = 50;
+export const MESES_FUNDADOR = 12;
+
+// "10 meses por el precio de 12" -- reemplaza el 15% de descuento
+// anual de hoy. Con el interruptor apagado, precioAnual() sigue usando
+// la fórmula vieja (12 meses con 15% off) para no cambiar nada.
+const MESES_ANUAL_LANZAMIENTO = 10;
+const DESCUENTO_ANUAL_HOY = 0.15;
+
+export function precioMensual(
+  planId: "crecimiento" | "escala",
+  opciones?: { esFundadorVigente?: boolean }
+): number {
+  if (!AUTOPILOTO_PUBLICO) return PLANES[planId].precio;
+  if (planId === "escala" && opciones?.esFundadorVigente) return PRECIO_FUNDADOR;
+  return PRECIOS_LANZAMIENTO[planId];
+}
+
+export function precioAnual(planId: "crecimiento" | "escala", opciones?: { esFundadorVigente?: boolean }): number {
+  if (!AUTOPILOTO_PUBLICO) return Math.round(PLANES[planId].precio * 12 * (1 - DESCUENTO_ANUAL_HOY));
+  return precioMensual(planId, opciones) * MESES_ANUAL_LANZAMIENTO;
 }

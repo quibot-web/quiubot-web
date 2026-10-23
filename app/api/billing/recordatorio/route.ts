@@ -18,7 +18,7 @@ export async function GET() {
     const emailBusqueda = session.user.email.trim().toLowerCase();
     const { data: usuario } = await supabaseAdmin
       .from("usuarios")
-      .select("id, rol, plan, en_trial, fecha_pago, fecha_vencimiento, beta_autopiloto")
+      .select("id, rol, plan, en_trial, trial_termina_en, fecha_pago, fecha_vencimiento, beta_autopiloto")
       .eq("email", emailBusqueda)
       .single();
 

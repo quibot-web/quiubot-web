@@ -160,7 +160,7 @@ export async function POST(req: NextRequest) {
 
   const { data: metasActivas } = await supabaseAdmin
     .from("metas")
-    .select("*, usuarios!inner(rol, plan, en_trial, fecha_vencimiento, beta_autopiloto)")
+    .select("*, usuarios!inner(rol, plan, en_trial, trial_termina_en, fecha_vencimiento, beta_autopiloto)")
     .eq("estado", "activa")
     .eq("pausado_autopiloto", false);
 

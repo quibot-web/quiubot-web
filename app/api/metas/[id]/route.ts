@@ -11,7 +11,7 @@ export async function PATCH(req: NextRequest, { params }: { params: Promise<{ id
 
   const { data: usuario } = await supabaseAdmin
     .from("usuarios")
-    .select("id, rol, plan, en_trial, fecha_vencimiento, beta_autopiloto")
+    .select("id, rol, plan, en_trial, trial_termina_en, fecha_vencimiento, beta_autopiloto")
     .eq("email", session.user.email.trim().toLowerCase())
     .single();
 

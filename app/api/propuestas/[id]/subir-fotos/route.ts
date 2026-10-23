@@ -33,7 +33,7 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
 
     const { data: usuario } = await supabaseAdmin
       .from("usuarios")
-      .select("id, rol, cloudinary_name, cloudinary_key, cloudinary_secret, plan, en_trial, fecha_vencimiento, beta_autopiloto")
+      .select("id, rol, cloudinary_name, cloudinary_key, cloudinary_secret, plan, en_trial, trial_termina_en, fecha_vencimiento, beta_autopiloto")
       .eq("email", emailBusqueda)
       .single();
 
