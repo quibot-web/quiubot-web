@@ -25,6 +25,12 @@ export async function POST(req: NextRequest) {
   const email = String(body.email || "").trim().toLowerCase();
   const password = String(body.password || "");
   const nombre = String(body.nombre || "").trim().slice(0, 100);
+  // UTM de primer contacto (ver app/lib/utmTracking.ts) -- solo se
+  // escriben más abajo si esta termina siendo una cuenta nueva de
+  // verdad, nunca en el branch de "ya existe" (ese no inserta nada).
+  const utm_source = typeof body.utm_source === "string" ? body.utm_source.slice(0, 200) : null;
+  const utm_campaign = typeof body.utm_campaign === "string" ? body.utm_campaign.slice(0, 200) : null;
+  const utm_content = typeof body.utm_content === "string" ? body.utm_content.slice(0, 200) : null;
 
   if (!email || !email.includes("@")) {
     return NextResponse.json({ error: "Correo inválido" }, { status: 400 });
@@ -82,6 +88,9 @@ export async function POST(req: NextRequest) {
       email_verificado: false,
       token_verificacion: tokenHash,
       token_verificacion_expira: expira,
+      utm_source,
+      utm_campaign,
+      utm_content,
     });
   }
 

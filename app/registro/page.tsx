@@ -2,6 +2,7 @@
 import { useState } from "react"
 import Link from "next/link"
 import { Eye, EyeOff } from "lucide-react"
+import { leerUtmPrimerContacto } from "@/app/lib/utmTracking"
 
 export default function RegistroPage() {
   const [nombre, setNombre] = useState("")
@@ -18,10 +19,11 @@ export default function RegistroPage() {
     setEnviando(true)
     setError(null)
     try {
+      const utm = leerUtmPrimerContacto()
       const res = await fetch("/api/auth/registro", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ nombre, email, password }),
+        body: JSON.stringify({ nombre, email, password, ...utm }),
       })
       const data = await res.json().catch(() => ({}))
       if (!res.ok) {
@@ -34,8 +36,12 @@ export default function RegistroPage() {
       // Usamos (window as any) para no depender de que el tipo global de
       // fbq este declarado en este archivo — evita errores de build si
       // este componente se compila antes o sin ver esa declaracion.
+      // en_trial queda en true desde el INSERT (default de la columna),
+      // asi que crear la cuenta y arrancar la prueba son el mismo
+      // instante hoy -- de ahi que los dos eventos se disparen juntos.
       if (typeof window !== "undefined") {
         ;(window as any).fbq?.("track", "CompleteRegistration")
+        ;(window as any).fbq?.("track", "StartTrial")
       }
     } catch {
       setError("No se pudo conectar. Intenta de nuevo.")

@@ -1,6 +1,7 @@
 "use client"
 import { useEffect } from "react"
 import { useSession } from "next-auth/react"
+import { leerUtmPrimerContacto } from "@/app/lib/utmTracking"
 
 // Vive montado en todo momento (layout raiz) porque no sabemos de antemano
 // en que pagina va a "aterrizar" alguien recien registrado por Google --
@@ -22,7 +23,24 @@ export default function TrackerRegistroGoogle() {
     if (sessionStorage.getItem("qb_complete_registration_enviado")) return
 
     ;(window as any).fbq?.("track", "CompleteRegistration")
+    // en_trial queda en true desde el INSERT (default de la columna),
+    // asi que crear la cuenta y arrancar la prueba son el mismo
+    // instante hoy -- de ahi que los dos eventos se disparen juntos.
+    ;(window as any).fbq?.("track", "StartTrial")
     sessionStorage.setItem("qb_complete_registration_enviado", "1")
+
+    // El UTM de primer contacto (si lo hay, guardado en sessionStorage
+    // desde /bienvenida) sobrevive la ida y vuelta por Google OAuth
+    // porque es la misma pestaña y el mismo origen al volver -- se
+    // manda una sola vez, justo aquí, al mismo tiempo que los eventos.
+    const utm = leerUtmPrimerContacto()
+    if (utm) {
+      fetch("/api/usuario/utm", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(utm),
+      }).catch(() => {})
+    }
   }, [session])
 
   return null

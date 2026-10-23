@@ -4,7 +4,8 @@ import Link from "next/link";
 import Image from "next/image";
 import { useEffect, useRef, useState, type ReactNode } from "react";
 import RevealObserver from "@/app/components/RevealObserver";
-import { trackEvento } from "@/app/components/MetaPixel";
+import { trackEvento, trackCustom } from "@/app/components/MetaPixel";
+import { guardarUtmPrimerContacto } from "@/app/lib/utmTracking";
 
 const AYUDAS = [
   {
@@ -29,7 +30,7 @@ const AYUDAS = [
     tag: "SIN SORPRESAS",
     titulo: "Sin sorpresas de costo",
     texto:
-      "Conectas tu propia cuenta de OpenAI, así que solo pagas exactamente lo que usas — nunca un margen escondido.",
+      "Conectas tu propia cuenta de OpenAI y pagas a OpenAI exactamente lo que usas — nunca un margen escondido ni una tarifa oculta de nuestra parte.",
   },
 ];
 
@@ -46,7 +47,13 @@ const GANANCIAS = [
   "La libertad de enfocarte en tu negocio, no en Meta Ads Manager.",
 ];
 
-const CHIPS_CONFIANZA = ["Cero curva de aprendizaje", "Tú apruebas cada cambio", "Pagas solo lo que usas"];
+const CHIPS_CONFIANZA = ["Cero curva de aprendizaje", "Tú apruebas cada cambio"];
+
+// Aviso de costo de OpenAI -- sin cifra: no hay ninguna cifra confiable
+// de cuánto gasta un cliente en OpenAI en ningún lugar de la app (ver
+// el modal de Integraciones y /terminos), así que no se inventa un
+// número. Se repite tal cual en garantías y en precios.
+const AVISO_OPENAI = "Quiubot usa tu propia cuenta de OpenAI: el uso de IA lo pagas directo a OpenAI, sin ningún margen nuestro encima.";
 
 const PLANES = [
   {
@@ -59,17 +66,17 @@ const PLANES = [
   {
     nombre: "Crecimiento",
     precio: "$149.900",
-    detalle: "El mas elegido por negocios en marcha",
+    detalle: "Para negocios que ya están en marcha.",
     features: ["4 estrategias al mes", "Todos los objetivos publicitarios", "Vigilancia y ajustes ilimitados", "Soporte prioritario"],
     icono: "crecimiento",
-    destacado: true,
   },
   {
     nombre: "Escala",
     precio: "$249.900",
-    detalle: "Para quien ya no quiere limites",
+    detalle: "El más completo para quien no quiere límites.",
     features: ["Estrategias ilimitadas", "Campañas vigiladas sin limite", "Plantillas publicitarias premium", "Soporte dedicado"],
     icono: "corona",
+    destacado: true,
   },
 ];
 
@@ -570,7 +577,7 @@ function CtaLink({
       className={className}
       data-cta-ubicacion={ubicacion}
       onClick={() => {
-        trackEvento("Lead", { content_name: `cta_${ubicacion}` });
+        trackCustom("ClicPruebaGratis", { ubicacion });
       }}
     >
       {children}
@@ -615,15 +622,22 @@ function VideoModal({ url, onClose }: { url: string; onClose: () => void }) {
   );
 }
 
-function SeccionTestimonios() {
+function SeccionTestimonios({ onCargado }: { onCargado?: (testimonios: TestimonioVideo[]) => void }) {
   const [testimonios, setTestimonios] = useState<TestimonioVideo[] | null>(null);
   const [abierto, setAbierto] = useState<TestimonioVideo | null>(null);
 
   useEffect(() => {
     fetch("/api/tutoriales-publicos/testimonios")
       .then((r) => r.json())
-      .then((data) => setTestimonios(data.testimonios || []))
-      .catch(() => setTestimonios([]));
+      .then((data) => {
+        const lista: TestimonioVideo[] = data.testimonios || [];
+        setTestimonios(lista);
+        onCargado?.(lista);
+      })
+      .catch(() => {
+        setTestimonios([]);
+        onCargado?.([]);
+      });
   }, []);
 
   const hayTestimonios = !!testimonios && testimonios.length > 0;
@@ -756,8 +770,16 @@ export default function BienvenidaExperience() {
   const [progreso, setProgreso] = useState(0);
   const [navScrolled, setNavScrolled] = useState(false);
   const [mundoAclarado, setMundoAclarado] = useState(false);
+  // null (todavía no sabemos) se trata igual que "no hay" -- nunca se
+  // afirma "negocios reales ya están usando Quiubot" sin confirmar que
+  // existe al menos un testimonio real.
+  const [hayTestimonios, setHayTestimonios] = useState(false);
   const coreStageRef = useRef<HTMLDivElement | null>(null);
   const sensorAclaradoRef = useRef<HTMLDivElement | null>(null);
+
+  useEffect(() => {
+    guardarUtmPrimerContacto(window.location.href);
+  }, []);
 
   useEffect(() => {
     const reduce = window.matchMedia("(prefers-reduced-motion: reduce)").matches;
@@ -1143,7 +1165,8 @@ export default function BienvenidaExperience() {
         .qb-lp .chip { display: inline-flex; align-items: center; gap: 7px; font-size: 13px; font-weight: 600; color: var(--purple-deep); background: var(--bg-alt); border: 1px solid #E5E1F5; padding: 9px 16px 9px 12px; border-radius: 20px; }
         .qb-lp .chip .check-mini { width: 16px; height: 16px; border-radius: 50%; background: var(--mint); color: #fff; font-size: 10px; display: flex; align-items: center; justify-content: center; flex-shrink: 0; }
 
-        .qb-lp .garantias { display: grid; grid-template-columns: repeat(3, 1fr); gap: 16px; margin-top: 34px; padding-top: 30px; border-top: 1px dashed #E2DEF3; text-align: left; }
+        .qb-lp .garantias { display: grid; grid-template-columns: repeat(4, 1fr); gap: 16px; margin-top: 34px; padding-top: 30px; border-top: 1px dashed #E2DEF3; text-align: left; }
+        @media (max-width: 900px) { .qb-lp .garantias { grid-template-columns: repeat(2, 1fr); } }
         .qb-lp .garantia { display: flex; flex-direction: column; gap: 8px; }
         .qb-lp .garantia .icono-g { width: 38px; height: 38px; border-radius: 10px; background: var(--bg-alt); display: flex; align-items: center; justify-content: center; }
         .qb-lp .garantia .icono-g svg { width: 18px; height: 18px; }
@@ -1376,7 +1399,7 @@ export default function BienvenidaExperience() {
       </section>
 
       {/* 5. PRUEBA SOCIAL — reduce escepticismo antes de explicar el mecanismo */}
-      <SeccionTestimonios />
+      <SeccionTestimonios onCargado={(lista) => setHayTestimonios(lista.length > 0)} />
 
       {/* 5b. CTA INTERMEDIO — para quien ya se convenció con dolor + testimonios
          y no quiere seguir bajando hasta el mecanismo o el precio */}
@@ -1482,7 +1505,7 @@ export default function BienvenidaExperience() {
               <path d="M9 12l2 2 4-4" />
             </svg>
           </div>
-          <h2>Negocios reales ya están usando Quiubot.</h2>
+          <h2>{hayTestimonios ? "Negocios reales ya están usando Quiubot." : "Hecho en Colombia, para negocios colombianos."}</h2>
           <p className="lead">
             Ya generamos estrategias y campañas reales para los primeros negocios que se unieron —
             sin equipos de marketing, sin agencias, sin líos. Tú puedes ser el próximo en recuperar tus horas.
@@ -1559,6 +1582,15 @@ export default function BienvenidaExperience() {
               <div className="titulo-g">Tú apruebas cada acción</div>
               <div className="texto-g">Ningún cambio se aplica en tus campañas sin tu clic. Siempre decides tú.</div>
             </div>
+            <div className="garantia">
+              <div className="icono-g">
+                <svg viewBox="0 0 24 24" fill="none" stroke="#4A3FAE" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                  <circle cx="12" cy="12" r="9" /><path d="M12 16v-5M12 8h.01" />
+                </svg>
+              </div>
+              <div className="titulo-g">Transparencia en costos</div>
+              <div className="texto-g">{AVISO_OPENAI}</div>
+            </div>
           </div>
           <div className="sello-cta">
             <CtaLink href="/login" ubicacion="sello_confianza" className="btn-cta">Iniciar prueba gratuita de 7 días →</CtaLink>
@@ -1595,6 +1627,7 @@ export default function BienvenidaExperience() {
         </div>
         <div className="planes-footer">
           <Link href="/billing">Ver todos los detalles de los planes →</Link>
+          <p style={{ fontSize: 13, color: "var(--muted)", maxWidth: 480, margin: "14px auto 0" }}>{AVISO_OPENAI}</p>
         </div>
       </section>
 
