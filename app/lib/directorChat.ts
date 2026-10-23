@@ -215,3 +215,35 @@ export function revisionNoPropusoNada(detalle: { evaluaciones?: { propuso?: bool
   if (!Array.isArray(detalle.evaluaciones)) return false;
   return !detalle.evaluaciones.some((e) => e.propuso === true);
 }
+
+// --- Recordatorio de renovación del plan -- misma voz del Director,
+// calculado en vivo (ver app/lib/renovacion.ts), nunca persistido. ---
+
+const NOMBRE_PLAN: Record<string, string> = {
+  crecimiento: "Crecimiento",
+  escala: "Escala",
+};
+
+export function nombrePlan(planId: string): string {
+  return NOMBRE_PLAN[planId] || planId;
+}
+
+type ResultadosPeriodo = { cantidad: number; tipoLabel: string; costoPromedio: number } | null;
+
+// 3 días antes de vencer -- misma ventana que ya usa el correo de
+// /api/cron/recordatorio-vencimiento. "Desde tu último pago" y no
+// "este mes": en un ciclo anual la ventana real es un año, no 30 días.
+export function textoRecordatorio3Dias(nombrePlanTexto: string, fecha: string, resultados: ResultadosPeriodo): string {
+  const frase = resultados
+    ? ` Desde tu último pago, el equipo consiguió ${resultados.cantidad} ${resultados.tipoLabel} a ${formatoCop(resultados.costoPromedio)} cada uno.`
+    : "";
+  return `Tu plan ${nombrePlanTexto} vence el ${fecha}.${frase} ¿Seguimos trabajando juntos?`;
+}
+
+export const TEXTO_HOY_VENCE = "Hoy vence tu plan. Si renuevas, el equipo sigue sin pausa.";
+
+export const TEXTO_VENCIDO = "Tu plan venció y el equipo quedó en pausa. Cuando renueves, retomamos donde íbamos.";
+
+export function textoRecienPagado(fecha: string): string {
+  return `¡Gracias! Renovaste hasta el ${fecha}. Seguimos con tu meta.`;
+}
