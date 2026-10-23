@@ -7,7 +7,7 @@ import { Suspense, useEffect, useRef, useState, type ReactNode } from "react";
 import RevealObserver from "@/app/components/RevealObserver";
 import { trackEvento, trackCustom } from "@/app/components/MetaPixel";
 import { guardarUtmPrimerContacto } from "@/app/lib/utmTracking";
-import { AUTOPILOTO_PUBLICO, nombreVisiblePlan, BENEFICIOS_AUTOPILOTO } from "@/app/lib/planesConfig";
+import { AUTOPILOTO_PUBLICO, nombreVisiblePlan, precioMensual, BENEFICIOS_AUTOPILOTO, DIAS_PRUEBA } from "@/app/lib/planesConfig";
 import EsferaAsistente from "@/app/components/esferas/EsferaAsistente";
 import { ProveedorEsferas } from "@/app/components/esferas/ProveedorEsferas";
 import type { AsistenteId } from "@/app/components/esferas/esferasShared";
@@ -137,14 +137,14 @@ function construirPlanes(mostrarAutopiloto: boolean) {
     },
     {
       nombre: "Crecimiento",
-      precio: "$149.900",
+      precio: `$${precioMensual("crecimiento").toLocaleString("es-CO")}`,
       detalle: "Para negocios que ya están en marcha.",
       features: ["4 estrategias al mes", "Todos los objetivos publicitarios", "Vigilancia y ajustes ilimitados", "Soporte prioritario"],
       icono: "crecimiento",
     },
     {
       nombre: mostrarAutopiloto ? "Autopiloto" : nombreVisiblePlan("escala"),
-      precio: "$249.900",
+      precio: `$${precioMensual("escala").toLocaleString("es-CO")}`,
       detalle: "El más completo para quien no quiere límites.",
       features: [
         ...(mostrarAutopiloto ? BENEFICIOS_AUTOPILOTO : []),
@@ -854,7 +854,7 @@ function BarraConfianzaTemprana() {
   return (
     <div className="barra-confianza qb-reveal">
       <div className="barra-confianza-item">
-        <span className="check-mini">✓</span> 7 días gratis, sin tarjeta
+        <span className="check-mini">✓</span> {DIAS_PRUEBA} días gratis, sin tarjeta
       </div>
       <div className="barra-confianza-item">
         <span className="check-mini">✓</span> Tú apruebas cada cambio
@@ -1456,7 +1456,7 @@ export default function BienvenidaExperience() {
               ? "Dile a Quiubot cuántas conversaciones o clientes quieres este mes. Siete asistentes crean, publican y cuidan tus campañas de Meta todos los días, y el Director te consulta cada cambio antes de hacerlo."
               : "Estrategia, creativos y publicación para Meta Ads generados con IA — y un motor que vigila tus campañas todo el tiempo para que nunca quemes presupuesto sin darte cuenta."}
           </p>
-          <CtaLink href="/login" ubicacion="hero" className="btn-cta">Iniciar prueba gratuita de 7 días →</CtaLink>
+          <CtaLink href="/login" ubicacion="hero" className="btn-cta">Iniciar prueba gratuita de {DIAS_PRUEBA} días →</CtaLink>
           <p className="micro">Sin tarjeta de crédito. Cancela cuando quieras.</p>
         </div>
         {mostrarAutopiloto ? (
@@ -1795,7 +1795,7 @@ export default function BienvenidaExperience() {
                   <rect x="3" y="4" width="18" height="18" rx="3" /><path d="M3 9h18" /><path d="M8 2v4M16 2v4" />
                 </svg>
               </div>
-              <div className="titulo-g">7 días gratis, de verdad</div>
+              <div className="titulo-g">{DIAS_PRUEBA} días gratis, de verdad</div>
               <div className="texto-g">Todo el poder de Quiubot desde el primer minuto, sin pagar nada.</div>
             </div>
             <div className="garantia">
@@ -1827,7 +1827,7 @@ export default function BienvenidaExperience() {
             </div>
           </div>
           <div className="sello-cta">
-            <CtaLink href="/login" ubicacion="sello_confianza" className="btn-cta">Iniciar prueba gratuita de 7 días →</CtaLink>
+            <CtaLink href="/login" ubicacion="sello_confianza" className="btn-cta">Iniciar prueba gratuita de {DIAS_PRUEBA} días →</CtaLink>
             <p className="micro">Sin tarjeta de crédito. Cancela cuando quieras.</p>
           </div>
         </div>
@@ -1873,8 +1873,8 @@ export default function BienvenidaExperience() {
               <EsferaAsistente asistente="director" estado="normal" tamano={72} />
             </div>
           )}
-          <h2>{mostrarAutopiloto ? "Tu equipo está listo para empezar. ¿Cuál es tu meta?" : "Tus primeros 7 días con Quiubot ya están pagados. Por nosotros."}</h2>
-          <CtaLink href="/login" ubicacion="cta_final" className="btn-cta">Iniciar prueba gratuita de 7 días →</CtaLink>
+          <h2>{mostrarAutopiloto ? "Tu equipo está listo para empezar. ¿Cuál es tu meta?" : `Tus primeros ${DIAS_PRUEBA} días con Quiubot ya están pagados. Por nosotros.`}</h2>
+          <CtaLink href="/login" ubicacion="cta_final" className="btn-cta">Iniciar prueba gratuita de {DIAS_PRUEBA} días →</CtaLink>
           <p className="micro">Sin tarjeta de crédito. Cancela cuando quieras.</p>
         </div>
       </section>

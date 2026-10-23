@@ -4,6 +4,7 @@ import { signIn } from "next-auth/react"
 import { useSearchParams, useRouter } from "next/navigation"
 import Link from "next/link"
 import { Eye, EyeOff } from "lucide-react"
+import { DIAS_PRUEBA } from "@/app/lib/planesConfig"
 
 function LoginContent() {
   const searchParams = useSearchParams()
@@ -156,7 +157,7 @@ function LoginContent() {
         <div className="ql-wordmark">quiu<span className="acc">bot</span></div>
 
         <p className="ql-headline">
-          {vaAPagar ? "Ya casi. Elige tu plan y sigue creciendo." : "Ya casi. Tu prueba gratuita de 7 días te espera."}
+          {vaAPagar ? "Ya casi. Elige tu plan y sigue creciendo." : `Ya casi. Tu prueba gratuita de ${DIAS_PRUEBA} días te espera.`}
         </p>
         <p className="ql-sub">
           {vaAPagar

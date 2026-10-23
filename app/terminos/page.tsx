@@ -42,7 +42,8 @@ export default function TerminosPage() {
               Quiubot es una plataforma que utiliza inteligencia artificial para generar estrategia
               publicitaria, creativos y campañas para redes sociales (Meta Ads), y para monitorear y
               sugerir ajustes sobre campañas activas. El servicio se ofrece bajo modalidad de suscripción,
-              con un período de prueba gratuita de 7 días para nuevos usuarios.
+              con un período de prueba gratuita para nuevos usuarios. La duración de la prueba se informa
+              al momento de registrarse y en la página de planes de la plataforma.
             </p>
           </section>
 
@@ -62,8 +63,9 @@ export default function TerminosPage() {
             <h2 style={sectionTitle}>4. Planes, pagos y reembolsos</h2>
             <p>
               Quiubot ofrece distintos planes de suscripción, detallados en la página de precios de la
-              plataforma. Todo usuario nuevo recibe automáticamente 7 días de prueba gratuita con acceso
-              completo antes de que se le solicite realizar cualquier pago.
+              plataforma. Todo usuario nuevo recibe automáticamente una prueba gratuita con acceso
+              completo antes de que se le solicite realizar cualquier pago; su duración exacta se informa
+              al momento de registrarse y en la página de planes.
             </p>
             <p>
               <strong>Quiubot no ofrece reembolsos</strong> sobre pagos ya realizados. El período de

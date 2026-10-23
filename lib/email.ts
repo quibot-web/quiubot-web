@@ -1,6 +1,7 @@
 import "server-only";
 import { supabaseAdmin } from "@/lib/supabase";
 import { registrarError } from "@/lib/registrarError";
+import { DIAS_PRUEBA } from "@/app/lib/planesConfig";
 
 const RESEND_API_KEY = process.env.RESEND_API_KEY;
 const REMITENTE = "Quiubot <noreply@quiubot.site>";
@@ -82,7 +83,7 @@ export async function enviarCorreoVerificacion(email: string, nombre: string, li
     `<div style="font-family: system-ui, sans-serif; max-width: 480px; margin: 0 auto; padding: 24px;">
       <h2 style="color:#17152B;">Hola${nombre ? " " + nombre : ""} 👋</h2>
       <p style="color:#333; font-size:14px; line-height:1.6;">
-        Confirma tu correo para activar tu cuenta de Quiubot y empezar tu prueba gratuita de 7 días.
+        Confirma tu correo para activar tu cuenta de Quiubot y empezar tu prueba gratuita de ${DIAS_PRUEBA} días.
       </p>
       <a href="${link}" style="display:inline-block; background:#534AB7; color:#fff; padding:12px 24px; border-radius:10px; text-decoration:none; font-weight:600; margin-top:12px;">
         Confirmar mi correo
