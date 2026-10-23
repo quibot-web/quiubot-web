@@ -3,6 +3,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { supabaseAdmin } from "@/lib/supabase";
 import { calcularAvanceMeta, type TipoMeta } from "@/app/lib/metas";
 import { hoyBogota } from "@/app/lib/fechaBogota";
+import { tieneAutopiloto } from "@/app/lib/planesConfig";
 
 const TIPOS_VALIDOS: TipoMeta[] = ["conversaciones_whatsapp", "leads"];
 const DIAS_MINIMOS = 14;
@@ -13,14 +14,13 @@ export async function GET() {
 
   const { data: usuario } = await supabaseAdmin
     .from("usuarios")
-    .select("id, rol")
+    .select("id, rol, plan, en_trial, fecha_vencimiento, beta_autopiloto")
     .eq("email", session.user.email.trim().toLowerCase())
     .single();
 
   if (!usuario) return NextResponse.json({ error: "Usuario no encontrado" }, { status: 404 });
 
-  // Autopiloto es admin-only por ahora -- mismo patrón que Video.
-  if (usuario.rol !== "admin") {
+  if (!tieneAutopiloto(usuario)) {
     return NextResponse.json({ error: "Autopiloto todavía no está disponible." }, { status: 403 });
   }
 
@@ -53,13 +53,13 @@ export async function POST(req: NextRequest) {
 
   const { data: usuario } = await supabaseAdmin
     .from("usuarios")
-    .select("id, rol")
+    .select("id, rol, plan, en_trial, fecha_vencimiento, beta_autopiloto")
     .eq("email", session.user.email.trim().toLowerCase())
     .single();
 
   if (!usuario) return NextResponse.json({ error: "Usuario no encontrado" }, { status: 404 });
 
-  if (usuario.rol !== "admin") {
+  if (!tieneAutopiloto(usuario)) {
     return NextResponse.json({ error: "Autopiloto todavía no está disponible." }, { status: 403 });
   }
 

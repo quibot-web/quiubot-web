@@ -1,6 +1,7 @@
 import { auth } from "@/auth";
 import { NextRequest, NextResponse } from "next/server";
 import { supabaseAdmin } from "@/lib/supabase";
+import { AUTOPILOTO_PUBLICO, nombreVisiblePlan, type PlanId } from "@/app/lib/planesConfig";
 
 // Precios calculados SIEMPRE del lado del servidor -- nunca se confía en
 // un monto que venga del frontend, para que nadie pueda manipular el
@@ -61,6 +62,14 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ error: "No se pudo iniciar el pago" }, { status: 500 });
   }
 
+  // Con el interruptor encendido, el recibo de Bold dice el nombre
+  // comercial de Escala ("Autopiloto") pero conserva el id entre
+  // paréntesis para poder conciliar -- apagado, queda igual que hoy.
+  const description =
+    AUTOPILOTO_PUBLICO && planId === "escala"
+      ? `Quiubot — Plan ${nombreVisiblePlan("escala")} (${planId}, ${ciclo})`
+      : `Quiubot — Plan ${planId} (${ciclo})`;
+
   try {
     const boldRes = await fetch("https://integrations.api.bold.co/online/link/v1", {
       method: "POST",
@@ -72,7 +81,7 @@ export async function POST(req: NextRequest) {
         amount_type: "CLOSE",
         amount: { currency: "COP", total_amount: monto, tip_amount: 0 },
         reference,
-        description: `Quiubot — Plan ${planId} (${ciclo})`,
+        description,
         payer_email: emailBusqueda,
         callback_url: `${process.env.NEXTAUTH_URL}/billing?pago=procesando`,
       }),

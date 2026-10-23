@@ -10,6 +10,7 @@ import EsperaCreativos from "@/app/components/EsperaCreativos";
 import CargandoQuiubot from "@/app/components/CargandoQuiubot";
 import { urlDescargaCloudinary, extraerFramesVideo } from "@/app/lib/cloudinaryUrl";
 import { comprimirSiHaceFalta, esArchivoDeImagen } from "@/app/lib/imagenes";
+import { nombreVisiblePlan, type PlanId } from "@/app/lib/planesConfig";
 
 function IconoWhatsApp() {
   return (
@@ -2544,7 +2545,7 @@ function EstrategiaContent() {
 
                   let etiqueta: string | null = null;
                   if (!estaActivo) etiqueta = soloVisualParaAdmin ? "Solo tú lo ves" : "Próximamente";
-                  else if (bloqueadoPorPlan) etiqueta = `Plan ${planRequerido === "crecimiento" ? "Crecimiento" : "Escala"}`;
+                  else if (bloqueadoPorPlan) etiqueta = `Plan ${nombreVisiblePlan(planRequerido as PlanId)}`;
 
                   return (
                     <TarjetaObjetivo

@@ -3,16 +3,13 @@ import { createHmac, timingSafeEqual } from "crypto";
 import { supabaseAdmin } from "@/lib/supabase";
 import { enviarCorreoPagoExitoso, enviarCorreoPlanActivado, enviarCorreoConfirmacionPlanCliente } from "@/lib/email";
 import { registrarError } from "@/lib/registrarError";
+import { nombreVisiblePlan, type PlanId } from "@/app/lib/planesConfig";
 
 // Duracion de cada ciclo. El "mes" se cuenta como 30 dias por simplicidad
 // (igual que ya hacia /api/activar con "dias ?? 30").
 const DIAS_POR_CICLO: Record<string, number> = {
   mensual: 30,
   anual: 365,
-};
-const NOMBRE_PLAN: Record<string, string> = {
-  crecimiento: "Crecimiento",
-  escala: "Escala",
 };
 
 
@@ -189,7 +186,7 @@ export async function POST(req: NextRequest) {
     await enviarCorreoConfirmacionPlanCliente({
       email: orden.email,
       nombre: usuario?.nombre || null,
-      planNombre: NOMBRE_PLAN[orden.plan_id] || orden.plan_id,
+      planNombre: nombreVisiblePlan(orden.plan_id as PlanId),
       monto: orden.monto,
       ciclo: orden.ciclo,
       fechaVencimiento: fechaVencimiento.toISOString(),

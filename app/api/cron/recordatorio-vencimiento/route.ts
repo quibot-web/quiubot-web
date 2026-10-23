@@ -2,13 +2,9 @@ import { NextRequest, NextResponse } from "next/server";
 import { timingSafeEqual } from "crypto";
 import { supabaseAdmin } from "@/lib/supabase";
 import { enviarCorreoRecordatorioVencimiento } from "@/lib/email";
+import { nombreVisiblePlan, type PlanId } from "@/app/lib/planesConfig";
 
 const DIAS_ANTES_DE_AVISAR = 3;
-
-const NOMBRE_PLAN: Record<string, string> = {
-  crecimiento: "Crecimiento",
-  escala: "Escala",
-};
 
 function compararSeguro(a: string, b: string): boolean {
   const bufA = Buffer.from(a);
@@ -67,7 +63,7 @@ export async function POST(req: NextRequest) {
       await enviarCorreoRecordatorioVencimiento({
         email: usuario.email,
         nombre: usuario.nombre || null,
-        planNombre: NOMBRE_PLAN[usuario.plan] || usuario.plan,
+        planNombre: nombreVisiblePlan(usuario.plan as PlanId),
         fechaVencimiento: usuario.fecha_vencimiento,
         diasRestantes,
       });

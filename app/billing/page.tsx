@@ -6,6 +6,7 @@ import Link from "next/link"
 import CargandoQuiubot from "@/app/components/CargandoQuiubot"
 
 import { OBJETIVOS_INFO } from "@/app/lib/objetivosInfo"
+import { AUTOPILOTO_PUBLICO, nombreVisiblePlan } from "@/app/lib/planesConfig"
 
 const TU_WHATSAPP = "573243490766"
 
@@ -38,6 +39,17 @@ const PLAYBOOK_EXPANDIBLE = {
 
 type FeaturePlan = string | { texto: string; expandible: typeof PLAYBOOK_EXPANDIBLE }
 
+// Beneficios propios del Autopiloto, encima de los que ya tiene Escala
+// -- solo se agregan con el interruptor encendido (AUTOPILOTO_PUBLICO).
+// El id del plan sigue siendo "escala" en todos lados; esto es
+// puramente lo que ve el cliente en esta página.
+const BENEFICIOS_AUTOPILOTO: FeaturePlan[] = [
+  "Un equipo de 7 asistentes trabajando por tu meta todos los días",
+  "Define tu meta (conversaciones o leads) y sigue su avance en tiempo real",
+  "El Director te propone cada mejora y tú decides: nada cambia sin tu aprobación",
+  "Refresco de creativos y ajustes de presupuesto cuando hacen falta",
+]
+
 const PLANES: {
   id: string
   nombre: string
@@ -66,15 +78,17 @@ const PLANES: {
       "4 estrategias nuevas por mes",
       { texto: "Revisamos tus campañas y te decimos qué subir, pausar o escalar (hasta 2 a la vez)", expandible: PLAYBOOK_EXPANDIBLE },
       "Alertas y sugerencias inteligentes",
+      ...(AUTOPILOTO_PUBLICO ? ["¿Quieres que un equipo lo haga por ti? Mira el plan Autopiloto"] : []),
     ],
   },
   {
     id: "escala",
-    nombre: "Escala",
+    nombre: nombreVisiblePlan("escala"),
     tagline: "Para que Quiubot vigile y ajuste todo mientras creces.",
     precio: 249900,
     masElegido: true,
     features: [
+      ...(AUTOPILOTO_PUBLICO ? BENEFICIOS_AUTOPILOTO : []),
       "Estrategias nuevas ilimitadas",
       { texto: "Revisamos tus campañas y te decimos qué subir, pausar o escalar (todas, sin límite)", expandible: PLAYBOOK_EXPANDIBLE },
       "Alertas y sugerencias con prioridad",

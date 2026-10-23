@@ -8,6 +8,7 @@
 // demás asistentes.
 import type { AccionPropuesta, Asistente } from "@/app/lib/metas";
 import { formatoCop } from "@/app/lib/directorTextos";
+import { nombreVisiblePlan, type PlanId } from "@/app/lib/planesConfig";
 
 export const NOMBRE_ASISTENTE: Record<Asistente, string> = {
   director: "Director",
@@ -219,13 +220,13 @@ export function revisionNoPropusoNada(detalle: { evaluaciones?: { propuso?: bool
 // --- Recordatorio de renovación del plan -- misma voz del Director,
 // calculado en vivo (ver app/lib/renovacion.ts), nunca persistido. ---
 
-const NOMBRE_PLAN: Record<string, string> = {
-  crecimiento: "Crecimiento",
-  escala: "Escala",
-};
+const IDS_PLAN: PlanId[] = ["arranque", "crecimiento", "escala"];
 
+// El Director siempre dice el mismo nombre que ve el cliente en la
+// página de planes y en sus correos -- ver nombreVisiblePlan en
+// planesConfig.ts, la única fuente de verdad para eso.
 export function nombrePlan(planId: string): string {
-  return NOMBRE_PLAN[planId] || planId;
+  return IDS_PLAN.includes(planId as PlanId) ? nombreVisiblePlan(planId as PlanId) : planId;
 }
 
 type ResultadosPeriodo = { cantidad: number; tipoLabel: string; costoPromedio: number } | null;

@@ -1,6 +1,7 @@
 import { auth } from "@/auth";
 import { NextRequest, NextResponse } from "next/server";
 import { supabaseAdmin } from "@/lib/supabase";
+import { tieneAutopiloto } from "@/app/lib/planesConfig";
 
 export async function POST(req: NextRequest, { params }: { params: Promise<{ id: string }> }) {
   try {
@@ -11,12 +12,12 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
 
     const { data: usuario } = await supabaseAdmin
       .from("usuarios")
-      .select("id, rol")
+      .select("id, rol, plan, en_trial, fecha_vencimiento, beta_autopiloto")
       .eq("email", session.user.email.trim().toLowerCase())
       .single();
 
     if (!usuario) return NextResponse.json({ error: "Usuario no encontrado" }, { status: 404 });
-    if (usuario.rol !== "admin") {
+    if (!tieneAutopiloto(usuario)) {
       return NextResponse.json({ error: "Autopiloto todavía no está disponible." }, { status: 403 });
     }
 

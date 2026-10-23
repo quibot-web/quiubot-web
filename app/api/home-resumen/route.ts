@@ -4,6 +4,7 @@ import { supabaseAdmin } from "@/lib/supabase";
 import { normalizarBloques } from "@/app/lib/configHome";
 import { hoyBogota } from "@/app/lib/fechaBogota";
 import { obtenerPropuestasPendientes } from "@/app/lib/propuestas";
+import { tieneAutopiloto } from "@/app/lib/planesConfig";
 
 // Un banner aplica si está dentro de su rango de fechas (o no tiene) Y
 // (no tiene restricción de plan/prueba, O el usuario cae en alguna de las
@@ -28,7 +29,7 @@ export async function GET() {
   const emailBusqueda = session.user.email.trim().toLowerCase();
   const { data: usuario } = await supabaseAdmin
     .from("usuarios")
-    .select("id, plan, en_trial, rol")
+    .select("id, plan, en_trial, rol, fecha_vencimiento, beta_autopiloto")
     .eq("email", emailBusqueda)
     .single();
   if (!usuario) {
@@ -136,27 +137,27 @@ export async function GET() {
   }));
 
   const notisPendientes = notisRes.data ?? [];
-  const esAdmin = usuario.rol === "admin";
+  const tieneDirector = tieneAutopiloto(usuario);
 
-  // Para admin, todo pasa por el Director: el bloque "Decisiones
-  // pendientes" y el saludo del Inicio dejan de mostrar esta lista y
-  // en su lugar cuentan cuántas cosas tiene el Director para hablar.
-  // obtenerPropuestasPendientes ya trae las 4 categorías (propuestas,
-  // notificaciones con accion_sugerida, campañas con problema,
-  // notificaciones sin accion_sugerida) en un solo arreglo sin
-  // duplicar nada -- su length es directamente el total.
+  // Para quien tiene Autopiloto, todo pasa por el Director: el bloque
+  // "Decisiones pendientes" y el saludo del Inicio dejan de mostrar esta
+  // lista y en su lugar cuentan cuántas cosas tiene el Director para
+  // hablar. obtenerPropuestasPendientes ya trae las 4 categorías
+  // (propuestas, notificaciones con accion_sugerida, campañas con
+  // problema, notificaciones sin accion_sugerida) en un solo arreglo
+  // sin duplicar nada -- su length es directamente el total.
   let directorTotal: number | null = null;
-  if (esAdmin) {
+  if (tieneDirector) {
     const propuestasPendientes = await obtenerPropuestasPendientes(usuario.id);
     directorTotal = propuestasPendientes.length;
   }
 
-  // No-admin: se queda igual que siempre (la lista sigue mostrando como
-  // mucho 5), pero el total ya no se recorta antes de contarlo --
+  // Sin Autopiloto: se queda igual que siempre (la lista sigue mostrando
+  // como mucho 5), pero el total ya no se recorta antes de contarlo --
   // antes "Tienes 5 cosas" salía siempre que hubiera 5 o más, sin decir
   // cuántas había de verdad.
   const pendientesTotal = pendientesProblemas.length + notisPendientes.length;
-  const pendientes = esAdmin ? [] : [...pendientesProblemas, ...notisPendientes].slice(0, 5);
+  const pendientes = tieneDirector ? [] : [...pendientesProblemas, ...notisPendientes].slice(0, 5);
 
   const hoy = new Date().toISOString().slice(0, 10);
   const plan = usuario.plan || "arranque";
@@ -172,10 +173,12 @@ export async function GET() {
       resultados_7dias: conversionesTotal,
     },
     ultima_sincronizacion: ultimaSincRes.data?.corrida_en ?? null,
-    es_admin: esAdmin,
+    // El nombre quedó de cuando esto era admin-only -- hoy es
+    // "¿tiene Autopiloto?" (tieneAutopiloto), no "¿es admin?".
+    es_admin: tieneDirector,
     pendientes,
-    pendientes_total: esAdmin ? null : pendientesTotal,
-    director_resumen: esAdmin ? { total: directorTotal } : null,
+    pendientes_total: tieneDirector ? null : pendientesTotal,
+    director_resumen: tieneDirector ? { total: directorTotal } : null,
     actividad_reciente: (albumRes.data ?? []).map((a) => ({ tipo: "creativo", ...a })),
     novedades: novedadesRes.data ?? [],
     capacitaciones: capacitacionesRes.data ?? [],

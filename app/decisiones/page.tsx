@@ -142,7 +142,14 @@ function DecisionesContenido() {
     | "recien_pagado"
     | null;
 
+  // esAdmin es el rol crudo -- solo para las herramientas de prueba y
+  // la simulación, que siguen siendo exclusivas de admin. El acceso a
+  // la conversación en sí (datos, gate de la página) usa
+  // puedeUsarAutopiloto, que también deja pasar a quien tiene beta o
+  // (con el interruptor encendido) un plan Autopiloto vigente -- ver
+  // tieneAutopiloto en app/lib/planesConfig.ts.
   const [esAdmin, setEsAdmin] = useState<boolean | null>(null);
+  const [puedeUsarAutopiloto, setPuedeUsarAutopiloto] = useState<boolean | null>(null);
   const [cargando, setCargando] = useState(true);
   const [propuestas, setPropuestas] = useState<PropuestaUnificada[]>([]);
   const [pausado, setPausado] = useState(false);
@@ -209,8 +216,14 @@ function DecisionesContenido() {
   useEffect(() => {
     fetch("/api/usuario/rol")
       .then((r) => r.json())
-      .then((data) => setEsAdmin(data.rol === "admin"))
-      .catch(() => setEsAdmin(false));
+      .then((data) => {
+        setEsAdmin(data.rol === "admin");
+        setPuedeUsarAutopiloto(!!data.tieneAutopiloto);
+      })
+      .catch(() => {
+        setEsAdmin(false);
+        setPuedeUsarAutopiloto(false);
+      });
   }, []);
 
   const cargarPropuestas = () => {
@@ -230,7 +243,7 @@ function DecisionesContenido() {
   };
 
   useEffect(() => {
-    if (!esAdmin) return;
+    if (!puedeUsarAutopiloto) return;
     cargarPropuestas();
     cargarHistorial();
     fetch("/api/metas")
@@ -252,7 +265,7 @@ function DecisionesContenido() {
       .then((r) => (r.ok ? r.json() : { etapa: null }))
       .then((data) => setRecordatorio(data.etapa ? data : null))
       .catch(() => setRecordatorio(null));
-  }, [esAdmin]);
+  }, [puedeUsarAutopiloto]);
 
   const renovarAhora = async () => {
     if (!recordatorioMostrado) return;
@@ -407,9 +420,9 @@ function DecisionesContenido() {
     }
   };
 
-  if (esAdmin === null) return <CargandoQuiubot mensaje="Verificando tu acceso" />;
+  if (puedeUsarAutopiloto === null) return <CargandoQuiubot mensaje="Verificando tu acceso" />;
 
-  if (esAdmin === false) {
+  if (puedeUsarAutopiloto === false) {
     return (
       <div style={{ minHeight: "100vh", background: "#f9f9f8", fontFamily: "system-ui, sans-serif", display: "flex", alignItems: "center", justifyContent: "center", padding: "2rem" }}>
         <div style={{ maxWidth: 480, width: "100%", background: "#fff", borderRadius: 20, border: "1px solid #e8e8e6", padding: "2.5rem 2rem", textAlign: "center", boxShadow: "0 8px 30px rgba(0,0,0,0.06)" }}>

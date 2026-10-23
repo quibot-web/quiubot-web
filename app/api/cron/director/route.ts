@@ -13,6 +13,7 @@ import {
 } from "@/app/lib/metas";
 import { esPropuestaDePrueba } from "@/app/lib/propuestas";
 import { hoyBogota, fechaBogota, inicioDiaBogota } from "@/app/lib/fechaBogota";
+import { tieneAutopiloto } from "@/app/lib/planesConfig";
 import { textoGenerarEstrategia, textoPausar, textoAjustarPresupuesto, textoCrearCreativos } from "@/app/lib/directorTextos";
 
 function compararSeguro(a: string, b: string): boolean {
@@ -159,23 +160,19 @@ export async function POST(req: NextRequest) {
 
   const { data: metasActivas } = await supabaseAdmin
     .from("metas")
-    .select("*, usuarios!inner(rol, en_trial, fecha_vencimiento)")
+    .select("*, usuarios!inner(rol, plan, en_trial, fecha_vencimiento, beta_autopiloto)")
     .eq("estado", "activa")
     .eq("pausado_autopiloto", false);
 
-  // Admin nunca se bloquea por esto, tenga o no fecha_vencimiento --
-  // Autopiloto sigue siendo admin-only hoy. La condición de plan
-  // vigente (en prueba, o con fecha_vencimiento todavía no vencida)
-  // solo aplica a no-admin, lista para el día que esto se abra a
-  // todos los planes pagos: un cliente vencido deja de recibir
-  // propuestas nuevas del Director, sin esperar a que el workflow de
-  // n8n que lo baja a Arranque haya corrido todavía.
-  const ahora = new Date();
-  const metasAdmin = (metasActivas ?? []).filter((m: any) => {
-    if (m.usuarios?.rol === "admin") return true;
-    if (m.usuarios?.en_trial) return true;
-    return !!m.usuarios?.fecha_vencimiento && new Date(m.usuarios.fecha_vencimiento) >= ahora;
-  }) as (Meta & { usuarios: any })[];
+  // Mismo criterio que el resto del Autopiloto -- ver tieneAutopiloto
+  // en planesConfig.ts: admin y beta siempre pasan; si no, solo con el
+  // interruptor encendido y el plan vigente (en prueba, o con
+  // fecha_vencimiento todavía no vencida). Un cliente vencido deja de
+  // recibir propuestas nuevas del Director, sin esperar a que el
+  // workflow de n8n que lo baja a Arranque haya corrido todavía.
+  const metasAdmin = (metasActivas ?? []).filter((m: any) => tieneAutopiloto(m.usuarios)) as (Meta & {
+    usuarios: any;
+  })[];
 
   const resumen: any[] = [];
   for (const meta of metasAdmin) {

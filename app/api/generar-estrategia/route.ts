@@ -1,7 +1,7 @@
 import { auth } from "@/auth";
 import { NextRequest, NextResponse } from "next/server";
 import { supabaseAdmin } from "@/lib/supabase";
-import { PLANES, type PlanId } from "@/app/lib/planesConfig";
+import { PLANES, nombreVisiblePlan, type PlanId } from "@/app/lib/planesConfig";
 import { desencriptarSiHaceFalta } from "@/lib/crypto";
 import { registrarError } from "@/lib/registrarError";
 
@@ -86,7 +86,7 @@ export async function POST(req: NextRequest) {
         {
           error: !activo
             ? "Ese objetivo no está disponible todavía."
-            : `El objetivo "${objetivo.label || objetivo.id}" requiere el plan ${planMinimo === "crecimiento" ? "Crecimiento" : "Escala"}. Mejora tu plan para usarlo.`,
+            : `El objetivo "${objetivo.label || objetivo.id}" requiere el plan ${nombreVisiblePlan(planMinimo as PlanId)}. Mejora tu plan para usarlo.`,
           plan_insuficiente: true,
         },
         { status: 403 }

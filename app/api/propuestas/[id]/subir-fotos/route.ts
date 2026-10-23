@@ -4,6 +4,7 @@ import { supabaseAdmin } from "@/lib/supabase";
 import { desencriptarSiHaceFalta } from "@/lib/crypto";
 import { subirFotoACloudinary } from "@/app/lib/cloudinaryUpload";
 import { aBase64, procesarCreacionCreativos } from "@/app/lib/propuestas";
+import { tieneAutopiloto } from "@/app/lib/planesConfig";
 
 const MIN_IMAGENES = 1;
 const MAX_IMAGENES = 3;
@@ -32,12 +33,12 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
 
     const { data: usuario } = await supabaseAdmin
       .from("usuarios")
-      .select("id, rol, cloudinary_name, cloudinary_key, cloudinary_secret")
+      .select("id, rol, cloudinary_name, cloudinary_key, cloudinary_secret, plan, en_trial, fecha_vencimiento, beta_autopiloto")
       .eq("email", emailBusqueda)
       .single();
 
     if (!usuario) return NextResponse.json({ error: "Usuario no encontrado" }, { status: 404 });
-    if (usuario.rol !== "admin") {
+    if (!tieneAutopiloto(usuario)) {
       return NextResponse.json({ error: "Autopiloto todavía no está disponible." }, { status: 403 });
     }
 
