@@ -6,11 +6,10 @@ import Link from "next/link"
 import CargandoQuiubot from "@/app/components/CargandoQuiubot"
 
 import { OBJETIVOS_INFO } from "@/app/lib/objetivosInfo"
-import { AUTOPILOTO_PUBLICO, nombreVisiblePlan, BENEFICIOS_AUTOPILOTO } from "@/app/lib/planesConfig"
+import { AUTOPILOTO_PUBLICO, nombreVisiblePlan, precioMensual, precioAnual, BENEFICIOS_AUTOPILOTO, CUPOS_FUNDADOR, PRECIO_FUNDADOR } from "@/app/lib/planesConfig"
 
 const TU_WHATSAPP = "573243490766"
 
-const DESCUENTO_ANUAL = 0.15
 const ORDEN_PLANES = ["arranque", "crecimiento", "escala"]
 
 type BillingInfo = {
@@ -19,6 +18,8 @@ type BillingInfo = {
   trial_termina_en: string | null
   fecha_vencimiento: string | null
   fecha_pago: string | null
+  esFundadorVigente: boolean
+  fundadorHasta: string | null
 }
 
 // Explicación del Playbook, compartida entre Crecimiento y Escala (el
@@ -39,51 +40,57 @@ const PLAYBOOK_EXPANDIBLE = {
 
 type FeaturePlan = string | { texto: string; expandible: typeof PLAYBOOK_EXPANDIBLE }
 
-const PLANES: {
+// Función (no una constante) porque el precio de Escala depende de si
+// ESTE usuario tiene precio de fundador vigente -- precioMensual() en
+// planesConfig.ts es la única fuente de verdad para los 3 precios
+// (arranque siempre es 0, aparte).
+function construirPlanes(esFundadorVigente: boolean): {
   id: string
   nombre: string
   tagline: string
   precio: number
   masElegido?: boolean
   features: FeaturePlan[]
-}[] = [
-  {
-    id: "arranque",
-    nombre: "Arranque",
-    tagline: "Para probar si la publicidad te funciona.",
-    precio: 0,
-    features: [
-      "1 estrategia nueva por mes",
-      "Álbum de creativos con auditoría de marca",
-      "Notificaciones informativas",
-    ],
-  },
-  {
-    id: "crecimiento",
-    nombre: "Crecimiento",
-    tagline: "Para dejar de revisar tus campañas a mano todos los días.",
-    precio: 149900,
-    features: [
-      "4 estrategias nuevas por mes",
-      { texto: "Revisamos tus campañas y te decimos qué subir, pausar o escalar (hasta 2 a la vez)", expandible: PLAYBOOK_EXPANDIBLE },
-      "Alertas y sugerencias inteligentes",
-      ...(AUTOPILOTO_PUBLICO ? ["¿Quieres que un equipo lo haga por ti? Mira el plan Autopiloto"] : []),
-    ],
-  },
-  {
-    id: "escala",
-    nombre: nombreVisiblePlan("escala"),
-    tagline: "Para que Quiubot vigile y ajuste todo mientras creces.",
-    precio: 249900,
-    masElegido: true,
-    features: [
-      ...(AUTOPILOTO_PUBLICO ? BENEFICIOS_AUTOPILOTO : []),
-      "Estrategias nuevas ilimitadas",
-      { texto: "Revisamos tus campañas y te decimos qué subir, pausar o escalar (todas, sin límite)", expandible: PLAYBOOK_EXPANDIBLE },
-      "Alertas y sugerencias con prioridad",
-    ],
-  },
-]
+}[] {
+  return [
+    {
+      id: "arranque",
+      nombre: "Arranque",
+      tagline: "Para probar si la publicidad te funciona.",
+      precio: 0,
+      features: [
+        "1 estrategia nueva por mes",
+        "Álbum de creativos con auditoría de marca",
+        "Notificaciones informativas",
+      ],
+    },
+    {
+      id: "crecimiento",
+      nombre: "Crecimiento",
+      tagline: "Para dejar de revisar tus campañas a mano todos los días.",
+      precio: precioMensual("crecimiento"),
+      features: [
+        "4 estrategias nuevas por mes",
+        { texto: "Revisamos tus campañas y te decimos qué subir, pausar o escalar (hasta 2 a la vez)", expandible: PLAYBOOK_EXPANDIBLE },
+        "Alertas y sugerencias inteligentes",
+        ...(AUTOPILOTO_PUBLICO ? ["¿Quieres que un equipo lo haga por ti? Mira el plan Autopiloto"] : []),
+      ],
+    },
+    {
+      id: "escala",
+      nombre: nombreVisiblePlan("escala"),
+      tagline: "Para que Quiubot vigile y ajuste todo mientras creces.",
+      precio: precioMensual("escala", { esFundadorVigente }),
+      masElegido: true,
+      features: [
+        ...(AUTOPILOTO_PUBLICO ? BENEFICIOS_AUTOPILOTO : []),
+        "Estrategias nuevas ilimitadas",
+        { texto: "Revisamos tus campañas y te decimos qué subir, pausar o escalar (todas, sin límite)", expandible: PLAYBOOK_EXPANDIBLE },
+        "Alertas y sugerencias con prioridad",
+      ],
+    },
+  ]
+}
 
 function PrecioAnimado({ valor }: { valor: number }) {
   const [mostrado, setMostrado] = useState(valor)
@@ -123,6 +130,9 @@ export default function BillingPage() {
   // Qué tarjeta de plan tiene el "¿Qué es esto?" del Playbook desplegado
   // -- una por tarjeta, independiente entre Crecimiento y Escala.
   const [playbookExpandido, setPlaybookExpandido] = useState<Record<string, boolean>>({})
+  // null mientras carga -- no se muestra "Quedan 0 cupos" por un
+  // instante antes de tener el número real.
+  const [cuposFundador, setCuposFundador] = useState<number | null>(null)
 
   useEffect(() => {
     fetch("/api/billing")
@@ -130,7 +140,7 @@ export default function BillingPage() {
       .then(setInfo)
       .catch((err) => {
         console.error("No se pudo cargar la info de billing:", err)
-        setInfo({ plan: "arranque", en_trial: false, trial_termina_en: null, fecha_vencimiento: null, fecha_pago: null })
+        setInfo({ plan: "arranque", en_trial: false, trial_termina_en: null, fecha_vencimiento: null, fecha_pago: null, esFundadorVigente: false, fundadorHasta: null })
       })
 
     fetch("/api/objetivos-activos")
@@ -140,6 +150,15 @@ export default function BillingPage() {
         setPlanMinimoPorId(data.planMinimoPorId ?? {})
       })
       .catch(() => {})
+
+    // Solo tiene sentido pedir esto con el interruptor encendido -- con
+    // el apagado ni siquiera se muestra el bloque que lo usa.
+    if (AUTOPILOTO_PUBLICO) {
+      fetch("/api/billing/cupos-fundador")
+        .then(r => r.json())
+        .then((data) => setCuposFundador(typeof data.restantes === "number" ? data.restantes : null))
+        .catch(() => setCuposFundador(null))
+    }
   }, [])
 
   const objetivosDelPlan = (planId: string): string[] => {
@@ -217,7 +236,7 @@ export default function BillingPage() {
           <h1 style={{ fontSize: 24, fontWeight: 700, color: "#1a1a1a", margin: 0 }}>Mi plan</h1>
           {info.en_trial ? (
             <p style={{ fontSize: 14, color: "#534AB7", marginTop: 6, background: "#f3f2fe", display: "inline-block", padding: "6px 14px", borderRadius: 20 }}>
-              🎁 Estás en tu prueba de 7 días — termina el {formatFecha(info.trial_termina_en)} ({diasRestantes(info.trial_termina_en)} días restantes)
+              🎁 Estás en tu prueba gratuita — termina el {formatFecha(info.trial_termina_en)} ({diasRestantes(info.trial_termina_en)} días restantes)
             </p>
           ) : (
             info.plan !== "arranque" && (
@@ -274,7 +293,7 @@ export default function BillingPage() {
                   color: ciclo === "anual" ? "#fff" : "#15803d",
                 }}
               >
-                -15%
+                2 meses gratis
               </span>
             </button>
           </div>
@@ -286,11 +305,12 @@ export default function BillingPage() {
         </p>
 
         <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(260px, 1fr))", gap: 20, alignItems: "start" }}>
-          {PLANES.map((plan) => {
+          {construirPlanes(info.esFundadorVigente).map((plan) => {
             const esPlanActual = !!session && plan.id === info.plan
             const destacarComoPopular = plan.masElegido && !esPlanActual
             const esAnual = ciclo === "anual" && plan.precio > 0
-            const totalAnual = Math.round(plan.precio * 12 * (1 - DESCUENTO_ANUAL))
+            const totalAnual =
+              plan.precio > 0 ? precioAnual(plan.id as "crecimiento" | "escala", { esFundadorVigente: info.esFundadorVigente }) : 0
             const mensualEquivalente = Math.round(totalAnual / 12)
             const ahorroAnual = plan.precio * 12 - totalAnual
             const precioMostrado = esAnual ? mensualEquivalente : plan.precio
@@ -353,6 +373,18 @@ export default function BillingPage() {
                   )
                 ) : (
                   <p style={{ fontSize: 12, color: "#999", margin: "0 0 20px" }}>Para siempre, sin tarjeta</p>
+                )}
+
+                {AUTOPILOTO_PUBLICO && plan.id === "escala" && (
+                  info.esFundadorVigente ? (
+                    <div style={{ display: "inline-flex", alignItems: "center", gap: 6, background: "#fef3c7", color: "#92600a", fontSize: 12.5, fontWeight: 700, padding: "5px 12px", borderRadius: 999, marginBottom: 14 }}>
+                      👑 Precio de fundador vigente hasta {formatFecha(info.fundadorHasta)}
+                    </div>
+                  ) : cuposFundador !== null && cuposFundador > 0 ? (
+                    <div style={{ display: "inline-flex", alignItems: "center", gap: 6, background: "#fef3c7", color: "#92600a", fontSize: 12.5, fontWeight: 700, padding: "5px 12px", borderRadius: 999, marginBottom: 14 }}>
+                      🔥 Los primeros {CUPOS_FUNDADOR} negocios pagan ${PRECIO_FUNDADOR.toLocaleString("es-CO")}/mes los primeros 12 meses — quedan {cuposFundador} cupos
+                    </div>
+                  ) : null
                 )}
 
                 <div style={{ display: "flex", flexDirection: "column", gap: 10, marginBottom: 24, marginTop: esAnual ? 14 : 0 }}>
