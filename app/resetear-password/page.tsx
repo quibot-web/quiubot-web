@@ -38,7 +38,7 @@ function ResetearPasswordForm() {
         return
       }
       setExito(true)
-      setTimeout(() => router.push("/login"), 2500)
+      setTimeout(() => router.push("/login?modo=ingresar"), 2500)
     } catch {
       setError("No se pudo conectar. Intenta de nuevo.")
     } finally {

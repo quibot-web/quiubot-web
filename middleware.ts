@@ -65,7 +65,7 @@ export default auth(async (req) => {
   if (isActivarRoute || isWebhookRoute || isCronRoute) return NextResponse.next()
 
   if (!isLoggedIn && !isLoginPage && !isBienvenidaPage && !isTerminosPage && !isEliminarDatosPage && !isTutorialesPublicosRoute && !isRegistroPage && !isOlvidePasswordPage && !isResetearPasswordPage && !isPricingPage && !isBillingPage && !isBillingRoute && !isCuposFundadorRoute) {
-    return NextResponse.redirect(new URL("/login", req.nextUrl))
+    return NextResponse.redirect(new URL("/login?modo=ingresar", req.nextUrl))
   }
 
   // Segunda puerta: aunque el usuario ya tenga sesión y rol admin, cualquier

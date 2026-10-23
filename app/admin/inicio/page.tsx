@@ -6,7 +6,7 @@ import AdminInicioClient from "./AdminInicioClient";
 export default async function AdminInicioPage() {
   const session = await auth();
   if (!session?.user?.email) {
-    redirect("/login");
+    redirect("/login?modo=ingresar");
   }
 
   const { data: usuario } = await supabaseAdmin

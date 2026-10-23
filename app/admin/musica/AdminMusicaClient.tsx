@@ -50,7 +50,7 @@ export default function AdminMusicaClient({ esAdmin }: { esAdmin: boolean }) {
       const res = await fetch("/api/admin/musica");
       const data = await res.json();
       if (res.status === 401) {
-        router.push("/login");
+        router.push("/login?modo=ingresar");
         return;
       }
       if (!res.ok) {

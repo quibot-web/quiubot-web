@@ -52,7 +52,7 @@ export default function OlvidePasswordPage() {
             <p style={{ textAlign: "center", fontSize: 14, color: "#333", lineHeight: 1.6, margin: "8px 0" }}>
               📩 Si ese correo tiene una cuenta, te enviamos instrucciones para restablecer tu contraseña. Revisa tu bandeja (y spam).
             </p>
-            <Link href="/login" style={{ textAlign: "center", color: "#7F77DD", fontSize: 13, fontWeight: 600, textDecoration: "none" }}>
+            <Link href="/login?modo=ingresar" style={{ textAlign: "center", color: "#7F77DD", fontSize: 13, fontWeight: 600, textDecoration: "none" }}>
               ← Volver a iniciar sesión
             </Link>
           </>
@@ -67,7 +67,7 @@ export default function OlvidePasswordPage() {
               {enviando ? "Enviando..." : "Enviar enlace"}
             </button>
 
-            <Link href="/login" style={{ textAlign: "center", fontSize: 12.5, color: "#999", textDecoration: "none" }}>
+            <Link href="/login?modo=ingresar" style={{ textAlign: "center", fontSize: 12.5, color: "#999", textDecoration: "none" }}>
               ← Volver a iniciar sesión
             </Link>
           </form>

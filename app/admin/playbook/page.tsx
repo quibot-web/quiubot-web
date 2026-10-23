@@ -6,7 +6,7 @@ import AdminPlaybookClient from "./AdminPlaybookClient";
 export default async function AdminPlaybookPage() {
   const session = await auth();
   if (!session?.user?.email) {
-    redirect("/login");
+    redirect("/login?modo=ingresar");
   }
 
   const { data: usuario } = await supabaseAdmin

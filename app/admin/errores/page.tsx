@@ -6,7 +6,7 @@ import AdminErroresClient from "./AdminErroresClient";
 export default async function AdminErroresPage() {
   const session = await auth();
   if (!session?.user?.email) {
-    redirect("/login");
+    redirect("/login?modo=ingresar");
   }
 
   const { data: usuario } = await supabaseAdmin

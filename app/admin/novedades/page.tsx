@@ -6,7 +6,7 @@ import AdminNovedadesClient from "./AdminNovedadesClient";
 export default async function AdminNovedadesPage() {
   const session = await auth();
   if (!session?.user?.email) {
-    redirect("/login");
+    redirect("/login?modo=ingresar");
   }
 
   const { data: usuario } = await supabaseAdmin

@@ -32,6 +32,10 @@ export async function POST(req: NextRequest) {
   const utm_source = typeof body.utm_source === "string" ? body.utm_source.slice(0, 200) : null;
   const utm_campaign = typeof body.utm_campaign === "string" ? body.utm_campaign.slice(0, 200) : null;
   const utm_content = typeof body.utm_content === "string" ? body.utm_content.slice(0, 200) : null;
+  // A dónde volver tras verificar el correo e iniciar sesión (ej. "/billing"
+  // si llegó desde ahí a pagar) -- solo se acepta una ruta relativa propia,
+  // nunca una URL completa, para no abrir la puerta a un redirect externo.
+  const next = typeof body.next === "string" && body.next.startsWith("/") && !body.next.startsWith("//") ? body.next.slice(0, 200) : "/";
 
   if (!email || !email.includes("@")) {
     return NextResponse.json({ error: "Correo inválido" }, { status: 400 });
@@ -101,7 +105,7 @@ export async function POST(req: NextRequest) {
   }
 
   const baseUrl = process.env.NEXTAUTH_URL || "https://quiubot.site";
-  const link = `${baseUrl}/api/auth/verificar-email?token=${tokenCrudo}&email=${encodeURIComponent(email)}`;
+  const link = `${baseUrl}/api/auth/verificar-email?token=${tokenCrudo}&email=${encodeURIComponent(email)}&next=${encodeURIComponent(next)}`;
   await enviarCorreoVerificacion(email, nombre, link);
 
   return respuestaGenerica;

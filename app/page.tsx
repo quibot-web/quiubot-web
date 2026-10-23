@@ -997,7 +997,7 @@ export default function Home() {
             </div>
           )}
           <button
-            onClick={() => signOut({ callbackUrl: "/login" })}
+            onClick={() => signOut({ callbackUrl: "/login?modo=ingresar" })}
             className="qb-footer-btn"
             style={{
               width: "100%", padding: "7px 10px", borderRadius: 8,

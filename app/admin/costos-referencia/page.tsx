@@ -6,7 +6,7 @@ import AdminCostosReferenciaClient from "./AdminCostosReferenciaClient";
 export default async function AdminCostosReferenciaPage() {
   const session = await auth();
   if (!session?.user?.email) {
-    redirect("/login");
+    redirect("/login?modo=ingresar");
   }
 
   const { data: usuario } = await supabaseAdmin

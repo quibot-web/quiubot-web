@@ -84,7 +84,7 @@ export default function Home() {
               </div>
             </div>
           )}
-          <button onClick={() => signOut({ callbackUrl: "/login" })} style={{ width: "100%", padding: "7px 12px", borderRadius: 8, border: "1px solid #e8e8e6", background: "transparent", color: "#666", fontSize: 13, cursor: "pointer", textAlign: "left" }}>
+          <button onClick={() => signOut({ callbackUrl: "/login?modo=ingresar" })} style={{ width: "100%", padding: "7px 12px", borderRadius: 8, border: "1px solid #e8e8e6", background: "transparent", color: "#666", fontSize: 13, cursor: "pointer", textAlign: "left" }}>
             Cerrar sesión
           </button>
         </div>

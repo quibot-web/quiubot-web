@@ -17,7 +17,7 @@ export default function AdminPlaybookClient() {
       const res = await fetch("/api/admin/playbook");
       const data = await res.json();
       if (res.status === 401) {
-        router.push("/login");
+        router.push("/login?modo=ingresar");
         return;
       }
       if (!res.ok) {

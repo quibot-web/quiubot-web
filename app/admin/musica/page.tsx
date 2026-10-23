@@ -6,7 +6,7 @@ import AdminMusicaClient from "./AdminMusicaClient";
 export default async function AdminMusicaPage() {
   const session = await auth();
   if (!session?.user?.email) {
-    redirect("/login");
+    redirect("/login?modo=ingresar");
   }
 
   const acceso = await verificarAccesoMusica(session.user!.email!);

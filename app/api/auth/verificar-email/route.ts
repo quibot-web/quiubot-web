@@ -7,9 +7,16 @@ export async function GET(req: NextRequest) {
   const token = searchParams.get("token");
   const email = searchParams.get("email")?.trim().toLowerCase();
   const baseUrl = process.env.NEXTAUTH_URL || "https://quiubot.site";
+  // Mismo "next" que se mandó a registrar (ej. "/billing") -- se valida de
+  // nuevo aquí porque llega por querystring de un enlace de correo, no hay
+  // que confiar en que nadie lo manipuló entre el envío y el clic.
+  const nextParam = searchParams.get("next");
+  const next = nextParam && nextParam.startsWith("/") && !nextParam.startsWith("//") ? nextParam.slice(0, 200) : "/";
+  const destino = (estado: "1" | "error") =>
+    `${baseUrl}/login?verificado=${estado}&modo=ingresar&next=${encodeURIComponent(next)}`;
 
   if (!token || !email) {
-    return NextResponse.redirect(`${baseUrl}/login?verificado=error`);
+    return NextResponse.redirect(destino("error"));
   }
 
   const { data: usuario } = await supabaseAdmin
@@ -25,7 +32,7 @@ export async function GET(req: NextRequest) {
     new Date(usuario.token_verificacion_expira) > new Date();
 
   if (!usuario || !tokenValido) {
-    return NextResponse.redirect(`${baseUrl}/login?verificado=error`);
+    return NextResponse.redirect(destino("error"));
   }
 
   await supabaseAdmin
@@ -33,5 +40,5 @@ export async function GET(req: NextRequest) {
     .update({ email_verificado: true, token_verificacion: null, token_verificacion_expira: null })
     .eq("id", usuario.id);
 
-  return NextResponse.redirect(`${baseUrl}/login?verificado=1`);
+  return NextResponse.redirect(destino("1"));
 }

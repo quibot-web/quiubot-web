@@ -4,7 +4,7 @@ import { NextResponse } from "next/server";
 export async function GET() {
   const session = await auth();
   if (!session?.user?.email) {
-    return NextResponse.redirect(new URL("/login", process.env.NEXTAUTH_URL || "http://localhost:3000"));
+    return NextResponse.redirect(new URL("/login?modo=ingresar", process.env.NEXTAUTH_URL || "http://localhost:3000"));
   }
 
   const appId = process.env.META_APP_ID;
