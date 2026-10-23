@@ -3,6 +3,7 @@ import { timingSafeEqual } from "crypto";
 import { supabaseAdmin } from "@/lib/supabase";
 import { obtenerPropuestasPendientes } from "@/app/lib/propuestas";
 import { enviarCorreoPropuestasPendientes } from "@/lib/email";
+import { tieneAutopiloto } from "@/app/lib/planesConfig";
 
 const VENTANA_MINIMA_MS = 6 * 60 * 60 * 1000;
 
@@ -14,13 +15,13 @@ function compararSeguro(a: string, b: string): boolean {
 }
 
 // Llamado cada hora por un Schedule Trigger en n8n (mismo patrón que
-// sync-meta-insights y vencer-propuestas). Por cada admin con al menos
-// una propuesta pendiente (lectura dual, igual que la bandeja), manda
-// un correo agrupado -- nunca uno por propuesta -- y nunca más de uno
-// cada 6 horas por usuario, verificado contra el último evento
-// "correo_propuestas_enviado" en bitacora. Solo admins: Autopiloto
-// sigue oculto para el resto, así que hoy no debería haber propuestas
-// para nadie más, pero el filtro queda explícito igual.
+// sync-meta-insights y vencer-propuestas). Por cada usuario con
+// Autopiloto (tieneAutopiloto(): admin, beta, o plan pagado/en prueba
+// una vez encendido el interruptor) que tenga al menos una propuesta
+// pendiente (lectura dual, igual que la bandeja), manda un correo
+// agrupado -- nunca uno por propuesta -- y nunca más de uno cada 6
+// horas por usuario, verificado contra el último evento
+// "correo_propuestas_enviado" en bitacora.
 export async function POST(req: NextRequest) {
   const adminSecret = process.env.ADMIN_SECRET;
   if (!adminSecret) {
@@ -32,15 +33,16 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ error: "No autorizado" }, { status: 401 });
   }
 
-  const { data: admins } = await supabaseAdmin
+  const { data: usuarios } = await supabaseAdmin
     .from("usuarios")
-    .select("id, email, nombre")
-    .eq("rol", "admin");
+    .select("id, email, nombre, rol, beta_autopiloto, plan, en_trial, trial_termina_en, fecha_vencimiento");
+
+  const elegibles = (usuarios || []).filter((usuario) => tieneAutopiloto(usuario));
 
   let avisados = 0;
   let omitidosPorVentana = 0;
 
-  for (const usuario of admins || []) {
+  for (const usuario of elegibles) {
     const pendientes = await obtenerPropuestasPendientes(usuario.id);
     if (pendientes.length === 0) continue;
 

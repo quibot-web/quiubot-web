@@ -34,7 +34,7 @@ function fechaMinima(): string {
 
 export default function CrearMetaPage() {
   const router = useRouter();
-  const [esAdmin, setEsAdmin] = useState<boolean | null>(null);
+  const [puedeUsarAutopiloto, setPuedeUsarAutopiloto] = useState<boolean | null>(null);
 
   const [paso, setPaso] = useState(1);
   const [tipo, setTipo] = useState<TipoMeta | null>(null);
@@ -49,15 +49,15 @@ export default function CrearMetaPage() {
   useEffect(() => {
     fetch("/api/usuario/rol")
       .then((r) => r.json())
-      .then((data) => setEsAdmin(data.rol === "admin"))
-      .catch(() => setEsAdmin(false));
+      .then((data) => setPuedeUsarAutopiloto(!!data.tieneAutopiloto))
+      .catch(() => setPuedeUsarAutopiloto(false));
   }, []);
 
-  if (esAdmin === null) {
+  if (puedeUsarAutopiloto === null) {
     return <CargandoQuiubot mensaje="Verificando tu acceso" />;
   }
 
-  if (esAdmin === false) {
+  if (puedeUsarAutopiloto === false) {
     return (
       <div style={{ minHeight: "100vh", background: "#f9f9f8", fontFamily: "system-ui, sans-serif", display: "flex", alignItems: "center", justifyContent: "center", padding: "2rem" }}>
         <div style={{ maxWidth: 480, width: "100%", background: "#fff", borderRadius: 20, border: "1px solid #e8e8e6", padding: "2.5rem 2rem", textAlign: "center", boxShadow: "0 8px 30px rgba(0,0,0,0.06)" }}>

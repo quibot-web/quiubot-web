@@ -44,35 +44,6 @@ function LectorVistaPrevia({ onDetectado }: { onDetectado: (activo: boolean) => 
   return null;
 }
 
-// --- DIAGNÓSTICO TEMPORAL -- borrar en cuanto se resuelva por qué la
-// vista previa no prendía en staging. A propósito NO depende de
-// PERMITIR_VISTA_PREVIA (es justo lo que hay que diagnosticar): se
-// monta siempre, en cualquier entorno, pero solo imprime algo si
-// alguien agrega ?vista=autopiloto a la URL a propósito -- tráfico
-// real nunca trae ese parámetro, así que en la práctica queda en
-// silencio fuera de una prueba deliberada. Responde directo a las 3
-// preguntas: qué valor (si alguno) llegó al navegador, de qué tipo, y
-// si la comparación con el texto "1" da true. También necesita su
-// propio <Suspense> -- igual que LectorVistaPrevia -- porque llama a
-// useSearchParams() en una página estática. ---
-function DiagnosticoVistaPrevia() {
-  const searchParams = useSearchParams();
-  useEffect(() => {
-    const vista = searchParams.get("vista");
-    if (vista !== "autopiloto") return;
-    const crudo = process.env.NEXT_PUBLIC_PERMITIR_VISTA_PREVIA;
-    console.log("[Quiubot] diagnóstico vista previa /bienvenida", {
-      NEXT_PUBLIC_PERMITIR_VISTA_PREVIA_crudo: crudo,
-      tipo: typeof crudo,
-      llegaUndefined: crudo === undefined,
-      comparacionConTrim: crudo?.trim() === "1",
-      PERMITIR_VISTA_PREVIA_resuelto: PERMITIR_VISTA_PREVIA,
-      vistaParam: vista,
-    });
-  }, [searchParams]);
-  return null;
-}
-
 const AYUDAS = [
   {
     tag: "AUTOMATICO",
@@ -943,10 +914,6 @@ export default function BienvenidaExperience() {
           <LectorVistaPrevia onDetectado={setVistaPreviaActiva} />
         </Suspense>
       )}
-      {/* Diagnóstico temporal -- ver el comentario junto a su definición */}
-      <Suspense fallback={null}>
-        <DiagnosticoVistaPrevia />
-      </Suspense>
       <link
         rel="stylesheet"
         href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@500;600;700&family=JetBrains+Mono:wght@400;500;600&display=swap"
