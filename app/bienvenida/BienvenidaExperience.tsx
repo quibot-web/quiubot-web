@@ -3,6 +3,7 @@
 import Link from "next/link";
 import { useEffect, useRef, useState, type ReactNode } from "react";
 import RevealObserver from "@/app/components/RevealObserver";
+import { trackEvento } from "@/app/components/MetaPixel";
 
 const AYUDAS = [
   {
@@ -477,57 +478,6 @@ function SeccionVideo() {
   );
 }
 
-/* ============================================================
-   MEDICION DE CONVERSION — Meta Pixel
-   ============================================================
-   trackEvento() dispara un evento estándar o personalizado de Meta Pixel
-   de forma segura (revisa que window.fbq exista antes de llamar).
-
-   IMPORTANTE: el script base de Meta Pixel (con tu PIXEL_ID) debe cargar
-   UNA SOLA VEZ por sitio — lo ideal es ponerlo en tu layout raíz
-   (app/layout.tsx), no aquí. Si ya lo tienes instalado ahí, ignora
-   el componente <MetaPixelBase />; si no, lo dejo listo para que
-   solo pegues tu ID y lo muevas a layout.tsx.
-   ============================================================ */
-
-declare global {
-  interface Window {
-    fbq?: (...args: unknown[]) => void;
-  }
-}
-
-function trackEvento(evento: string, params?: Record<string, unknown>) {
-  if (typeof window !== "undefined" && typeof window.fbq === "function") {
-    window.fbq("track", evento, params);
-  }
-}
-
-// Lee el Pixel ID de la variable de entorno NEXT_PUBLIC_META_PIXEL_ID (Coolify + .env.local).
-// Si no existe, cae al valor actual como respaldo — asi no se rompe nada si aun no
-// has agregado la variable, pero ya queda listo para moverlo sin tocar codigo.
-const META_PIXEL_ID: string = process.env.NEXT_PUBLIC_META_PIXEL_ID || "2226087528185704";
-
-function MetaPixelBase() {
-  useEffect(() => {
-    if (typeof window === "undefined" || window.fbq) return;
-    if (META_PIXEL_ID === "TU_PIXEL_ID_AQUI") return; // evita cargar sin ID configurado
-
-    const script = document.createElement("script");
-    script.innerHTML = `
-      !function(f,b,e,v,n,t,s){if(f.fbq)return;n=f.fbq=function(){n.callMethod?
-      n.callMethod.apply(n,arguments):n.queue.push(arguments)};if(!f._fbq)f._fbq=n;
-      n.push=n;n.loaded=!0;n.version='2.0';n.queue=[];t=b.createElement(e);t.async=!0;
-      t.src=v;s=b.getElementsByTagName(e)[0];s.parentNode.insertBefore(t,s)}(window,
-      document,'script','https://connect.facebook.net/en_US/fbevents.js');
-      fbq('init', '${META_PIXEL_ID}');
-      fbq('track', 'PageView');
-    `;
-    document.head.appendChild(script);
-  }, []);
-
-  return null;
-}
-
 /* CTA reutilizable con tracking incorporado.
    ubicacion = de dónde sale el clic (para saber qué CTA convierte más). */
 function CtaLink({
@@ -784,7 +734,6 @@ export default function BienvenidaExperience() {
 
   return (
     <div className="qb-lp">
-      <MetaPixelBase />
       <link
         rel="stylesheet"
         href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@500;600;700&family=JetBrains+Mono:wght@400;500;600&display=swap"

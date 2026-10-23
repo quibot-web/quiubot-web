@@ -4,6 +4,7 @@ import { SessionProvider } from "next-auth/react";
 import JobFlotante from "@/app/components/JobFlotante";
 import AsistenteFlotante from "@/app/components/AsistenteFlotante";
 import TrackerRegistroGoogle from "@/app/components/TrackerRegistroGoogle";
+import MetaPixelBase from "@/app/components/MetaPixel";
 
 export const metadata: Metadata = {
   metadataBase: new URL("https://quiubot.site"),
@@ -40,6 +41,7 @@ export default function RootLayout({
           <JobFlotante />
           <AsistenteFlotante />
           <TrackerRegistroGoogle />
+          <MetaPixelBase />
         </SessionProvider>
       </body>
     </html>
