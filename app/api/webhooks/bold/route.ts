@@ -3,7 +3,7 @@ import { createHmac, timingSafeEqual } from "crypto";
 import { supabaseAdmin } from "@/lib/supabase";
 import { enviarCorreoPagoExitoso, enviarCorreoPlanActivado, enviarCorreoConfirmacionPlanCliente } from "@/lib/email";
 import { registrarError } from "@/lib/registrarError";
-import { nombreVisiblePlan, type PlanId } from "@/app/lib/planesConfig";
+import { AUTOPILOTO_PUBLICO, nombreVisiblePlan, CUPOS_FUNDADOR, MESES_FUNDADOR, type PlanId } from "@/app/lib/planesConfig";
 
 // Duracion de cada ciclo. El "mes" se cuenta como 30 dias por simplicidad
 // (igual que ya hacia /api/activar con "dias ?? 30").
@@ -124,6 +124,37 @@ export async function POST(req: NextRequest) {
     const fechaVencimiento = new Date();
     fechaVencimiento.setDate(fechaVencimiento.getDate() + (DIAS_POR_CICLO[orden.ciclo] ?? 30));
 
+    // Precio de fundador: esta consulta SOLO corre con el interruptor
+    // encendido y para un pago de escala -- apagado, nunca toca
+    // fundador_hasta, para no depender de esa columna mientras el
+    // lanzamiento no esté activo. Si el usuario ya tenía fundador_hasta
+    // (está renovando dentro de sus 12 meses), no se toca -- la ventana
+    // se cuenta siempre desde el PRIMER pago, no se extiende con cada
+    // renovación. Si no lo tenía, este es el chequeo autoritativo de
+    // cupos (crear-link ya cobró el precio de fundador de forma
+    // optimista; aquí es donde queda escriturado de verdad).
+    let fundadorHastaNuevo: string | undefined;
+    if (AUTOPILOTO_PUBLICO && orden.plan_id === "escala") {
+      const { data: usuarioFundador } = await supabaseAdmin
+        .from("usuarios")
+        .select("fundador_hasta")
+        .eq("email", orden.email)
+        .maybeSingle();
+
+      if (!usuarioFundador?.fundador_hasta) {
+        const { count: cuposUsados } = await supabaseAdmin
+          .from("usuarios")
+          .select("id", { count: "exact", head: true })
+          .not("fundador_hasta", "is", null);
+
+        if ((cuposUsados ?? 0) < CUPOS_FUNDADOR) {
+          const fundadorHasta = new Date(fechaPago);
+          fundadorHasta.setMonth(fundadorHasta.getMonth() + MESES_FUNDADOR);
+          fundadorHastaNuevo = fundadorHasta.toISOString().slice(0, 10);
+        }
+      }
+    }
+
     const { error: errorActivar } = await supabaseAdmin
       .from("usuarios")
       .update({
@@ -139,6 +170,7 @@ export async function POST(req: NextRequest) {
         // vencimiento nueva, asi que el recordatorio debe volver a poder
         // dispararse para ESTA fecha, no quedar "ya usado" de la vez anterior.
         recordatorio_vencimiento_enviado: false,
+        ...(fundadorHastaNuevo ? { fundador_hasta: fundadorHastaNuevo } : {}),
       })
       .eq("email", orden.email);
 

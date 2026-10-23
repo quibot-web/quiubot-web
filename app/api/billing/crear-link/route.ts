@@ -1,16 +1,10 @@
 import { auth } from "@/auth";
 import { NextRequest, NextResponse } from "next/server";
 import { supabaseAdmin } from "@/lib/supabase";
-import { AUTOPILOTO_PUBLICO, nombreVisiblePlan, type PlanId } from "@/app/lib/planesConfig";
+import { AUTOPILOTO_PUBLICO, nombreVisiblePlan, precioMensual, precioAnual, CUPOS_FUNDADOR } from "@/app/lib/planesConfig";
 
-// Precios calculados SIEMPRE del lado del servidor -- nunca se confía en
-// un monto que venga del frontend, para que nadie pueda manipular el
-// precio antes de mandarlo a Bold.
-const PRECIOS: Record<string, number> = {
-  crecimiento: 149900,
-  escala: 249900,
-};
-const DESCUENTO_ANUAL = 0.15;
+const PLANES_COMPRABLES = ["crecimiento", "escala"] as const;
+type PlanComprable = (typeof PLANES_COMPRABLES)[number];
 
 export async function POST(req: NextRequest) {
   const session = await auth();
@@ -20,7 +14,7 @@ export async function POST(req: NextRequest) {
 
   const { planId, ciclo } = await req.json();
 
-  if (!PRECIOS[planId]) {
+  if (!PLANES_COMPRABLES.includes(planId)) {
     return NextResponse.json({ error: "Plan invalido" }, { status: 400 });
   }
   if (ciclo !== "mensual" && ciclo !== "anual") {
@@ -35,12 +29,52 @@ export async function POST(req: NextRequest) {
 
   const emailBusqueda = session.user.email.trim().toLowerCase();
 
-  // Monto: mensual es el precio de tabla; anual es 12 meses con 15% de
-  // descuento, facturado una sola vez -- mismo calculo que ya usa el
-  // frontend, replicado aqui porque el monto real SIEMPRE debe salir del
-  // servidor, nunca del cliente.
-  const precioBase = PRECIOS[planId];
-  const monto = ciclo === "anual" ? Math.round(precioBase * 12 * (1 - DESCUENTO_ANUAL)) : precioBase;
+  // Precio de fundador: vigente si el usuario ya tiene fundador_hasta en
+  // el futuro (está renovando dentro de sus 12 meses), o si este sería su
+  // PRIMER pago de escala/Autopiloto y todavía quedan cupos -- se cobra
+  // fundador de una vez, de forma optimista: quien deja el cupo
+  // escriturado de verdad, con un segundo chequeo, es el webhook de Bold
+  // al confirmar el pago (ver app/api/webhooks/bold/route.ts).
+  let esFundadorVigente = false;
+  if (AUTOPILOTO_PUBLICO && planId === "escala") {
+    const { data: usuario } = await supabaseAdmin
+      .from("usuarios")
+      .select("fundador_hasta")
+      .eq("email", emailBusqueda)
+      .maybeSingle();
+
+    if (usuario?.fundador_hasta && new Date(usuario.fundador_hasta) >= new Date()) {
+      esFundadorVigente = true;
+    } else {
+      const { data: pagoPrevio } = await supabaseAdmin
+        .from("ordenes_pago")
+        .select("id")
+        .eq("email", emailBusqueda)
+        .eq("plan_id", "escala")
+        .eq("estado", "pagado")
+        .limit(1)
+        .maybeSingle();
+
+      if (!pagoPrevio) {
+        const { count: cuposUsados } = await supabaseAdmin
+          .from("usuarios")
+          .select("id", { count: "exact", head: true })
+          .not("fundador_hasta", "is", null);
+
+        if ((cuposUsados ?? 0) < CUPOS_FUNDADOR) {
+          esFundadorVigente = true;
+        }
+      }
+    }
+  }
+
+  // Monto SIEMPRE calculado del lado del servidor -- nunca se confía en
+  // un monto que venga del frontend, para que nadie pueda manipular el
+  // precio antes de mandarlo a Bold. precioMensual()/precioAnual() en
+  // planesConfig.ts son la única fuente de verdad (ver ahí para la
+  // fórmula exacta en cada caso).
+  const plan = planId as PlanComprable;
+  const monto = ciclo === "anual" ? precioAnual(plan, { esFundadorVigente }) : precioMensual(plan, { esFundadorVigente });
 
   // Referencia unica que Bold nos devuelve intacta en el webhook -- es la
   // unica forma de saber, cuando llega el pago, a que usuario y plan
@@ -65,9 +99,11 @@ export async function POST(req: NextRequest) {
   // Con el interruptor encendido, el recibo de Bold dice el nombre
   // comercial de Escala ("Autopiloto") pero conserva el id entre
   // paréntesis para poder conciliar -- apagado, queda igual que hoy.
+  // "(fundador)" se agrega solo cuando el cobro usa ese precio, para
+  // poder revisar los 50 cupos contra los recibos reales de Bold.
   const description =
     AUTOPILOTO_PUBLICO && planId === "escala"
-      ? `Quiubot — Plan ${nombreVisiblePlan("escala")} (${planId}, ${ciclo})`
+      ? `Quiubot — Plan ${nombreVisiblePlan("escala")} (${planId}, ${ciclo}${esFundadorVigente ? ", fundador" : ""})`
       : `Quiubot — Plan ${planId} (${ciclo})`;
 
   try {

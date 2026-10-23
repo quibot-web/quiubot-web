@@ -34,6 +34,11 @@ export default auth(async (req) => {
   // siempre. /api/billing/crear-link NO entra aqui -- esa sigue exigiendo
   // sesion, es la que genera el link de pago real.
   const isBillingRoute = pathname === "/api/billing"
+  // Mismo caso que isBillingRoute: /billing muestra "Quedan N cupos de
+  // fundador" a cualquiera, con o sin sesión, así que el fetch que trae
+  // ese número real también necesita quedar fuera del candado de login.
+  // Es de solo lectura (un conteo), no expone nada sensible.
+  const isCuposFundadorRoute = pathname === "/api/billing/cupos-fundador"
   const isActivarRoute = pathname === "/api/activar"
   // /bienvenida (pagina publica) le pega a este endpoint desde el navegador
   // para mostrar el video de presentacion y los testimonios a visitantes
@@ -59,7 +64,7 @@ export default auth(async (req) => {
 
   if (isActivarRoute || isWebhookRoute || isCronRoute) return NextResponse.next()
 
-  if (!isLoggedIn && !isLoginPage && !isBienvenidaPage && !isTerminosPage && !isEliminarDatosPage && !isTutorialesPublicosRoute && !isRegistroPage && !isOlvidePasswordPage && !isResetearPasswordPage && !isPricingPage && !isBillingPage && !isBillingRoute) {
+  if (!isLoggedIn && !isLoginPage && !isBienvenidaPage && !isTerminosPage && !isEliminarDatosPage && !isTutorialesPublicosRoute && !isRegistroPage && !isOlvidePasswordPage && !isResetearPasswordPage && !isPricingPage && !isBillingPage && !isBillingRoute && !isCuposFundadorRoute) {
     return NextResponse.redirect(new URL("/login", req.nextUrl))
   }
 
