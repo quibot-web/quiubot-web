@@ -16,13 +16,18 @@ import { NOMBRE_ASISTENTE } from "@/app/lib/directorChat";
 // Vista previa de la Parte B (Autopiloto) para revisarla en staging
 // SIN tocar AUTOPILOTO_PUBLICO ni perder el prerenderizado estático de
 // esta página (es la que recibe el tráfico pagado). NEXT_PUBLIC_* se
-// inlinea en build time: en producción, donde esta variable no existe
-// en Coolify, process.env.NEXT_PUBLIC_PERMITIR_VISTA_PREVIA queda
-// `undefined` en el bundle y el bloque completo de abajo (incluyendo
-// el useSearchParams() y su import) se elimina como código muerto al
-// minificar -- no solo no se ejecuta, no queda en el paquete. Solo tú
-// configuras esta variable, y solo en el recurso de staging.
-const PERMITIR_VISTA_PREVIA = process.env.NEXT_PUBLIC_PERMITIR_VISTA_PREVIA === "1";
+// inlinea en build time -- OJO: con Turbopack (el motor por defecto de
+// "next build" en esta versión de Next) esto NO se traduce en un
+// literal reemplazado + código muerto eliminado como hacía webpack,
+// sino en una lectura de un objeto de entorno compartido. Si la
+// variable nunca llegó al proceso de build (por ejemplo, si Coolify
+// la marcó solo como "runtime" y no como "build-time", o si el build
+// reusó una capa de Docker vieja), process.env.NEXT_PUBLIC_PERMITIR_VISTA_PREVIA
+// queda `undefined` en el bundle del navegador -- el .trim() de abajo
+// es defensivo por si en cambio llega con espacios o un salto de
+// línea en vez de faltar del todo. Solo tú configuras esta variable, y
+// solo en el recurso de staging.
+const PERMITIR_VISTA_PREVIA = process.env.NEXT_PUBLIC_PERMITIR_VISTA_PREVIA?.trim() === "1";
 
 // useSearchParams() exige un límite de Suspense para no romper el
 // prerenderizado estático (mismo motivo que ya resolvimos en
@@ -36,6 +41,35 @@ function LectorVistaPrevia({ onDetectado }: { onDetectado: (activo: boolean) => 
   useEffect(() => {
     onDetectado(searchParams.get("vista") === "autopiloto");
   }, [searchParams, onDetectado]);
+  return null;
+}
+
+// --- DIAGNÓSTICO TEMPORAL -- borrar en cuanto se resuelva por qué la
+// vista previa no prendía en staging. A propósito NO depende de
+// PERMITIR_VISTA_PREVIA (es justo lo que hay que diagnosticar): se
+// monta siempre, en cualquier entorno, pero solo imprime algo si
+// alguien agrega ?vista=autopiloto a la URL a propósito -- tráfico
+// real nunca trae ese parámetro, así que en la práctica queda en
+// silencio fuera de una prueba deliberada. Responde directo a las 3
+// preguntas: qué valor (si alguno) llegó al navegador, de qué tipo, y
+// si la comparación con el texto "1" da true. También necesita su
+// propio <Suspense> -- igual que LectorVistaPrevia -- porque llama a
+// useSearchParams() en una página estática. ---
+function DiagnosticoVistaPrevia() {
+  const searchParams = useSearchParams();
+  useEffect(() => {
+    const vista = searchParams.get("vista");
+    if (vista !== "autopiloto") return;
+    const crudo = process.env.NEXT_PUBLIC_PERMITIR_VISTA_PREVIA;
+    console.log("[Quiubot] diagnóstico vista previa /bienvenida", {
+      NEXT_PUBLIC_PERMITIR_VISTA_PREVIA_crudo: crudo,
+      tipo: typeof crudo,
+      llegaUndefined: crudo === undefined,
+      comparacionConTrim: crudo?.trim() === "1",
+      PERMITIR_VISTA_PREVIA_resuelto: PERMITIR_VISTA_PREVIA,
+      vistaParam: vista,
+    });
+  }, [searchParams]);
   return null;
 }
 
@@ -909,6 +943,10 @@ export default function BienvenidaExperience() {
           <LectorVistaPrevia onDetectado={setVistaPreviaActiva} />
         </Suspense>
       )}
+      {/* Diagnóstico temporal -- ver el comentario junto a su definición */}
+      <Suspense fallback={null}>
+        <DiagnosticoVistaPrevia />
+      </Suspense>
       <link
         rel="stylesheet"
         href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@500;600;700&family=JetBrains+Mono:wght@400;500;600&display=swap"
