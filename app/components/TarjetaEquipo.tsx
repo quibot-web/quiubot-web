@@ -22,6 +22,15 @@ function textoCorto(titulo: string): string {
   return titulo.length > LARGO_MAXIMO_PREVIA ? `${titulo.slice(0, LARGO_MAXIMO_PREVIA - 1)}…` : titulo;
 }
 
+// Versión corta del recordatorio de renovación para la burbuja del
+// Inicio (que tiene muy poco espacio) -- "recien_pagado" no entra acá,
+// no es urgente, se ve completo en /decisiones.
+const TEXTO_CORTO_RECORDATORIO: Record<string, string> = {
+  "3_dias_antes": "Tu plan vence pronto",
+  hoy_vence: "Hoy vence tu plan",
+  vencido: "Tu plan venció",
+};
+
 // Bloque "equipo" del Inicio -- mismo diseño de tarjeta oscura que la
 // sección "Así se vería el equipo en el inicio" de esferas_v3.html (el
 // brillo de las esferas se pierde sobre blanco). Admin-only: si
@@ -46,8 +55,9 @@ export default function TarjetaEquipo() {
         return r.json();
       }),
       fetch("/api/propuestas").then((r) => (r.ok ? r.json() : { propuestas: [] })),
+      fetch("/api/billing/recordatorio").then((r) => (r.ok ? r.json() : { etapa: null })),
     ])
-      .then(([metaData, propuestasData]) => {
+      .then(([metaData, propuestasData, recordatorioData]) => {
         setVisible(true);
         setPausado(!!metaData.meta?.pausado_autopiloto);
         const lista: any[] = propuestasData.propuestas ?? [];
@@ -58,9 +68,21 @@ export default function TarjetaEquipo() {
         // "esperando".
         const conjunto = new Set<AsistenteId>(lista.map((p) => asistenteDeMensaje(p)));
         setAsistentesEsperando(conjunto);
-        // La burbuja muestra la propuesta más reciente -- las campañas
-        // con problema (origen "problema_campana") no compiten por ese
-        // lugar, solo aparecen si no hay ninguna propuesta real.
+
+        // El recordatorio de renovación tiene prioridad sobre la
+        // propuesta más reciente en los 3 días antes de vencer, el día
+        // que vence, y después de vencer -- "recien_pagado" no es
+        // urgente, no compite por la burbuja.
+        const textoUrgente = TEXTO_CORTO_RECORDATORIO[recordatorioData?.etapa];
+        if (textoUrgente) {
+          setPrevia({ titulo: textoUrgente, asistente: "director", extra: 0 });
+          return;
+        }
+
+        // Si no, la burbuja muestra la propuesta más reciente -- las
+        // campañas con problema (origen "problema_campana") no
+        // compiten por ese lugar, solo aparecen si no hay ninguna
+        // propuesta real.
         const reales = lista.filter((p) => p.origen !== "problema_campana");
         const candidatos = reales.length > 0 ? reales : lista;
         if (candidatos.length > 0) {
