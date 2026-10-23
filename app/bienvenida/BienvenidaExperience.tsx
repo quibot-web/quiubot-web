@@ -1164,7 +1164,7 @@ export default function BienvenidaExperience() {
       <nav className={navScrolled ? "scrolled" : ""}>
         <div className="brand">
           <img src="/marca/icono-quiubot.svg" alt="" />
-          quiu<span className="acc">bot</span>
+          <span>quiu<span className="acc">bot</span></span>
         </div>
         <CtaLink href="/login" ubicacion="nav" className="btn-cta">Iniciar prueba gratis</CtaLink>
       </nav>

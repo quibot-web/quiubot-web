@@ -54,7 +54,7 @@ export default function ExperienciaAutopiloto() {
 
         .qb-conv .qbc-nav { display: flex; align-items: center; justify-content: space-between; height: 68px; max-width: 1080px; margin: 0 auto; padding: 0 20px; }
         .qb-conv .qbc-logo { display: flex; align-items: center; gap: 10px; color: #fff; font-weight: 800; font-size: 21px; text-decoration: none; }
-        .qb-conv .qbc-logo i { width: 32px; height: 32px; border-radius: 9px; background: var(--brand); display: block; box-shadow: 0 0 22px rgba(124,108,242,.6); }
+        .qb-conv .qbc-logo img { width: 32px; height: 32px; border-radius: 9px; }
         .qb-conv .qbc-logo b { color: #C9C2FF; }
         .qb-conv .qbc-nav-mini { color: #fff; text-decoration: none; font-weight: 700; font-size: 15px; padding: 0 16px; min-height: 44px; display: inline-flex; align-items: center; border-radius: 11px; border: 1px solid rgba(255,255,255,.2); }
 
@@ -173,8 +173,8 @@ export default function ExperienciaAutopiloto() {
       <main className="qbc-escena">
         <nav className="qbc-nav" aria-label="Principal">
           <div className="qbc-logo">
-            <i aria-hidden="true" />
-            quiu<b>bot</b>
+            <img src="/marca/icono-quiubot.svg" alt="" />
+            <span>quiu<b>bot</b></span>
           </div>
           <CtaLink href="/login" ubicacion="nav" className="qbc-nav-mini">
             Probar {DIAS_PRUEBA} días gratis
