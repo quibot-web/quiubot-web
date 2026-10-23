@@ -1,0 +1,84 @@
+<!doctype html>
+<html lang="es">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Crea tu cuenta · Quiubot</title>
+<style>
+:root{--bg:#0C0A17;--card:#17142B;--line:#2C2747;--ink:#F4F2FF;--muted:#B4AED3;--soft:#8E88B0;--brand:#7C6CF2;--brand-d:#6858E6;--ok:#5EE0A8}
+*{box-sizing:border-box}
+html,body{margin:0;min-height:100%;background:var(--bg);color:var(--ink)}
+body{font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Inter,Roboto,Helvetica,Arial,sans-serif;-webkit-font-smoothing:antialiased;line-height:1.5}
+.escena{position:relative;min-height:100svh;display:flex;align-items:center;justify-content:center;padding:28px 18px 40px;isolation:isolate}
+.escena::before{content:"";position:absolute;inset:0;z-index:-2;background:radial-gradient(55% 45% at 50% 12%,rgba(124,108,242,.30),transparent 70%),radial-gradient(35% 35% at 85% 85%,rgba(94,224,168,.10),transparent 70%),radial-gradient(35% 35% at 12% 80%,rgba(242,141,183,.10),transparent 70%)}
+.escena::after{content:"";position:absolute;inset:0;z-index:-1;background-image:linear-gradient(rgba(255,255,255,.035) 1px,transparent 1px),linear-gradient(90deg,rgba(255,255,255,.035) 1px,transparent 1px);background-size:44px 44px;mask-image:radial-gradient(60% 55% at 50% 30%,#000,transparent)}
+.caja{width:min(440px,100%);display:flex;flex-direction:column;gap:18px}
+.logo{display:flex;align-items:center;justify-content:center;gap:10px;text-decoration:none;color:#fff;font-weight:800;font-size:22px;letter-spacing:-.02em}
+.logo img{width:34px;height:34px;border-radius:9px}
+.logo span b{color:#B9AEFF;font-weight:800}
+.orb{position:relative;border-radius:50%;aspect-ratio:1;background:radial-gradient(circle at 32% 26%,rgba(255,255,255,.95) 0 5%,rgba(255,255,255,.3) 12%,transparent 26%),radial-gradient(circle at 40% 35%,var(--c1),var(--c2) 55%,var(--c3));box-shadow:inset -7px -10px 18px rgba(0,0,0,.25),inset 4px 6px 12px rgba(255,255,255,.28),0 10px 26px -8px var(--c2);animation:flota 5.5s ease-in-out infinite}
+.orb::after{content:"";position:absolute;left:-16%;right:-16%;top:42%;height:22%;border-radius:50%;border:2px solid var(--c1);opacity:.7;transform:rotate(-14deg)}
+.ojos{position:absolute;inset:38% 0 auto;display:flex;justify-content:center;gap:16%}
+.ojo{width:14%;aspect-ratio:3/4;min-width:4px;background:#141224;border-radius:50%;animation:parpadeo 5s infinite}
+.d{--c1:#9D95F5;--c2:#5B51C9;--c3:#2B2470}.m{--c1:#F28DB7;--c2:#C94680;--c3:#7A1F4A}.e{--c1:#7FB0FF;--c2:#2F6FDB;--c3:#163C85}.c{--c1:#FFB287;--c2:#EA7340;--c3:#8F3714}.p{--c1:#6EE0AE;--c2:#1E9E6B;--c3:#0B5639}.a{--c1:#73DCE8;--c2:#1597A8;--c3:#0A5560}.o{--c1:#FFD780;--c2:#D99A1E;--c3:#7D5308}
+@keyframes flota{50%{transform:translateY(-4px)}}
+@keyframes parpadeo{0%,93%,100%{transform:scaleY(1)}96%{transform:scaleY(.1)}}
+.director{display:flex;gap:12px;align-items:flex-end}
+.director .orb{width:54px;flex:none}
+.burbuja{background:var(--card);border:1px solid var(--line);border-radius:20px 20px 20px 6px;padding:14px 16px;font-size:16px;line-height:1.5;color:#ECE9FF}
+.burbuja strong{color:#fff}
+.equipo{display:flex;justify-content:center;gap:8px}
+.equipo .orb{width:26px}
+.tarjeta{background:rgba(23,20,43,.86);border:1px solid var(--line);border-radius:24px;padding:24px;display:flex;flex-direction:column;gap:14px;box-shadow:0 30px 70px -35px rgba(124,108,242,.55)}
+.tabs{display:grid;grid-template-columns:1fr 1fr;background:#0F0D1F;border:1px solid var(--line);border-radius:14px;padding:4px}
+.tabs button{min-height:42px;border:0;border-radius:10px;background:transparent;color:var(--muted);font:inherit;font-weight:700;font-size:15px;cursor:pointer}
+.tabs button[aria-selected="true"]{background:#2A2450;color:#fff}
+.google{display:flex;align-items:center;justify-content:center;gap:12px;min-height:54px;border-radius:14px;background:#fff;color:#1F1F1F;font-weight:700;font-size:16px;text-decoration:none;border:0}
+.sep{display:flex;align-items:center;gap:12px;color:var(--soft);font-size:12.5px;font-weight:700;letter-spacing:.08em}
+.sep::before,.sep::after{content:"";flex:1;height:1px;background:var(--line)}
+label{font-size:14px;font-weight:600;color:var(--muted);display:block;margin-bottom:6px}
+input{width:100%;min-height:52px;border-radius:13px;border:1px solid #3A3460;background:#0F0D1F;color:#fff;font:inherit;font-size:16px;padding:0 14px;outline:none}
+input:focus{border-color:#8C7EF7;box-shadow:0 0 0 3px rgba(124,108,242,.25)}
+input::placeholder{color:#6E6890}
+.cta{min-height:56px;border:0;border-radius:14px;background:var(--brand);color:#fff;font:inherit;font-weight:800;font-size:17px;cursor:pointer;box-shadow:0 14px 34px -14px var(--brand)}
+.cta:hover{background:var(--brand-d)}
+.fila{display:flex;justify-content:space-between;font-size:14px}
+.fila a{color:#C9C2FF}
+.confianza{display:flex;flex-wrap:wrap;justify-content:center;gap:6px 16px;color:var(--muted);font-size:13.5px}
+.confianza span::before{content:"✓ ";color:var(--ok);font-weight:800}
+.legal{text-align:center;color:var(--soft);font-size:12.5px;margin:0}
+.legal a{color:#C9C2FF}
+@media (prefers-reduced-motion:reduce){*{animation:none!important}}
+</style>
+</head>
+<body>
+<main class="escena">
+<div class="caja">
+<a class="logo" href="#"><img src="data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 34 34'><rect width='34' height='34' rx='9' fill='%237C6CF2'/><circle cx='16' cy='16' r='7' fill='none' stroke='white' stroke-width='2.6' stroke-dasharray='34 10' stroke-linecap='round'/><circle cx='22.5' cy='22.5' r='2' fill='white'/></svg>" alt=""><span>quiu<b>bot</b></span></a>
+
+<div class="director">
+<div class="orb d" aria-hidden="true"><div class="ojos"><span class="ojo"></span><span class="ojo"></span></div></div>
+<div class="burbuja">¡Bienvenido! Crea tu cuenta y en unos minutos empezamos con tu meta. Tienes <strong>14 días gratis</strong>, sin tarjeta.</div>
+</div>
+
+<div class="tarjeta">
+<div class="tabs" role="tablist" aria-label="Tipo de acceso">
+<button role="tab" aria-selected="true" type="button">Crear cuenta</button>
+<button role="tab" aria-selected="false" type="button">Ya tengo cuenta</button>
+</div>
+<a class="google" href="#"><svg width="20" height="20" viewBox="0 0 48 48" aria-hidden="true"><path fill="#EA4335" d="M24 9.5c3.5 0 6.6 1.2 9.1 3.6l6.8-6.8C35.8 2.4 30.3 0 24 0 14.6 0 6.6 5.4 2.6 13.2l7.9 6.2C12.4 13.6 17.7 9.5 24 9.5z"/><path fill="#4285F4" d="M46.1 24.5c0-1.6-.1-3.1-.4-4.5H24v9h12.4c-.5 2.9-2.2 5.3-4.6 6.9l7.4 5.8c4.3-4 6.9-9.9 6.9-17.2z"/><path fill="#FBBC05" d="M10.5 28.6c-.5-1.4-.8-2.9-.8-4.6s.3-3.2.8-4.6l-7.9-6.2C1 16.4 0 20.1 0 24s1 7.6 2.6 10.8l7.9-6.2z"/><path fill="#34A853" d="M24 48c6.5 0 11.9-2.1 15.9-5.8l-7.4-5.8c-2.1 1.4-4.8 2.2-8.5 2.2-6.3 0-11.6-4.1-13.5-9.9l-7.9 6.2C6.6 42.6 14.6 48 24 48z"/></svg>Continuar con Google</a>
+<div class="sep">O CON TU CORREO</div>
+<div><label for="correo">Correo electrónico</label><input id="correo" type="email" autocomplete="email" placeholder="tu@negocio.com"></div>
+<div><label for="clave">Crea una contraseña</label><input id="clave" type="password" autocomplete="new-password" placeholder="Mínimo 8 caracteres"></div>
+<button class="cta" type="button">Crear mi cuenta gratis →</button>
+<p class="legal">Al crear tu cuenta aceptas los <a href="#">términos y condiciones</a>.</p>
+</div>
+
+<div class="confianza"><span>14 días gratis</span><span>Sin tarjeta de crédito</span><span>Nada se publica sin ti</span></div>
+<div class="equipo" aria-hidden="true">
+<div class="orb m"></div><div class="orb e"></div><div class="orb c"></div><div class="orb p"></div><div class="orb a"></div><div class="orb o"></div>
+</div>
+</div>
+</main>
+</body>
+</html>
