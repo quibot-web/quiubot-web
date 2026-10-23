@@ -27,7 +27,7 @@ export function planAlcanzaPara(planUsuario: PlanId, planMinimo: PlanId): boolea
 // cambia en ningún lado (base, código, órdenes de Bold) -- esto solo
 // controla el nombre comercial que ve el cliente y a quién se le abre
 // la función. Apagado: todo se ve y se comporta exactamente como hoy.
-export const AUTOPILOTO_PUBLICO = false;
+export const AUTOPILOTO_PUBLICO = true;
 
 // Nombre que ve el cliente para un plan -- el único lugar que decide
 // si el plan "escala" se llama "Autopiloto". Todo lo que el cliente lee
