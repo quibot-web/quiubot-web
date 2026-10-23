@@ -135,6 +135,12 @@ function DecisionesContenido() {
   const router = useRouter();
   const searchParams = useSearchParams();
   const filtro = searchParams.get("asistente") as Asistente | null;
+  const simularRenovacion = searchParams.get("simular_renovacion") as
+    | "3_dias_antes"
+    | "hoy_vence"
+    | "vencido"
+    | "recien_pagado"
+    | null;
 
   const [esAdmin, setEsAdmin] = useState<boolean | null>(null);
   const [cargando, setCargando] = useState(true);
@@ -152,6 +158,34 @@ function DecisionesContenido() {
   };
   const [recordatorio, setRecordatorio] = useState<Recordatorio | null>(null);
   const [renovando, setRenovando] = useState(false);
+  const [mensajeRenovar, setMensajeRenovar] = useState<string | null>(null);
+
+  // Vista previa para probar sin tener una cuenta real vencida --
+  // ?simular_renovacion=<etapa> (solo admin) construye un recordatorio
+  // de ejemplo EN MEMORIA, nunca toca /api/billing/recordatorio ni la
+  // base. Tiene prioridad sobre el recordatorio real mientras el
+  // parámetro esté en la URL.
+  const esSimulacionRenovacion = !!(simularRenovacion && esAdmin);
+  const recordatorioSimulado: Recordatorio | null = esSimulacionRenovacion
+    ? (() => {
+        const fecha = new Date();
+        if (simularRenovacion === "3_dias_antes") fecha.setDate(fecha.getDate() + 2);
+        else if (simularRenovacion === "vencido") fecha.setDate(fecha.getDate() - 5);
+        else if (simularRenovacion === "recien_pagado") fecha.setDate(fecha.getDate() + 28);
+        return {
+          etapa: simularRenovacion!,
+          plan: "escala",
+          nombrePlan: "Escala",
+          fechaVencimiento: fecha.toISOString(),
+          ciclo: "mensual",
+          resultados:
+            simularRenovacion === "3_dias_antes"
+              ? { cantidad: 42, tipoLabel: "conversaciones de WhatsApp", costoPromedio: 12000 }
+              : null,
+        };
+      })()
+    : null;
+  const recordatorioMostrado = recordatorioSimulado ?? recordatorio;
   const [procesandoId, setProcesandoId] = useState<string | null>(null);
   const [ajustandoId, setAjustandoId] = useState<string | null>(null);
   const [porcentajeAjuste, setPorcentajeAjuste] = useState("20");
@@ -221,13 +255,19 @@ function DecisionesContenido() {
   }, [esAdmin]);
 
   const renovarAhora = async () => {
-    if (!recordatorio) return;
+    if (!recordatorioMostrado) return;
+    // En simulación no se genera un link real ni se llama la pasarela --
+    // solo se muestra el aviso, nada se escribe en la base.
+    if (recordatorioSimulado) {
+      setMensajeRenovar("(simulación) Aquí se abriría el link de pago de Bold.");
+      return;
+    }
     setRenovando(true);
     try {
       const res = await fetch("/api/billing/crear-link", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ planId: recordatorio.plan, ciclo: recordatorio.ciclo }),
+        body: JSON.stringify({ planId: recordatorioMostrado.plan, ciclo: recordatorioMostrado.ciclo }),
       });
       const data = await leerJsonSeguro(res);
       if (!res.ok || !data.url) {
@@ -720,28 +760,33 @@ function DecisionesContenido() {
             ))}
           </div>
 
-          {recordatorio && (!filtro || filtro === "director") && (() => {
+          {recordatorioMostrado && (!filtro || filtro === "director") && (() => {
             const colores =
-              recordatorio.etapa === "vencido"
+              recordatorioMostrado.etapa === "vencido"
                 ? { fondo: "#FEF2F2", borde: "#FCDADA", texto: "#B3261E" }
-                : recordatorio.etapa === "recien_pagado"
+                : recordatorioMostrado.etapa === "recien_pagado"
                 ? { fondo: "#F0FDF4", borde: "#BBF7D0", texto: "#15803D" }
                 : { fondo: "#FFF8E1", borde: "#FCE8A8", texto: "#92600A" };
-            const fecha = new Date(recordatorio.fechaVencimiento).toLocaleDateString("es-CO");
+            const fecha = new Date(recordatorioMostrado.fechaVencimiento).toLocaleDateString("es-CO");
             const mensaje =
-              recordatorio.etapa === "3_dias_antes"
-                ? textoRecordatorio3Dias(recordatorio.nombrePlan, fecha, recordatorio.resultados)
-                : recordatorio.etapa === "hoy_vence"
+              recordatorioMostrado.etapa === "3_dias_antes"
+                ? textoRecordatorio3Dias(recordatorioMostrado.nombrePlan, fecha, recordatorioMostrado.resultados)
+                : recordatorioMostrado.etapa === "hoy_vence"
                 ? TEXTO_HOY_VENCE
-                : recordatorio.etapa === "vencido"
+                : recordatorioMostrado.etapa === "vencido"
                 ? TEXTO_VENCIDO
                 : textoRecienPagado(fecha);
-            const necesitaBotones = recordatorio.etapa !== "recien_pagado";
+            const necesitaBotones = recordatorioMostrado.etapa !== "recien_pagado";
             return (
               <div style={{ background: colores.fondo, border: `1px solid ${colores.borde}`, borderRadius: 14, padding: "14px 16px", marginBottom: 16 }}>
+                {recordatorioSimulado && (
+                  <p style={{ fontSize: 11, color: colores.texto, margin: "0 0 6px", fontWeight: 700, textTransform: "uppercase", letterSpacing: 0.3 }}>
+                    Vista previa (simulación, no escribe en la base)
+                  </p>
+                )}
                 <p style={{ fontSize: 13, color: colores.texto, margin: necesitaBotones ? "0 0 10px" : 0, lineHeight: 1.5, fontWeight: 600 }}>{mensaje}</p>
                 {necesitaBotones && (
-                  <div style={{ display: "flex", gap: 8 }}>
+                  <div style={{ display: "flex", gap: 8, alignItems: "center", flexWrap: "wrap" }}>
                     <button
                       onClick={renovarAhora}
                       disabled={renovando}
@@ -755,6 +800,9 @@ function DecisionesContenido() {
                     >
                       Ver planes
                     </button>
+                    {recordatorioSimulado && mensajeRenovar && (
+                      <span style={{ fontSize: 12, color: colores.texto, fontWeight: 600 }}>{mensajeRenovar}</span>
+                    )}
                   </div>
                 )}
               </div>
