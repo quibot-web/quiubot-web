@@ -1,0 +1,373 @@
+<!doctype html>
+<html lang="es">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Quiubot · Conoce a tu equipo de publicidad</title>
+<meta name="description" content="Habla con el Director de tu equipo de publicidad con IA. 7 asistentes consiguen clientes para tu negocio en Facebook e Instagram. Tú solo apruebas. 14 días gratis.">
+<style>
+:root{--bg:#0C0A17;--bg2:#141127;--card:#1B1733;--line:#2C2747;--ink:#F4F2FF;--muted:#B4AED3;--soft:#8E88B0;--brand:#7C6CF2;--brand-d:#6858E6;--ok:#5EE0A8;--gold:#F2B640}
+*{box-sizing:border-box}
+html,body{margin:0;background:var(--bg);color:var(--ink)}
+body{font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Inter,Roboto,Helvetica,Arial,sans-serif;-webkit-font-smoothing:antialiased;line-height:1.5;overflow-x:hidden}
+a{color:#C9C2FF}
+button{font:inherit}
+.w{max-width:1080px;margin:0 auto;padding:0 20px}
+h1,h2,h3{margin:0;letter-spacing:-.025em;line-height:1.08}
+.sr{position:absolute;width:1px;height:1px;overflow:hidden;clip:rect(0 0 0 0)}
+.cta{display:inline-flex;align-items:center;justify-content:center;gap:8px;min-height:54px;padding:0 26px;border-radius:14px;border:0;background:var(--brand);color:#fff;font-weight:800;font-size:16.5px;text-decoration:none;cursor:pointer;box-shadow:0 14px 34px -14px var(--brand);transition:transform .15s,background .15s}
+.cta:hover{background:var(--brand-d);transform:translateY(-1px);color:#fff}
+
+/* Fondo vivo */
+.escena{position:relative;min-height:100svh;display:flex;flex-direction:column;isolation:isolate}
+.escena>.w{width:100%}
+.escena::before{content:"";position:absolute;inset:0;z-index:-2;background:radial-gradient(60% 50% at 50% 18%,rgba(124,108,242,.32),transparent 70%),radial-gradient(40% 40% at 85% 80%,rgba(94,224,168,.10),transparent 70%),radial-gradient(40% 40% at 10% 70%,rgba(242,141,183,.10),transparent 70%)}
+.escena::after{content:"";position:absolute;inset:0;z-index:-1;background-image:linear-gradient(rgba(255,255,255,.035) 1px,transparent 1px),linear-gradient(90deg,rgba(255,255,255,.035) 1px,transparent 1px);background-size:44px 44px;mask-image:radial-gradient(70% 60% at 50% 30%,#000,transparent)}
+
+nav{display:flex;align-items:center;justify-content:space-between;height:68px}
+.logo{display:flex;align-items:center;gap:10px;color:#fff;font-weight:800;font-size:21px;text-decoration:none}
+.logo i{width:32px;height:32px;border-radius:9px;background:var(--brand);display:block;box-shadow:0 0 22px rgba(124,108,242,.6)}
+.logo b{color:#C9C2FF}
+nav .mini{color:#fff;text-decoration:none;font-weight:700;font-size:15px;padding:0 16px;min-height:44px;display:inline-flex;align-items:center;border-radius:11px;border:1px solid rgba(255,255,255,.2)}
+
+.titulo{text-align:center;padding:18px 0 6px}
+.titulo p{margin:0 0 12px;color:var(--ok);font-weight:700;font-size:13.5px;letter-spacing:.1em;text-transform:uppercase}
+.titulo h1{font-size:clamp(30px,4.6vw,52px);font-weight:850;max-width:900px;margin:0 auto}
+.titulo h1 em{font-style:normal;background:linear-gradient(90deg,#B9AEFF,#7FD8F0);-webkit-background-clip:text;background-clip:text;color:transparent}
+
+/* Constelación del equipo */
+.equipo{position:relative;display:flex;justify-content:center;align-items:flex-end;gap:clamp(8px,2.2vw,26px);padding:26px 0 8px;flex-wrap:nowrap}
+.miembro{display:flex;flex-direction:column;align-items:center;gap:8px;width:clamp(48px,9vw,92px);transition:transform .35s cubic-bezier(.2,.8,.2,1),opacity .35s}
+.miembro small{font-size:12px;color:var(--soft);font-weight:600;text-align:center;line-height:1.2;transition:color .3s}
+.equipo.enfoque .miembro{opacity:.38;transform:scale(.92)}
+.equipo .miembro.activo{opacity:1;transform:translateY(-8px) scale(1.08)}
+.miembro.activo small{color:#fff}
+.miembro.activo .orb{box-shadow:inset -7px -10px 18px rgba(0,0,0,.25),inset 4px 6px 12px rgba(255,255,255,.3),0 0 0 3px var(--c1),0 0 36px 6px var(--c2)}
+
+.orb{position:relative;border-radius:50%;width:100%;aspect-ratio:1;background:radial-gradient(circle at 32% 26%,rgba(255,255,255,.95) 0 5%,rgba(255,255,255,.3) 12%,transparent 26%),radial-gradient(circle at 40% 35%,var(--c1),var(--c2) 55%,var(--c3));box-shadow:inset -7px -10px 18px rgba(0,0,0,.25),inset 4px 6px 12px rgba(255,255,255,.28),0 10px 26px -8px var(--c2);animation:flota 5.5s ease-in-out infinite;transition:box-shadow .35s}
+.orb::after{content:"";position:absolute;left:-16%;right:-16%;top:42%;height:22%;border-radius:50%;border:2px solid var(--c1);opacity:.7;transform:rotate(-14deg)}
+.ojos{position:absolute;inset:38% 0 auto;display:flex;justify-content:center;gap:16%}
+.ojo{width:14%;aspect-ratio:3/4;min-width:4px;background:#141224;border-radius:50%;animation:parpadeo 5s infinite}
+.d{--c1:#9D95F5;--c2:#5B51C9;--c3:#2B2470}.m{--c1:#F28DB7;--c2:#C94680;--c3:#7A1F4A}.e{--c1:#7FB0FF;--c2:#2F6FDB;--c3:#163C85}.c{--c1:#FFB287;--c2:#EA7340;--c3:#8F3714}.p{--c1:#6EE0AE;--c2:#1E9E6B;--c3:#0B5639}.a{--c1:#73DCE8;--c2:#1597A8;--c3:#0A5560}.o{--c1:#FFD780;--c2:#D99A1E;--c3:#7D5308}
+.miembro.director{width:clamp(72px,13vw,132px)}
+.miembro:nth-child(2) .orb{animation-delay:-.7s}.miembro:nth-child(3) .orb{animation-delay:-1.4s}.miembro:nth-child(5) .orb{animation-delay:-2.1s}.miembro:nth-child(6) .orb{animation-delay:-2.8s}.miembro:nth-child(7) .orb{animation-delay:-3.5s}
+@keyframes flota{50%{transform:translateY(-5px)}}
+@keyframes parpadeo{0%,93%,100%{transform:scaleY(1)}96%{transform:scaleY(.1)}}
+
+/* Chat */
+.chat{width:min(720px,100%);margin:6px auto 0;padding:0 20px 28px;flex:1;display:flex;flex-direction:column}
+.hilo{display:flex;flex-direction:column;gap:10px;padding:10px 0;min-height:120px}
+.msg{display:flex;gap:10px;align-items:flex-end;max-width:92%;animation:entra .35s cubic-bezier(.2,.8,.2,1) both}
+.msg .av{width:30px;flex:none}
+.msg .burbuja{background:var(--card);border:1px solid var(--line);border-radius:20px 20px 20px 6px;padding:13px 16px;font-size:16px;line-height:1.55;color:#ECE9FF}
+.msg .burbuja strong{color:#fff}
+.msg.yo{align-self:flex-end;flex-direction:row-reverse}
+.msg.yo .burbuja{background:var(--brand);border-color:var(--brand);color:#fff;border-radius:20px 20px 6px 20px;font-weight:600}
+.escribiendo .burbuja{display:flex;gap:5px;padding:16px 18px}
+.escribiendo i{width:7px;height:7px;border-radius:50%;background:#B4AED3;animation:punto 1.1s infinite}
+.escribiendo i:nth-child(2){animation-delay:.15s}.escribiendo i:nth-child(3){animation-delay:.3s}
+@keyframes punto{0%,60%,100%{opacity:.3;transform:translateY(0)}30%{opacity:1;transform:translateY(-3px)}}
+@keyframes entra{from{opacity:0;transform:translateY(8px)}to{opacity:1;transform:none}}
+.propuesta{margin-top:10px;background:#231E40;border:1px solid #3A3460;border-radius:16px;padding:14px}
+.propuesta b{display:block;margin-bottom:6px;color:#fff}
+.propuesta .rs{display:flex;gap:8px;flex-wrap:wrap;margin-top:10px}
+.propuesta .rs span{padding:8px 13px;border-radius:10px;border:1px solid #3F3966;font-weight:700;font-size:13.5px}
+.propuesta .rs span:first-child{background:var(--brand);border-color:var(--brand)}
+.lista{margin:8px 0 0;padding:0;list-style:none;display:grid;gap:7px}
+.lista li{display:flex;gap:10px;align-items:center}
+.lista .pt{width:14px;height:14px;border-radius:50%;flex:none;background:radial-gradient(circle at 35% 30%,var(--c1),var(--c2))}
+.precio-msg{display:flex;align-items:baseline;gap:8px;margin:4px 0}
+.precio-msg b{font-size:30px;letter-spacing:-.02em;color:#fff}
+.burbuja .cta{margin-top:12px;width:100%}
+.planes-msg{display:grid;gap:8px}
+.pl{border:1px solid #3A3460;border-radius:14px;padding:12px 14px;background:#211C3C}
+.pl.top{border:1.5px solid #8C7EF7;background:#2A2253;box-shadow:0 0 24px -8px rgba(124,108,242,.7)}
+.pl-h{display:flex;justify-content:space-between;align-items:baseline;gap:10px}
+.pl-h b{color:#fff;font-size:16px}.pl-h span{color:#fff;font-weight:800}
+.pl em{display:inline-block;font-style:normal;font-size:12px;font-weight:800;color:#0C0A17;background:var(--ok);border-radius:999px;padding:2px 9px;margin-top:6px}
+.pl p{margin:6px 0 0;color:#CFC9EC;font-size:14.5px;line-height:1.45}
+.planes{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:16px;margin-top:36px;align-items:stretch}
+.plan{background:var(--card);border:1px solid var(--line);border-radius:22px;padding:26px;display:flex;flex-direction:column;gap:10px}
+.plan.top{border:1.5px solid #8C7EF7;background:linear-gradient(180deg,#2A2253,#1B1733);box-shadow:0 30px 60px -30px rgba(124,108,242,.6)}
+.plan h3{font-size:20px}
+.plan .pr{font-size:30px;font-weight:850;letter-spacing:-.02em}
+.plan .pr small{font-size:14px;color:var(--muted);font-weight:600}
+.plan p{margin:0;color:var(--muted);font-size:15px;flex:1}
+.plan .tag{align-self:flex-start;font-size:12px;font-weight:800;color:#0C0A17;background:var(--ok);border-radius:999px;padding:3px 10px}
+.plan a{min-height:48px;display:flex;align-items:center;justify-content:center;border-radius:12px;font-weight:800;text-decoration:none;border:1px solid #4A4380;color:#fff}
+.plan.top a{background:var(--brand);border-color:var(--brand)}
+.plan s{color:var(--soft);font-size:18px;font-weight:600;margin-right:4px}
+.plan .fund{flex:0;color:#7FE7B8;font-size:13.5px;font-weight:600}
+.nota{text-align:center;color:var(--soft);font-size:13.5px;margin:18px auto 0;max-width:680px}
+
+.opciones{display:flex;flex-wrap:wrap;gap:10px;justify-content:flex-end;padding-top:12px}
+.opcion{min-height:46px;padding:0 18px;border-radius:999px;border:1.5px solid #4A4380;background:rgba(124,108,242,.10);color:#fff;font-weight:700;font-size:15px;cursor:pointer;transition:background .15s,border-color .15s,transform .15s;animation:entra .35s both}
+.opcion:hover,.opcion:focus-visible{background:rgba(124,108,242,.28);border-color:#8C7EF7;transform:translateY(-1px)}
+.opcion:focus-visible,.cta:focus-visible{outline:3px solid #C9C2FF;outline-offset:2px}
+.opcion.fuerte{background:var(--brand);border-color:var(--brand)}
+.garantias{display:flex;justify-content:center;flex-wrap:wrap;gap:8px 18px;color:var(--muted);font-size:14px;padding:6px 0 26px}
+.garantias span::before{content:"✓ ";color:var(--ok);font-weight:800}
+
+/* Debajo: para quien hace scroll */
+.franja{background:var(--bg2);border-top:1px solid var(--line);padding:72px 0}
+.franja h2{font-size:clamp(26px,3.6vw,40px);font-weight:800;text-align:center;max-width:760px;margin:0 auto}
+.pasos{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:16px;margin-top:36px}
+.paso{background:var(--card);border:1px solid var(--line);border-radius:20px;padding:24px}
+.paso .n{font-size:13px;font-weight:800;color:var(--ok);letter-spacing:.08em}
+.paso h3{font-size:20px;margin:8px 0}
+.paso p{margin:0;color:var(--muted);font-size:15.5px}
+.cierre{text-align:center;padding:80px 0 120px}
+.cierre h2{font-size:clamp(28px,4vw,46px);font-weight:850;max-width:760px;margin:0 auto 22px}
+.cierre p{color:var(--muted);margin:16px 0 0;font-size:14px}
+footer{border-top:1px solid var(--line);color:var(--soft);font-size:14px;padding:22px 0 100px}
+footer .w{display:flex;justify-content:space-between;flex-wrap:wrap;gap:10px}
+.fija{position:fixed;left:0;right:0;bottom:0;z-index:30;padding:10px 14px calc(10px + env(safe-area-inset-bottom));background:rgba(12,10,23,.92);backdrop-filter:blur(10px);border-top:1px solid var(--line);display:none}
+.fija .cta{width:100%}
+@media (max-width:760px){
+ nav .mini{display:none}
+ .equipo .miembro:not(.director) small{display:none}
+ .pasos{grid-template-columns:1fr}
+ .fija{display:block}
+ .msg{max-width:100%}
+}
+@media (prefers-reduced-motion:reduce){*{animation:none!important;transition:none!important}}
+</style>
+</head>
+<body>
+
+<main class="escena">
+<div class="w"><nav aria-label="Principal">
+<a class="logo" href="#"><i aria-hidden="true"></i>quiu<b>bot</b></a>
+<a class="mini" href="#empezar">Probar 14 días gratis</a>
+</nav></div>
+
+<div class="titulo w">
+<p>Publicidad en Facebook e Instagram, sin complicarte</p>
+<h1>Conoce al equipo que va a conseguirle <em>clientes a tu negocio.</em></h1>
+</div>
+
+<div class="equipo" id="equipo" aria-hidden="true">
+<div class="miembro" data-id="marca"><div class="orb m"><div class="ojos"><span class="ojo"></span><span class="ojo"></span></div></div><small>Marca</small></div>
+<div class="miembro" data-id="estratega"><div class="orb e"><div class="ojos"><span class="ojo"></span><span class="ojo"></span></div></div><small>Estratega</small></div>
+<div class="miembro" data-id="creativo"><div class="orb c"><div class="ojos"><span class="ojo"></span><span class="ojo"></span></div></div><small>Creativo</small></div>
+<div class="miembro director" data-id="director"><div class="orb d"><div class="ojos"><span class="ojo"></span><span class="ojo"></span></div></div><small>Director</small></div>
+<div class="miembro" data-id="publicador"><div class="orb p"><div class="ojos"><span class="ojo"></span><span class="ojo"></span></div></div><small>Publicador</small></div>
+<div class="miembro" data-id="analista"><div class="orb a"><div class="ojos"><span class="ojo"></span><span class="ojo"></span></div></div><small>Analista</small></div>
+<div class="miembro" data-id="optimizador"><div class="orb o"><div class="ojos"><span class="ojo"></span><span class="ojo"></span></div></div><small>Optimizador</small></div>
+</div>
+
+<section class="chat" aria-label="Conversación con el Director">
+<div class="hilo" id="hilo" aria-live="polite"></div>
+<div class="opciones" id="opciones"></div>
+</section>
+<div class="garantias w"><span>14 días gratis, sin tarjeta</span><span>Nada se publica sin tu aprobación</span><span>Cancelas cuando quieras</span></div>
+</main>
+
+<section class="franja"><div class="w">
+<h2>Así de fácil funciona</h2>
+<div class="pasos">
+<div class="paso"><span class="n">PASO 1</span><h3>Dices tu meta</h3><p>"Quiero 40 conversaciones de WhatsApp este mes, sin gastar más de $1.000.000."</p></div>
+<div class="paso"><span class="n">PASO 2</span><h3>El equipo trabaja</h3><p>Aprende tu marca, crea los anuncios con tu producto real, los publica y los revisa todos los días.</p></div>
+<div class="paso"><span class="n">PASO 3</span><h3>Tú apruebas</h3><p>El Director te explica cada mejora con números. Un toque y se aplica. O dices que no.</p></div>
+</div>
+</div></section>
+
+<section class="franja" style="border-top:0;padding-top:0"><div class="w">
+<h2>Un equipo completo de publicidad, por menos de lo que cobra un freelancer</h2>
+<p class="nota" style="font-size:15.5px;margin-top:14px">Un freelancer de pauta en Colombia cobra entre $500.000 y $3.000.000 al mes, y una agencia desde $2.000.000. Autopiloto trabaja todos los días por tu meta, sin inversión mínima y sin porcentaje sobre lo que inviertes.</p>
+<div class="planes">
+<div class="plan"><h3>Arranque</h3><div class="pr">Gratis</div><p>Para conocer Quiubot. Una estrategia al mes con IA.</p><a href="#">Empezar gratis</a></div>
+<div class="plan top"><span class="tag">Recomendado</span><h3>Autopiloto</h3><div class="pr"><s>$399.900</s> $299.900 <small>/mes</small></div><p class="fund">Precio de fundador para los primeros 50 negocios, durante su primer año.</p><p>El equipo completo trabajando por tu meta todos los días. Tú solo apruebas.</p><a href="#">Probar 14 días gratis</a></div>
+<div class="plan"><h3>Crecimiento</h3><div class="pr">$169.900 <small>/mes</small></div><p>Lo haces tú, con nuestras herramientas de estrategia y anuncios con IA.</p><a href="#">Elegir Crecimiento</a></div>
+</div>
+<p class="nota">Los anuncios los pagas directo a Meta y el uso de IA directo a OpenAI, sin margen nuestro. Paga el año y recibe 2 meses gratis.</p>
+</div></section>
+
+<section class="cierre" id="empezar"><div class="w">
+<div style="width:84px;margin:0 auto 22px" aria-hidden="true"><div class="orb d"><div class="ojos"><span class="ojo"></span><span class="ojo"></span></div></div></div>
+<h2>Tu equipo está listo. Solo falta tu meta.</h2>
+<a class="cta" href="#">Empezar mis 14 días gratis →</a>
+<p>Sin tarjeta de crédito · Autopiloto a $299.900/mes como fundador · Cancelas cuando quieras</p>
+</div></section>
+
+<footer><div class="w"><span>© 2026 Quiubot · Hecho en Cali, para negocios colombianos.</span><a href="#">Términos y condiciones</a></div></footer>
+<div class="fija"><a class="cta" href="#empezar">Probar 14 días gratis →</a></div>
+
+<script>
+(function(){
+  var REDUCIDO = window.matchMedia && matchMedia('(prefers-reduced-motion: reduce)').matches;
+  var URL_PRUEBA = '#'; // /login con UTM
+  var hilo = document.getElementById('hilo');
+  var opcionesEl = document.getElementById('opciones');
+  var equipo = document.getElementById('equipo');
+  var vistas = {}; var respuestas = 0; var ofrecioCta = false;
+
+  var COLORES = {marca:'m',estratega:'e',creativo:'c',publicador:'p',analista:'a',optimizador:'o'};
+
+  // Cada respuesta: lista de mensajes del Director (texto o bloques), asistentes que se iluminan, y siguientes opciones.
+  var GUION = {
+    inicio:{luz:['director'],msgs:[
+      [['t','¡Quiubo! Soy el '],['b','Director'],['t',' de tu nuevo equipo de publicidad.']],
+      [['t','Somos 7 asistentes con inteligencia artificial. Conseguimos clientes para tu negocio en Facebook e Instagram mientras tú atiendes. ¿Qué quieres saber?']]
+    ],sig:['que','ventas','precio','control','novato']},
+
+    que:{p:'¿Qué hacen exactamente?',luz:['marca','estratega','creativo','publicador','analista','optimizador'],msgs:[
+      [['t','Te lo explico fácil. Tú me dices tu meta, por ejemplo '],['b','"40 conversaciones de WhatsApp este mes"'],['t','. Y el equipo se reparte el trabajo:']],
+      ['lista']
+    ],sig:['empezar','ventas','control','precio']},
+
+    ventas:{p:'Mis anuncios no me traen clientes',luz:['estratega','analista','optimizador'],msgs:[
+      [['t','Pasa muchísimo, y casi nunca es culpa tuya. Suele ser una de tres cosas:']],
+      [['t','1. Todos tus anuncios dicen lo mismo, y Meta los trata como si fueran uno solo.'],['br'],['t','2. Nadie los revisa cuando dejan de funcionar, y siguen gastando.'],['br'],['t','3. Le hablan a todo el mundo en vez de a tu cliente.']],
+      [['t','Mi equipo ataca las tres: anuncios con ideas '],['b','realmente distintas'],['t',', revisión '],['b','todos los días'],['t',' y cambios explicados con números.']]
+    ],sig:['empezar','control','que','precio']},
+
+    precio:{p:'¿Cuánto cuesta?',luz:['director'],msgs:[
+      [['t','Un freelancer de pauta en Colombia cobra desde $500.000 al mes, y una agencia desde $2.000.000. Nosotros tenemos tres planes, y puedes empezar gratis. El que te recomiendo es '],['b','Autopiloto'],['t',', porque es el único con el equipo completo trabajando por ti:']],
+      ['planes'],
+      [['t','Aparte, tus anuncios los pagas directo a Meta y el uso de IA directo a OpenAI, '],['b','sin ningún margen nuestro'],['t','.']]
+    ],sig:['cual','empezar','control','que']},
+
+    cual:{p:'¿Cuál plan es para mí?',luz:['director'],msgs:[
+      [['t','Depende de una sola cosa. ¿Cómo prefieres trabajar?']]
+    ],sig:['equipo_hace','yo_mismo','conocer']},
+
+    equipo_hace:{p:'Que el equipo lo haga por mí',luz:['marca','estratega','creativo','publicador','analista','optimizador'],msgs:[
+      [['t','Entonces es '],['b','Autopiloto'],['t',': tú dices tu meta y apruebas; el equipo hace todo lo demás. Como fundador pagas $299.900 al mes, menos de $10.000 al día, y los primeros 14 días son gratis.']]
+    ],sig:['empezar','control','necesito']},
+
+    yo_mismo:{p:'Prefiero hacerlo yo, con ayuda',luz:['estratega','creativo'],msgs:[
+      [['t','Entonces '],['b','Crecimiento'],['t',' ($169.900 al mes): tienes las herramientas para crear estrategias y anuncios con IA, y tú decides cuándo y cómo publicar.']],
+      [['t','Si algún día no tienes tiempo, pasas a Autopiloto y el equipo toma el control. Sin perder nada de lo que hiciste.']]
+    ],sig:['empezar','equipo_hace','necesito']},
+
+    conocer:{p:'Solo quiero conocerlo primero',luz:['director'],msgs:[
+      [['t','Perfecto. Empieza con los '],['b','14 días gratis'],['t',': conoces al equipo trabajando con tu negocio, sin tarjeta.']],
+      [['t','Si después no quieres pagar, sigues en '],['b','Arranque'],['t',', gratis para siempre, con una estrategia al mes.']]
+    ],sig:['empezar','control','que']},
+
+    control:{p:'¿Y si gastan mi plata sin preguntarme?',luz:['director','optimizador'],msgs:[
+      [['b','Nunca.'],['t',' Ningún anuncio se publica y ningún presupuesto cambia sin que tú digas "Sí, adelante". Así te llegan las propuestas:']],
+      ['propuesta'],
+      [['t','Además le pones un tope a tu meta, y jamás te propongo pasarlo.']]
+    ],sig:['empezar','novato','precio','cancelar']},
+
+    novato:{p:'No sé nada de publicidad',luz:['director'],msgs:[
+      [['t','Mejor así. No tienes que aprender nada: yo te hablo claro y con números simples.']],
+      [['t','Tu único trabajo es decir '],['b','sí'],['t',' o '],['b','no'],['t','. El resto lo hace el equipo.']]
+    ],sig:['empezar','necesito','que','precio']},
+
+    necesito:{p:'¿Qué necesito para empezar?',luz:['director','marca'],msgs:[
+      [['t','Tres cosas: tu cuenta de Facebook con la página de tu negocio, una cuenta de OpenAI (te guiamos paso a paso) y unas fotos de tu producto. Con eso arrancamos.']]
+    ],sig:['empezar','negocio','precio']},
+
+    negocio:{p:'¿Sirve para mi tipo de negocio?',luz:['estratega'],msgs:[
+      [['t','Si vendes por WhatsApp o quieres que tus clientes te dejen sus datos, sí: tiendas, restaurantes, servicios, salud y belleza, talleres… Lo mejor es probarlo con tu propio negocio. Son 14 días gratis.']]
+    ],sig:['empezar','control','precio']},
+
+    cancelar:{p:'¿Puedo cancelar cuando quiera?',luz:['director'],msgs:[
+      [['t','Cuando quieras, sin permanencia. Y tus campañas se quedan en tu cuenta de Meta: son tuyas.']]
+    ],sig:['empezar','que','precio']},
+
+    mas:{p:'Primero cuéntame más',luz:['director'],msgs:[
+      [['t','¡Claro! Pregúntame lo que quieras.']]
+    ],sig:null}
+  };
+
+  var ETIQ_OPCION = {empezar:'Quiero empezar gratis'};
+
+  function luz(ids){
+    equipo.classList.add('enfoque');
+    Array.prototype.forEach.call(equipo.children,function(m){
+      m.classList.toggle('activo', ids.indexOf(m.getAttribute('data-id'))>=0);
+    });
+  }
+  function av(){var d=document.createElement('div');d.className='av';d.innerHTML='<div class="orb d"><div class="ojos"><span class="ojo"></span><span class="ojo"></span></div></div>';return d;}
+  function nodo(partes){
+    var b=document.createElement('div');b.className='burbuja';
+    if(partes[0]==='lista'){
+      b.appendChild(document.createTextNode('Así trabaja el equipo:'));
+      var ul=document.createElement('ul');ul.className='lista';
+      [['m','El Analista de marca aprende tu estilo y tus colores.'],['e','El Estratega arma la campaña con ideas distintas.'],['c','El Creativo diseña los anuncios con tu producto real.'],['p','El Publicador los sube a tu cuenta de Meta.'],['a','El Analista de campañas revisa los resultados cada día.'],['o','El Optimizador me dice qué mejorar, y yo te lo propongo.']].forEach(function(x){
+        var li=document.createElement('li');var s=document.createElement('span');s.className='pt '+x[0];var t=document.createElement('span');t.textContent=x[1];li.appendChild(s);li.appendChild(t);ul.appendChild(li);
+      });
+      b.appendChild(ul);return b;
+    }
+    if(partes[0]==='precio'){
+      b.appendChild(document.createTextNode('El plan Autopiloto, con todo el equipo:'));
+      var pm=document.createElement('div');pm.className='precio-msg';pm.innerHTML='<s style="color:#8E88B0">$399.900</s> <b>$299.900</b><span>al mes</span>';b.appendChild(pm);
+      var s2=document.createElement('div');s2.textContent='Precio de fundador para los primeros 50 negocios, durante su primer año: menos de $10.000 al día por un equipo completo. Y los primeros 14 días son gratis, sin tarjeta.';b.appendChild(s2);
+      return b;
+    }
+    if(partes[0]==='planes'){
+      var pl=document.createElement('div');pl.className='planes-msg';
+      [['Arranque','Gratis','Para conocer Quiubot: 1 estrategia al mes.',false],['Crecimiento','$169.900/mes','Lo haces tú con nuestras herramientas de IA.',false],['Autopiloto','$299.900/mes','Precio de fundador (normal $399.900). El equipo completo trabajando por tu meta, todos los días.',true]].forEach(function(x){
+        var r=document.createElement('div');r.className='pl'+(x[3]?' top':'');
+        var h=document.createElement('div');h.className='pl-h';
+        var n=document.createElement('b');n.textContent=x[0];var pr=document.createElement('span');pr.textContent=x[1];
+        h.appendChild(n);h.appendChild(pr);r.appendChild(h);
+        if(x[3]){var tg=document.createElement('em');tg.textContent='Recomendado · 14 días gratis';r.appendChild(tg);}
+        var dd=document.createElement('p');dd.textContent=x[2];r.appendChild(dd);pl.appendChild(r);
+      });
+      b.style.padding='10px';b.appendChild(pl);return b;
+    }
+    if(partes[0]==='propuesta'){
+      var p=document.createElement('div');p.className='propuesta';
+      p.innerHTML='<b>Subir 20 % el presupuesto de "Domicilios"</b><span style="color:#CFC9EC;font-size:14.5px">Consigue conversaciones a $9.800, por debajo de tu objetivo de $15.000. A este ritmo llegarías a tu meta.</span><div class="rs"><span>Sí, adelante</span><span>Ajustar</span><span>No por ahora</span></div><div style="margin-top:8px;font-size:12px;color:#8E88B0">Ejemplo de propuesta</div>';
+      b.style.padding='10px';b.appendChild(p);return b;
+    }
+    partes.forEach(function(x){
+      if(x[0]==='br'){b.appendChild(document.createElement('br'));return;}
+      var el=document.createElement(x[0]==='b'?'strong':'span');el.textContent=x[1];b.appendChild(el);
+    });
+    return b;
+  }
+  function agregar(el){hilo.appendChild(el);el.scrollIntoView({block:'nearest',behavior:REDUCIDO?'auto':'smooth'});}
+  function director(partes){var m=document.createElement('div');m.className='msg';m.appendChild(av());m.appendChild(nodo(partes));agregar(m);}
+  function yo(texto){var m=document.createElement('div');m.className='msg yo';var b=document.createElement('div');b.className='burbuja';b.textContent=texto;m.appendChild(b);agregar(m);}
+  function escribiendo(){var m=document.createElement('div');m.className='msg escribiendo';m.appendChild(av());var b=document.createElement('div');b.className='burbuja';b.innerHTML='<i></i><i></i><i></i>';b.setAttribute('aria-label','El Director está escribiendo');m.appendChild(b);agregar(m);return m;}
+  function ctaMsg(){
+    var m=document.createElement('div');m.className='msg';m.appendChild(av());
+    var b=document.createElement('div');b.className='burbuja';
+    var t=document.createElement('div');t.textContent='¿Quieres que empecemos con tu negocio? Te armo tu primera campaña hoy. Son 14 días gratis, sin tarjeta.';b.appendChild(t);
+    var a=document.createElement('a');a.className='cta';a.href=URL_PRUEBA;a.textContent='Empezar mis 14 días gratis →';b.appendChild(a);
+    m.appendChild(b);agregar(m);
+  }
+  function decir(lista,fin){
+    var i=0;
+    (function sig(){
+      if(i>=lista.length){fin&&fin();return;}
+      var largo=JSON.stringify(lista[i]).length;
+      var espera=REDUCIDO?0:Math.min(1300,450+largo*6);
+      var e=REDUCIDO?null:escribiendo();
+      setTimeout(function(){e&&e.remove();director(lista[i]);i++;setTimeout(sig,REDUCIDO?0:250);},espera);
+    })();
+  }
+  function opciones(ids){
+    opcionesEl.innerHTML='';
+    var lista=(ids||['que','ventas','precio','control','novato','necesito','negocio','cancelar']).filter(function(id){return id==='empezar'||!vistas[id];}).slice(0,4);
+    if(lista.indexOf('empezar')<0&&respuestas>=2) lista.unshift('empezar');
+    lista.forEach(function(id){
+      var bt=document.createElement('button');bt.type='button';bt.className='opcion'+(id==='empezar'?' fuerte':'');
+      bt.textContent=ETIQ_OPCION[id]||GUION[id].p;
+      bt.addEventListener('click',function(){elegir(id);});
+      opcionesEl.appendChild(bt);
+    });
+  }
+  function elegir(id){
+    opcionesEl.innerHTML='';
+    if(id==='empezar'){yo('Quiero empezar gratis');luz(['director']);setTimeout(function(){ctaMsg();ofrecioCta=true;opciones(['mas']);},REDUCIDO?0:500);return;}
+    var g=GUION[id];vistas[id]=true;respuestas++;
+    yo(g.p);luz(g.luz);
+    decir(g.msgs,function(){
+      if(respuestas===2&&!ofrecioCta){ofrecioCta=true;setTimeout(function(){ctaMsg();opciones(g.sig);},REDUCIDO?0:600);}
+      else opciones(g.sig);
+    });
+  }
+  // Arranque
+  luz(['director']);
+  decir(GUION.inicio.msgs,function(){opciones(GUION.inicio.sig);});
+})();
+</script>
+</body>
+</html>
