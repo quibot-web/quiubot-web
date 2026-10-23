@@ -4,6 +4,7 @@ import { supabaseAdmin } from "@/lib/supabase";
 import { verificarLimite } from "@/lib/rateLimit";
 import { generarToken, hashearToken } from "@/lib/tokens";
 import { enviarCorreoVerificacion } from "@/lib/email";
+import { DIAS_PRUEBA } from "@/app/lib/planesConfig";
 
 const MIN_LARGO = 10;
 
@@ -80,6 +81,10 @@ export async function POST(req: NextRequest) {
       })
       .eq("id", existente.id);
   } else {
+    // trial_termina_en explícito (14 días con AUTOPILOTO_PUBLICO
+    // encendido, 7 apagado) en vez de confiar en el default de la
+    // columna -- ver auth.ts para el mismo criterio en el flujo de Google.
+    const trialTerminaEn = new Date(Date.now() + DIAS_PRUEBA * 24 * 60 * 60 * 1000).toISOString();
     await supabaseAdmin.from("usuarios").insert({
       email,
       nombre,
@@ -88,6 +93,7 @@ export async function POST(req: NextRequest) {
       email_verificado: false,
       token_verificacion: tokenHash,
       token_verificacion_expira: expira,
+      trial_termina_en: trialTerminaEn,
       utm_source,
       utm_campaign,
       utm_content,

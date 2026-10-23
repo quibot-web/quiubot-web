@@ -4,6 +4,7 @@ import Credentials from "next-auth/providers/credentials";
 import bcrypt from "bcryptjs";
 import { supabaseAdmin } from "@/lib/supabase";
 import { verificarLimite } from "@/lib/rateLimit";
+import { DIAS_PRUEBA } from "@/app/lib/planesConfig";
 const MAX_INTENTOS_FALLIDOS = 5;
 const BLOQUEO_MINUTOS = 15;
 export const { handlers, signIn, signOut, auth } = NextAuth({
@@ -78,10 +79,17 @@ export const { handlers, signIn, signOut, auth } = NextAuth({
       // Este upsert es solo para el flujo de Google. El flujo de contraseña
       // ya crea y gestiona su propia fila desde /api/auth/registro.
       if (account?.provider === "google") {
+        // trial_termina_en explícito en vez de confiar en el default de la
+        // columna (7 días) -- así la duración real depende de
+        // AUTOPILOTO_PUBLICO (14 días encendido, 7 apagado) en vez de
+        // quedar fija. ignoreDuplicates hace que esto solo se escriba la
+        // primera vez: un usuario que ya existe nunca ve su prueba
+        // reiniciada por volver a entrar con Google.
+        const trialTerminaEn = new Date(Date.now() + DIAS_PRUEBA * 24 * 60 * 60 * 1000).toISOString();
         const { error } = await supabaseAdmin
           .from('usuarios')
           .upsert(
-            { email: user.email, activo: false, email_verificado: true },
+            { email: user.email, activo: false, email_verificado: true, trial_termina_en: trialTerminaEn },
             { onConflict: 'email', ignoreDuplicates: true }
           );
         if (error) {

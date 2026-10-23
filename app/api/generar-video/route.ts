@@ -31,7 +31,7 @@ export async function POST(req: NextRequest) {
 
   const { data: usuario } = await supabaseAdmin
     .from("usuarios")
-    .select("id, rol, plan, en_trial, trial_termina_en, cloudinary_name, cloudinary_key, cloudinary_secret, openai_key")
+    .select("id, rol, plan, en_trial, creado_en, cloudinary_name, cloudinary_key, cloudinary_secret, openai_key")
     .eq("email", emailBusqueda)
     .single();
 
@@ -53,14 +53,13 @@ export async function POST(req: NextRequest) {
   // Limite de videos por mes/prueba -- a diferencia de estrategiasPorMes y
   // creativosJobsPorMes (que siempre cuentan por mes calendario, sin
   // importar si el usuario esta en trial), el trial tiene un limite TOTAL
-  // para todo el periodo de 7 dias, que no se reinicia cada mes. Como no
-  // hay una columna con la fecha de inicio del trial (solo
-  // trial_termina_en, el final), el inicio de la ventana se calcula
-  // restandole 7 dias a esa fecha.
+  // para todo el periodo de prueba, que no se reinicia cada mes. Se usa
+  // creado_en (cuándo se creó la cuenta) como inicio de la ventana --
+  // NUNCA restarle una duración fija a trial_termina_en, porque esa
+  // duración cambia (7 u 14 días según AUTOPILOTO_PUBLICO) y calcularía
+  // mal el inicio real para cualquiera que se registró con otra duración.
   if (usuario.en_trial) {
-    const inicioTrial = usuario.trial_termina_en
-      ? new Date(new Date(usuario.trial_termina_en).getTime() - 7 * 24 * 60 * 60 * 1000)
-      : new Date(0);
+    const inicioTrial = usuario.creado_en ? new Date(usuario.creado_en) : new Date(0);
 
     const { count } = await supabaseAdmin
       .from("video_jobs")
