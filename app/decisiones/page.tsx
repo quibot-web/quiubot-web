@@ -25,6 +25,10 @@ import {
   TEXTO_AUTOPILOTO_REANUDADO,
   narracionRevisionSinPropuestas,
   revisionNoPropusoNada,
+  textoRecordatorio3Dias,
+  TEXTO_HOY_VENCE,
+  TEXTO_VENCIDO,
+  textoRecienPagado,
 } from "@/app/lib/directorChat";
 
 type CreativoPropuesto = {
@@ -138,6 +142,16 @@ function DecisionesContenido() {
   const [pausado, setPausado] = useState(false);
   const [cantidadObjetivo, setCantidadObjetivo] = useState<number | null>(null);
   const [campanasPorId, setCampanasPorId] = useState<Record<string, string>>({});
+  type Recordatorio = {
+    etapa: "recien_pagado" | "3_dias_antes" | "hoy_vence" | "vencido";
+    plan: string;
+    nombrePlan: string;
+    fechaVencimiento: string;
+    ciclo: string;
+    resultados: { cantidad: number; tipoLabel: string; costoPromedio: number } | null;
+  };
+  const [recordatorio, setRecordatorio] = useState<Recordatorio | null>(null);
+  const [renovando, setRenovando] = useState(false);
   const [procesandoId, setProcesandoId] = useState<string | null>(null);
   const [ajustandoId, setAjustandoId] = useState<string | null>(null);
   const [porcentajeAjuste, setPorcentajeAjuste] = useState("20");
@@ -200,7 +214,33 @@ function DecisionesContenido() {
         setCampanasPorId(mapa);
       })
       .catch(() => {});
+    fetch("/api/billing/recordatorio")
+      .then((r) => (r.ok ? r.json() : { etapa: null }))
+      .then((data) => setRecordatorio(data.etapa ? data : null))
+      .catch(() => setRecordatorio(null));
   }, [esAdmin]);
+
+  const renovarAhora = async () => {
+    if (!recordatorio) return;
+    setRenovando(true);
+    try {
+      const res = await fetch("/api/billing/crear-link", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ planId: recordatorio.plan, ciclo: recordatorio.ciclo }),
+      });
+      const data = await leerJsonSeguro(res);
+      if (!res.ok || !data.url) {
+        setError({ mensaje: data.error || "No se pudo generar el link de pago." });
+        return;
+      }
+      window.open(data.url, "_blank");
+    } catch {
+      setError({ mensaje: "No se pudo conectar con la pasarela de pagos." });
+    } finally {
+      setRenovando(false);
+    }
+  };
 
   // Al abrir, la conversación baja sola al final -- como un chat --
   // una sola vez (no en cada recarga posterior de propuestas/historial,
@@ -679,6 +719,47 @@ function DecisionesContenido() {
               </button>
             ))}
           </div>
+
+          {recordatorio && (!filtro || filtro === "director") && (() => {
+            const colores =
+              recordatorio.etapa === "vencido"
+                ? { fondo: "#FEF2F2", borde: "#FCDADA", texto: "#B3261E" }
+                : recordatorio.etapa === "recien_pagado"
+                ? { fondo: "#F0FDF4", borde: "#BBF7D0", texto: "#15803D" }
+                : { fondo: "#FFF8E1", borde: "#FCE8A8", texto: "#92600A" };
+            const fecha = new Date(recordatorio.fechaVencimiento).toLocaleDateString("es-CO");
+            const mensaje =
+              recordatorio.etapa === "3_dias_antes"
+                ? textoRecordatorio3Dias(recordatorio.nombrePlan, fecha, recordatorio.resultados)
+                : recordatorio.etapa === "hoy_vence"
+                ? TEXTO_HOY_VENCE
+                : recordatorio.etapa === "vencido"
+                ? TEXTO_VENCIDO
+                : textoRecienPagado(fecha);
+            const necesitaBotones = recordatorio.etapa !== "recien_pagado";
+            return (
+              <div style={{ background: colores.fondo, border: `1px solid ${colores.borde}`, borderRadius: 14, padding: "14px 16px", marginBottom: 16 }}>
+                <p style={{ fontSize: 13, color: colores.texto, margin: necesitaBotones ? "0 0 10px" : 0, lineHeight: 1.5, fontWeight: 600 }}>{mensaje}</p>
+                {necesitaBotones && (
+                  <div style={{ display: "flex", gap: 8 }}>
+                    <button
+                      onClick={renovarAhora}
+                      disabled={renovando}
+                      style={{ padding: "7px 14px", borderRadius: 8, background: colores.texto, color: "#fff", border: "none", fontSize: 12.5, fontWeight: 700, cursor: renovando ? "not-allowed" : "pointer" }}
+                    >
+                      {renovando ? "..." : "Renovar ahora"}
+                    </button>
+                    <button
+                      onClick={() => router.push("/billing")}
+                      style={{ padding: "7px 14px", borderRadius: 8, background: "#fff", color: colores.texto, border: `1px solid ${colores.texto}`, fontSize: 12.5, fontWeight: 700, cursor: "pointer" }}
+                    >
+                      Ver planes
+                    </button>
+                  </div>
+                )}
+              </div>
+            );
+          })()}
 
           {itemsPendientes.length > 0 && (
             <button
