@@ -5,13 +5,12 @@ import Image from "next/image";
 import { useSearchParams } from "next/navigation";
 import { Suspense, useEffect, useRef, useState, type ReactNode } from "react";
 import RevealObserver from "@/app/components/RevealObserver";
-import { trackEvento, trackCustom } from "@/app/components/MetaPixel";
+import { trackEvento } from "@/app/components/MetaPixel";
 import { guardarUtmPrimerContacto } from "@/app/lib/utmTracking";
-import { AUTOPILOTO_PUBLICO, nombreVisiblePlan, precioMensual, BENEFICIOS_AUTOPILOTO, DIAS_PRUEBA } from "@/app/lib/planesConfig";
-import EsferaAsistente from "@/app/components/esferas/EsferaAsistente";
+import { AUTOPILOTO_PUBLICO, nombreVisiblePlan, precioMensual, DIAS_PRUEBA } from "@/app/lib/planesConfig";
 import { ProveedorEsferas } from "@/app/components/esferas/ProveedorEsferas";
-import type { AsistenteId } from "@/app/components/esferas/esferasShared";
-import { NOMBRE_ASISTENTE } from "@/app/lib/directorChat";
+import { CtaLink, VideoModal, miniaturaVideo, SeccionTestimonios } from "./compartido";
+import ExperienciaAutopiloto from "./ExperienciaAutopiloto";
 
 // Vista previa de la Parte B (Autopiloto) para revisarla en staging
 // SIN tocar AUTOPILOTO_PUBLICO ni perder el prerenderizado estático de
@@ -92,12 +91,9 @@ const CHIPS_CONFIANZA = ["Cero curva de aprendizaje", "Tú apruebas cada cambio"
 // número. Se repite tal cual en garantías y en precios.
 const AVISO_OPENAI = "Quiubot usa tu propia cuenta de OpenAI: el uso de IA lo pagas directo a OpenAI, sin ningún margen nuestro encima.";
 
-// Función (no una constante) porque mostrarAutopiloto puede venir del
-// interruptor real (AUTOPILOTO_PUBLICO) O de la vista previa de
-// staging (?vista=autopiloto, ver app/bienvenida/page.tsx) -- un array
-// a nivel de módulo se calcularía una sola vez al cargar el módulo y
-// nunca podría reaccionar a esa vista previa por request.
-function construirPlanes(mostrarAutopiloto: boolean) {
+// Solo se usa en la Parte A (interruptor apagado) -- con el
+// interruptor encendido, los precios viven en ExperienciaAutopiloto.tsx.
+function construirPlanes() {
   return [
     {
       nombre: "Arranque",
@@ -114,16 +110,10 @@ function construirPlanes(mostrarAutopiloto: boolean) {
       icono: "crecimiento",
     },
     {
-      nombre: mostrarAutopiloto ? "Autopiloto" : nombreVisiblePlan("escala"),
+      nombre: nombreVisiblePlan("escala"),
       precio: `$${precioMensual("escala").toLocaleString("es-CO")}`,
       detalle: "El más completo para quien no quiere límites.",
-      features: [
-        ...(mostrarAutopiloto ? BENEFICIOS_AUTOPILOTO : []),
-        "Estrategias ilimitadas",
-        "Campañas vigiladas sin limite",
-        "Plantillas publicitarias premium",
-        "Soporte dedicado",
-      ],
+      features: ["Estrategias ilimitadas", "Campañas vigiladas sin limite", "Plantillas publicitarias premium", "Soporte dedicado"],
       icono: "corona",
       destacado: true,
     },
@@ -191,27 +181,6 @@ const TAB_ICONS = [
   <path key="d" d="M3 12h4l3 8 4-16 3 8h4" />,
 ];
 
-// "Conoce a tu equipo" (solo con AUTOPILOTO_PUBLICO) -- mismos 7 roles
-// que ya existen en el producto real (ver NOMBRE_ASISTENTE en
-// directorChat.ts), descritos para alguien que todavía no es cliente.
-const LINEA_DIRECTOR = "Coordina a todo el equipo y te cuenta qué está pasando, en una sola conversación.";
-const EQUIPO_LINEAS: { id: AsistenteId; linea: string }[] = [
-  { id: "marca", linea: "Guarda tu logo y tus colores, y audita cada creativo antes de mostrártelo." },
-  { id: "estratega", linea: "Convierte tu objetivo y presupuesto en una estrategia publicitaria completa." },
-  { id: "creativo", linea: "Genera las imágenes y los textos de tus anuncios, ya auditados contra tu marca." },
-  { id: "publicador", linea: "Publica la campaña directo en tu cuenta de Meta, sin que toques Ads Manager." },
-  { id: "analista", linea: "Vigila el rendimiento real de tus campañas todos los días." },
-  { id: "optimizador", linea: "Te avisa cuándo subir, pausar o ajustar presupuesto; tú apruebas antes de que se aplique." },
-];
-
-// "Así trabaja tu equipo" (solo con AUTOPILOTO_PUBLICO) -- va justo
-// después de "Cómo funciona", sin quitar las capturas reales de esa
-// sección.
-const ASI_TRABAJA = [
-  { titulo: "Defines tu meta", texto: "Cuántas conversaciones de WhatsApp o clientes quieres, en cuánto tiempo y cuánto es lo máximo que quieres invertir." },
-  { titulo: "El equipo propone", texto: "Cada día revisa tus campañas y el Director te explica con números qué conviene cambiar y por qué." },
-  { titulo: "Tú decides", texto: "Apruebas, ajustas o dices que no. Nada se publica ni se gasta sin tu visto bueno." },
-];
 
 function PanelContenido({ paso }: { paso: number }) {
   return (
@@ -554,35 +523,6 @@ type InfoVideoPublico = {
   descripcion?: string;
 };
 
-function idYoutube(url: string): string | null {
-  if (url.includes("youtube.com/watch")) {
-    try {
-      return new URL(url).searchParams.get("v");
-    } catch {
-      return null;
-    }
-  }
-  if (url.includes("youtu.be/")) {
-    return url.split("youtu.be/")[1]?.split(/[?&]/)[0] || null;
-  }
-  return null;
-}
-
-function embedVideo(url: string): string | null {
-  const yt = idYoutube(url);
-  if (yt) return `https://www.youtube.com/embed/${yt}?autoplay=1`;
-  if (url.includes("vimeo.com/")) {
-    const id = url.split("vimeo.com/")[1]?.split(/[?&]/)[0];
-    return id ? `https://player.vimeo.com/video/${id}?autoplay=1` : null;
-  }
-  return null;
-}
-
-function miniaturaVideo(url: string): string | null {
-  const yt = idYoutube(url);
-  return yt ? `https://img.youtube.com/vi/${yt}/hqdefault.jpg` : null;
-}
-
 function SeccionVideo() {
   const [info, setInfo] = useState<InfoVideoPublico | null>(null);
   const [abierto, setAbierto] = useState(false);
@@ -626,155 +566,6 @@ function SeccionVideo() {
       </div>
 
       {abierto && <VideoModal url={info.url_video} onClose={() => setAbierto(false)} />}
-    </section>
-  );
-}
-
-/* CTA reutilizable con tracking incorporado.
-   ubicacion = de dónde sale el clic (para saber qué CTA convierte más). */
-function CtaLink({
-  href,
-  ubicacion,
-  className,
-  children,
-}: {
-  href: string;
-  ubicacion: string;
-  className?: string;
-  children: React.ReactNode;
-}) {
-  return (
-    <Link
-      href={href}
-      className={className}
-      data-cta-ubicacion={ubicacion}
-      onClick={() => {
-        trackCustom("ClicPruebaGratis", { ubicacion });
-      }}
-    >
-      {children}
-    </Link>
-  );
-}
-
-/* ============================================================
-   PRUEBA SOCIAL — Testimonios en video
-   ============================================================
-   Se alimenta de /api/tutoriales-publicos/testimonios, que a su vez
-   se administra desde /admin/testimonios. Si todavia no hay ningun
-   testimonio activo, se muestra un placeholder honesto en vez de
-   inventar citas o dejar la seccion vacia. */
-
-type TestimonioVideo = {
-  id: string;
-  nombre_empresa: string;
-  imagen_url: string;
-  url_video: string;
-  cita: string | null;
-};
-
-/* Modal reutilizable para reproducir un video (YouTube, Vimeo o .mp4).
-   Lo usan tanto el video de presentacion como las tarjetas de testimonios,
-   asi evitamos repetir el mismo bloque de JSX dos veces. */
-function VideoModal({ url, onClose }: { url: string; onClose: () => void }) {
-  const embed = embedVideo(url);
-  return (
-    <div className="video-modal-backdrop" onClick={onClose}>
-      <div className="video-modal" onClick={(e) => e.stopPropagation()}>
-        <button className="video-modal-close" onClick={onClose}>✕</button>
-        <div className="video-modal-frame">
-          {embed ? (
-            <iframe src={embed} allow="autoplay; fullscreen; picture-in-picture" allowFullScreen />
-          ) : (
-            <video src={url} controls autoPlay />
-          )}
-        </div>
-      </div>
-    </div>
-  );
-}
-
-function SeccionTestimonios({ onCargado }: { onCargado?: (testimonios: TestimonioVideo[]) => void }) {
-  const [testimonios, setTestimonios] = useState<TestimonioVideo[] | null>(null);
-  const [abierto, setAbierto] = useState<TestimonioVideo | null>(null);
-
-  useEffect(() => {
-    fetch("/api/tutoriales-publicos/testimonios")
-      .then((r) => r.json())
-      .then((data) => {
-        const lista: TestimonioVideo[] = data.testimonios || [];
-        setTestimonios(lista);
-        onCargado?.(lista);
-      })
-      .catch(() => {
-        setTestimonios([]);
-        onCargado?.([]);
-      });
-  }, []);
-
-  const hayTestimonios = !!testimonios && testimonios.length > 0;
-
-  return (
-    <section className="alt">
-      <div className="section-head qb-reveal">
-        <p className="eyebrow" style={{ textAlign: "center" }}>Prueba social</p>
-        <h2>Negocios como el tuyo ya lo están usando.</h2>
-        <p className="lead">
-          Estamos en las primeras semanas — cada testimonio de esta sección es de un negocio real,
-          verificado personalmente por el fundador.
-        </p>
-      </div>
-
-      {hayTestimonios ? (
-        <div className="testimonios-grid">
-          {testimonios!.map((t) => {
-            const miniatura = miniaturaVideo(t.url_video);
-            return (
-              <button
-                key={t.id}
-                type="button"
-                className="testimonio-card testimonio-card-video qb-reveal"
-                onClick={() => {
-                  trackEvento("ViewContent", { content_name: `testimonio_${t.nombre_empresa}` });
-                  setAbierto(t);
-                }}
-              >
-                <div className="testimonio-video-thumb">
-                  {miniatura ? (
-                    <img src={miniatura} alt="" />
-                  ) : (
-                    <img src={t.imagen_url} alt="" />
-                  )}
-                  <span className="testimonio-play">
-                    <svg viewBox="0 0 24 24" width="18" height="18" fill="#4A3FAE">
-                      <path d="M8 5v14l11-7z" />
-                    </svg>
-                  </span>
-                </div>
-                {t.cita && <div className="testimonio-quote">"{t.cita}"</div>}
-                <div className="testimonio-autor">
-                  <img className="testimonio-avatar-img" src={t.imagen_url} alt="" />
-                  <div className="testimonio-nombre">{t.nombre_empresa}</div>
-                </div>
-              </button>
-            );
-          })}
-        </div>
-      ) : (
-        <div className="testimonios-placeholder qb-reveal">
-          <div className="placeholder-icon">
-            <svg viewBox="0 0 24 24" fill="none" stroke="#7F77DD" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-              <path d="M21 15a2 2 0 01-2 2H7l-4 4V5a2 2 0 012-2h14a2 2 0 012 2z" />
-            </svg>
-          </div>
-          <p>
-            Los primeros testimonios en video están en camino — mientras tanto, cada negocio nuevo
-            lo revisa personalmente el fundador. Cuéntanos tu caso y podrías ser el primero en aparecer aquí.
-          </p>
-        </div>
-      )}
-
-      {abierto && <VideoModal url={abierto.url_video} onClose={() => setAbierto(null)} />}
     </section>
   );
 }
@@ -844,7 +635,7 @@ export default function BienvenidaExperience() {
   // Nunca sustituye a AUTOPILOTO_PUBLICO, solo lo complementa.
   const [vistaPreviaActiva, setVistaPreviaActiva] = useState(false);
   const mostrarAutopiloto = AUTOPILOTO_PUBLICO || (PERMITIR_VISTA_PREVIA && vistaPreviaActiva);
-  const planes = construirPlanes(mostrarAutopiloto);
+  const planes = construirPlanes();
   const [pasoActivo, setPasoActivo] = useState(0);
   const [progreso, setProgreso] = useState(0);
   const [navScrolled, setNavScrolled] = useState(false);
@@ -908,12 +699,15 @@ export default function BienvenidaExperience() {
 
   return (
     <ProveedorEsferas>
+    {PERMITIR_VISTA_PREVIA && (
+      <Suspense fallback={null}>
+        <LectorVistaPrevia onDetectado={setVistaPreviaActiva} />
+      </Suspense>
+    )}
+    {mostrarAutopiloto ? (
+      <ExperienciaAutopiloto />
+    ) : (
     <div className="qb-lp">
-      {PERMITIR_VISTA_PREVIA && (
-        <Suspense fallback={null}>
-          <LectorVistaPrevia onDetectado={setVistaPreviaActiva} />
-        </Suspense>
-      )}
       <link
         rel="stylesheet"
         href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@500;600;700&family=JetBrains+Mono:wght@400;500;600&display=swap"
@@ -1006,23 +800,6 @@ export default function BienvenidaExperience() {
         .qb-lp .hud-line:nth-child(2) .dot { background: var(--purple-deep); }
         .qb-lp .hud-line:nth-child(3) .dot { background: var(--purple); }
         .qb-lp .hud-line:nth-child(4) .dot { background: var(--mint); }
-
-        /* ---- HERO con Autopiloto encendido: el Director en vez del
-           CoreOrb -- las esferas son EsferaAsistente real, con todo su
-           comportamiento (mirada, toque), no una recreacion. ---- */
-        .qb-lp .hero-equipo-visual { display: flex; flex-direction: column; gap: 20px; }
-        .qb-lp .hero-director-card { background: var(--ink); border: 1px solid #2E2A48; border-radius: 24px; padding: 24px; display: flex; flex-direction: column; gap: 18px; box-shadow: 0 30px 60px -30px rgba(108,92,231,0.5); }
-        .qb-lp .hero-director-head { display: flex; align-items: center; gap: 14px; }
-        .qb-lp .hero-director-nombre { display: block; font-size: 17px; color: #fff; }
-        .qb-lp .hero-director-sub { display: block; font-size: 14px; color: #A9A4C4; }
-        .qb-lp .hero-mensaje { background: #26223F; border-radius: 18px 18px 18px 6px; padding: 16px 18px; display: flex; flex-direction: column; gap: 10px; font-size: 15px; line-height: 1.55; color: #E7E4F7; }
-        .qb-lp .hero-mensaje b { color: #fff; }
-        .qb-lp .hero-mensaje .hero-destacado-optimizador { color: #FFD780; }
-        .qb-lp .hero-resp-fila { display: flex; flex-wrap: wrap; gap: 10px; justify-content: flex-end; }
-        .qb-lp .hero-resp { display: inline-flex; align-items: center; min-height: 40px; padding: 0 16px; border-radius: 12px; font-weight: 600; font-size: 14px; border: 1px solid #3A3558; color: #E7E4F7; background: transparent; }
-        .qb-lp .hero-resp-primario { background: var(--purple-deep); border-color: var(--purple-deep); color: #fff; }
-        .qb-lp .hero-ejemplo-label { font-size: 12.5px; color: #9C97B8; }
-        .qb-lp .hero-equipo-fila { display: flex; flex-wrap: wrap; gap: 14px; justify-content: center; }
 
         .qb-lp section { padding: 88px 24px; position: relative; }
         .qb-lp .section-head { max-width: 640px; margin: 0 auto 48px; text-align: center; }
@@ -1242,23 +1019,6 @@ export default function BienvenidaExperience() {
         .qb-lp .ayuda-card h3 { font-size: 16px; font-weight: 600; margin-bottom: 8px; }
         .qb-lp .ayuda-card p { font-size: 14px; color: var(--muted); line-height: 1.55; margin: 0; }
 
-        /* ---- "Así trabaja tu equipo" (solo con AUTOPILOTO_PUBLICO) ---- */
-        .qb-lp .asi-trabaja-grid { max-width: 1000px; margin: 0 auto; display: grid; grid-template-columns: repeat(auto-fit, minmax(240px, 1fr)); gap: 20px; }
-        .qb-lp .asi-trabaja-paso { display: flex; flex-direction: column; gap: 12px; padding: 26px; border-radius: 20px; background: var(--bg-alt); }
-        .qb-lp .asi-trabaja-numero { width: 40px; height: 40px; border-radius: 12px; background: var(--purple-deep); color: #fff; font-weight: 800; display: flex; align-items: center; justify-content: center; }
-        .qb-lp .asi-trabaja-paso h3 { font-size: 18px; font-weight: 600; margin: 0; }
-        .qb-lp .asi-trabaja-paso p { font-size: 15px; color: var(--muted); line-height: 1.6; margin: 0; }
-
-        /* ---- "Conoce a tu equipo" (solo con AUTOPILOTO_PUBLICO) ---- */
-        .qb-lp .equipo-grid { max-width: 1000px; margin: 0 auto; display: grid; grid-template-columns: repeat(auto-fill, minmax(220px, 1fr)); gap: 18px; }
-        .qb-lp .equipo-tarjeta { background: #fff; border: 1px solid #ECE9F7; border-radius: 22px; padding: 26px 22px; display: flex; flex-direction: column; gap: 12px; }
-        .qb-lp .equipo-tarjeta h3 { font-size: 18px; font-weight: 600; margin: 0; }
-        .qb-lp .equipo-tarjeta p { font-size: 15px; color: var(--muted); line-height: 1.55; margin: 0; }
-        .qb-lp .equipo-tarjeta-director { grid-column: span 2; background: var(--ink); border-radius: 22px; padding: 28px 22px; display: flex; flex-direction: column; align-items: flex-start; gap: 14px; }
-        .qb-lp .equipo-tarjeta-director h3 { font-size: 22px; font-weight: 700; color: #fff; margin: 0; }
-        .qb-lp .equipo-tarjeta-director p { font-size: 16px; color: #CFCBE6; line-height: 1.55; margin: 0; }
-        @media (max-width: 640px) { .qb-lp .equipo-tarjeta-director { grid-column: span 1; } }
-
         .qb-lp .mini-cta { max-width: 780px; margin: 32px auto 0; background: #fff; border: 1px solid #ECE9F7; border-radius: 18px; padding: 26px 30px; display: flex; align-items: center; justify-content: space-between; gap: 20px; flex-wrap: wrap; }
         .qb-lp .mini-cta-tag { display: flex; align-items: center; gap: 7px; font-family: var(--font-mono), monospace; font-size: 11px; letter-spacing: 0.06em; color: var(--mint); font-weight: 600; margin-bottom: 6px; }
         .qb-lp .mini-cta-tag .dot-mini { width: 7px; height: 7px; border-radius: 50%; background: var(--mint); box-shadow: 0 0 0 3px rgba(31,169,124,0.18); }
@@ -1413,65 +1173,26 @@ export default function BienvenidaExperience() {
       <section className="hero" style={{ paddingBottom: 0 }}>
         <div>
           <p className="eyebrow">Publicidad con IA · Meta Ads</p>
-          {mostrarAutopiloto ? (
-            <h1>Un equipo de publicidad trabajando por tu meta. <span className="grad">Tú solo apruebas.</span></h1>
-          ) : (
-            <h1>Tu próxima campaña <span className="grad">no la armas tú.</span></h1>
-          )}
+          <h1>Tu próxima campaña <span className="grad">no la armas tú.</span></h1>
           <p className="sub">
-            {mostrarAutopiloto
-              ? "Dile a Quiubot cuántas conversaciones o clientes quieres este mes. Siete asistentes crean, publican y cuidan tus campañas de Meta todos los días, y el Director te consulta cada cambio antes de hacerlo."
-              : "Estrategia, creativos y publicación para Meta Ads generados con IA — y un motor que vigila tus campañas todo el tiempo para que nunca quemes presupuesto sin darte cuenta."}
+            Estrategia, creativos y publicación para Meta Ads generados con IA — y un motor que vigila tus campañas todo el tiempo para que nunca quemes presupuesto sin darte cuenta.
           </p>
           <CtaLink href="/login" ubicacion="hero" className="btn-cta">Iniciar prueba gratuita de {DIAS_PRUEBA} días →</CtaLink>
           <p className="micro">Sin tarjeta de crédito. Cancela cuando quieras.</p>
         </div>
-        {mostrarAutopiloto ? (
-          <div className="hero-equipo-visual">
-            <div className="hero-director-card">
-              <div className="hero-director-head">
-                <EsferaAsistente asistente="director" estado="normal" tamano={64} />
-                <div>
-                  <strong className="hero-director-nombre">Director</strong>
-                  <span className="hero-director-sub">Coordina a tu equipo y cuida tu meta</span>
-                </div>
-              </div>
-              <div className="hero-mensaje">
-                <span>Hoy revisé tu meta con el equipo: vas <b>23 de 40</b> conversaciones y quedan 12 días.</span>
-                <span>El <b className="hero-destacado-optimizador">Optimizador</b> encontró que tu campaña de domicilios consigue conversaciones a $9.800, por debajo de tu objetivo. Propone subirle 20% el presupuesto.</span>
-                <span>¿Le doy luz verde?</span>
-              </div>
-              <div className="hero-resp-fila">
-                <span className="hero-resp hero-resp-primario">Sí, adelante</span>
-                <span className="hero-resp">Ajustar</span>
-                <span className="hero-resp">No por ahora</span>
-              </div>
-              <span className="hero-ejemplo-label">Conversación de ejemplo</span>
-            </div>
-            <div className="hero-equipo-fila">
-              <EsferaAsistente asistente="marca" estado="normal" tamano={42} />
-              <EsferaAsistente asistente="estratega" estado="normal" tamano={42} />
-              <EsferaAsistente asistente="creativo" estado="normal" tamano={42} />
-              <EsferaAsistente asistente="publicador" estado="normal" tamano={42} />
-              <EsferaAsistente asistente="analista" estado="normal" tamano={42} />
-              <EsferaAsistente asistente="optimizador" estado="esperando" tamano={42} />
-            </div>
+        <div className="core-stage" ref={coreStageRef} style={{ willChange: "transform, opacity" }}>
+          <div className="core-glow" />
+          <CoreOrb />
+          <div className="core-ring" />
+          <div className="core-mark">
+            <img src="/marca/icono-quiubot.svg" alt="Quiubot" />
           </div>
-        ) : (
-          <div className="core-stage" ref={coreStageRef} style={{ willChange: "transform, opacity" }}>
-            <div className="core-glow" />
-            <CoreOrb />
-            <div className="core-ring" />
-            <div className="core-mark">
-              <img src="/marca/icono-quiubot.svg" alt="Quiubot" />
-            </div>
-            <div className="core-hud">
-              {HUD_LINEAS.map((linea) => (
-                <div className="hud-line" key={linea}><span className="dot" />{linea}</div>
-              ))}
-            </div>
+          <div className="core-hud">
+            {HUD_LINEAS.map((linea) => (
+              <div className="hud-line" key={linea}><span className="dot" />{linea}</div>
+            ))}
           </div>
-        )}
+        </div>
       </section>
 
       {/* 2. VIDEO DE PRESENTACION — el gancho emocional principal, justo después del hero.
@@ -1623,70 +1344,26 @@ export default function BienvenidaExperience() {
         </div>
       </section>
 
-      {/* 6b. ASI TRABAJA TU EQUIPO (solo con AUTOPILOTO_PUBLICO) */}
-      {mostrarAutopiloto && (
-        <section className="alt">
-          <div className="section-head qb-reveal" style={{ textAlign: "left", maxWidth: 1160, margin: "0 auto 40px" }}>
-            <h2>Así trabaja tu equipo</h2>
-          </div>
-          <div className="asi-trabaja-grid">
-            {ASI_TRABAJA.map((paso, i) => (
-              <div className="asi-trabaja-paso qb-reveal" key={paso.titulo}>
-                <span className="asi-trabaja-numero">{i + 1}</span>
-                <h3>{paso.titulo}</h3>
-                <p>{paso.texto}</p>
-              </div>
-            ))}
-          </div>
-        </section>
-      )}
-
-      {/* 7. QUE PASA DESPUES DE PUBLICAR (o "Conoce a tu equipo" con AUTOPILOTO_PUBLICO) + segundo CTA intermedio */}
+      {/* 7. QUE PASA DESPUES DE PUBLICAR + segundo CTA intermedio */}
       <section>
-        {mostrarAutopiloto ? (
-          <>
-            <div className="section-head qb-reveal" style={{ textAlign: "left", maxWidth: 720, margin: "0 auto 44px" }}>
-              <p className="eyebrow">Conoce a tu equipo</p>
-              <h2>Siete asistentes. Una sola conversación.</h2>
-              <p className="lead">Tú hablas con el Director. Él coordina al resto del equipo y te trae cada propuesta lista para decidir.</p>
-            </div>
-            <div className="equipo-grid">
-              <div className="equipo-tarjeta-director qb-reveal">
-                <EsferaAsistente asistente="director" estado="normal" tamano={84} />
-                <h3>{NOMBRE_ASISTENTE.director}</h3>
-                <p>{LINEA_DIRECTOR}</p>
+        <div className="section-head qb-reveal">
+          <p className="eyebrow" style={{ textAlign: "center" }}>Mientras tú haces otras cosas</p>
+          <h2>Quiubot no te deja solo después de publicar.</h2>
+        </div>
+        <div className="ayudas">
+          {AYUDAS.map((a, i) => (
+            <div className={`ayuda-card qb-reveal qb-reveal-delay-${(i % 4) + 1}`} key={a.titulo}>
+              <div className="ayuda-icon">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                  {AYUDA_ICONS[i]}
+                </svg>
               </div>
-              {EQUIPO_LINEAS.map((a, i) => (
-                <div className={`equipo-tarjeta qb-reveal qb-reveal-delay-${(i % 4) + 1}`} key={a.id}>
-                  <EsferaAsistente asistente={a.id} estado={a.id === "optimizador" ? "esperando" : "normal"} tamano={60} />
-                  <h3>{NOMBRE_ASISTENTE[a.id]}</h3>
-                  <p>{a.linea}</p>
-                </div>
-              ))}
+              <div className="ayuda-tag">{a.tag}</div>
+              <h3>{a.titulo}</h3>
+              <p>{a.texto}</p>
             </div>
-          </>
-        ) : (
-          <>
-            <div className="section-head qb-reveal">
-              <p className="eyebrow" style={{ textAlign: "center" }}>Mientras tú haces otras cosas</p>
-              <h2>Quiubot no te deja solo después de publicar.</h2>
-            </div>
-            <div className="ayudas">
-              {AYUDAS.map((a, i) => (
-                <div className={`ayuda-card qb-reveal qb-reveal-delay-${(i % 4) + 1}`} key={a.titulo}>
-                  <div className="ayuda-icon">
-                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                      {AYUDA_ICONS[i]}
-                    </svg>
-                  </div>
-                  <div className="ayuda-tag">{a.tag}</div>
-                  <h3>{a.titulo}</h3>
-                  <p>{a.texto}</p>
-                </div>
-              ))}
-            </div>
-          </>
-        )}
+          ))}
+        </div>
 
         <div className="mini-cta qb-reveal">
           <div>
@@ -1835,12 +1512,7 @@ export default function BienvenidaExperience() {
       {/* 10. CTA FINAL */}
       <section>
         <div className="cta-final qb-reveal">
-          {mostrarAutopiloto && (
-            <div style={{ display: "flex", justifyContent: "center", marginBottom: 8 }}>
-              <EsferaAsistente asistente="director" estado="normal" tamano={72} />
-            </div>
-          )}
-          <h2>{mostrarAutopiloto ? "Tu equipo está listo para empezar. ¿Cuál es tu meta?" : `Tus primeros ${DIAS_PRUEBA} días con Quiubot ya están pagados. Por nosotros.`}</h2>
+          <h2>{`Tus primeros ${DIAS_PRUEBA} días con Quiubot ya están pagados. Por nosotros.`}</h2>
           <CtaLink href="/login" ubicacion="cta_final" className="btn-cta">Iniciar prueba gratuita de {DIAS_PRUEBA} días →</CtaLink>
           <p className="micro">Sin tarjeta de crédito. Cancela cuando quieras.</p>
         </div>
@@ -1851,6 +1523,7 @@ export default function BienvenidaExperience() {
         <p style={{ marginTop: 6 }}><a href="/terminos">Términos y condiciones</a></p>
       </footer>
     </div>
+    )}
     </ProveedorEsferas>
   );
 }
