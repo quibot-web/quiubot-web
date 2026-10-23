@@ -36,14 +36,22 @@
   transform:rotate(-12deg) translateY(calc(var(--size) * .1)); }
 .anillo.atras { z-index:0; opacity:.55; }
 .anillo.frente { z-index:3; border-top-color:transparent; border-left-color:transparent; border-right-color:transparent; box-shadow:0 calc(var(--size) * .03) calc(var(--size) * .06) calc(var(--size) * -.03) var(--c1); }
-/* Gema: la firma de Quiubot */
+/* Gema: la firma de Quiubot. El "titilar" ya NO anima filter:brightness
+   (fuerza repintar en cada frame, no lo acelera el compositor) -- en vez
+   de eso, una capa aparte (::before), con la misma forma y una versión
+   más clara del degradado/resplandor, se cruza en opacity por encima de
+   la gema de siempre. Visualmente es el mismo brillo; el navegador solo
+   compone dos capas en vez de recalcular el filtro. */
 .gema { position:absolute; z-index:4; width:calc(var(--size) * .12); height:calc(var(--size) * .12);
   left:calc(50% + var(--size) * .66); top:calc(50% - var(--size) * .06); transform:rotate(45deg);
   border-radius:calc(var(--size) * .025);
   background:linear-gradient(135deg, #fff 0%, color-mix(in srgb, var(--c1) 60%, #fff) 45%, var(--c2) 100%);
-  box-shadow:0 0 calc(var(--size) * .08) var(--c1), 0 0 calc(var(--size) * .16) color-mix(in srgb, var(--c1) 60%, transparent);
-  animation:titila 3.4s ease-in-out infinite; animation-delay:var(--retraso,0s); }
-@keyframes titila { 0%,100% { filter:brightness(1); } 50% { filter:brightness(1.5); } }
+  box-shadow:0 0 calc(var(--size) * .08) var(--c1), 0 0 calc(var(--size) * .16) color-mix(in srgb, var(--c1) 60%, transparent); }
+.gema::before { content:""; position:absolute; inset:0; border-radius:calc(var(--size) * .025);
+  background:linear-gradient(135deg, #fff 0%, color-mix(in srgb, var(--c1) 85%, #fff) 45%, color-mix(in srgb, var(--c2) 70%, #fff) 100%);
+  box-shadow:0 0 calc(var(--size) * .14) var(--c1), 0 0 calc(var(--size) * .26) color-mix(in srgb, var(--c1) 85%, transparent);
+  opacity:0; animation:titila 3.4s ease-in-out infinite; animation-delay:var(--retraso,0s); }
+@keyframes titila { 0%,100% { opacity:0; } 50% { opacity:1; } }
 
 /* ================= LA CARA ================= */
 .cara { position:absolute; z-index:2; inset:0; pointer-events:none; }
@@ -85,7 +93,8 @@
 @keyframes revisa { 0%,100% { transform:translate(-62%,-50%); } 45%,55% { transform:translate(-38%,-50%); } }
 /* 1. La gema recorre el anillo (pasa por delante y por detrás de la esfera) */
 .trabajando .gema.orbitando { left:0; top:0; offset-anchor:50% 50%; offset-rotate:0deg;
-  animation:orbita 2.8s linear infinite, titila 1.2s ease-in-out infinite; }
+  animation:orbita 2.8s linear infinite; }
+.trabajando .gema.orbitando::before { animation:titila 1.2s ease-in-out infinite; animation-delay:var(--retraso,0s); }
 @keyframes orbita { 0% { offset-distance:0%; z-index:4; } 49.9% { z-index:4; } 50% { z-index:0; } 99.9% { z-index:0; } 100% { offset-distance:100%; z-index:4; } }
 /* 2. El vidrio late por dentro, como procesando */
 .trabajando .orb::after { animation:procesa 1.4s ease-in-out infinite; }
@@ -128,4 +137,4 @@
 .analista    { --c1:#A8EEF5; --c2:#2DB2C2; --c3:#0D5E69; --retraso:1.8s; --ritmo:4.9s; }
 .optimizador { --c1:#FFE3A6; --c2:#E5AE3A; --c3:#85590C; --retraso:2.8s; --ritmo:5.9s; }
 
-@media (prefers-reduced-motion: reduce) { .cuerpo, .ojo, .ojos, .gema, .zz { animation:none !important; } }
+@media (prefers-reduced-motion: reduce) { .cuerpo, .ojo, .ojos, .gema, .gema::before, .zz { animation:none !important; } }
