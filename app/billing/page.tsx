@@ -6,7 +6,7 @@ import Link from "next/link"
 import CargandoQuiubot from "@/app/components/CargandoQuiubot"
 
 import { OBJETIVOS_INFO } from "@/app/lib/objetivosInfo"
-import { AUTOPILOTO_PUBLICO, nombreVisiblePlan } from "@/app/lib/planesConfig"
+import { AUTOPILOTO_PUBLICO, nombreVisiblePlan, BENEFICIOS_AUTOPILOTO } from "@/app/lib/planesConfig"
 
 const TU_WHATSAPP = "573243490766"
 
@@ -38,17 +38,6 @@ const PLAYBOOK_EXPANDIBLE = {
 }
 
 type FeaturePlan = string | { texto: string; expandible: typeof PLAYBOOK_EXPANDIBLE }
-
-// Beneficios propios del Autopiloto, encima de los que ya tiene Escala
-// -- solo se agregan con el interruptor encendido (AUTOPILOTO_PUBLICO).
-// El id del plan sigue siendo "escala" en todos lados; esto es
-// puramente lo que ve el cliente en esta página.
-const BENEFICIOS_AUTOPILOTO: FeaturePlan[] = [
-  "Un equipo de 7 asistentes trabajando por tu meta todos los días",
-  "Define tu meta (conversaciones o leads) y sigue su avance en tiempo real",
-  "El Director te propone cada mejora y tú decides: nada cambia sin tu aprobación",
-  "Refresco de creativos y ajustes de presupuesto cuando hacen falta",
-]
 
 const PLANES: {
   id: string

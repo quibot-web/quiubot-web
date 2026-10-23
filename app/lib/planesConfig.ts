@@ -40,6 +40,16 @@ export function nombreVisiblePlan(id: PlanId): string {
   return PLANES[id].nombre;
 }
 
+// Beneficios propios del Autopiloto, encima de los que ya tiene Escala
+// -- solo se agregan con el interruptor encendido. Compartido entre
+// /billing y /bienvenida para que digan exactamente lo mismo.
+export const BENEFICIOS_AUTOPILOTO: string[] = [
+  "Un equipo de 7 asistentes trabajando por tu meta todos los días",
+  "Define tu meta (conversaciones o leads) y sigue su avance en tiempo real",
+  "El Director te propone cada mejora y tú decides: nada cambia sin tu aprobación",
+  "Refresco de creativos y ajustes de presupuesto cuando hacen falta",
+];
+
 // Quién tiene acceso al Autopiloto (meta, equipo, conversación con el
 // Director, recordatorio de renovación): admin siempre, beta por
 // cliente siempre (columna beta_autopiloto, la activa un humano por
