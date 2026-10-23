@@ -159,11 +159,23 @@ export async function POST(req: NextRequest) {
 
   const { data: metasActivas } = await supabaseAdmin
     .from("metas")
-    .select("*, usuarios!inner(rol)")
+    .select("*, usuarios!inner(rol, en_trial, fecha_vencimiento)")
     .eq("estado", "activa")
     .eq("pausado_autopiloto", false);
 
-  const metasAdmin = (metasActivas ?? []).filter((m: any) => m.usuarios?.rol === "admin") as (Meta & { usuarios: any })[];
+  // Admin nunca se bloquea por esto, tenga o no fecha_vencimiento --
+  // Autopiloto sigue siendo admin-only hoy. La condición de plan
+  // vigente (en prueba, o con fecha_vencimiento todavía no vencida)
+  // solo aplica a no-admin, lista para el día que esto se abra a
+  // todos los planes pagos: un cliente vencido deja de recibir
+  // propuestas nuevas del Director, sin esperar a que el workflow de
+  // n8n que lo baja a Arranque haya corrido todavía.
+  const ahora = new Date();
+  const metasAdmin = (metasActivas ?? []).filter((m: any) => {
+    if (m.usuarios?.rol === "admin") return true;
+    if (m.usuarios?.en_trial) return true;
+    return !!m.usuarios?.fecha_vencimiento && new Date(m.usuarios.fecha_vencimiento) >= ahora;
+  }) as (Meta & { usuarios: any })[];
 
   const resumen: any[] = [];
   for (const meta of metasAdmin) {
