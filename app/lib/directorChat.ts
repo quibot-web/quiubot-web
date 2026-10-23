@@ -234,11 +234,15 @@ type ResultadosPeriodo = { cantidad: number; tipoLabel: string; costoPromedio: n
 // 3 días antes de vencer -- misma ventana que ya usa el correo de
 // /api/cron/recordatorio-vencimiento. "Desde tu último pago" y no
 // "este mes": en un ciclo anual la ventana real es un año, no 30 días.
-export function textoRecordatorio3Dias(nombrePlanTexto: string, fecha: string, resultados: ResultadosPeriodo): string {
+export function textoRecordatorio3Dias(nombrePlanTexto: string | null, fecha: string, resultados: ResultadosPeriodo): string {
   const frase = resultados
     ? ` Desde tu último pago, el equipo consiguió ${resultados.cantidad} ${resultados.tipoLabel} a ${formatoCop(resultados.costoPromedio)} cada uno.`
     : "";
-  return `Tu plan ${nombrePlanTexto} vence el ${fecha}.${frase} ¿Seguimos trabajando juntos?`;
+  // nombrePlanTexto solo falta si no hay ninguna orden pagada que lo
+  // respalde (nunca debería pasar en esta etapa, pero sin inventar un
+  // nombre si pasara) -- se omite "Plan X" y queda "Tu plan vence...".
+  const plan = nombrePlanTexto ? ` ${nombrePlanTexto}` : "";
+  return `Tu plan${plan} vence el ${fecha}.${frase} ¿Seguimos trabajando juntos?`;
 }
 
 export const TEXTO_HOY_VENCE = "Hoy vence tu plan. Si renuevas, el equipo sigue sin pausa.";

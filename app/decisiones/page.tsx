@@ -157,10 +157,14 @@ function DecisionesContenido() {
   const [campanasPorId, setCampanasPorId] = useState<Record<string, string>>({});
   type Recordatorio = {
     etapa: "recien_pagado" | "3_dias_antes" | "hoy_vence" | "vencido";
-    plan: string;
-    nombrePlan: string;
+    // plan/nombrePlan/ciclo salen de la última orden pagada, no de
+    // usuarios.plan -- pueden venir null si no hay ninguna orden y el
+    // usuario ya está en Arranque (activación manual, sin plan pago
+    // que renovar). Ahí no hay botón "Renovar ahora", solo "Ver planes".
+    plan: string | null;
+    nombrePlan: string | null;
     fechaVencimiento: string;
-    ciclo: string;
+    ciclo: string | null;
     resultados: { cantidad: number; tipoLabel: string; costoPromedio: number } | null;
   };
   const [recordatorio, setRecordatorio] = useState<Recordatorio | null>(null);
@@ -268,7 +272,7 @@ function DecisionesContenido() {
   }, [puedeUsarAutopiloto]);
 
   const renovarAhora = async () => {
-    if (!recordatorioMostrado) return;
+    if (!recordatorioMostrado?.plan || !recordatorioMostrado.ciclo) return;
     // En simulación no se genera un link real ni se llama la pasarela --
     // solo se muestra el aviso, nada se escribe en la base.
     if (recordatorioSimulado) {
@@ -790,6 +794,10 @@ function DecisionesContenido() {
                 ? TEXTO_VENCIDO
                 : textoRecienPagado(fecha);
             const necesitaBotones = recordatorioMostrado.etapa !== "recien_pagado";
+            // Sin plan/ciclo (sin orden pagada y usuarios.plan ya en
+            // Arranque) no hay nada que renovar directamente -- solo
+            // queda "Ver planes".
+            const puedeRenovarDirecto = !!recordatorioMostrado.plan && !!recordatorioMostrado.ciclo;
             return (
               <div style={{ background: colores.fondo, border: `1px solid ${colores.borde}`, borderRadius: 14, padding: "14px 16px", marginBottom: 16 }}>
                 {recordatorioSimulado && (
@@ -800,13 +808,15 @@ function DecisionesContenido() {
                 <p style={{ fontSize: 13, color: colores.texto, margin: necesitaBotones ? "0 0 10px" : 0, lineHeight: 1.5, fontWeight: 600 }}>{mensaje}</p>
                 {necesitaBotones && (
                   <div style={{ display: "flex", gap: 8, alignItems: "center", flexWrap: "wrap" }}>
-                    <button
-                      onClick={renovarAhora}
-                      disabled={renovando}
-                      style={{ padding: "7px 14px", borderRadius: 8, background: colores.texto, color: "#fff", border: "none", fontSize: 12.5, fontWeight: 700, cursor: renovando ? "not-allowed" : "pointer" }}
-                    >
-                      {renovando ? "..." : "Renovar ahora"}
-                    </button>
+                    {puedeRenovarDirecto && (
+                      <button
+                        onClick={renovarAhora}
+                        disabled={renovando}
+                        style={{ padding: "7px 14px", borderRadius: 8, background: colores.texto, color: "#fff", border: "none", fontSize: 12.5, fontWeight: 700, cursor: renovando ? "not-allowed" : "pointer" }}
+                      >
+                        {renovando ? "..." : "Renovar ahora"}
+                      </button>
+                    )}
                     <button
                       onClick={() => router.push("/billing")}
                       style={{ padding: "7px 14px", borderRadius: 8, background: "#fff", color: colores.texto, border: `1px solid ${colores.texto}`, fontSize: 12.5, fontWeight: 700, cursor: "pointer" }}
