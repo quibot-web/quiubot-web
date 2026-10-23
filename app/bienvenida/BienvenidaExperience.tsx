@@ -2,7 +2,8 @@
 
 import Link from "next/link";
 import Image from "next/image";
-import { useEffect, useRef, useState, type ReactNode } from "react";
+import { useSearchParams } from "next/navigation";
+import { Suspense, useEffect, useRef, useState, type ReactNode } from "react";
 import RevealObserver from "@/app/components/RevealObserver";
 import { trackEvento, trackCustom } from "@/app/components/MetaPixel";
 import { guardarUtmPrimerContacto } from "@/app/lib/utmTracking";
@@ -11,6 +12,32 @@ import EsferaAsistente from "@/app/components/esferas/EsferaAsistente";
 import { ProveedorEsferas } from "@/app/components/esferas/ProveedorEsferas";
 import type { AsistenteId } from "@/app/components/esferas/esferasShared";
 import { NOMBRE_ASISTENTE } from "@/app/lib/directorChat";
+
+// Vista previa de la Parte B (Autopiloto) para revisarla en staging
+// SIN tocar AUTOPILOTO_PUBLICO ni perder el prerenderizado estático de
+// esta página (es la que recibe el tráfico pagado). NEXT_PUBLIC_* se
+// inlinea en build time: en producción, donde esta variable no existe
+// en Coolify, process.env.NEXT_PUBLIC_PERMITIR_VISTA_PREVIA queda
+// `undefined` en el bundle y el bloque completo de abajo (incluyendo
+// el useSearchParams() y su import) se elimina como código muerto al
+// minificar -- no solo no se ejecuta, no queda en el paquete. Solo tú
+// configuras esta variable, y solo en el recurso de staging.
+const PERMITIR_VISTA_PREVIA = process.env.NEXT_PUBLIC_PERMITIR_VISTA_PREVIA === "1";
+
+// useSearchParams() exige un límite de Suspense para no romper el
+// prerenderizado estático (mismo motivo que ya resolvimos en
+// /decisiones) -- por eso vive en su propio componente diminuto, que
+// no pinta nada visible, en vez de llamarlo directo en
+// BienvenidaExperience. Así el Suspense queda acotado a esto, y el
+// resto de la página (todo el contenido real) se sigue generando
+// estático como siempre, sin ningún fallback de carga visible.
+function LectorVistaPrevia({ onDetectado }: { onDetectado: (activo: boolean) => void }) {
+  const searchParams = useSearchParams();
+  useEffect(() => {
+    onDetectado(searchParams.get("vista") === "autopiloto");
+  }, [searchParams, onDetectado]);
+  return null;
+}
 
 const AYUDAS = [
   {
@@ -805,13 +832,13 @@ function BarraConfianzaTemprana() {
   );
 }
 
-// forzarAutopiloto: solo lo manda app/bienvenida/page.tsx, y solo en
-// staging con ?vista=autopiloto -- ver ese archivo para el chequeo de
-// COOLIFY_BRANCH. Nunca sustituye a AUTOPILOTO_PUBLICO, solo lo
-// complementa para poder revisar la Parte B sin tocar el interruptor
-// real ni afectar producción.
-export default function BienvenidaExperience({ forzarAutopiloto = false }: { forzarAutopiloto?: boolean }) {
-  const mostrarAutopiloto = AUTOPILOTO_PUBLICO || forzarAutopiloto;
+export default function BienvenidaExperience() {
+  // vistaPreviaActiva solo puede volverse true si PERMITIR_VISTA_PREVIA
+  // ya era true de entrada (staging) -- en producción ese flag es
+  // `false` en build time, así que esta rama ni se evalúa de verdad.
+  // Nunca sustituye a AUTOPILOTO_PUBLICO, solo lo complementa.
+  const [vistaPreviaActiva, setVistaPreviaActiva] = useState(false);
+  const mostrarAutopiloto = AUTOPILOTO_PUBLICO || (PERMITIR_VISTA_PREVIA && vistaPreviaActiva);
   const planes = construirPlanes(mostrarAutopiloto);
   const [pasoActivo, setPasoActivo] = useState(0);
   const [progreso, setProgreso] = useState(0);
@@ -877,6 +904,11 @@ export default function BienvenidaExperience({ forzarAutopiloto = false }: { for
   return (
     <ProveedorEsferas>
     <div className="qb-lp">
+      {PERMITIR_VISTA_PREVIA && (
+        <Suspense fallback={null}>
+          <LectorVistaPrevia onDetectado={setVistaPreviaActiva} />
+        </Suspense>
+      )}
       <link
         rel="stylesheet"
         href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@500;600;700&family=JetBrains+Mono:wght@400;500;600&display=swap"
