@@ -60,7 +60,7 @@ export async function POST(req: NextRequest) {
   }
 
   const emailBusqueda = session.user.email.trim().toLowerCase();
-  const { estrategia, creativos, fuente_creativos, efectividad_final } = await req.json();
+  const { estrategia, creativos, fuente_creativos, efectividad_final, meta_id } = await req.json();
 
   if (!estrategia) {
     return NextResponse.json({ error: "Falta la estrategia a publicar" }, { status: 400 });
@@ -169,6 +169,21 @@ export async function POST(req: NextRequest) {
 
     // Registrar la campaña en nuestra BD para poder monitorearla luego
     if (usuario) {
+      // meta_id llega del cliente (?meta_id= de /estrategia, ver ese
+      // archivo) -- se valida que de verdad sea una meta de este mismo
+      // usuario antes de confiar en ella, para que nadie pueda ligar su
+      // campaña nueva a la meta de otra cuenta solo editando el body.
+      let metaIdValidado: string | null = null;
+      if (typeof meta_id === "string" && meta_id) {
+        const { data: metaDelUsuario } = await supabaseAdmin
+          .from("metas")
+          .select("id")
+          .eq("id", meta_id)
+          .eq("user_id", usuario.id)
+          .maybeSingle();
+        metaIdValidado = metaDelUsuario?.id ?? null;
+      }
+
       const { data: campana, error: insertError } = await supabaseAdmin
         .from("campanas_publicadas")
         .insert({
@@ -181,6 +196,7 @@ export async function POST(req: NextRequest) {
           estado: "activa",
           meta_campaign_id: data?.meta_campaign_id ?? null,
           meta_adset_id: data?.meta_adset_id ?? null,
+          meta_id: metaIdValidado,
         })
         .select()
         .single();

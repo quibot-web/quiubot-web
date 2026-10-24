@@ -87,10 +87,13 @@ function campanaIdDe(p: { parametros: Record<string, unknown> | null }): string 
 // Estado de cada esfera del equipo para la fila de /decisiones --
 // "trabajando" si tiene un crear_creativos pendiente en etapa
 // generando_conceptos/generando, "esperando" si tiene cualquier otra
-// cosa pendiente, "pausa" si el Autopiloto está pausado. El Director
-// mismo queda "esperando" si cualquiera del equipo lo está (algo que
-// contarle al cliente).
-function construirEstadoPorAsistente(propuestas: PropuestaUnificada[], pausado: boolean): Record<Asistente, EstadoEsfera> {
+// cosa pendiente. El Director mismo queda "esperando" si cualquiera
+// del equipo lo está (algo que contarle al cliente). Ya no existe un
+// "pausa" global acá: con varias metas activas a la vez (una por tipo)
+// "el Autopiloto está pausado" dejó de ser una sola respuesta -- ese
+// estado se ve ahora por meta en "Mis metas", no atenuando todo el
+// equipo en esta pantalla.
+function construirEstadoPorAsistente(propuestas: PropuestaUnificada[]): Record<Asistente, EstadoEsfera> {
   const estado = {
     director: "normal",
     marca: "normal",
@@ -100,11 +103,6 @@ function construirEstadoPorAsistente(propuestas: PropuestaUnificada[], pausado: 
     analista: "normal",
     optimizador: "normal",
   } as Record<Asistente, EstadoEsfera>;
-
-  if (pausado) {
-    for (const a of Object.keys(estado) as Asistente[]) estado[a] = "pausa";
-    return estado;
-  }
 
   for (const p of propuestas) {
     const asistente = asistenteDeMensaje(p);
@@ -152,8 +150,11 @@ function DecisionesContenido() {
   const [puedeUsarAutopiloto, setPuedeUsarAutopiloto] = useState<boolean | null>(null);
   const [cargando, setCargando] = useState(true);
   const [propuestas, setPropuestas] = useState<PropuestaUnificada[]>([]);
-  const [pausado, setPausado] = useState(false);
-  const [cantidadObjetivo, setCantidadObjetivo] = useState<number | null>(null);
+  // Mapa meta_id -> cantidad_objetivo, de todas las metas activas del
+  // usuario -- hace falta para narrar "revisión sin propuestas" (cada
+  // evento de bitácora trae su propio meta_id) ahora que puede haber
+  // varias metas, no "la" meta.
+  const [cantidadObjetivoPorMeta, setCantidadObjetivoPorMeta] = useState<Record<string, number>>({});
   const [campanasPorId, setCampanasPorId] = useState<Record<string, string>>({});
   type Recordatorio = {
     etapa: "recien_pagado" | "3_dias_antes" | "hoy_vence" | "vencido";
@@ -251,10 +252,11 @@ function DecisionesContenido() {
     cargarPropuestas();
     cargarHistorial();
     fetch("/api/metas")
-      .then((r) => (r.ok ? r.json() : { meta: null }))
+      .then((r) => (r.ok ? r.json() : { metas: [] }))
       .then((data) => {
-        setPausado(!!data.meta?.pausado_autopiloto);
-        setCantidadObjetivo(data.meta?.cantidad_objetivo ?? null);
+        const mapa: Record<string, number> = {};
+        for (const item of data.metas ?? []) mapa[item.meta.id] = item.meta.cantidad_objetivo;
+        setCantidadObjetivoPorMeta(mapa);
       })
       .catch(() => {});
     fetch("/api/campanas")
@@ -355,8 +357,21 @@ function DecisionesContenido() {
       }
       // El Estratega todavía no publica nada solo -- aprobar esto solo
       // lleva al cliente a /estrategia con el objetivo ya precargado.
+      // Si viene de "abrir otro frente" (ver app/api/cron/director/
+      // route.ts), la propuesta trae también presupuesto sugerido y
+      // ángulos a evitar en sus parámetros -- se mandan en la misma URL
+      // para que /estrategia los precargue sin otro viaje al servidor.
       if (p.accion === "generar_estrategia" && p.metaId) {
-        router.push(`/estrategia?meta_id=${p.metaId}`);
+        const params = (data.propuesta?.parametros as Record<string, unknown>) || {};
+        const extra = new URLSearchParams();
+        if (typeof params.presupuesto_diario_sugerido_cop === "number") {
+          extra.set("presupuesto_sugerido_cop", String(params.presupuesto_diario_sugerido_cop));
+        }
+        if (Array.isArray(params.angulos_a_evitar) && params.angulos_a_evitar.length > 0) {
+          extra.set("angulos_a_evitar", JSON.stringify(params.angulos_a_evitar));
+        }
+        const query = extra.toString();
+        router.push(`/estrategia?meta_id=${p.metaId}${query ? `&${query}` : ""}`);
         return;
       }
       // crear_creativos no tiene una "confirmación" propia acá -- solo
@@ -445,7 +460,7 @@ function DecisionesContenido() {
     );
   }
 
-  const estadoPorAsistente = construirEstadoPorAsistente(propuestas, pausado);
+  const estadoPorAsistente = construirEstadoPorAsistente(propuestas);
 
   // Las campañas con problema no van en la línea de tiempo (no tienen
   // una fecha real de cuándo empezó el problema, y no son "una
@@ -491,7 +506,7 @@ function DecisionesContenido() {
           {
             orden: revisionMasReciente.creado_en,
             key: `revision-${revisionMasReciente.id}`,
-            render: () => renderDirectorSolo(narracionRevisionSinPropuestas(revisionMasReciente.detalle?.avance_resumen ?? null, cantidadObjetivo)),
+            render: () => renderDirectorSolo(narracionRevisionSinPropuestas(revisionMasReciente.detalle?.avance_resumen ?? null, cantidadObjetivoPorMeta[revisionMasReciente.meta_id] ?? null)),
           },
         ]
       : []),

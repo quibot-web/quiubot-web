@@ -23,6 +23,7 @@ export async function POST(req: NextRequest) {
     tipo_contenido,       // "producto" | "servicio" — nuevo
     descripcion_servicio, // opcional, solo aplica si tipo_contenido === "servicio"
     modo_estructura,      // "advantage" | "prueba_conceptos" — nuevo (estructura Andromeda)
+    angulos_a_evitar,      // opcional -- viene de la regla "abrir otro frente" del Director (ver app/api/cron/director/route.ts), mismo campo que ya usa intentarGenerarYCrearCreativos en app/lib/propuestas.ts
   } = await req.json();
 
   if (!Array.isArray(imagenes_base64) || imagenes_base64.length < MIN_IMAGENES || imagenes_base64.length > MAX_IMAGENES) {
@@ -149,6 +150,7 @@ export async function POST(req: NextRequest) {
         tipo_contenido: tipoContenidoFinal,
         descripcion_servicio: descripcionServicioFinal,
         modo_estructura: modoEstructuraFinal,
+        angulos_a_evitar: Array.isArray(angulos_a_evitar) ? angulos_a_evitar : [],
       }),
     });
 

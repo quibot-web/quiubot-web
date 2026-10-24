@@ -43,7 +43,11 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
     if (!resultado.ok) {
       return NextResponse.json({ error: resultado.error, motivo: resultado.motivo, paso: resultado.paso }, { status: resultado.status });
     }
-    return NextResponse.json({ ok: true });
+    // Se devuelve la propuesta completa (ya se seleccionó "*" arriba,
+    // sin costo extra) -- /decisiones la necesita para pasarle a
+    // /estrategia el presupuesto sugerido y los ángulos a evitar de una
+    // propuesta "abrir otro frente", sin otro viaje al servidor.
+    return NextResponse.json({ ok: true, propuesta });
   } catch (err) {
     console.error("Error inesperado en /api/propuestas/[id]/aprobar:", err);
     return NextResponse.json({ error: "Error interno del servidor." }, { status: 500 });

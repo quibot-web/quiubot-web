@@ -11,6 +11,19 @@ import CargandoQuiubot from "@/app/components/CargandoQuiubot";
 import { urlDescargaCloudinary, extraerFramesVideo } from "@/app/lib/cloudinaryUrl";
 import { comprimirSiHaceFalta, esArchivoDeImagen } from "@/app/lib/imagenes";
 import { nombreVisiblePlan, type PlanId } from "@/app/lib/planesConfig";
+// Solo el tipo (se borra en compilación) -- NUNCA un import de valor de
+// "@/app/lib/metas" acá: ese módulo importa lib/supabase.ts
+// (server-only, llave de servicio), y esta página es "use client".
+import type { TipoMeta } from "@/app/lib/metas";
+
+// Mismo mapeo que OBJETIVO_ID_POR_TIPO en app/lib/metas.ts -- duplicado
+// a propósito porque ese archivo no se puede importar desde el cliente;
+// si agregas un tipo de meta nuevo, actualiza los dos.
+const OBJETIVO_ID_POR_TIPO: Record<TipoMeta, string> = {
+  conversaciones_whatsapp: "venta_directa_whatsapp",
+  leads: "leads",
+  ventas_web: "venta_directa_web",
+};
 
 function IconoWhatsApp() {
   return (
@@ -755,6 +768,15 @@ function EstrategiaContent() {
   const [arrastrandoImagenes, setArrastrandoImagenes] = useState(false);
   const [objetivo, setObjetivo] = useState<typeof OBJETIVOS[number] | null>(null);
   const [presupuestoDiario, setPresupuestoDiario] = useState<number>(50000);
+  // Solo viene de una propuesta "abrir otro frente" del Director (ver
+  // app/api/cron/director/route.ts) -- los ángulos de las campañas
+  // actuales de la meta, para que el Estratega no repita el mismo
+  // enfoque en la campaña nueva.
+  const [angulosAEvitarSugeridos, setAngulosAEvitarSugeridos] = useState<string[]>([]);
+  // meta_id de la URL (llegada desde una propuesta aprobada en
+  // /decisiones) -- se manda tal cual a /api/publicar-estrategia para
+  // que la campaña nueva quede ligada a esa meta desde que se publica.
+  const [metaIdDeOrigen, setMetaIdDeOrigen] = useState<string | null>(null);
   // Estructura de la campaña (motor Andromeda): "advantage" (default, 1
   // conjunto amplio, Meta reparte el presupuesto) o "prueba_conceptos"
   // (modo avanzado, 1 concepto por conjunto con presupuesto igual).
@@ -889,22 +911,43 @@ function EstrategiaContent() {
 
   // Llegada desde "Generar estrategia" en /decisiones (propuesta del
   // Director, ver app/lib/propuestas.ts) con ?meta_id=... -- precarga el
-  // objetivo según el tipo de la meta activa, para no pedirle al cliente
-  // que lo vuelva a elegir. No toca el resto del wizard (fotos, precio,
-  // etc. las sigue poniendo el cliente); si la restauración de progreso
-  // de abajo encuentra algo guardado en localStorage, esa gana.
+  // objetivo según el tipo de ESA meta puntual (ya no "la" meta activa:
+  // puede haber varias a la vez, una por tipo), y si la propuesta era
+  // "abrir otro frente", también el presupuesto sugerido y los ángulos
+  // a evitar (van en la misma URL, los pone /decisiones al aprobar). No
+  // toca el resto del wizard (fotos, precio, etc. las sigue poniendo el
+  // cliente); si la restauración de progreso de abajo encuentra algo
+  // guardado en localStorage, esa gana.
   useEffect(() => {
-    if (!searchParams.get("meta_id")) return;
-    fetch("/api/metas")
+    const metaId = searchParams.get("meta_id");
+    if (!metaId) return;
+    setMetaIdDeOrigen(metaId);
+    fetch(`/api/metas/${metaId}`)
       .then((r) => (r.ok ? r.json() : null))
       .then((data) => {
-        const tipo = data?.meta?.tipo as "conversaciones_whatsapp" | "leads" | undefined;
+        const tipo = data?.meta?.tipo as TipoMeta | undefined;
         if (!tipo) return;
-        const idObjetivo = tipo === "conversaciones_whatsapp" ? "venta_directa_whatsapp" : "leads";
+        const idObjetivo = OBJETIVO_ID_POR_TIPO[tipo];
         const match = OBJETIVOS.find((o) => o.id === idObjetivo);
         if (match) setObjetivo(match);
       })
       .catch(() => {});
+
+    const presupuestoSugerido = searchParams.get("presupuesto_sugerido_cop");
+    if (presupuestoSugerido) {
+      const n = Number(presupuestoSugerido);
+      if (Number.isFinite(n) && n > 0) setPresupuestoDiario(n);
+    }
+
+    const angulosCrudos = searchParams.get("angulos_a_evitar");
+    if (angulosCrudos) {
+      try {
+        const lista = JSON.parse(angulosCrudos);
+        if (Array.isArray(lista)) setAngulosAEvitarSugeridos(lista.filter((a) => typeof a === "string"));
+      } catch {
+        // URL manipulada a mano o truncada -- se ignora, nunca bloquea el resto de la precarga
+      }
+    }
   }, [searchParams]);
 
   // Restaura el progreso guardado (si existe) apenas se monta la pagina,
@@ -1488,6 +1531,7 @@ function EstrategiaContent() {
           tipo_contenido: tipoContenido,
           descripcion_servicio: tipoContenido === "servicio" ? descripcionServicio : null,
           modo_estructura: modoEstructura,
+          angulos_a_evitar: angulosAEvitarSugeridos,
         }),
       });
       const data = await res.json().catch(() => ({}));
@@ -2128,6 +2172,7 @@ function EstrategiaContent() {
           creativos: creativosConDescripcion,
           fuente_creativos: fuenteCreativosFinal,
           efectividad_final: efectividadFinal,
+          meta_id: metaIdDeOrigen,
         }),
       });
       const data = await res.json().catch(() => ({}));
