@@ -86,6 +86,29 @@ export function textoAjustarPresupuesto(datos: {
   };
 }
 
+export function textoAbrirOtroFrente(datos: {
+  tipo: TipoMeta;
+  cantidadObjetivo: number;
+  proyeccion: number;
+  presupuestoDiarioSugeridoCop: number;
+  margenCop: number;
+  nombreCampanaSaturada: string;
+  motivoSaturacion: "frecuencia" | "subida_sin_mejora";
+  frecuencia: number | null;
+}): TextoPropuesta {
+  const tipoLabel = TIPO_LABEL[datos.tipo];
+  const detalleSaturacion =
+    datos.motivoSaturacion === "frecuencia"
+      ? `la frecuencia de "${datos.nombreCampanaSaturada}" ya llegó a ${datos.frecuencia?.toFixed(2)} (la misma persona la ve muchas veces)`
+      : `"${datos.nombreCampanaSaturada}" ya recibió una subida de presupuesto esta semana sin que el costo por resultado mejorara`;
+  return {
+    titulo: "Abrir otro frente con un enfoque distinto",
+    justificacion: `Tu meta de ${datos.cantidadObjetivo} ${tipoLabel} va atrasada (proyección ~${datos.proyeccion}), pero ${detalleSaturacion} -- subirle más presupuesto a esa campaña no va a ayudar. Todavía queda ${formatoCop(datos.margenCop)} de margen en tu presupuesto máximo. En vez de forzar la campaña actual, el Estratega puede generar una campaña nueva con un ángulo distinto, con ${formatoCop(datos.presupuestoDiarioSugeridoCop)} de presupuesto diario.`,
+    impactoEsperado: "Una campaña nueva, con otro enfoque, lista para revisar y publicar.",
+    costoEstimadoCop: null,
+  };
+}
+
 export function textoCrearCreativos(datos: { nombreCampana: string; motivo: "costo" | "frecuencia" | "ambos" }): TextoPropuesta {
   const detalleMotivo =
     datos.motivo === "ambos"

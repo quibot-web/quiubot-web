@@ -10,11 +10,13 @@ import {
   type Meta,
   type TipoMeta,
   type SnapshotDiario,
+  type CampanaDeMeta,
+  type AvanceMeta,
 } from "@/app/lib/metas";
-import { esPropuestaDePrueba } from "@/app/lib/propuestas";
+import { esPropuestaDePrueba, obtenerAngulosUsados } from "@/app/lib/propuestas";
 import { hoyBogota, fechaBogota, inicioDiaBogota } from "@/app/lib/fechaBogota";
 import { tieneAutopiloto } from "@/app/lib/planesConfig";
-import { textoGenerarEstrategia, textoPausar, textoAjustarPresupuesto, textoCrearCreativos } from "@/app/lib/directorTextos";
+import { textoGenerarEstrategia, textoPausar, textoAjustarPresupuesto, textoCrearCreativos, textoAbrirOtroFrente } from "@/app/lib/directorTextos";
 
 function compararSeguro(a: string, b: string): boolean {
   const bufA = Buffer.from(a);
@@ -42,6 +44,10 @@ const ROAS_MINIMO_DEFECTO_PAUSAR = 1;
 const ROAS_MINIMO_DEFECTO_SUBIR = 2;
 const MULTIPLICADOR_ROAS_SUBIR = 1.5;
 const MULTIPLO_GASTO_MINIMO_ROAS = 3;
+// Regla "abrir otro frente": saturación por frecuencia, y ventana para
+// mirar si una subida de presupuesto reciente mejoró el costo o no.
+const UMBRAL_FRECUENCIA_SATURACION = 2.5;
+const DIAS_VENTANA_SUBIDA_RECIENTE = 7;
 
 function sumarSnapshots(filas: SnapshotDiario[]): { spend: number; conversiones: number; ingreso: number } {
   return filas.reduce(
@@ -69,6 +75,40 @@ function umbralRoasPausar(meta: Meta): number {
 
 function umbralRoasSubirPresupuesto(meta: Meta): number {
   return meta.roas_minimo != null ? meta.roas_minimo * MULTIPLICADOR_ROAS_SUBIR : ROAS_MINIMO_DEFECTO_SUBIR;
+}
+
+// ¿Esta campaña recibió una subida de presupuesto (ejecutada) en los
+// últimos 7 días que no mejoró su costo por resultado? Mira la última
+// propuesta "ajustar_presupuesto" ejecutada de esa campaña dentro de la
+// ventana, y compara el costo de los snapshots antes/después de esa
+// fecha -- "sin mejora" es costo después >= costo antes, o sin
+// suficientes días de datos de cada lado para comparar con confianza.
+async function huboSubidaSinMejora(metaId: string, campanaId: string, snapshotsCampana: SnapshotDiario[]): Promise<boolean> {
+  const desde = new Date(Date.now() - DIAS_VENTANA_SUBIDA_RECIENTE * 24 * 60 * 60 * 1000).toISOString();
+  const { data: subidas } = await supabaseAdmin
+    .from("propuestas")
+    .select("decidido_en")
+    .eq("meta_id", metaId)
+    .eq("accion", "ajustar_presupuesto")
+    .eq("estado", "ejecutada")
+    .eq("parametros->>campana_id", campanaId)
+    .gte("decidido_en", desde)
+    .order("decidido_en", { ascending: false })
+    .limit(1);
+
+  const subida = subidas?.[0];
+  if (!subida?.decidido_en) return false;
+
+  const fechaSubida = fechaBogota(new Date(subida.decidido_en));
+  const antes = snapshotsCampana.filter((s) => s.fecha_bogota < fechaSubida);
+  const despues = snapshotsCampana.filter((s) => s.fecha_bogota >= fechaSubida);
+  if (antes.length < 2 || despues.length < 2) return false;
+
+  const costoAntes = costoPorResultado(antes);
+  const costoDespues = costoPorResultado(despues);
+  if (costoAntes == null || costoDespues == null) return false;
+
+  return costoDespues >= costoAntes;
 }
 
 function promedio(valores: number[]): number | null {
@@ -302,6 +342,7 @@ async function revisarMeta(meta: Meta, simular: boolean) {
   let errorAvance: string | null = null;
   try {
     avance = await calcularAvanceMeta({
+      id: meta.id,
       tipo: meta.tipo,
       user_id: meta.user_id,
       fecha_inicio: meta.fecha_inicio,
@@ -327,7 +368,7 @@ async function revisarMeta(meta: Meta, simular: boolean) {
     ...(errorAvance ? { error: errorAvance } : {}),
   };
 
-  const campanas = await obtenerCampanasDeMeta(meta.tipo, meta.user_id);
+  const campanas = await obtenerCampanasDeMeta({ id: meta.id, tipo: meta.tipo }, meta.user_id);
   const campanasActivas = campanas.filter((c) => c.estado === "activa");
 
   const evaluaciones: any[] = [];
@@ -352,6 +393,10 @@ async function revisarMeta(meta: Meta, simular: boolean) {
   const hastaEfectivo = hoy < meta.fecha_fin ? hoy : meta.fecha_fin;
   const ultimosEjecutados = await obtenerUltimosCambiosEjecutados(meta.user_id);
   let contadorEstadoDesconocido = 0;
+  // "Abrir otro frente" (regla 4, más abajo) nunca se evalúa si pausar
+  // o ajustar presupuesto ya aplicó en ALGUNA campaña esta corrida --
+  // misma prioridad que el resto, frente a esas dos.
+  let pausarOAjustarAplicoEstaCorrida = false;
 
   for (const campana of campanasActivas) {
     // El tope diario nunca frena una simulación -- el punto es ver qué
@@ -584,6 +629,8 @@ async function revisarMeta(meta: Meta, simular: boolean) {
       regla3Condicion = `no evaluable: hacen falta 6 días con datos (hay ${snapshotsCampana.length})`;
     }
 
+    if (regla1Aplica || regla2Aplica) pausarOAjustarAplicoEstaCorrida = true;
+
     // Prioridad igual que antes: pausar > ajustar_presupuesto > crear_creativos.
     // Solo se ejecuta (o se simula) la primera que de verdad aplica.
     if (regla1Aplica) {
@@ -682,10 +729,142 @@ async function revisarMeta(meta: Meta, simular: boolean) {
     );
     if (resultado.propuso && !simular) propuestasCreadasEnEstaCorrida++;
     evaluaciones.push({ regla: "ninguna_campana_con_gasto_reciente", propuso: resultado.propuso, propuesta: resultado.propuesta });
+  } else if (!pausarOAjustarAplicoEstaCorrida) {
+    // 4) "Abrir otro frente": la meta va atrasada, nadie necesitó
+    // pausar ni subir presupuesto esta corrida (prioridad frente a
+    // esas dos, igual que pide el encargo), hay margen real en el
+    // presupuesto máximo, y al menos una campaña activa está saturada
+    // -- frecuencia alta reciente, o ya le subieron el presupuesto
+    // esta semana sin que mejorara el costo.
+    const resultadoAbrirFrente = await evaluarAbrirOtroFrente(meta, campanasActivas, avance, hastaEfectivo, simular);
+    if (resultadoAbrirFrente.propuso && !simular) propuestasCreadasEnEstaCorrida++;
+    evaluaciones.push(resultadoAbrirFrente.evaluacion);
   }
 
   await registrarRevision(meta, { evaluaciones, avance_resumen: avanceResumen }, simular);
   return { meta_id: meta.id, simulado: simular, propuestas_creadas: propuestasCreadasEnEstaCorrida, avance: avanceResumen, evaluaciones };
+}
+
+// Regla "abrir otro frente" -- evaluada una vez por meta (no por
+// campaña), solo si nadie necesitó pausar/ajustar esta corrida. Margen:
+// lo que le queda al presupuesto máximo después de seguir pagando el
+// gasto diario actual de las campañas activas durante lo que resta de
+// la meta. Presupuesto sugerido: lo que de verdad cabe en ese margen
+// por día, pero nunca más de lo que ya se gasta por campaña hoy.
+async function evaluarAbrirOtroFrente(
+  meta: Meta,
+  campanasActivas: CampanaDeMeta[],
+  avance: AvanceMeta,
+  hastaEfectivo: string,
+  simular: boolean
+): Promise<{ propuso: boolean; evaluacion: any }> {
+  if (avance.proyeccion == null || avance.proyeccion >= meta.cantidad_objetivo) {
+    return { propuso: false, evaluacion: { regla: "abrir_otro_frente", aplico: false, condicion: "la meta no va atrasada, o la proyección no es calculable todavía" } };
+  }
+
+  const gastoDiarioActual = campanasActivas.reduce((acc, c) => acc + (c.presupuesto_diario || 0), 0);
+  const margenCop = meta.presupuesto_maximo_cop - avance.spend - gastoDiarioActual * avance.diasRestantes;
+  const presupuestoDiarioPromedioActual = campanasActivas.length > 0 ? gastoDiarioActual / campanasActivas.length : 0;
+  const margenDiarioDisponible = avance.diasRestantes > 0 ? margenCop / avance.diasRestantes : margenCop;
+  const presupuestoSugeridoCop = Math.max(0, Math.round(Math.min(margenDiarioDisponible, presupuestoDiarioPromedioActual)));
+
+  // Piso: que el presupuesto sugerido alcance al menos para el costo
+  // objetivo de un resultado -- si no, abrir un frente nuevo no tiene
+  // caso real todavía, aunque técnicamente "quepa" un poco de margen.
+  if (presupuestoSugeridoCop < meta.costo_objetivo_cop) {
+    return {
+      propuso: false,
+      evaluacion: {
+        regla: "abrir_otro_frente",
+        aplico: false,
+        condicion: `margen de $${Math.round(margenCop)} (presupuesto sugerido $${presupuestoSugeridoCop}/día) no alcanza el costo objetivo de $${Math.round(meta.costo_objetivo_cop)} por resultado`,
+      },
+    };
+  }
+
+  // Saturación: la primera campaña activa que cumpla cualquiera de los
+  // dos motivos -- no hace falta que todas lo estén.
+  let campanaSaturada: CampanaDeMeta | null = null;
+  let motivoSaturacion: "frecuencia" | "subida_sin_mejora" | null = null;
+  let frecuenciaSaturacion: number | null = null;
+
+  for (const campana of campanasActivas) {
+    let snaps: SnapshotDiario[];
+    try {
+      snaps = await obtenerSnapshotsDiarios(campana.id, meta.fecha_inicio, hastaEfectivo);
+    } catch {
+      continue;
+    }
+    if (snaps.length < 3) continue;
+
+    const frecProm = promedio(snaps.slice(-3).map((f) => f.frequency).filter((f): f is number => f != null));
+    if (frecProm != null && frecProm >= UMBRAL_FRECUENCIA_SATURACION) {
+      campanaSaturada = campana;
+      motivoSaturacion = "frecuencia";
+      frecuenciaSaturacion = frecProm;
+      break;
+    }
+
+    if (await huboSubidaSinMejora(meta.id, campana.id, snaps)) {
+      campanaSaturada = campana;
+      motivoSaturacion = "subida_sin_mejora";
+      break;
+    }
+  }
+
+  if (!campanaSaturada || !motivoSaturacion) {
+    return { propuso: false, evaluacion: { regla: "abrir_otro_frente", aplico: false, condicion: "ninguna campaña activa está saturada todavía (frecuencia < 2.5 y sin subida reciente sin mejora)" } };
+  }
+
+  // Ángulos ya usados en TODAS las campañas activas, no solo la
+  // saturada -- la campaña nueva debe diferenciarse del conjunto, no
+  // solo de la que disparó la señal.
+  const { data: usuario } = await supabaseAdmin
+    .from("usuarios")
+    .select("meta_access_token")
+    .eq("id", meta.user_id)
+    .single();
+
+  let angulosAEvitar: string[] = [];
+  if (usuario?.meta_access_token) {
+    const listas = await Promise.all(
+      campanasActivas
+        .filter((c) => c.meta_campaign_id)
+        .map((c) => obtenerAngulosUsados(c.meta_campaign_id as string, usuario.meta_access_token))
+    );
+    angulosAEvitar = [...new Set(listas.flat())];
+  }
+
+  const resultado = await proponerSiNoDuplicado(
+    meta,
+    {
+      asistente: "estratega",
+      accion: "generar_estrategia",
+      parametros: { presupuesto_diario_sugerido_cop: presupuestoSugeridoCop, angulos_a_evitar: angulosAEvitar },
+      texto: textoAbrirOtroFrente({
+        tipo: meta.tipo,
+        cantidadObjetivo: meta.cantidad_objetivo,
+        proyeccion: avance.proyeccion,
+        presupuestoDiarioSugeridoCop: presupuestoSugeridoCop,
+        margenCop,
+        nombreCampanaSaturada: campanaSaturada.nombre,
+        motivoSaturacion,
+        frecuencia: frecuenciaSaturacion,
+      }),
+    },
+    simular
+  );
+
+  return {
+    propuso: resultado.propuso,
+    evaluacion: {
+      regla: "abrir_otro_frente",
+      aplico: true,
+      condicion: `margen $${Math.round(margenCop)} (sugerido $${presupuestoSugeridoCop}/día) ≥ costo objetivo; "${campanaSaturada.nombre}" saturada por ${motivoSaturacion}`,
+      propuso: resultado.propuso,
+      propuesta: resultado.propuesta,
+    },
+  };
 }
 
 // Último cambio EJECUTADO por campaña (de propuestas aprobadas o de
