@@ -15,20 +15,42 @@ function compararSeguro(a: string, b: string): boolean {
 // accion segun que estabamos optimizando. OUTCOME_AWARENESS no tiene un
 // "resultado" claro tipo conversion (es alcance/impresiones), asi que se
 // deja en 0 a proposito.
+//
+// Es una lista de PRIORIDAD, no un conjunto para sumar: purchase y
+// omni_purchase (igual que lead y onsite_conversion.lead_grouped) pueden
+// ser dos formas de medir la MISMA conversión real -- omni_purchase es
+// la métrica unificada de Meta que ya puede incluir adentro lo que
+// purchase cuenta por su cuenta. Sumarlas (como hacía esta lista antes)
+// arriesgaba contar una sola venta/lead dos veces. Ahora se toma el
+// primer action_type de la lista que de verdad venga en la respuesta,
+// nunca los dos.
 const ACCIONES_POR_OBJETIVO: Record<string, string[]> = {
-  OUTCOME_SALES: ["purchase", "omni_purchase"],
-  OUTCOME_LEADS: ["lead", "onsite_conversion.lead_grouped"],
+  OUTCOME_SALES: ["omni_purchase", "purchase"],
+  OUTCOME_LEADS: ["onsite_conversion.lead_grouped", "lead"],
   OUTCOME_ENGAGEMENT: ["onsite_conversion.messaging_conversation_started_7d"],
   OUTCOME_TRAFFIC: ["link_click"],
 };
 
+// Mismo criterio de prioridad que contarConversiones, pero leyendo
+// action_values (el valor en dinero de la conversión, no el conteo) --
+// para objetivos que no cargan valor (WhatsApp, leads, tráfico) esto da
+// 0 de forma natural, sin ningún caso especial por tipo.
+function elegirValor(lista: any[] | undefined, objetivoMeta: string | null): number {
+  if (!lista || !objetivoMeta) return 0;
+  const prioridad = ACCIONES_POR_OBJETIVO[objetivoMeta] || [];
+  for (const tipo of prioridad) {
+    const encontrada = lista.find((a) => a.action_type === tipo);
+    if (encontrada) return parseFloat(encontrada.value) || 0;
+  }
+  return 0;
+}
+
 function contarConversiones(actions: any[] | undefined, objetivoMeta: string | null): number {
-  if (!actions || !objetivoMeta) return 0;
-  const tiposBuscados = ACCIONES_POR_OBJETIVO[objetivoMeta] || [];
-  if (tiposBuscados.length === 0) return 0;
-  return actions
-    .filter((a) => tiposBuscados.includes(a.action_type))
-    .reduce((sum, a) => sum + (parseInt(a.value, 10) || 0), 0);
+  return Math.round(elegirValor(actions, objetivoMeta));
+}
+
+function sumarValorConversion(actionValues: any[] | undefined, objetivoMeta: string | null): number {
+  return elegirValor(actionValues, objetivoMeta);
 }
 
 // Traduce el estado real de Meta a los estados propios de Quiubot.
@@ -78,7 +100,7 @@ export async function POST(req: NextRequest) {
 
   const { data: usuarios } = await supabaseAdmin
     .from("usuarios")
-    .select("id, email, meta_access_token")
+    .select("id, email, meta_access_token, meta_ad_account_id")
     .not("meta_access_token", "is", null);
 
   let campanasActualizadas = 0;
@@ -87,12 +109,31 @@ export async function POST(req: NextRequest) {
   for (const usuario of usuarios || []) {
     const { data: campanas } = await supabaseAdmin
       .from("campanas_publicadas")
-      .select("id, meta_campaign_id, objetivo, estado")
+      .select("id, meta_campaign_id, objetivo, estado, moneda")
       .eq("user_id", usuario.id)
       .not("meta_campaign_id", "is", null)
       .neq("estado", "eliminada");
 
     if (!campanas || campanas.length === 0) continue;
+
+    // La moneda de la cuenta publicitaria no cambia -- solo se pide una
+    // vez por usuario por corrida, y solo si hace falta (alguna de sus
+    // campañas todavía no la tiene guardada). El ROAS no la necesita
+    // (es valor ÷ gasto en la MISMA moneda), pero cualquier texto que
+    // muestre el ingreso tiene que saber en qué moneda está.
+    let monedaCuenta: string | null = null;
+    if (usuario.meta_ad_account_id && campanas.some((c) => !c.moneda)) {
+      try {
+        const resCuenta = await fetch(
+          `https://graph.facebook.com/v21.0/${usuario.meta_ad_account_id}?fields=currency&access_token=${usuario.meta_access_token}`
+        );
+        const dataCuenta = await resCuenta.json();
+        monedaCuenta = typeof dataCuenta.currency === "string" ? dataCuenta.currency : null;
+      } catch {
+        // Sin moneda esta corrida no es crítico -- se reintenta en la
+        // siguiente (queda null hasta entonces, nunca bloquea el resto).
+      }
+    }
 
     let tokenInvalido = false;
 
@@ -103,7 +144,7 @@ export async function POST(req: NextRequest) {
         const [insightsRes, statusRes] = await Promise.all([
           fetch(
             `https://graph.facebook.com/v21.0/${campana.meta_campaign_id}/insights` +
-              `?fields=spend,ctr,reach,frequency,impressions,actions&date_preset=${datePreset}` +
+              `?fields=spend,ctr,reach,frequency,impressions,actions,action_values&date_preset=${datePreset}` +
               `&access_token=${usuario.meta_access_token}`
           ),
           fetch(
@@ -138,10 +179,13 @@ export async function POST(req: NextRequest) {
         const fila = insightsData.data?.[0] || {};
 
         const nuevoEstado = mapearEstado(statusData.effective_status);
-        if (nuevoEstado && nuevoEstado !== campana.estado) {
+        const actualizacionCampana: Record<string, string> = {};
+        if (nuevoEstado && nuevoEstado !== campana.estado) actualizacionCampana.estado = nuevoEstado;
+        if (!campana.moneda && monedaCuenta) actualizacionCampana.moneda = monedaCuenta;
+        if (Object.keys(actualizacionCampana).length > 0) {
           await supabaseAdmin
             .from("campanas_publicadas")
-            .update({ estado: nuevoEstado })
+            .update(actualizacionCampana)
             .eq("id", campana.id);
         }
 
@@ -161,6 +205,7 @@ export async function POST(req: NextRequest) {
           reach: fila.reach ? parseInt(fila.reach, 10) : null,
           frequency: fila.frequency ? parseFloat(fila.frequency) : null,
           conversiones: contarConversiones(fila.actions, campana.objetivo),
+          valor_conversion: sumarValorConversion(fila.action_values, campana.objetivo),
           impresiones: fila.impressions ? parseInt(fila.impressions, 10) : null,
           objetivo: campana.objetivo,
           raw: fila,
