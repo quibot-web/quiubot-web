@@ -97,15 +97,19 @@ export async function calcularResultadosPeriodo(
   const desde = fechaPago ? fechaBogota(new Date(fechaPago)) : fechaBogota(new Date(ahora.getTime() - 30 * 24 * 60 * 60 * 1000));
   const hasta = fechaBogota(ahora);
 
+  // .maybeSingle() con varias metas activas (una por tipo, desde esta
+  // fase) devuelve null sin tirar error -- cae al resumen general de
+  // abajo (todas las campañas, sin tipoLabel), que sigue siendo un
+  // resultado razonable para el correo aunque no distinga por meta.
   const { data: metaActiva } = await supabaseAdmin
     .from("metas")
-    .select("tipo")
+    .select("id, tipo")
     .eq("user_id", userId)
     .eq("estado", "activa")
     .maybeSingle();
 
   if (metaActiva?.tipo) {
-    const campanas = await obtenerCampanasDeMeta(metaActiva.tipo as TipoMeta, userId);
+    const campanas = await obtenerCampanasDeMeta({ id: metaActiva.id, tipo: metaActiva.tipo as TipoMeta }, userId);
     let spend = 0;
     let conversiones = 0;
     for (const c of campanas) {

@@ -22,7 +22,7 @@ export type BloqueConfig = { id: string; visible: boolean };
 // el admin ya haya guardado o reordenado a mano.
 export const BLOQUES_INICIO: { id: BloqueId; nombre: string; siempreVisible: boolean; insertarDespuesDe?: BloqueId }[] = [
   { id: "banners", nombre: "Banners", siempreVisible: false },
-  { id: "meta", nombre: "Mi meta", siempreVisible: false, insertarDespuesDe: "banners" },
+  { id: "meta", nombre: "Mis metas", siempreVisible: true, insertarDespuesDe: "banners" },
   { id: "estado_sistema", nombre: "Quiubot trabajando en segundo plano", siempreVisible: false },
   { id: "saludo", nombre: "Saludo", siempreVisible: false },
   { id: "metricas", nombre: "Métricas", siempreVisible: true },

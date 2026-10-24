@@ -885,6 +885,12 @@ export default function Home() {
                 <span className="qb-tooltip">Mis Campañas</span>
               </a>
 
+              <a href="/metas" className="qb-nav-item">
+                <span className="qb-nav-icon"><Icono><circle cx="12" cy="12" r="3" /><circle cx="12" cy="12" r="7" /><path d="M12 2v3M12 19v3M2 12h3M19 12h3" /></Icono></span>
+                <span className="qb-nav-label">Metas</span>
+                <span className="qb-tooltip">Metas</span>
+              </a>
+
               <div onClick={() => setTab("album")} className={`qb-nav-item${tab === "album" ? " activo" : ""}`}>
                 <span className="qb-nav-icon"><Icono><rect x="3" y="3" width="18" height="18" rx="2" /><circle cx="8.5" cy="8.5" r="1.4" /><path d="M21 15l-5-5L5 21" /></Icono></span>
                 <span className="qb-nav-label">Álbum Creativos</span>

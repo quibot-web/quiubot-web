@@ -284,22 +284,28 @@ async function verificarCampanaYAutopiloto(
     return { ok: false, error: "Esa campaña no pertenece a tu cuenta.", status: 403 };
   }
 
-  const { data: metaActiva } = await supabaseAdmin
-    .from("metas")
-    .select("id, pausado_autopiloto")
-    .eq("user_id", usuario.id)
-    .eq("estado", "activa")
-    .maybeSingle();
+  // El freno de mano es por meta (pausado_autopiloto vive en "metas",
+  // nunca hubo un interruptor global) -- con varias metas activas a la
+  // vez, lo correcto es mirar la meta QUE ESTA PROPUESTA trae consigo
+  // (propuesta.meta_id), no "la" meta activa del usuario (eso ya no es
+  // único: .maybeSingle() con 2+ filas devolvía null sin avisar).
+  if (propuesta.meta_id) {
+    const { data: metaDeLaPropuesta } = await supabaseAdmin
+      .from("metas")
+      .select("id, pausado_autopiloto")
+      .eq("id", propuesta.meta_id)
+      .maybeSingle();
 
-  if (metaActiva?.pausado_autopiloto) {
-    await supabaseAdmin.from("bitacora").insert({
-      user_id: usuario.id,
-      meta_id: metaActiva.id,
-      propuesta_id: propuesta.id,
-      tipo_evento: "propuesta_bloqueada_autopiloto_pausado",
-      detalle: { accion: propuesta.accion },
-    });
-    return { ok: false, error: "El Autopiloto está pausado. Reanúdalo desde «Mi meta» para aplicar esto.", status: 409 };
+    if (metaDeLaPropuesta?.pausado_autopiloto) {
+      await supabaseAdmin.from("bitacora").insert({
+        user_id: usuario.id,
+        meta_id: metaDeLaPropuesta.id,
+        propuesta_id: propuesta.id,
+        tipo_evento: "propuesta_bloqueada_autopiloto_pausado",
+        detalle: { accion: propuesta.accion },
+      });
+      return { ok: false, error: "El Autopiloto de esa meta está pausado. Reanúdalo desde «Mis metas» para aplicar esto.", status: 409 };
+    }
   }
 
   if (!usuario.meta_access_token) {
@@ -804,7 +810,7 @@ export async function aBase64(imagen: { tipo: "base64" | "url"; valor: string })
 // sus anuncios en Meta (convención QB_IMG_<Angulo>_...), para pedirle a
 // generar_estrategia que no los repita. Nunca bloquea: si Graph API
 // falla o no hay match, sigue sin ángulos.
-async function obtenerAngulosUsados(metaCampaignId: string, metaAccessToken: string): Promise<string[]> {
+export async function obtenerAngulosUsados(metaCampaignId: string, metaAccessToken: string): Promise<string[]> {
   try {
     const res = await fetch(
       `https://graph.facebook.com/v21.0/${metaCampaignId}/ads?fields=name&limit=200&access_token=${metaAccessToken}`

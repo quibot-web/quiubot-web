@@ -1,7 +1,7 @@
 import { auth } from "@/auth";
 import { NextRequest, NextResponse } from "next/server";
 import { supabaseAdmin } from "@/lib/supabase";
-import { calcularAvanceMeta, type TipoMeta } from "@/app/lib/metas";
+import { calcularAvanceMeta, cerrarMetasVencidas, type TipoMeta } from "@/app/lib/metas";
 import { hoyBogota } from "@/app/lib/fechaBogota";
 import { tieneAutopiloto } from "@/app/lib/planesConfig";
 
@@ -24,27 +24,31 @@ export async function GET() {
     return NextResponse.json({ error: "Autopiloto todavía no está disponible." }, { status: 403 });
   }
 
-  const { data: meta } = await supabaseAdmin
+  const { data: metas } = await supabaseAdmin
     .from("metas")
     .select("*")
     .eq("user_id", usuario.id)
-    .eq("estado", "activa")
-    .maybeSingle();
+    .eq("estado", "activa");
 
-  if (!meta) return NextResponse.json({ meta: null, avance: null });
+  const items = await Promise.all(
+    (metas ?? []).map(async (meta) => {
+      try {
+        const avance = await calcularAvanceMeta({
+          id: meta.id,
+          tipo: meta.tipo,
+          user_id: meta.user_id,
+          fecha_inicio: meta.fecha_inicio,
+          fecha_fin: meta.fecha_fin,
+        });
+        return { meta, avance };
+      } catch (err) {
+        console.error(`Error calculando el avance de la meta ${meta.id}:`, err);
+        return { meta, avance: null, error: "No se pudo calcular el avance en este momento." };
+      }
+    })
+  );
 
-  try {
-    const avance = await calcularAvanceMeta({
-      tipo: meta.tipo,
-      user_id: meta.user_id,
-      fecha_inicio: meta.fecha_inicio,
-      fecha_fin: meta.fecha_fin,
-    });
-    return NextResponse.json({ meta, avance });
-  } catch (err) {
-    console.error("Error calculando el avance de la meta:", err);
-    return NextResponse.json({ meta, avance: null, error: "No se pudo calcular el avance en este momento." });
-  }
+  return NextResponse.json({ metas: items });
 }
 
 export async function POST(req: NextRequest) {
@@ -97,15 +101,23 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ error: `La meta debe durar al menos ${DIAS_MINIMOS} días.` }, { status: 400 });
   }
 
+  // Por seguridad: si quedó una meta de este mismo tipo con la
+  // fecha_fin ya vencida pero todavía marcada "activa" (ej. el cron
+  // horario no ha pasado desde que venció), se cierra antes de
+  // chequear -- así una vencida vieja nunca bloquea crear la nueva por
+  // el índice único (user_id, tipo) WHERE estado='activa'.
+  await cerrarMetasVencidas({ userId: usuario.id, tipo });
+
   const { data: metaActiva } = await supabaseAdmin
     .from("metas")
     .select("id")
     .eq("user_id", usuario.id)
+    .eq("tipo", tipo)
     .eq("estado", "activa")
     .maybeSingle();
 
   if (metaActiva) {
-    return NextResponse.json({ error: "Ya tienes una meta activa. Pausa o cancélala antes de crear otra." }, { status: 409 });
+    return NextResponse.json({ error: "Ya tienes una meta activa de este tipo. Pausa o cancélala antes de crear otra." }, { status: 409 });
   }
 
   const { data: metaCreada, error } = await supabaseAdmin

@@ -39,6 +39,7 @@ export default function CrearMetaPage() {
   const router = useRouter();
   const [puedeUsarAutopiloto, setPuedeUsarAutopiloto] = useState<boolean | null>(null);
   const [saludPixel, setSaludPixel] = useState<SaludPixel | null>(null);
+  const [tiposYaActivos, setTiposYaActivos] = useState<Set<TipoMeta>>(new Set());
 
   const [paso, setPaso] = useState(1);
   const [tipo, setTipo] = useState<TipoMeta | null>(null);
@@ -65,6 +66,14 @@ export default function CrearMetaPage() {
       .then((r) => r.json())
       .then((data) => setSaludPixel(data))
       .catch(() => setSaludPixel({ conectado: false, ultimo_disparo: null, compras_7d: 0, compras_con_valor: false }));
+    // El asistente solo ofrece los tipos que el usuario no tiene
+    // activos todavía -- el índice único (user_id, tipo) WHERE
+    // estado='activa' los dejaría crear igual y fallar con un 409, esto
+    // evita que lleguen hasta ahí.
+    fetch("/api/metas")
+      .then((r) => (r.ok ? r.json() : { metas: [] }))
+      .then((data) => setTiposYaActivos(new Set((data.metas ?? []).map((it: any) => it.meta.tipo))))
+      .catch(() => {});
   }, []);
 
   if (puedeUsarAutopiloto === null) {
@@ -206,33 +215,39 @@ export default function CrearMetaPage() {
                 { id: "leads" as TipoMeta, icono: Target, label: "Leads (contactos)" },
                 { id: "ventas_web" as TipoMeta, icono: ShoppingCart, label: "Ventas en tu sitio web" },
               ].map(({ id, icono: Icono, label }) => {
-                const habilitada = id !== "ventas_web" || (saludPixel?.conectado && saludPixel.compras_7d > 0);
+                const yaActivo = tiposYaActivos.has(id);
+                const pixelOk = saludPixel?.conectado && saludPixel.compras_7d > 0;
+                const habilitada = !yaActivo && (id !== "ventas_web" || pixelOk);
+                const motivo = yaActivo
+                  ? "Ya tienes una meta activa de este tipo."
+                  : id === "ventas_web" && saludPixel && !pixelOk
+                    ? !saludPixel.conectado
+                      ? "Conecta tu pixel de Meta en Integraciones."
+                      : "Tu pixel no ha recibido compras en los últimos 7 días."
+                    : null;
                 return (
-                  <button
-                    key={id}
-                    disabled={!habilitada}
-                    onClick={() => habilitada && setTipo(id)}
-                    style={{
-                      display: "flex", alignItems: "center", gap: 12, padding: "14px 16px", borderRadius: 12,
-                      border: tipo === id ? "2px solid #534AB7" : "1px solid #ddd",
-                      background: tipo === id ? "#F3F2FE" : habilitada ? "#fff" : "#f5f5f4",
-                      cursor: habilitada ? "pointer" : "not-allowed",
-                      opacity: habilitada ? 1 : 0.6,
-                      textAlign: "left",
-                    }}
-                  >
-                    <Icono size={20} color="#534AB7" />
-                    <span style={{ fontSize: 15, fontWeight: 600, color: "#1a1a1a" }}>{label}</span>
-                  </button>
+                  <div key={id}>
+                    <button
+                      disabled={!habilitada}
+                      onClick={() => habilitada && setTipo(id)}
+                      style={{
+                        display: "flex", alignItems: "center", gap: 12, padding: "14px 16px", borderRadius: 12, width: "100%",
+                        border: tipo === id ? "2px solid #534AB7" : "1px solid #ddd",
+                        background: tipo === id ? "#F3F2FE" : habilitada ? "#fff" : "#f5f5f4",
+                        cursor: habilitada ? "pointer" : "not-allowed",
+                        opacity: habilitada ? 1 : 0.6,
+                        textAlign: "left",
+                      }}
+                    >
+                      <Icono size={20} color="#534AB7" />
+                      <span style={{ fontSize: 15, fontWeight: 600, color: "#1a1a1a" }}>{label}</span>
+                    </button>
+                    {motivo && <p style={{ fontSize: 12, color: "#888", margin: "4px 0 0 4px" }}>{motivo}</p>}
+                  </div>
                 );
               })}
             </div>
-            <p style={{ fontSize: 12.5, color: "#888", margin: "0 0 24px", lineHeight: 1.5, minHeight: 18 }}>
-              {saludPixel && !(saludPixel.conectado && saludPixel.compras_7d > 0) &&
-                (!saludPixel.conectado
-                  ? "\"Ventas en tu sitio web\" no está disponible todavía: conecta tu pixel de Meta en Integraciones."
-                  : "\"Ventas en tu sitio web\" no está disponible todavía: tu pixel no ha recibido compras en los últimos 7 días.")}
-            </p>
+            <div style={{ marginBottom: 14 }} />
             <button style={estiloBotonPrimario} disabled={!tipo} onClick={() => setPaso(2)}>
               Continuar →
             </button>

@@ -44,10 +44,15 @@ const TEXTO_CORTO_RECORDATORIO: Record<string, string> = {
 export default function TarjetaEquipo() {
   const [cargando, setCargando] = useState(true);
   const [visible, setVisible] = useState(false);
-  const [pausado, setPausado] = useState(false);
   const [asistentesEsperando, setAsistentesEsperando] = useState<Set<AsistenteId>>(new Set());
   const [previa, setPrevia] = useState<{ titulo: string; asistente: AsistenteId; extra: number } | null>(null);
 
+  // El fetch a /api/metas sigue acá -- no por su contenido, sino porque
+  // si no responde 200 (sin tieneAutopiloto) este bloque no debe
+  // renderizar nada, igual que siempre. Lo que cambió es que ya no lee
+  // "la" meta pausada de ahí: con varias metas activas a la vez (una
+  // por tipo) ese "la" ya no existe, y el pausado ahora se ve por meta
+  // en "Mis metas", no atenuando todo el equipo acá.
   useEffect(() => {
     Promise.all([
       fetch("/api/metas").then((r) => {
@@ -57,9 +62,8 @@ export default function TarjetaEquipo() {
       fetch("/api/propuestas").then((r) => (r.ok ? r.json() : { propuestas: [] })),
       fetch("/api/billing/recordatorio").then((r) => (r.ok ? r.json() : { etapa: null })),
     ])
-      .then(([metaData, propuestasData, recordatorioData]) => {
+      .then(([, propuestasData, recordatorioData]) => {
         setVisible(true);
-        setPausado(!!metaData.meta?.pausado_autopiloto);
         const lista: any[] = propuestasData.propuestas ?? [];
         // El asistente siempre se deduce de la acción cuando la hay
         // (ASISTENTE_POR_ACCION, vía asistenteDeMensaje) -- nunca del
@@ -97,13 +101,11 @@ export default function TarjetaEquipo() {
   if (cargando || !visible) return null;
 
   const estadoDe = (id: AsistenteId): EstadoEsfera => {
-    if (pausado) return "pausa";
     if (asistentesEsperando.has(id)) return "esperando";
     return "normal";
   };
 
   const textoDe = (id: AsistenteId): string => {
-    if (pausado) return "En pausa";
     if (asistentesEsperando.has(id)) return "Te necesita";
     return "Activo";
   };

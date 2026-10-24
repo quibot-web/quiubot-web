@@ -2,7 +2,7 @@
 import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import NotificacionIcono from "@/app/components/NotificacionIcono";
-import TarjetaMeta from "@/app/components/TarjetaMeta";
+import ListaMisMetas from "@/app/components/ListaMisMetas";
 import TarjetaEquipo from "@/app/components/TarjetaEquipo";
 import BadgeDecisiones from "@/app/components/BadgeDecisiones";
 import { ProveedorEsferas } from "@/app/components/esferas/ProveedorEsferas";
@@ -14,7 +14,7 @@ import { BLOQUES_DEFAULT, BLOQUES_COLUMNA_DERECHA, type BloqueId } from "@/app/l
 // interruptor, pero esto es el respaldo real: aunque llegue un
 // visible:false desde la base (a mano, por un bug, o lo que sea), estos
 // dos bloques no dependen solo de ese valor.
-const SIEMPRE_VISIBLES = new Set<BloqueId>(["metricas", "decisiones_pendientes"]);
+const SIEMPRE_VISIBLES = new Set<BloqueId>(["metricas", "decisiones_pendientes", "meta"]);
 
 function useEsMovil() {
   const [esMovil, setEsMovil] = useState(false);
@@ -324,7 +324,7 @@ export default function HomeInicio({ nombreUsuario }: { nombreUsuario: string })
   const RENDERERS: Record<string, () => React.ReactNode> = {
     banners: () => <CarruselBanners banners={datos.banners || []} visible={visible} />,
 
-    meta: () => <TarjetaMeta />,
+    meta: () => <ListaMisMetas />,
 
     equipo: () => <TarjetaEquipo />,
 

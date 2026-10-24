@@ -2,6 +2,7 @@ import { after, NextRequest, NextResponse } from "next/server";
 import { timingSafeEqual } from "crypto";
 import { supabaseAdmin } from "@/lib/supabase";
 import { revisarGeneracionCreativos, procesarCreacionCreativos } from "@/app/lib/propuestas";
+import { cerrarMetasVencidas } from "@/app/lib/metas";
 
 function compararSeguro(a: string, b: string): boolean {
   const bufA = Buffer.from(a);
@@ -33,6 +34,13 @@ export async function POST(req: NextRequest) {
   if (!compararSeguro(authHeader, `Bearer ${adminSecret}`)) {
     return NextResponse.json({ error: "No autorizado" }, { status: 401 });
   }
+
+  // Metas "activas" cuya fecha_fin ya pasó -- se cierran de verdad
+  // (vencida, o cumplida si llegó a la cantidad) para que el índice
+  // único (user_id, tipo) WHERE estado='activa' nunca quede bloqueado
+  // por una meta que ya terminó. Nada que ver con propuestas, pero
+  // vive en este mismo cron horario en vez de uno nuevo.
+  const metasCerradas = await cerrarMetasVencidas();
 
   const { data: vencidasPendiente, error: errorPendiente } = await supabaseAdmin
     .from("propuestas")
@@ -98,6 +106,7 @@ export async function POST(req: NextRequest) {
 
   return NextResponse.json({
     ok: true,
+    metas_cerradas: metasCerradas.length,
     vencidas: vencidasPendiente?.length ?? 0,
     vencidas_esperando_fotos: vencidasEsperandoFotos?.length ?? 0,
     generando_revisadas: revisadas,

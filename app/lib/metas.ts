@@ -177,6 +177,22 @@ export function campanaCoincideConTipo(
   return campana.objetivo === OBJETIVO_META_POR_TIPO[tipo];
 }
 
+// Campañas de UNA meta puntual (no "del tipo" en general) --
+// campanas_publicadas.meta_id es la fuente principal desde que existe
+// (se escribe al publicar, ver publicar-estrategia/route.ts). Una
+// campaña vieja sin meta_id se asocia por objetivo, pero solo tiene
+// sentido hacerlo contra la meta ACTIVA de ese tipo -- con el índice
+// único (user_id, tipo) WHERE estado='activa', nunca hay más de una,
+// así que no hay ambigüedad real: el llamador simplemente nunca debe
+// pasar una meta que no sea la activa de su tipo para este propósito.
+export function campanaPerteneceAMeta(
+  campana: { meta_id?: string | null; objetivo_id: string | null; objetivo: string | null },
+  meta: { id: string; tipo: TipoMeta }
+): boolean {
+  if (campana.meta_id) return campana.meta_id === meta.id;
+  return campanaCoincideConTipo(campana, meta.tipo);
+}
+
 // Para el body de agregar_anuncios (necesita objetivo_id siempre, no el
 // objetivo crudo de Meta) -- mismo fallback que campanaCoincideConTipo,
 // pero devolviendo el id en vez de un booleano. Solo cubre los dos tipos
@@ -197,6 +213,7 @@ export type CampanaDeMeta = {
   estado: string;
   objetivo: string | null;
   objetivo_id: string | null;
+  meta_id: string | null;
   meta_campaign_id: string | null;
   meta_adset_id: string | null;
   presupuesto_diario: number | null;
@@ -207,17 +224,16 @@ export type CampanaDeMeta = {
   moneda: string | null;
 };
 
-// Campañas del usuario que coinciden con el tipo de una meta -- mismo
-// matcheo que usa sumarResultados (objetivo_id con fallback a objetivo),
-// pero con los campos que necesita el Director para evaluar reglas y
-// armar propuestas, no solo para sumar spend/conversiones.
-export async function obtenerCampanasDeMeta(tipo: TipoMeta, userId: string): Promise<CampanaDeMeta[]> {
+// Campañas de UNA meta puntual (ver campanaPerteneceAMeta) -- con los
+// campos que necesita el Director para evaluar reglas y armar
+// propuestas, no solo para sumar spend/conversiones.
+export async function obtenerCampanasDeMeta(meta: { id: string; tipo: TipoMeta }, userId: string): Promise<CampanaDeMeta[]> {
   const { data: campanas } = await supabaseAdmin
     .from("campanas_publicadas")
-    .select("id, nombre, estado, objetivo, objetivo_id, meta_campaign_id, meta_adset_id, presupuesto_diario, fecha_publicacion, moneda")
+    .select("id, nombre, estado, objetivo, objetivo_id, meta_id, meta_campaign_id, meta_adset_id, presupuesto_diario, fecha_publicacion, moneda")
     .eq("user_id", userId);
 
-  return (campanas ?? []).filter((c) => campanaCoincideConTipo(c, tipo));
+  return (campanas ?? []).filter((c) => campanaPerteneceAMeta(c, meta));
 }
 
 export type SnapshotDiario = {
@@ -278,13 +294,22 @@ export async function obtenerSnapshotsDiarios(campanaId: string, desde: string, 
 // sola fila por campaña por día -- defensivo ante un futuro segundo
 // escritor en campanas_snapshots, aunque el indice unico (campana_id,
 // fecha_bogota) ya no deberia permitir duplicados.
+//
+// metaId (opcional): cuando viene, las campañas con meta_id se filtran
+// por ESA meta puntual (campanaPerteneceAMeta), no por tipo en general --
+// lo usa calcularAvanceMeta, que siempre es sobre una meta concreta. Sin
+// metaId (calcularCostoReferencia, el histórico de 90 días) se sigue
+// matcheando por objetivo a secas, cruzando todas las campañas del tipo
+// sin importar a qué meta (activa o ya terminada) quedaron ligadas --
+// ese cálculo necesita ver el historial completo, no solo la meta actual.
 async function sumarResultados(params: {
   tipo: TipoMeta;
   userId: string | null;
   desde: string;
   hasta: string;
+  metaId?: string;
 }): Promise<{ spend: number; conversiones: number; ingreso: number; campanas: number }> {
-  let query = supabaseAdmin.from("campanas_publicadas").select("id, objetivo_id, objetivo");
+  let query = supabaseAdmin.from("campanas_publicadas").select("id, meta_id, objetivo_id, objetivo");
   if (params.userId) query = query.eq("user_id", params.userId);
   const { data: campanas, error: errorCampanas } = await query;
   if (errorCampanas) {
@@ -292,7 +317,7 @@ async function sumarResultados(params: {
   }
 
   const idsCoinciden = (campanas ?? [])
-    .filter((c) => campanaCoincideConTipo(c, params.tipo))
+    .filter((c) => (params.metaId ? campanaPerteneceAMeta(c, { id: params.metaId, tipo: params.tipo }) : campanaCoincideConTipo(c, params.tipo)))
     .map((c) => c.id);
 
   if (idsCoinciden.length === 0) return { spend: 0, conversiones: 0, ingreso: 0, campanas: 0 };
@@ -358,6 +383,7 @@ export type AvanceMeta = {
 // terminados, porque con menos una racha corta puede dar una proyección
 // absurda.
 export async function calcularAvanceMeta(meta: {
+  id: string;
   tipo: TipoMeta;
   user_id: string;
   fecha_inicio: string;
@@ -372,6 +398,7 @@ export async function calcularAvanceMeta(meta: {
     userId: meta.user_id,
     desde: meta.fecha_inicio,
     hasta: hastaEfectivo,
+    metaId: meta.id,
   });
 
   const diasTranscurridos = diasEntre(meta.fecha_inicio, hastaEfectivo).length;
@@ -396,6 +423,7 @@ export async function calcularAvanceMeta(meta: {
             userId: meta.user_id,
             desde: diasCompletos[0],
             hasta: diasCompletos[diasCompletos.length - 1],
+            metaId: meta.id,
           })
         : { spend: 0, conversiones: 0, ingreso: 0, campanas: 0 };
 
@@ -424,6 +452,82 @@ export async function calcularAvanceMeta(meta: {
 function calcularRoasDeTotales(ingreso: number, spend: number): number | null {
   if (spend <= 0 || ingreso <= 0) return null;
   return ingreso / spend;
+}
+
+export type ResultadoCierreMeta = {
+  metaId: string;
+  userId: string;
+  estadoNuevo: "vencida" | "cumplida";
+  conversiones: number;
+  cantidadObjetivo: number;
+};
+
+// Cierra de verdad (vencida o cumplida) las metas "activas" cuya
+// fecha_fin ya pasó -- el estado nunca se queda en "activa" para
+// siempre con la fecha vencida, porque con el índice único (user_id,
+// tipo) WHERE estado='activa' eso bloquearía crear una meta nueva del
+// mismo tipo. Dos llamadores: el cron horario (sin filtro, revisa a
+// todos) y /api/metas al crear una meta (filtrado a ese usuario+tipo,
+// por seguridad, para que una vencida vieja nunca frene la creación).
+// "Cumplida" si llegó a la cantidad objetivo, "vencida" si no -- deja
+// un evento en bitácora y una notificación (tipo "meta_terminada",
+// renderiza con el ícono genérico de NotificacionIcono) para que el
+// cliente se entere.
+export async function cerrarMetasVencidas(filtro: { userId?: string; tipo?: TipoMeta } = {}): Promise<ResultadoCierreMeta[]> {
+  const hoy = hoyBogota();
+  let query = supabaseAdmin
+    .from("metas")
+    .select("id, user_id, tipo, cantidad_objetivo, fecha_inicio, fecha_fin")
+    .eq("estado", "activa")
+    .lt("fecha_fin", hoy);
+  if (filtro.userId) query = query.eq("user_id", filtro.userId);
+  if (filtro.tipo) query = query.eq("tipo", filtro.tipo);
+  const { data: vencidas } = await query;
+
+  const resultados: ResultadoCierreMeta[] = [];
+  for (const meta of vencidas ?? []) {
+    let conversiones = 0;
+    try {
+      const avance = await calcularAvanceMeta(meta);
+      conversiones = avance.conversiones;
+    } catch (err) {
+      // Nunca se deja la meta "activa" por un error de cálculo (eso sí
+      // bloquearía el índice único indefinidamente) -- se cierra como
+      // vencida de todas formas, conservador, con conversiones en 0.
+      console.error(`cerrarMetasVencidas: no se pudo calcular el avance de ${meta.id}:`, err);
+    }
+
+    const estadoNuevo: "vencida" | "cumplida" = conversiones >= meta.cantidad_objetivo ? "cumplida" : "vencida";
+
+    await supabaseAdmin
+      .from("metas")
+      .update({ estado: estadoNuevo, actualizado_en: new Date().toISOString() })
+      .eq("id", meta.id);
+
+    await supabaseAdmin.from("bitacora").insert({
+      user_id: meta.user_id,
+      meta_id: meta.id,
+      propuesta_id: null,
+      tipo_evento: estadoNuevo === "cumplida" ? "meta_cumplida" : "meta_vencida",
+      detalle: { conversiones, cantidad_objetivo: meta.cantidad_objetivo },
+    });
+
+    await supabaseAdmin.from("notificaciones").insert({
+      user_id: meta.user_id,
+      campana_id: null,
+      tipo: "meta_terminada",
+      titulo: estadoNuevo === "cumplida" ? "¡Meta cumplida!" : "Tu meta terminó",
+      mensaje:
+        estadoNuevo === "cumplida"
+          ? `Tu meta terminó: conseguimos ${conversiones} de ${meta.cantidad_objetivo}. ¡Buen trabajo!`
+          : `Tu meta terminó: conseguimos ${conversiones} de ${meta.cantidad_objetivo}.`,
+      estado: "pendiente",
+    });
+
+    resultados.push({ metaId: meta.id, userId: meta.user_id, estadoNuevo, conversiones, cantidadObjetivo: meta.cantidad_objetivo });
+  }
+
+  return resultados;
 }
 
 // Mismo cálculo que calcularAvanceMeta.roas, pero standalone -- para
