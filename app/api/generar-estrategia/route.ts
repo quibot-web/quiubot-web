@@ -1,14 +1,20 @@
 import { auth } from "@/auth";
-import { NextRequest, NextResponse } from "next/server";
+import { after, NextRequest, NextResponse } from "next/server";
 import { supabaseAdmin } from "@/lib/supabase";
 import { PLANES, nombreVisiblePlan, type PlanId } from "@/app/lib/planesConfig";
 import { desencriptarSiHaceFalta } from "@/lib/crypto";
-import { registrarError } from "@/lib/registrarError";
+import { procesarGeneracionEstrategia, revisarTimeoutJob, type EstrategiaJob } from "@/app/lib/estrategiasJobs";
 
 const ORDEN_PLANES = ["arranque", "crecimiento", "escala"];
 const MIN_IMAGENES = 1;
 const MAX_IMAGENES = 3;
 
+// Esta ruta solo hace lo rápido -- validar (sesión, límite del plan,
+// llave de OpenAI), crear el job, y responder. El trabajo largo
+// (generar_estrategia en n8n, 1.5 a 2.5 min) corre en after(), fuera
+// del ciclo de esta petición -- ver app/lib/estrategiasJobs.ts para el
+// por qué. El cliente (app/estrategia/page.tsx) hace polling de
+// GET /api/estrategias-jobs/[id] hasta que quede "lista" o "fallida".
 export async function POST(req: NextRequest) {
   const session = await auth();
   if (!session?.user?.email) {
@@ -20,10 +26,10 @@ export async function POST(req: NextRequest) {
     imagenes_base64,       // array de 1 a 3 imagenes -- antes era imagen_base64 (singular)
     objetivo,
     presupuesto_diario_cop,
-    tipo_contenido,       // "producto" | "servicio" — nuevo
+    tipo_contenido,       // "producto" | "servicio"
     descripcion_servicio, // opcional, solo aplica si tipo_contenido === "servicio"
-    modo_estructura,      // "advantage" | "prueba_conceptos" — nuevo (estructura Andromeda)
-    angulos_a_evitar,      // opcional -- viene de la regla "abrir otro frente" del Director (ver app/api/cron/director/route.ts), mismo campo que ya usa intentarGenerarYCrearCreativos en app/lib/propuestas.ts
+    modo_estructura,      // "advantage" | "prueba_conceptos" (estructura Andromeda)
+    angulos_a_evitar,      // opcional -- viene de la regla "abrir otro frente" del Director
   } = await req.json();
 
   if (!Array.isArray(imagenes_base64) || imagenes_base64.length < MIN_IMAGENES || imagenes_base64.length > MAX_IMAGENES) {
@@ -53,6 +59,8 @@ export async function POST(req: NextRequest) {
   // llamada -- n8n ya hace lo mismo si no le llega este campo.
   const modoEstructuraFinal: "advantage" | "prueba_conceptos" =
     modo_estructura === "prueba_conceptos" ? "prueba_conceptos" : "advantage";
+
+  const angulosAEvitarFinal: string[] = Array.isArray(angulos_a_evitar) ? angulos_a_evitar : [];
 
   const { data: usuario } = await supabaseAdmin
     .from("usuarios")
@@ -137,80 +145,59 @@ export async function POST(req: NextRequest) {
     }
   }
 
-  try {
-    const n8nRes = await fetch("https://n8n.quiubot.site/webhook/generar_estrategia", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({
-        email: emailBusqueda,
-        imagenes_base64,
-        objetivo,
-        presupuesto_diario_cop,
-        openai_key: openaiKeyDescifrada,
-        tipo_contenido: tipoContenidoFinal,
-        descripcion_servicio: descripcionServicioFinal,
-        modo_estructura: modoEstructuraFinal,
-        angulos_a_evitar: Array.isArray(angulos_a_evitar) ? angulos_a_evitar : [],
-      }),
-    });
+  // Sin trabajos duplicados: si ya hay uno pendiente/procesando de
+  // menos de 10 minutos, se devuelve ESE job_id -- nunca se crea otro
+  // ni se vuelve a llamar a n8n (eso cobraría dos veces en OpenAI). Si
+  // revisarTimeoutJob lo marca "fallida" por pasarse de los 10 minutos,
+  // se sigue de largo y se crea uno nuevo.
+  const { data: jobExistente } = await supabaseAdmin
+    .from("estrategias_jobs")
+    .select("*")
+    .eq("user_id", usuario.id)
+    .in("estado", ["pendiente", "procesando"])
+    .order("creado_en", { ascending: false })
+    .limit(1)
+    .maybeSingle();
 
-    const data = await n8nRes.json().catch(() => ({}));
-
-    if (!n8nRes.ok || data.ok === false) {
-      const mensajeError = data.error || "No se pudo generar la estrategia";
-      // Paso propio para diversidad_conceptos (motor Andromeda, ver
-      // code-conceptos-andromeda.md): no es un bug del sistema, es nuestra
-      // propia validación de diversidad en el workflow generar_estrategia
-      // de n8n, que tras 2 intentos de reparación no logró conceptos
-      // distintos entre los anuncios -- se sigue registrando (sin correo,
-      // ver NOTIFICAR_ERRORES_POR_CORREO) para medir qué tan seguido pasa y
-      // ajustar el prompt, pero con su propio paso para no mezclarlo con
-      // fallas reales de conexión/webhook.
-      const paso = data.tipo_error === "diversidad_conceptos" ? "diversidad_conceptos" : "webhook_generar_estrategia";
-
-      registrarError({
-        origen: "generar_estrategia",
-        userId: usuario.id,
-        email: emailBusqueda,
-        paso,
-        errorMensaje: mensajeError,
-        detalleTecnico: JSON.stringify(data),
-        objetivoId: objetivo?.id ?? null,
-      });
-
-      // n8n siempre responde HTTP 200 en su nodo "Respond to Webhook" de
-      // éxito, incluso para data.ok === false (ej. diversidad_conceptos) --
-      // por eso n8nRes.status no sirve para distinguir ese caso. Si n8n
-      // respondió OK pero el body dice ok:false, es un 422 (la petición
-      // estaba bien, el resultado no se pudo generar); si n8n mismo falló
-      // (HTTP no-2xx), se conserva su status.
-      const status = n8nRes.ok ? 422 : (n8nRes.status || 502);
-
-      return NextResponse.json(
-        { ok: false, error: mensajeError, tipo_error: data.tipo_error ?? null },
-        { status }
-      );
+  if (jobExistente) {
+    const actualizado = await revisarTimeoutJob(jobExistente as EstrategiaJob);
+    if (actualizado.estado === "pendiente" || actualizado.estado === "procesando") {
+      return NextResponse.json({ job_id: actualizado.id, estado: actualizado.estado });
     }
-
-    await supabaseAdmin.from("estrategias_generadas").insert({
-      user_id: usuario.id,
-      tipo_contenido: tipoContenidoFinal,
-    });
-
-    return NextResponse.json(data);
-  } catch (err) {
-    console.error("Error al conectar con n8n (generar_estrategia):", err);
-
-    registrarError({
-      origen: "generar_estrategia",
-      userId: usuario.id,
-      email: emailBusqueda,
-      paso: "conexion_con_n8n",
-      errorMensaje: "No se pudo conectar con el servidor de IA",
-      detalleTecnico: String(err),
-      objetivoId: objetivo?.id ?? null,
-    });
-
-    return NextResponse.json({ error: "No se pudo conectar con el servidor de IA" }, { status: 503 });
   }
+
+  const ahora = new Date().toISOString();
+  const { data: job, error: errorCrearJob } = await supabaseAdmin
+    .from("estrategias_jobs")
+    .insert({ user_id: usuario.id, estado: "pendiente", intento_desde: ahora })
+    .select()
+    .single();
+
+  if (errorCrearJob || !job) {
+    console.error("Error creando estrategias_jobs:", errorCrearJob);
+    return NextResponse.json({ error: "No se pudo iniciar la generación. Intenta de nuevo." }, { status: 500 });
+  }
+
+  after(() =>
+    procesarGeneracionEstrategia(job.id, {
+      emailBusqueda,
+      userId: usuario.id,
+      imagenesBase64: imagenes_base64,
+      objetivo,
+      presupuestoDiarioCop: presupuesto_diario_cop,
+      openaiKey: openaiKeyDescifrada,
+      tipoContenido: tipoContenidoFinal,
+      descripcionServicio: descripcionServicioFinal,
+      modoEstructura: modoEstructuraFinal,
+      angulosAEvitar: angulosAEvitarFinal,
+    }).catch(async (err) => {
+      console.error("Error no manejado en procesarGeneracionEstrategia:", err);
+      await supabaseAdmin
+        .from("estrategias_jobs")
+        .update({ estado: "fallida", error: "Error inesperado generando la estrategia." })
+        .eq("id", job.id);
+    })
+  );
+
+  return NextResponse.json({ job_id: job.id, estado: "pendiente" });
 }
