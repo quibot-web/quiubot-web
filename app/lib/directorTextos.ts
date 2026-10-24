@@ -40,10 +40,22 @@ export function textoGenerarEstrategia(datos: { tipo: TipoMeta; cantidadObjetivo
   };
 }
 
-export function textoPausar(datos: { nombreCampana: string; gasto: number; costoObjetivo: number }): TextoPropuesta {
+export function textoPausar(datos: {
+  nombreCampana: string;
+  gasto: number;
+  costoObjetivo: number;
+  // Solo viene en metas ventas_web cuando lo que disparó la regla fue
+  // el retorno (ROAS) bajo, no la falta total de resultados -- cambia
+  // la frase inicial, porque "sin ningún resultado" sería falso: sí
+  // hay ventas, solo que el retorno no alcanza el mínimo pedido.
+  roasBajo?: { valor: number; minimo: number; moneda: string | null };
+}): TextoPropuesta {
+  const cuerpo = datos.roasBajo
+    ? `"${datos.nombreCampana}" está devolviendo ${datos.roasBajo.valor.toFixed(2)} veces lo invertido en los últimos días -- por debajo del mínimo de ${datos.roasBajo.minimo}x que pediste, con ${formatoMoneda(datos.gasto, datos.roasBajo.moneda)} ya gastados.`
+    : `"${datos.nombreCampana}" lleva gastados ${formatoCop(datos.gasto)} sin ningún resultado -- más del doble de tu costo objetivo (${formatoCop(datos.costoObjetivo)} por resultado).`;
   return {
     titulo: `Pausar "${datos.nombreCampana}"`,
-    justificacion: `"${datos.nombreCampana}" lleva gastados ${formatoCop(datos.gasto)} sin ningún resultado -- más del doble de tu costo objetivo (${formatoCop(datos.costoObjetivo)} por resultado). Pausarla evita seguir gastando sin resultados mientras revisas qué ajustar.`,
+    justificacion: `${cuerpo} Pausarla evita seguir invirtiendo presupuesto mientras revisas qué ajustar.`,
     impactoEsperado: "Deja de gastar presupuesto en esta campaña.",
     costoEstimadoCop: null,
   };
@@ -51,16 +63,24 @@ export function textoPausar(datos: { nombreCampana: string; gasto: number; costo
 
 export function textoAjustarPresupuesto(datos: {
   nombreCampana: string;
-  costoActual: number;
+  costoActual: number | null;
   costoObjetivo: number;
   presupuestoActual: number;
   presupuestoNuevo: number;
   proyeccionNueva: number;
   cantidadObjetivo: number;
+  // Solo en ventas_web cuando lo que calificó la campaña como "funciona
+  // bien" fue el retorno, no (o no solo) el costo por resultado.
+  roasBueno?: { valor: number; minimo: number };
 }): TextoPropuesta {
+  const desempeno = datos.roasBueno
+    ? `está devolviendo ${datos.roasBueno.valor.toFixed(2)} veces lo invertido (tu mínimo para subir presupuesto es ${datos.roasBueno.minimo.toFixed(2)}x)`
+    : datos.costoActual != null
+      ? `consigue resultados a ${formatoCop(datos.costoActual)} (tu objetivo es ${formatoCop(datos.costoObjetivo)})`
+      : "va bien";
   return {
     titulo: `Subir presupuesto de "${datos.nombreCampana}"`,
-    justificacion: `"${datos.nombreCampana}" consigue resultados a ${formatoCop(datos.costoActual)} (tu objetivo es ${formatoCop(datos.costoObjetivo)}), pero tu meta va atrasada. Si le subimos 20% el presupuesto diario (de ${formatoCop(datos.presupuestoActual)} a ${formatoCop(datos.presupuestoNuevo)}), a este ritmo llegarías a ~${datos.proyeccionNueva} de ${datos.cantidadObjetivo}.`,
+    justificacion: `"${datos.nombreCampana}" ${desempeno}, pero tu meta va atrasada. Si le subimos 20% el presupuesto diario (de ${formatoCop(datos.presupuestoActual)} a ${formatoCop(datos.presupuestoNuevo)}), a este ritmo llegarías a ~${datos.proyeccionNueva} de ${datos.cantidadObjetivo}.`,
     impactoEsperado: `Más alcance diario para "${datos.nombreCampana}".`,
     costoEstimadoCop: null,
   };

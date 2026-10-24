@@ -201,6 +201,10 @@ export type CampanaDeMeta = {
   meta_adset_id: string | null;
   presupuesto_diario: number | null;
   fecha_publicacion: string | null;
+  // Moneda real de la cuenta publicitaria (campanas_publicadas.moneda) --
+  // null hasta que sync-meta-insights la complete. Solo le hace falta a
+  // ventas_web, para mostrar el ingreso en la moneda correcta.
+  moneda: string | null;
 };
 
 // Campañas del usuario que coinciden con el tipo de una meta -- mismo
@@ -210,7 +214,7 @@ export type CampanaDeMeta = {
 export async function obtenerCampanasDeMeta(tipo: TipoMeta, userId: string): Promise<CampanaDeMeta[]> {
   const { data: campanas } = await supabaseAdmin
     .from("campanas_publicadas")
-    .select("id, nombre, estado, objetivo, objetivo_id, meta_campaign_id, meta_adset_id, presupuesto_diario, fecha_publicacion")
+    .select("id, nombre, estado, objetivo, objetivo_id, meta_campaign_id, meta_adset_id, presupuesto_diario, fecha_publicacion, moneda")
     .eq("user_id", userId);
 
   return (campanas ?? []).filter((c) => campanaCoincideConTipo(c, tipo));

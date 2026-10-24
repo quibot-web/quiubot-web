@@ -34,17 +34,41 @@ const UMBRAL_FRECUENCIA_CANSANCIO = 3;
 const VENCE_EN_HORAS = 24;
 const DIAS_META_SIMULADA = 30;
 const HORAS_SIN_DATOS_ESTADO_DESCONOCIDO_MS = 48 * 60 * 60 * 1000;
+// Solo para metas tipo "ventas_web". Si la meta no definió roas_minimo
+// (el asistente no preguntó, o es una meta vieja de antes de este
+// campo), estos son los defaults -- 1 = punto de equilibrio (ni gana
+// ni pierde), 2 = el "me sirve" típico que el asistente sugiere.
+const ROAS_MINIMO_DEFECTO_PAUSAR = 1;
+const ROAS_MINIMO_DEFECTO_SUBIR = 2;
+const MULTIPLICADOR_ROAS_SUBIR = 1.5;
+const MULTIPLO_GASTO_MINIMO_ROAS = 3;
 
-function sumarSnapshots(filas: SnapshotDiario[]): { spend: number; conversiones: number } {
+function sumarSnapshots(filas: SnapshotDiario[]): { spend: number; conversiones: number; ingreso: number } {
   return filas.reduce(
-    (acc, f) => ({ spend: acc.spend + f.spend, conversiones: acc.conversiones + f.conversiones }),
-    { spend: 0, conversiones: 0 }
+    (acc, f) => ({ spend: acc.spend + f.spend, conversiones: acc.conversiones + f.conversiones, ingreso: acc.ingreso + (f.valorConversion || 0) }),
+    { spend: 0, conversiones: 0, ingreso: 0 }
   );
 }
 
 function costoPorResultado(filas: SnapshotDiario[]): number | null {
   const { spend, conversiones } = sumarSnapshots(filas);
   return conversiones > 0 ? spend / conversiones : null;
+}
+
+// ingreso ÷ gasto -- lo opuesto a costoPorResultado (más alto es
+// mejor). null cuando no hay gasto o no hay ingreso registrado --
+// nunca 0, que significaría "retorno confirmado de cero".
+function roasPorResultado(filas: SnapshotDiario[]): number | null {
+  const { spend, ingreso } = sumarSnapshots(filas);
+  return spend > 0 && ingreso > 0 ? ingreso / spend : null;
+}
+
+function umbralRoasPausar(meta: Meta): number {
+  return meta.roas_minimo ?? ROAS_MINIMO_DEFECTO_PAUSAR;
+}
+
+function umbralRoasSubirPresupuesto(meta: Meta): number {
+  return meta.roas_minimo != null ? meta.roas_minimo * MULTIPLICADOR_ROAS_SUBIR : ROAS_MINIMO_DEFECTO_SUBIR;
 }
 
 function promedio(valores: number[]): number | null {
@@ -440,25 +464,67 @@ async function revisarMeta(meta: Meta, simular: boolean) {
     // o por otra cosa.
 
     // 1) Gasta sin resultados -> pausar. Nunca si es la única activa.
+    //    Para ventas_web, también pausa si SÍ hay resultados pero el
+    //    retorno de los últimos 3 días está por debajo del mínimo
+    //    aceptable (roas_minimo, o 1 -- equilibrio -- si no se definió),
+    //    y solo si se gastó lo suficiente en esos 3 días como para
+    //    confiar en el número (no una compra cara aislada haciendo ruido).
     const umbralGastoSinResultados = MULTIPLO_GASTO_SIN_RESULTADOS * meta.costo_objetivo_cop;
-    const regla1Aplica =
-      campanasActivas.length > 1 &&
-      conversionesCampana === 0 &&
-      gastoCampana >= umbralGastoSinResultados;
+    const sinResultadosAplica = conversionesCampana === 0 && gastoCampana >= umbralGastoSinResultados;
+
+    let roasBajoAplica = false;
+    let roasBajoDetalle = "";
+    if (meta.tipo === "ventas_web") {
+      const ultimos3 = snapshotsCampana.slice(-3);
+      const roasUltimos3 = roasPorResultado(ultimos3);
+      const gastoUltimos3 = sumarSnapshots(ultimos3).spend;
+      const umbralPausar = umbralRoasPausar(meta);
+      const gastoSuficiente = gastoUltimos3 >= MULTIPLO_GASTO_MINIMO_ROAS * meta.costo_objetivo_cop;
+      if (roasUltimos3 != null && gastoSuficiente) {
+        roasBajoAplica = roasUltimos3 < umbralPausar;
+        roasBajoDetalle = `; retorno últimos 3 días ${roasUltimos3.toFixed(2)}x ${roasBajoAplica ? "<" : "≥"} mínimo ${umbralPausar}x (gasto esos días $${Math.round(gastoUltimos3)}): ${roasBajoAplica ? "cumple" : "no cumple"}`;
+      } else {
+        roasBajoDetalle = roasUltimos3 == null
+          ? "; sin retorno calculable en los últimos 3 días (sin valor de compra o sin gasto)"
+          : `; gasto de los últimos 3 días ($${Math.round(gastoUltimos3)}) insuficiente para evaluar el retorno con confianza`;
+      }
+    }
+
+    const regla1Aplica = campanasActivas.length > 1 && (sinResultadosAplica || roasBajoAplica);
     const regla1Condicion =
       campanasActivas.length <= 1
         ? "no se evalúa: es la única campaña activa de la meta"
-        : conversionesCampana > 0
-        ? `resultados ${conversionesCampana} > 0: no cumple "sin resultados"`
-        : `gasto $${Math.round(gastoCampana)} ${gastoCampana >= umbralGastoSinResultados ? "≥" : "<"} 2× objetivo ($${Math.round(umbralGastoSinResultados)}): ${regla1Aplica ? "cumple" : "no cumple"}`;
+        : `${
+            conversionesCampana > 0
+              ? `resultados ${conversionesCampana} > 0: no cumple "sin resultados"`
+              : `gasto $${Math.round(gastoCampana)} ${gastoCampana >= umbralGastoSinResultados ? "≥" : "<"} 2× objetivo ($${Math.round(umbralGastoSinResultados)}): ${sinResultadosAplica ? "cumple" : "no cumple"}`
+          }${roasBajoDetalle}`;
 
-    // 2) Funciona y la meta va atrasada -> subir presupuesto 20%.
+    // 2) Funciona y la meta va atrasada -> subir presupuesto 20%. Para
+    //    ventas_web, "funciona" también cuenta si el retorno de toda
+    //    la ventana ya supera roas_minimo × 1.5 (o 2 si no se definió),
+    //    no solo si el costo por resultado es bueno.
     const umbralCostoAjustar = UMBRAL_COSTO_AJUSTAR * meta.costo_objetivo_cop;
     const costoOk = costoCampana != null && costoCampana <= umbralCostoAjustar;
     const costoDetalle =
       costoCampana != null
         ? `costo $${Math.round(costoCampana)} ${costoOk ? "≤" : ">"} 80% de $${Math.round(meta.costo_objetivo_cop)} ($${Math.round(umbralCostoAjustar)}): ${costoOk ? "cumple" : "no cumple"}`
         : "sin costo por resultado calculable (0 conversiones)";
+
+    let roasOk = false;
+    let roasDetalle = "";
+    if (meta.tipo === "ventas_web") {
+      const roasCampana = roasPorResultado(snapshotsCampana);
+      const umbralSubir = umbralRoasSubirPresupuesto(meta);
+      if (roasCampana != null) {
+        roasOk = roasCampana >= umbralSubir;
+        roasDetalle = `; retorno ${roasCampana.toFixed(2)}x ${roasOk ? "≥" : "<"} mínimo para subir ${umbralSubir.toFixed(2)}x: ${roasOk ? "cumple" : "no cumple"}`;
+      } else {
+        roasDetalle = "; sin retorno calculable (sin valor de compra o sin gasto)";
+      }
+    }
+    const funcionaBien = costoOk || roasOk;
+
     const proyeccionOk = avance.proyeccion != null && avance.proyeccion < meta.cantidad_objetivo;
     const proyeccionDetalle =
       avance.proyeccion != null
@@ -469,7 +535,7 @@ async function revisarMeta(meta: Meta, simular: boolean) {
     let regla2Extra = "";
     let presupuestoNuevo = 0;
     let proyeccionNueva = 0;
-    if (costoOk && proyeccionOk) {
+    if (funcionaBien && proyeccionOk) {
       if (campana.presupuesto_diario == null) {
         regla2Extra = " -- la campaña no tiene presupuesto_diario registrado";
       } else {
@@ -483,7 +549,7 @@ async function revisarMeta(meta: Meta, simular: boolean) {
         }
       }
     }
-    const regla2Condicion = `${costoDetalle}; ${proyeccionDetalle}${regla2Extra}`;
+    const regla2Condicion = `${costoDetalle}${roasDetalle}; ${proyeccionDetalle}${regla2Extra}`;
 
     // 3) Se está cansando -> refrescar creativos. Compara los primeros 3
     // días con datos contra los últimos 3 días con datos dentro de la
@@ -527,7 +593,14 @@ async function revisarMeta(meta: Meta, simular: boolean) {
           asistente: "optimizador",
           accion: "pausar",
           parametros: { campana_id: campana.id },
-          texto: textoPausar({ nombreCampana: campana.nombre, gasto: gastoCampana, costoObjetivo: meta.costo_objetivo_cop }),
+          texto: textoPausar({
+            nombreCampana: campana.nombre,
+            gasto: gastoCampana,
+            costoObjetivo: meta.costo_objetivo_cop,
+            roasBajo: roasBajoAplica
+              ? { valor: roasPorResultado(snapshotsCampana.slice(-3)) as number, minimo: umbralRoasPausar(meta), moneda: campana.moneda }
+              : undefined,
+          }),
         },
         simular
       );
@@ -544,12 +617,13 @@ async function revisarMeta(meta: Meta, simular: boolean) {
           parametros: { campana_id: campana.id, ajuste_porcentaje: AJUSTE_PRESUPUESTO_PORCENTAJE },
           texto: textoAjustarPresupuesto({
             nombreCampana: campana.nombre,
-            costoActual: costoCampana as number,
+            costoActual: costoCampana,
             costoObjetivo: meta.costo_objetivo_cop,
             presupuestoActual: campana.presupuesto_diario as number,
             presupuestoNuevo,
             proyeccionNueva,
             cantidadObjetivo: meta.cantidad_objetivo,
+            roasBueno: roasOk && !costoOk ? { valor: roasPorResultado(snapshotsCampana) as number, minimo: umbralRoasSubirPresupuesto(meta) } : undefined,
           }),
         },
         simular
