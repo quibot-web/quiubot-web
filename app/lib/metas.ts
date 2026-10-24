@@ -5,7 +5,7 @@
 import { supabaseAdmin } from "@/lib/supabase";
 import { diasEntre, hoyBogota, ayerBogota } from "@/app/lib/fechaBogota";
 
-export type TipoMeta = "conversaciones_whatsapp" | "leads";
+export type TipoMeta = "conversaciones_whatsapp" | "leads" | "ventas_web";
 export type EstadoMeta = "activa" | "pausada" | "cumplida" | "vencida" | "cancelada";
 export type NivelAutonomia = "copiloto" | "autopiloto_con_limites";
 
@@ -37,6 +37,10 @@ export type Meta = {
   fecha_fin: string;
   presupuesto_maximo_cop: number;
   costo_objetivo_cop: number;
+  // Solo aplica a tipo "ventas_web" -- cuánto retorno (ingreso/gasto)
+  // necesita cada peso invertido para que la meta lo considere bueno.
+  // null hasta que el asistente la pregunte, o en metas de otro tipo.
+  roas_minimo: number | null;
   nivel_autonomia: NivelAutonomia;
   estado: EstadoMeta;
   pausado_autopiloto: boolean;
@@ -80,10 +84,12 @@ export type EventoBitacora = {
 const OBJETIVO_ID_POR_TIPO: Record<TipoMeta, string> = {
   conversaciones_whatsapp: "venta_directa_whatsapp",
   leads: "leads",
+  ventas_web: "venta_directa_web",
 };
 const OBJETIVO_META_POR_TIPO: Record<TipoMeta, string> = {
   conversaciones_whatsapp: "OUTCOME_ENGAGEMENT",
   leads: "OUTCOME_LEADS",
+  ventas_web: "OUTCOME_SALES",
 };
 
 // Mismo objeto que manda /estrategia al webhook generar_estrategia (ver
@@ -108,6 +114,13 @@ export const OBJETIVO_PARA_TIPO: Record<
     desc: "Captura contactos interesados en tu producto.",
     meta_objective: "OUTCOME_LEADS",
     destino: "formulario",
+  },
+  ventas_web: {
+    id: "venta_directa_web",
+    label: "Venta Directa",
+    desc: "Ventas inmediatas en tu sitio web.",
+    meta_objective: "OUTCOME_SALES",
+    destino: "sitio_web",
   },
 };
 
@@ -210,6 +223,10 @@ export type SnapshotDiario = {
   frequency: number | null;
   ctr: number | null;
   impresiones: number | null;
+  // Valor en dinero de las conversiones del día -- null cuando el tipo
+  // de meta no lo trackea (WhatsApp, leads, tráfico) o cuando el pixel
+  // nunca reportó valor, para distinguirlo de "0 pesos de verdad".
+  valorConversion: number | null;
 };
 
 // Snapshots diarios de UNA campaña, deduplicados por día (misma defensa
@@ -220,7 +237,7 @@ export type SnapshotDiario = {
 export async function obtenerSnapshotsDiarios(campanaId: string, desde: string, hasta: string): Promise<SnapshotDiario[]> {
   const { data: filas, error } = await supabaseAdmin
     .from("campanas_snapshots")
-    .select("fecha_bogota, spend, conversiones, frequency, ctr, impresiones, corrida_en")
+    .select("fecha_bogota, spend, conversiones, frequency, ctr, impresiones, valor_conversion, corrida_en")
     .eq("campana_id", campanaId)
     .gte("fecha_bogota", desde)
     .lte("fecha_bogota", hasta);
@@ -244,6 +261,7 @@ export async function obtenerSnapshotsDiarios(campanaId: string, desde: string, 
         frequency: fila.frequency != null ? Number(fila.frequency) : null,
         ctr: fila.ctr != null ? Number(fila.ctr) : null,
         impresiones: fila.impresiones != null ? Number(fila.impresiones) : null,
+        valorConversion: fila.valor_conversion != null ? Number(fila.valor_conversion) : null,
         corrida_en: fila.corrida_en,
       });
     }
@@ -261,7 +279,7 @@ async function sumarResultados(params: {
   userId: string | null;
   desde: string;
   hasta: string;
-}): Promise<{ spend: number; conversiones: number; campanas: number }> {
+}): Promise<{ spend: number; conversiones: number; ingreso: number; campanas: number }> {
   let query = supabaseAdmin.from("campanas_publicadas").select("id, objetivo_id, objetivo");
   if (params.userId) query = query.eq("user_id", params.userId);
   const { data: campanas, error: errorCampanas } = await query;
@@ -273,11 +291,11 @@ async function sumarResultados(params: {
     .filter((c) => campanaCoincideConTipo(c, params.tipo))
     .map((c) => c.id);
 
-  if (idsCoinciden.length === 0) return { spend: 0, conversiones: 0, campanas: 0 };
+  if (idsCoinciden.length === 0) return { spend: 0, conversiones: 0, ingreso: 0, campanas: 0 };
 
   const { data: filas, error: errorSnapshots } = await supabaseAdmin
     .from("campanas_snapshots")
-    .select("campana_id, fecha_bogota, spend, conversiones, corrida_en")
+    .select("campana_id, fecha_bogota, spend, conversiones, valor_conversion, corrida_en")
     .in("campana_id", idsCoinciden)
     .gte("fecha_bogota", params.desde)
     .lte("fecha_bogota", params.hasta);
@@ -288,7 +306,7 @@ async function sumarResultados(params: {
     throw new Error(`sumarResultados (campanas_snapshots): ${errorSnapshots.message}`);
   }
 
-  const porDia = new Map<string, { spend: number; conversiones: number; corrida_en: string }>();
+  const porDia = new Map<string, { spend: number; conversiones: number; ingreso: number; corrida_en: string }>();
   for (const fila of filas ?? []) {
     const clave = `${fila.campana_id}|${fila.fecha_bogota}`;
     const existente = porDia.get(clave);
@@ -296,6 +314,7 @@ async function sumarResultados(params: {
       porDia.set(clave, {
         spend: Number(fila.spend) || 0,
         conversiones: Number(fila.conversiones) || 0,
+        ingreso: Number(fila.valor_conversion) || 0,
         corrida_en: fila.corrida_en,
       });
     }
@@ -304,13 +323,15 @@ async function sumarResultados(params: {
   const campanasConDatos = new Set<string>();
   let spend = 0;
   let conversiones = 0;
+  let ingreso = 0;
   for (const [clave, valores] of porDia) {
     spend += valores.spend;
     conversiones += valores.conversiones;
+    ingreso += valores.ingreso;
     campanasConDatos.add(clave.split("|")[0]);
   }
 
-  return { spend, conversiones, campanas: campanasConDatos.size };
+  return { spend, conversiones, ingreso, campanas: campanasConDatos.size };
 }
 
 export type AvanceMeta = {
@@ -319,6 +340,11 @@ export type AvanceMeta = {
   diasTranscurridos: number;
   diasRestantes: number;
   proyeccion: number | null;
+  // Solo tienen sentido real en metas de tipo "ventas_web" -- en los
+  // demás tipos ingreso siempre es 0 (nadie reporta valor) y roas queda
+  // en null (0 ÷ gasto no es "sin retorno", es "no se mide retorno aquí").
+  ingreso: number;
+  roas: number | null;
 };
 
 // Progreso de una meta: conversiones/spend solo dentro de su propia
@@ -367,7 +393,7 @@ export async function calcularAvanceMeta(meta: {
             desde: diasCompletos[0],
             hasta: diasCompletos[diasCompletos.length - 1],
           })
-        : { spend: 0, conversiones: 0, campanas: 0 };
+        : { spend: 0, conversiones: 0, ingreso: 0, campanas: 0 };
 
     // Lo de hoy = total - dias completos (mismo rango, sin una tercera
     // consulta): si la meta ya cerró, hoy no aporta nada.
@@ -383,7 +409,25 @@ export async function calcularAvanceMeta(meta: {
     diasTranscurridos,
     diasRestantes,
     proyeccion,
+    ingreso: resultadoTotal.ingreso,
+    roas: calcularRoasDeTotales(resultadoTotal.ingreso, resultadoTotal.spend),
   };
+}
+
+// ingreso ÷ gasto -- más alto es mejor (lo opuesto a costoPorResultado).
+// null cuando no hay valor de compra registrado, nunca 0: "no se sabe
+// el retorno" no es lo mismo que "el retorno fue cero".
+function calcularRoasDeTotales(ingreso: number, spend: number): number | null {
+  if (spend <= 0 || ingreso <= 0) return null;
+  return ingreso / spend;
+}
+
+// Mismo cálculo que calcularAvanceMeta.roas, pero standalone -- para
+// cuando solo hace falta el retorno (ej. mostrarlo en /metas sin pedir
+// todo el avance de vuelta).
+export async function calcularRoas(params: { userId: string; desde: string; hasta: string }): Promise<number | null> {
+  const { spend, ingreso } = await sumarResultados({ tipo: "ventas_web", userId: params.userId, desde: params.desde, hasta: params.hasta });
+  return calcularRoasDeTotales(ingreso, spend);
 }
 
 export type FuenteCostoReferencia = "tu_historial" | "promedio_quiubot" | "referencia_admin";

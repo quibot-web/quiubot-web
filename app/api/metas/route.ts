@@ -5,7 +5,7 @@ import { calcularAvanceMeta, type TipoMeta } from "@/app/lib/metas";
 import { hoyBogota } from "@/app/lib/fechaBogota";
 import { tieneAutopiloto } from "@/app/lib/planesConfig";
 
-const TIPOS_VALIDOS: TipoMeta[] = ["conversaciones_whatsapp", "leads"];
+const TIPOS_VALIDOS: TipoMeta[] = ["conversaciones_whatsapp", "leads", "ventas_web"];
 const DIAS_MINIMOS = 14;
 
 export async function GET() {
@@ -63,7 +63,7 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ error: "Autopiloto todavía no está disponible." }, { status: 403 });
   }
 
-  const { tipo, cantidad_objetivo, fecha_fin, presupuesto_maximo_cop } = await req.json();
+  const { tipo, cantidad_objetivo, fecha_fin, presupuesto_maximo_cop, roas_minimo } = await req.json();
 
   if (!TIPOS_VALIDOS.includes(tipo)) {
     return NextResponse.json({ error: "Tipo de meta inválido." }, { status: 400 });
@@ -75,6 +75,17 @@ export async function POST(req: NextRequest) {
   const presupuesto = Number(presupuesto_maximo_cop);
   if (!Number.isFinite(presupuesto) || presupuesto <= 0) {
     return NextResponse.json({ error: "El presupuesto máximo debe ser mayor a cero." }, { status: 400 });
+  }
+  // Solo aplica (y solo se pregunta en el asistente) para ventas_web --
+  // en los demás tipos siempre queda null. Si viene, tiene que ser un
+  // número positivo real, no cualquier cosa que el cliente mande.
+  let roasMinimo: number | null = null;
+  if (tipo === "ventas_web" && roas_minimo !== undefined && roas_minimo !== null) {
+    const valor = Number(roas_minimo);
+    if (!Number.isFinite(valor) || valor <= 0) {
+      return NextResponse.json({ error: "El retorno mínimo debe ser un número mayor a cero." }, { status: 400 });
+    }
+    roasMinimo = valor;
   }
 
   const hoy = hoyBogota();
@@ -107,6 +118,7 @@ export async function POST(req: NextRequest) {
       fecha_fin,
       presupuesto_maximo_cop: presupuesto,
       costo_objetivo_cop: presupuesto / cantidad,
+      roas_minimo: roasMinimo,
       nivel_autonomia: "copiloto",
       estado: "activa",
       pausado_autopiloto: false,

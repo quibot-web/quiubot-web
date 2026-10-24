@@ -56,6 +56,7 @@ export type ResultadosPeriodo = { cantidad: number; tipoLabel: string; costoProm
 const TIPO_LABEL: Record<TipoMeta, string> = {
   conversaciones_whatsapp: "conversaciones de WhatsApp",
   leads: "leads",
+  ventas_web: "ventas en tu sitio web",
 };
 
 // Deduplica snapshots por (campana_id, fecha_bogota) quedándose con el

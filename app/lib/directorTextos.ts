@@ -13,10 +13,21 @@ export type TextoPropuesta = {
 const TIPO_LABEL: Record<TipoMeta, string> = {
   conversaciones_whatsapp: "conversaciones de WhatsApp",
   leads: "leads",
+  ventas_web: "ventas en tu sitio web",
 };
 
 export function formatoCop(valor: number): string {
   return new Intl.NumberFormat("es-CO", { style: "currency", currency: "COP", maximumFractionDigits: 0 }).format(valor);
+}
+
+// Para montos que vienen de valor_conversion (el ingreso real que
+// reportó el pixel) -- a diferencia de presupuesto/costo objetivo, que
+// siempre son COP por diseño del producto, el ingreso está en la
+// moneda real de la cuenta publicitaria (campanas_publicadas.moneda).
+// Sin moneda guardada todavía, se asume COP (mismo criterio de
+// respaldo que ya usa el resto del producto).
+export function formatoMoneda(valor: number, moneda: string | null): string {
+  return new Intl.NumberFormat("es-CO", { style: "currency", currency: moneda || "COP", maximumFractionDigits: 0 }).format(valor);
 }
 
 export function textoGenerarEstrategia(datos: { tipo: TipoMeta; cantidadObjetivo: number }): TextoPropuesta {

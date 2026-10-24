@@ -184,10 +184,10 @@ export async function POST(req: NextRequest) {
 
 // Meta ficticia en memoria para el modo simulación, cuando el usuario
 // no tiene una meta activa de verdad -- nunca se inserta en "metas".
-// Tipo: según el objetivo de sus campañas activas (leads si alguna
-// coincide con ese tipo, si no conversaciones_whatsapp -- son los
-// únicos dos tipos que existen hoy; si ninguna campaña coincide con
-// ninguno, conversaciones_whatsapp queda como default declarado).
+// Tipo: según el objetivo de sus campañas activas, con esta prioridad --
+// ventas_web primero (es el tipo con mayor valor real por resultado),
+// si no leads, si no conversaciones_whatsapp como default declarado si
+// ninguna campaña coincide con ningún tipo conocido.
 // Ventana: 30 días terminando hoy (para que SÍ haya historial real en
 // campanas_snapshots que las reglas puedan leer -- una ventana que
 // arrancara hoy no tendría ningún día con datos todavía).
@@ -204,9 +204,11 @@ async function construirMetaSimulada(userId: string): Promise<Meta | null> {
 
   if (!campanasActivas || campanasActivas.length === 0) return null;
 
-  const tipo: TipoMeta = campanasActivas.some((c) => campanaCoincideConTipo(c, "leads"))
-    ? "leads"
-    : "conversaciones_whatsapp";
+  const tipo: TipoMeta = campanasActivas.some((c) => campanaCoincideConTipo(c, "ventas_web"))
+    ? "ventas_web"
+    : campanasActivas.some((c) => campanaCoincideConTipo(c, "leads"))
+      ? "leads"
+      : "conversaciones_whatsapp";
 
   const campanasDelTipo = campanasActivas.filter((c) => campanaCoincideConTipo(c, tipo));
   const campanasParaGasto = campanasDelTipo.length > 0 ? campanasDelTipo : campanasActivas;
@@ -229,6 +231,7 @@ async function construirMetaSimulada(userId: string): Promise<Meta | null> {
     fecha_fin: hoy,
     presupuesto_maximo_cop: presupuestoMaximo,
     costo_objetivo_cop: costoObjetivo,
+    roas_minimo: null,
     nivel_autonomia: "copiloto",
     estado: "activa",
     pausado_autopiloto: false,
@@ -282,7 +285,7 @@ async function revisarMeta(meta: Meta, simular: boolean) {
     });
   } catch (err) {
     errorAvance = err instanceof Error ? err.message : "Error desconocido calculando el avance.";
-    avance = { conversiones: 0, spend: 0, diasTranscurridos: 0, diasRestantes: 0, proyeccion: null };
+    avance = { conversiones: 0, spend: 0, diasTranscurridos: 0, diasRestantes: 0, proyeccion: null, ingreso: 0, roas: null };
     if (!simular) {
       await supabaseAdmin.from("bitacora").insert({
         user_id: meta.user_id,
