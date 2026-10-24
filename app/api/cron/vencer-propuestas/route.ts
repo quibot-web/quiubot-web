@@ -3,6 +3,7 @@ import { timingSafeEqual } from "crypto";
 import { supabaseAdmin } from "@/lib/supabase";
 import { revisarGeneracionCreativos, procesarCreacionCreativos } from "@/app/lib/propuestas";
 import { cerrarMetasVencidas } from "@/app/lib/metas";
+import { TIMEOUT_PROCESANDO_MS } from "@/app/lib/estrategiasJobs";
 
 function compararSeguro(a: string, b: string): boolean {
   const bufA = Buffer.from(a);
@@ -41,6 +42,19 @@ export async function POST(req: NextRequest) {
   // por una meta que ya terminó. Nada que ver con propuestas, pero
   // vive en este mismo cron horario en vez de uno nuevo.
   const metasCerradas = await cerrarMetasVencidas();
+
+  // Respaldo del timeout de 10 minutos de estrategias_jobs -- GET
+  // /api/estrategias-jobs/[id] y /ultimo ya lo revisan en cada
+  // consulta (ver app/lib/estrategiasJobs.ts), esto es solo para
+  // cuando nadie está consultando (ej. un despliegue mató el proceso
+  // y el cliente ni siquiera llegó a guardar el job_id). Nunca
+  // reintenta solo -- marcarla "fallida" es lo único que hace.
+  const { data: estrategiasVencidas } = await supabaseAdmin
+    .from("estrategias_jobs")
+    .update({ estado: "fallida", error: "Se interrumpió la generación, intenta de nuevo" })
+    .in("estado", ["pendiente", "procesando"])
+    .lt("intento_desde", new Date(Date.now() - TIMEOUT_PROCESANDO_MS).toISOString())
+    .select("id");
 
   const { data: vencidasPendiente, error: errorPendiente } = await supabaseAdmin
     .from("propuestas")
@@ -107,6 +121,7 @@ export async function POST(req: NextRequest) {
   return NextResponse.json({
     ok: true,
     metas_cerradas: metasCerradas.length,
+    estrategias_jobs_vencidos: estrategiasVencidas?.length ?? 0,
     vencidas: vencidasPendiente?.length ?? 0,
     vencidas_esperando_fotos: vencidasEsperandoFotos?.length ?? 0,
     generando_revisadas: revisadas,
