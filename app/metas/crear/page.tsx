@@ -1,12 +1,15 @@
 "use client";
 import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
-import { MessageCircle, Target, Calendar, Wallet, Clock } from "lucide-react";
+import { MessageCircle, Target, ShoppingCart, Calendar, Wallet, Clock } from "lucide-react";
 import CargandoQuiubot from "@/app/components/CargandoQuiubot";
 import { hoyBogota } from "@/app/lib/fechaBogota";
 import type { TipoMeta } from "@/app/lib/metas";
 
 const DIAS_MINIMOS = 14;
+const ROAS_MINIMO_SUGERIDO = "2";
+
+type SaludPixel = { conectado: boolean; ultimo_disparo: string | null; compras_7d: number; compras_con_valor: boolean | null };
 
 type Previsualizacion = {
   costoObjetivoCop: number;
@@ -35,12 +38,14 @@ function fechaMinima(): string {
 export default function CrearMetaPage() {
   const router = useRouter();
   const [puedeUsarAutopiloto, setPuedeUsarAutopiloto] = useState<boolean | null>(null);
+  const [saludPixel, setSaludPixel] = useState<SaludPixel | null>(null);
 
   const [paso, setPaso] = useState(1);
   const [tipo, setTipo] = useState<TipoMeta | null>(null);
   const [cantidad, setCantidad] = useState("");
   const [fechaFin, setFechaFin] = useState("");
   const [presupuesto, setPresupuesto] = useState("");
+  const [roasMinimo, setRoasMinimo] = useState(ROAS_MINIMO_SUGERIDO);
 
   const [previsualizacion, setPrevisualizacion] = useState<Previsualizacion | null>(null);
   const [cargando, setCargando] = useState(false);
@@ -51,6 +56,15 @@ export default function CrearMetaPage() {
       .then((r) => r.json())
       .then((data) => setPuedeUsarAutopiloto(!!data.tieneAutopiloto))
       .catch(() => setPuedeUsarAutopiloto(false));
+    // Si el pixel no está conectado o no ha visto compras en los
+    // últimos 7 días, "Ventas en tu sitio web" se muestra pero
+    // deshabilitada con la explicación -- nunca se oculta del todo,
+    // para que el cliente entienda qué le falta en vez de preguntarse
+    // por qué no está esa opción.
+    fetch("/api/meta/pixel/salud")
+      .then((r) => r.json())
+      .then((data) => setSaludPixel(data))
+      .catch(() => setSaludPixel({ conectado: false, ultimo_disparo: null, compras_7d: 0, compras_con_valor: false }));
   }, []);
 
   if (puedeUsarAutopiloto === null) {
@@ -83,6 +97,7 @@ export default function CrearMetaPage() {
 
   const cantidadNum = Number(cantidad);
   const presupuestoNum = Number(presupuesto);
+  const roasMinimoValido = tipo !== "ventas_web" || (Number.isFinite(Number(roasMinimo)) && Number(roasMinimo) > 0);
 
   async function pedirPrevisualizacion() {
     setCargando(true);
@@ -115,6 +130,7 @@ export default function CrearMetaPage() {
           cantidad_objetivo: cantidadFinal,
           fecha_fin: fechaFin,
           presupuesto_maximo_cop: presupuestoFinal,
+          roas_minimo: tipo === "ventas_web" ? Number(roasMinimo) : undefined,
         }),
       });
       const data = await res.json();
@@ -184,25 +200,39 @@ export default function CrearMetaPage() {
         {paso === 1 && (
           <div>
             <p style={{ fontSize: 14, color: "#666", margin: "0 0 18px" }}>¿Qué quieres lograr?</p>
-            <div style={{ display: "flex", flexDirection: "column", gap: 10, marginBottom: 24 }}>
+            <div style={{ display: "flex", flexDirection: "column", gap: 10, marginBottom: 10 }}>
               {[
                 { id: "conversaciones_whatsapp" as TipoMeta, icono: MessageCircle, label: "Conversaciones de WhatsApp" },
                 { id: "leads" as TipoMeta, icono: Target, label: "Leads (contactos)" },
-              ].map(({ id, icono: Icono, label }) => (
-                <button
-                  key={id}
-                  onClick={() => setTipo(id)}
-                  style={{
-                    display: "flex", alignItems: "center", gap: 12, padding: "14px 16px", borderRadius: 12,
-                    border: tipo === id ? "2px solid #534AB7" : "1px solid #ddd",
-                    background: tipo === id ? "#F3F2FE" : "#fff", cursor: "pointer", textAlign: "left",
-                  }}
-                >
-                  <Icono size={20} color="#534AB7" />
-                  <span style={{ fontSize: 15, fontWeight: 600, color: "#1a1a1a" }}>{label}</span>
-                </button>
-              ))}
+                { id: "ventas_web" as TipoMeta, icono: ShoppingCart, label: "Ventas en tu sitio web" },
+              ].map(({ id, icono: Icono, label }) => {
+                const habilitada = id !== "ventas_web" || (saludPixel?.conectado && saludPixel.compras_7d > 0);
+                return (
+                  <button
+                    key={id}
+                    disabled={!habilitada}
+                    onClick={() => habilitada && setTipo(id)}
+                    style={{
+                      display: "flex", alignItems: "center", gap: 12, padding: "14px 16px", borderRadius: 12,
+                      border: tipo === id ? "2px solid #534AB7" : "1px solid #ddd",
+                      background: tipo === id ? "#F3F2FE" : habilitada ? "#fff" : "#f5f5f4",
+                      cursor: habilitada ? "pointer" : "not-allowed",
+                      opacity: habilitada ? 1 : 0.6,
+                      textAlign: "left",
+                    }}
+                  >
+                    <Icono size={20} color="#534AB7" />
+                    <span style={{ fontSize: 15, fontWeight: 600, color: "#1a1a1a" }}>{label}</span>
+                  </button>
+                );
+              })}
             </div>
+            <p style={{ fontSize: 12.5, color: "#888", margin: "0 0 24px", lineHeight: 1.5, minHeight: 18 }}>
+              {saludPixel && !(saludPixel.conectado && saludPixel.compras_7d > 0) &&
+                (!saludPixel.conectado
+                  ? "\"Ventas en tu sitio web\" no está disponible todavía: conecta tu pixel de Meta en Integraciones."
+                  : "\"Ventas en tu sitio web\" no está disponible todavía: tu pixel no ha recibido compras en los últimos 7 días.")}
+            </p>
             <button style={estiloBotonPrimario} disabled={!tipo} onClick={() => setPaso(2)}>
               Continuar →
             </button>
@@ -280,6 +310,27 @@ export default function CrearMetaPage() {
 
         {paso === 4 && previsualizacion && (
           <div>
+            {tipo === "ventas_web" && (
+              <div style={{ background: "#F9F8FD", border: "1px solid #E4E1F7", borderRadius: 12, padding: "14px 16px", marginBottom: 20 }}>
+                <p style={{ fontSize: 14, fontWeight: 600, color: "#1a1a1a", margin: "0 0 4px" }}>
+                  ¿Cuánto debe devolverte cada peso invertido para que te sirva?
+                </p>
+                <p style={{ fontSize: 12.5, color: "#888", margin: "0 0 10px", lineHeight: 1.5 }}>
+                  Es tu retorno mínimo (ROAS): si inviertes $1.000 y pides 2, significa que esperas al menos $2.000 en ventas por cada $1.000 gastados en anuncios. Si tu venta promedio ya tiene buen margen, 2 es un punto de partida razonable.
+                </p>
+                <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+                  <input
+                    type="number"
+                    min={0.1}
+                    step={0.1}
+                    value={roasMinimo}
+                    onChange={(e) => setRoasMinimo(e.target.value)}
+                    style={{ ...estiloInput, width: 90 }}
+                  />
+                  <span style={{ fontSize: 13.5, color: "#666" }}>veces lo invertido</span>
+                </div>
+              </div>
+            )}
             {previsualizacion.realista ? (
               <>
                 <p style={{ fontSize: 14, color: "#1a1a1a", margin: "0 0 8px" }}>
@@ -293,7 +344,7 @@ export default function CrearMetaPage() {
                   <button style={estiloBotonSecundario} onClick={() => setPrevisualizacion(null)}>← Atrás</button>
                   <button
                     style={estiloBotonPrimario}
-                    disabled={cargando}
+                    disabled={cargando || !roasMinimoValido}
                     onClick={() => crearMeta(cantidadNum, presupuestoNum)}
                   >
                     {cargando ? "Creando..." : "Crear meta"}
@@ -312,21 +363,21 @@ export default function CrearMetaPage() {
                 <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
                   <button
                     style={estiloBotonPrimario}
-                    disabled={cargando}
+                    disabled={cargando || !roasMinimoValido}
                     onClick={() => crearMeta(previsualizacion.cantidadRealista, presupuestoNum)}
                   >
                     Ajustar meta a ~{previsualizacion.cantidadRealista}
                   </button>
                   <button
                     style={estiloBotonPrimario}
-                    disabled={cargando}
+                    disabled={cargando || !roasMinimoValido}
                     onClick={() => crearMeta(cantidadNum, previsualizacion.presupuestoRealista)}
                   >
                     Ajustar presupuesto a {formatoCop(previsualizacion.presupuestoRealista)}
                   </button>
                   <button
                     style={estiloBotonSecundario}
-                    disabled={cargando}
+                    disabled={cargando || !roasMinimoValido}
                     onClick={() => crearMeta(cantidadNum, presupuestoNum)}
                   >
                     Crear igual
