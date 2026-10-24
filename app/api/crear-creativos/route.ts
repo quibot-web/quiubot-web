@@ -77,7 +77,12 @@ export async function POST(req: NextRequest) {
   // Limite real por plan -- antes solo existia el rate-limit anti-spam de
   // arriba (3 cada 5 min), que no distingue plan ni pone techo mensual.
   // Cada llamada aqui (lote completo, "regenerar todos", o "regenerar un
-  // anuncio") crea una fila en creativos_jobs, y eso es lo que se cuenta.
+  // anuncio") crea una fila en creativos_jobs, y eso es lo que se cuenta
+  // -- salvo las que terminaron en estado "error" (el job entero falló,
+  // ni una imagen salió bien): esas no se cuentan, para que un problema
+  // temporal de OpenAI no le gaste al cliente una generación de su plan.
+  // Un job "listo" con ALGUNAS imágenes fallidas sí sigue contando como
+  // 1 uso -- ahí el lote en general sí funcionó.
   const plan = (usuario.plan as PlanId) || "arranque";
   const limiteJobs = PLANES[plan].creativosJobsPorMes;
 
@@ -90,6 +95,7 @@ export async function POST(req: NextRequest) {
       .from("creativos_jobs")
       .select("*", { count: "exact", head: true })
       .eq("user_id", usuario.id)
+      .neq("estado", "error")
       .gte("creado_en", inicioMes.toISOString());
 
     if ((count ?? 0) >= limiteJobs) {

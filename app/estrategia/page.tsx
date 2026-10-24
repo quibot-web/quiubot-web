@@ -3276,9 +3276,34 @@ function EstrategiaContent() {
 
             {!cargandoCreativos && creativos && creativos.length > 0 && (
               <div>
+                {(() => {
+                  // Un creativo "imagen" (a diferencia de album/video) llega
+                  // sin url_imagen cuando n8n respondió ok:false para ese
+                  // anuncio puntual (ej. un 500 de OpenAI) -- no es que no
+                  // haya nada que mostrar, es que esa generación falló. Si
+                  // TODOS los de imagen fallaron, un aviso arriba de la
+                  // grilla con el mismo botón de regenerar todos.
+                  const creativosImagen = creativos.filter((c) => c.origen === "imagen");
+                  const todasImagenFallaron = creativosImagen.length > 0 && creativosImagen.every((c) => !c.url_imagen);
+                  if (!todasImagenFallaron) return null;
+                  return (
+                    <div style={{ marginBottom: 16, padding: "14px 16px", background: "#fef2f2", border: "1px solid #fecaca", borderRadius: 10, display: "flex", alignItems: "center", justifyContent: "space-between", flexWrap: "wrap", gap: 10 }}>
+                      <p style={{ margin: 0, fontSize: 13.5, color: "#991b1b" }}>
+                        OpenAI tuvo un problema temporal y no se pudo generar ninguna de las imágenes. Puedes intentarlo de nuevo.
+                      </p>
+                      <button
+                        onClick={handleRegenerarTodosImagen}
+                        style={{ background: "#B3261E", border: "none", color: "#fff", fontSize: 13, fontWeight: 600, padding: "8px 14px", borderRadius: 20, cursor: "pointer", flexShrink: 0 }}
+                      >
+                        🔄 Regenerar todos los de imagen
+                      </button>
+                    </div>
+                  );
+                })()}
                 <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(260px, 1fr))", gap: 16 }}>
                   {creativos.map((c, idx) => {
                     const regenerando = !!regenerandoIndices[idx];
+                    const imagenFallida = c.origen === "imagen" && !c.url_imagen;
                     return (
                       <div key={`${c.public_id || c.id || "x"}-${idx}`} style={{ background: "#fff", border: "1px solid #e8e8e6", borderRadius: 12, overflow: "hidden", position: "relative" }}>
                         {/* Botón eliminar */}
@@ -3320,6 +3345,13 @@ function EstrategiaContent() {
                               )}
                             </div>
                           )
+                        ) : imagenFallida ? (
+                          <div style={{ height: 160, background: "#fef2f2", display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", gap: 6, padding: "0 16px", textAlign: "center" }}>
+                            <span style={{ fontSize: 24 }}>⚠️</span>
+                            <p style={{ margin: 0, fontSize: 12.5, color: "#991b1b", lineHeight: 1.4 }}>
+                              OpenAI tuvo un problema temporal al crear esta imagen. Toca "Regenerar este anuncio" para intentarlo de nuevo.
+                            </p>
+                          </div>
                         ) : (
                           <div style={{ height: 160, background: "#f3f2fe", display: "flex", alignItems: "center", justifyContent: "center", fontSize: 32 }}>🖼️</div>
                         )}
@@ -3355,7 +3387,11 @@ function EstrategiaContent() {
                               <button
                                 onClick={() => handleRegenerarUno(idx)}
                                 disabled={regenerando}
-                                style={{ marginTop: 6, background: "#fff", border: "1px solid #e0e0e0", color: "#534AB7", fontSize: 12, fontWeight: 600, padding: "8px 10px", borderRadius: 8, cursor: regenerando ? "not-allowed" : "pointer" }}
+                                style={
+                                  imagenFallida && !regenerando
+                                    ? { marginTop: 6, background: "#B3261E", border: "none", color: "#fff", fontSize: 12, fontWeight: 700, padding: "9px 10px", borderRadius: 8, cursor: "pointer" }
+                                    : { marginTop: 6, background: "#fff", border: "1px solid #e0e0e0", color: "#534AB7", fontSize: 12, fontWeight: 600, padding: "8px 10px", borderRadius: 8, cursor: regenerando ? "not-allowed" : "pointer" }
+                                }
                               >
                                 {regenerando ? "Regenerando..." : "🔄 Regenerar este anuncio"}
                               </button>
