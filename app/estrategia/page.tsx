@@ -96,6 +96,42 @@ async function pollJobHasta(
   throw new Error("La generación de creativos está tardando más de lo esperado. Intenta de nuevo en unos minutos.");
 }
 
+// Clave para retomar la generación de estrategia si el cliente cierra
+// la pestaña y vuelve -- mismo patrón que quiubot_video_job_activo en
+// app/video/page.tsx. GET /api/estrategias-jobs/ultimo es el respaldo
+// por si el storage se perdió o cambió de navegador/dispositivo.
+const LLAVE_ESTRATEGIA_JOB = "quiubot_estrategia_job_activo";
+
+type ErrorJobEstrategia = Error & { tipoError?: string | null };
+
+// Consulta /api/estrategias-jobs/[id] cada 5s hasta "lista" o "fallida".
+// onProgress recibe los segundos transcurridos, para el mensaje amable
+// (ver mensajeProgresoGeneracion) -- no hay un avance real que reportar
+// como en creativos (n8n no informa pasos intermedios acá).
+async function pollEstrategiaJobHasta(jobId: string, onProgress?: (segundos: number) => void, maxMs = 8 * 60 * 1000): Promise<any> {
+  const inicio = Date.now();
+  while (Date.now() - inicio < maxMs) {
+    const res = await fetch(`/api/estrategias-jobs/${jobId}`);
+    const data = await res.json().catch(() => ({}));
+    if (!data.ok) throw new Error(data.error || "No se pudo consultar el estado de la generación.");
+    onProgress?.(Math.round((Date.now() - inicio) / 1000));
+    if (data.estado === "lista") return data.resultado;
+    if (data.estado === "fallida") {
+      const error: ErrorJobEstrategia = new Error(data.error || "No se pudo generar la estrategia.");
+      error.tipoError = data.tipo_error ?? null;
+      throw error;
+    }
+    await new Promise((resolve) => setTimeout(resolve, 5000));
+  }
+  throw new Error("La generación está tardando más de lo esperado. Intenta de nuevo en unos minutos.");
+}
+
+function mensajeProgresoGeneracion(segundos: number): string {
+  if (segundos < 30) return "Estoy analizando tu producto…";
+  if (segundos < 90) return "Armando los conceptos…";
+  return "Ya casi — esto puede tardar hasta 2 minutos y medio.";
+}
+
 function ErrorConAccion({ mensaje, titulo, accionTexto, accionUrl }: { mensaje: string; titulo?: string | null; accionTexto?: string | null; accionUrl?: string | null }) {
   const tieneLinkOpenAI = mensaje.includes("platform.openai.com");
   return (
@@ -288,6 +324,7 @@ type EstrategiaStep =
   | "imagen"
   | "objetivo"
   | "presupuesto"
+  | "generando-estrategia"
   | "resultado"
   | "asignar-tipos"
   | "album-selector"
@@ -301,6 +338,7 @@ const NUMERO_DE_PASO: Record<EstrategiaStep, number> = {
   imagen: 2,
   objetivo: 3,
   presupuesto: 4,
+  "generando-estrategia": 4,
   resultado: 5,
   "asignar-tipos": 6,
   "album-selector": 6,
@@ -319,6 +357,7 @@ const SECCION_TUTORIAL_POR_PASO: Record<Exclude<EstrategiaStep, "imagen">, strin
   tipo: "motor-estrategia-paso1",
   objetivo: "motor-estrategia-paso3",
   presupuesto: "motor-estrategia-paso4",
+  "generando-estrategia": "motor-estrategia-paso4",
   resultado: "motor-estrategia-paso5",
   "asignar-tipos": "motor-estrategia-paso6",
   "album-selector": "motor-estrategia-paso6",
@@ -783,6 +822,10 @@ function EstrategiaContent() {
   const [modoEstructura, setModoEstructura] = useState<"advantage" | "prueba_conceptos">("advantage");
   const [modoEstructuraAjustado, setModoEstructuraAjustado] = useState(false);
   const [cargandoEstrategia, setCargandoEstrategia] = useState(false);
+  // Segundos transcurridos generando la estrategia -- solo para elegir
+  // el mensaje amable (ver mensajeProgresoGeneracion), no hay un avance
+  // real que mostrar en este paso.
+  const [segundosGenerando, setSegundosGenerando] = useState(0);
   const [cargandoCreativos, setCargandoCreativos] = useState(false);
   const [publicando, setPublicando] = useState(false);
   const [publicado, setPublicado] = useState(false);
@@ -954,6 +997,13 @@ function EstrategiaContent() {
   // ANTES que el efecto de recuperacion de job por notificacion (ese tiene
   // prioridad si el usuario llego con ?job= en la URL, ya que ese es un
   // caso mas especifico). Se corre una sola vez.
+  //
+  // Primero revisa si hay una generación de estrategia en curso o recién
+  // terminada -- localStorage (quiubot_estrategia_job_activo) y, si no
+  // hay nada ahí (otro navegador, storage borrado), GET /api/estrategias-
+  // jobs/ultimo. Si encuentra algo, esto GANA sobre la restauración
+  // normal de abajo -- no tiene sentido devolver al usuario al paso de
+  // presupuesto si ya hay una estrategia generándose o lista.
   useEffect(() => {
     if (searchParams.get("job") || searchParams.get("videoJobId")) {
       // Si llego por notificacion o de vuelta desde /video, esos flujos
@@ -961,34 +1011,86 @@ function EstrategiaContent() {
       setProgresoListo(true);
       return;
     }
-    try {
-      const guardado = localStorage.getItem(LLAVE_PROGRESO);
-      if (guardado) {
-        const data = JSON.parse(guardado);
-        if (data.tipoContenido) setTipoContenido(data.tipoContenido);
-        if (data.descripcionServicio) setDescripcionServicio(data.descripcionServicio);
-        if (typeof data.mostrarPrecio === "boolean") setMostrarPrecio(data.mostrarPrecio);
-        if (typeof data.precio === "number") setPrecio(data.precio);
-        if (data.imagenesBase64) setImagenesBase64(data.imagenesBase64);
-        if (data.objetivo) setObjetivo(data.objetivo);
-        if (data.presupuestoDiario) setPresupuestoDiario(data.presupuestoDiario);
-        if (data.modoEstructura) setModoEstructura(data.modoEstructura);
-        if (data.estrategiasGeneradas) setEstrategiasGeneradas(data.estrategiasGeneradas);
-        if (data.estrategiaSeleccionada) setEstrategiaSeleccionada(data.estrategiaSeleccionada);
-        if (data.descripcionVisual) setDescripcionVisual(data.descripcionVisual);
-        if (data.tiposPorAnuncio) setTiposPorAnuncio(data.tiposPorAnuncio);
-        if (typeof data.pasoAsignacionIdx === "number") setPasoAsignacionIdx(data.pasoAsignacionIdx);
-        if (data.colaDeTipos) setColaDeTipos(data.colaDeTipos);
-        if (typeof data.tipoEnProcesoIdx === "number") setTipoEnProcesoIdx(data.tipoEnProcesoIdx);
-        if (data.creativosPorClave) setCreativosPorClave(data.creativosPorClave);
-        if (data.angulosRecomendados) setAngulosRecomendados(data.angulosRecomendados);
-        if (data.angulosClaves) setAngulosClaves(data.angulosClaves);
-        if (data.creativos) setCreativos(data.creativos);
-        if (data.analisisResultado) setAnalisisResultado(data.analisisResultado);
-        setStep(pasoRestaurable(data));
+
+    (async () => {
+      let jobEnCurso: { id: string; estado: string; resultado: any; error: string | null; tipo_error: string | null } | null = null;
+
+      let jobIdGuardado: string | null = null;
+      try {
+        jobIdGuardado = localStorage.getItem(LLAVE_ESTRATEGIA_JOB);
+      } catch {}
+
+      if (jobIdGuardado) {
+        try {
+          const r = await fetch(`/api/estrategias-jobs/${jobIdGuardado}`);
+          const data = await r.json();
+          if (data.ok && data.estado !== "fallida") jobEnCurso = { id: jobIdGuardado, ...data };
+        } catch {}
       }
-    } catch {}
-    setProgresoListo(true);
+
+      if (!jobEnCurso) {
+        try {
+          const r = await fetch("/api/estrategias-jobs/ultimo");
+          const data = await r.json();
+          if (data.ok && data.job) jobEnCurso = data.job;
+        } catch {}
+      }
+
+      if (jobEnCurso) {
+        if (jobEnCurso.estado === "lista") {
+          aplicarResultadoEstrategia(jobEnCurso.resultado);
+          try { localStorage.removeItem(LLAVE_ESTRATEGIA_JOB); } catch {}
+          setStep("resultado");
+        } else {
+          try { localStorage.setItem(LLAVE_ESTRATEGIA_JOB, jobEnCurso.id); } catch {}
+          setStep("generando-estrategia");
+          pollEstrategiaJobHasta(jobEnCurso.id, setSegundosGenerando)
+            .then((resultado) => {
+              try { localStorage.removeItem(LLAVE_ESTRATEGIA_JOB); } catch {}
+              aplicarResultadoEstrategia(resultado);
+              setStep("resultado");
+            })
+            .catch((e) => {
+              try { localStorage.removeItem(LLAVE_ESTRATEGIA_JOB); } catch {}
+              const error = e as ErrorJobEstrategia;
+              setErrorMsg(error?.message || "No se pudo conectar con el servidor.");
+              setErrorTitulo(error?.tipoError === "diversidad_conceptos" ? "Conceptos muy parecidos" : null);
+              setStep("presupuesto");
+            });
+        }
+        setProgresoListo(true);
+        return;
+      }
+
+      try {
+        const guardado = localStorage.getItem(LLAVE_PROGRESO);
+        if (guardado) {
+          const data = JSON.parse(guardado);
+          if (data.tipoContenido) setTipoContenido(data.tipoContenido);
+          if (data.descripcionServicio) setDescripcionServicio(data.descripcionServicio);
+          if (typeof data.mostrarPrecio === "boolean") setMostrarPrecio(data.mostrarPrecio);
+          if (typeof data.precio === "number") setPrecio(data.precio);
+          if (data.imagenesBase64) setImagenesBase64(data.imagenesBase64);
+          if (data.objetivo) setObjetivo(data.objetivo);
+          if (data.presupuestoDiario) setPresupuestoDiario(data.presupuestoDiario);
+          if (data.modoEstructura) setModoEstructura(data.modoEstructura);
+          if (data.estrategiasGeneradas) setEstrategiasGeneradas(data.estrategiasGeneradas);
+          if (data.estrategiaSeleccionada) setEstrategiaSeleccionada(data.estrategiaSeleccionada);
+          if (data.descripcionVisual) setDescripcionVisual(data.descripcionVisual);
+          if (data.tiposPorAnuncio) setTiposPorAnuncio(data.tiposPorAnuncio);
+          if (typeof data.pasoAsignacionIdx === "number") setPasoAsignacionIdx(data.pasoAsignacionIdx);
+          if (data.colaDeTipos) setColaDeTipos(data.colaDeTipos);
+          if (typeof data.tipoEnProcesoIdx === "number") setTipoEnProcesoIdx(data.tipoEnProcesoIdx);
+          if (data.creativosPorClave) setCreativosPorClave(data.creativosPorClave);
+          if (data.angulosRecomendados) setAngulosRecomendados(data.angulosRecomendados);
+          if (data.angulosClaves) setAngulosClaves(data.angulosClaves);
+          if (data.creativos) setCreativos(data.creativos);
+          if (data.analisisResultado) setAnalisisResultado(data.analisisResultado);
+          setStep(pasoRestaurable(data));
+        }
+      } catch {}
+      setProgresoListo(true);
+    })();
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
@@ -1514,12 +1616,25 @@ function EstrategiaContent() {
     setImagenesBase64((prev) => prev.filter((_, i) => i !== idx));
   };
 
+  // Lo que hay que hacer con el resultado de n8n sea que llegue recién
+  // generado (polling normal) o retomado (job que ya estaba "lista" al
+  // volver a /estrategia, ver el efecto de restauración) -- separado
+  // del resto de handleGenerarEstrategia para no duplicarlo.
+  const aplicarResultadoEstrategia = (data: any) => {
+    setEstrategiasGeneradas(data?.campanas || []);
+    setDescripcionVisual(data?.descripcion_visual_producto || "");
+    setModoEstructuraAjustado(!!data?.modo_estructura_ajustado);
+    try { localStorage.setItem("quiubot_descripcion_visual_producto", data?.descripcion_visual_producto || ""); } catch {}
+  };
+
   const handleGenerarEstrategia = async () => {
     if (imagenesBase64.length < MIN_IMAGENES_PRODUCTO || !objetivo || presupuestoDiario < 20000 || !tipoContenido) return;
     setCargandoEstrategia(true);
     setErrorMsg(null);
     setErrorTitulo(null);
     setModoEstructuraAjustado(false);
+    setSegundosGenerando(0);
+    setStep("generando-estrategia");
     try {
       const res = await fetch("/api/generar-estrategia", {
         method: "POST",
@@ -1535,22 +1650,29 @@ function EstrategiaContent() {
         }),
       });
       const data = await res.json().catch(() => ({}));
-      if (!res.ok || data.ok === false) {
-        setErrorMsg(data.error || "No se pudo generar la estrategia. Intenta de nuevo.");
-        // Diversidad_conceptos (motor Andromeda) no es una falla técnica --
-        // es Meta pidiendo conceptos menos parecidos entre sí. Título propio
-        // para que no se lea como un error del sistema; el botón "Generar
-        // Estrategia" de este mismo paso ya sirve como reintento.
-        setErrorTitulo(data.tipo_error === "diversidad_conceptos" ? "Conceptos muy parecidos" : null);
+      if (!res.ok || !data.job_id) {
+        setErrorMsg(data.error || "No se pudo iniciar la generación. Intenta de nuevo.");
+        setStep("presupuesto");
         return;
       }
-      setEstrategiasGeneradas(data.campanas || []);
-      setDescripcionVisual(data.descripcion_visual_producto || "");
-      setModoEstructuraAjustado(!!data.modo_estructura_ajustado);
-      try { localStorage.setItem("quiubot_descripcion_visual_producto", data.descripcion_visual_producto || ""); } catch {}
+
+      try { localStorage.setItem(LLAVE_ESTRATEGIA_JOB, data.job_id); } catch {}
+
+      const resultado = await pollEstrategiaJobHasta(data.job_id, setSegundosGenerando);
+      try { localStorage.removeItem(LLAVE_ESTRATEGIA_JOB); } catch {}
+      aplicarResultadoEstrategia(resultado);
       setStep("resultado");
     } catch (e) {
-      setErrorMsg("No se pudo conectar con el servidor.");
+      try { localStorage.removeItem(LLAVE_ESTRATEGIA_JOB); } catch {}
+      const error = e as ErrorJobEstrategia;
+      setErrorMsg(error?.message || "No se pudo conectar con el servidor.");
+      // Diversidad_conceptos (motor Andromeda) no es una falla técnica --
+      // es Meta pidiendo conceptos menos parecidos entre sí. Título propio
+      // para que no se lea como un error del sistema; el botón "Generar
+      // Estrategia" de este mismo paso ya sirve como reintento -- las
+      // fotos siguen en el formulario, nunca se pierden.
+      setErrorTitulo(error?.tipoError === "diversidad_conceptos" ? "Conceptos muy parecidos" : null);
+      setStep("presupuesto");
     } finally {
       setCargandoEstrategia(false);
     }
@@ -2715,29 +2837,33 @@ function EstrategiaContent() {
                 </button>
               </div>
             </div>
-            {cargandoEstrategia && (
-              <ProgresoPasos
-                activo={cargandoEstrategia}
-                duracionEstimadaMs={24000}
-                tituloEnCurso="Diseñando tu estrategia"
-                pasos={[
-                  "Leyendo tu producto y tu marca",
-                  "Aplicando las reglas del playbook de Meta Ads",
-                  "Diseñando la segmentación de público",
-                  "Redactando el copy de cada anuncio",
-                  "Calculando la efectividad estimada",
-                ]}
-              />
-            )}
-            {!cargandoEstrategia && (
-              <div style={{ display: "flex", gap: 10 }}>
-                <button onClick={() => setStep("objetivo")} style={{ padding: "16px 32px", borderRadius: 10, border: "1px solid #ddd", background: "#fff", cursor: "pointer" }}>Atrás</button>
-                <button onClick={handleGenerarEstrategia} disabled={presupuestoDiario < 20000} style={{ flex: 1, background: presupuestoDiario < 20000 ? "#aaa" : "#534AB7", color: "#fff", border: "none", padding: 16, borderRadius: 10, fontSize: 16, fontWeight: 600, cursor: presupuestoDiario < 20000 ? "not-allowed" : "pointer" }}>
-                  🚀 Generar Estrategia
-                </button>
-              </div>
-            )}
+            <div style={{ display: "flex", gap: 10 }}>
+              <button onClick={() => setStep("objetivo")} style={{ padding: "16px 32px", borderRadius: 10, border: "1px solid #ddd", background: "#fff", cursor: "pointer" }}>Atrás</button>
+              <button onClick={handleGenerarEstrategia} disabled={presupuestoDiario < 20000} style={{ flex: 1, background: presupuestoDiario < 20000 ? "#aaa" : "#534AB7", color: "#fff", border: "none", padding: 16, borderRadius: 10, fontSize: 16, fontWeight: 600, cursor: presupuestoDiario < 20000 ? "not-allowed" : "pointer" }}>
+                🚀 Generar Estrategia
+              </button>
+            </div>
             {errorMsg && <ErrorConAccion mensaje={errorMsg} titulo={errorTitulo} />}
+          </div>
+        )}
+
+        {step === "generando-estrategia" && (
+          <div style={{ display: "flex", flexDirection: "column", alignItems: "center", gap: 20, padding: "2.5rem 0" }}>
+            <ProgresoPasos
+              activo
+              duracionEstimadaMs={24000}
+              tituloEnCurso={mensajeProgresoGeneracion(segundosGenerando)}
+              pasos={[
+                "Leyendo tu producto y tu marca",
+                "Aplicando las reglas del playbook de Meta Ads",
+                "Diseñando la segmentación de público",
+                "Redactando el copy de cada anuncio",
+                "Calculando la efectividad estimada",
+              ]}
+            />
+            <p style={{ fontSize: 12.5, color: "#999", margin: 0, textAlign: "center" }}>
+              Puedes cerrar esta pestaña si quieres -- cuando vuelvas, seguimos donde quedamos.
+            </p>
           </div>
         )}
 
