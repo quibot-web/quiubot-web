@@ -850,6 +850,7 @@ async function intentarGenerarYCrearCreativos(datos: {
   openaiKey: string;
   tipoContenido: "producto" | "servicio";
   descripcionServicio: string | null;
+  datosProducto: string | null;
   angulosAEvitar: string[];
   cloudinaryName: string;
   cloudinaryKey: string;
@@ -870,6 +871,7 @@ async function intentarGenerarYCrearCreativos(datos: {
       openai_key: datos.openaiKey,
       tipo_contenido: datos.tipoContenido,
       descripcion_servicio: datos.descripcionServicio,
+      datos_producto: datos.datosProducto,
       modo_estructura: "advantage",
       angulos_a_evitar: datos.angulosAEvitar,
     }),
@@ -939,6 +941,12 @@ async function intentarGenerarYCrearCreativos(datos: {
       cloudinary_name: datos.cloudinaryName,
       cloudinary_key: datos.cloudinaryKey,
       cloudinary_secret: datos.cloudinarySecret,
+      // Mismo datos.tipoContenido/descripcionServicio que ya recibió
+      // generar_estrategia arriba -- un solo objeto "datos", nunca dos
+      // valores que puedan desincronizarse entre las dos llamadas.
+      // datos_producto no viaja acá: crear_creativos ya trabaja sobre el
+      // concepto/copy que generar_estrategia ya escribió con ese dato en
+      // cuenta, no necesita que se le repita.
       tipo_contenido: datos.tipoContenido,
       descripcion_servicio: datos.descripcionServicio,
       mostrar_precio: false,
@@ -1114,6 +1122,7 @@ export async function procesarCreacionCreativos(propuestaId: string): Promise<vo
         openaiKey,
         tipoContenido: parametros.tipo_contenido === "servicio" ? "servicio" : "producto",
         descripcionServicio: parametros.tipo_contenido === "servicio" ? parametros.descripcion_servicio ?? null : null,
+        datosProducto: parametros.tipo_contenido !== "servicio" ? parametros.datos_producto ?? null : null,
         angulosAEvitar,
         cloudinaryName: usuario.cloudinary_name,
         cloudinaryKey,
