@@ -117,6 +117,18 @@ export async function POST(req: NextRequest) {
         anunciosFallidos = Array.isArray(parseado.anuncios_fallidos) ? parseado.anuncios_fallidos : null;
         mensajeFinal = parseado.error;
         if (paso === "crear_anuncios") {
+          // El error genérico de n8n ("No se pudieron crear los
+          // anuncios") no sirve para diagnosticar nada -- si viene el
+          // detalle real de Meta en anuncios_fallidos, se muestra ese tal
+          // cual (el primero, que suele ser representativo de todos). Si
+          // no viene ninguno, es porque no se llegó a intentar crear ni
+          // un anuncio.
+          const primerFallido = Array.isArray(anunciosFallidos) && anunciosFallidos.length > 0 ? (anunciosFallidos[0] as any) : null;
+          mensajeFinal = primerFallido?.error
+            ? primerFallido.titulo
+              ? `"${primerFallido.titulo}": ${primerFallido.error}`
+              : primerFallido.error
+            : "No se envió ningún anuncio a Meta (revisa los creativos).";
           mensajeFinal +=
             " La campaña quedó creada en tu cuenta de Meta pero sin anuncios, así que no está gastando dinero — puedes eliminarla desde el Administrador de anuncios antes de volver a intentar.";
         }

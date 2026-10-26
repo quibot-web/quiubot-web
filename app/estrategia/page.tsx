@@ -1745,14 +1745,30 @@ function EstrategiaContent() {
     setTiposPorAnuncio(completos);
     setPasoAsignacionIdx(0);
 
-    // Las imágenes subidas/elegidas del álbum ya vienen listas -- se
-    // pre-cargan en el acumulado para que ensamblarCreativosDesde las
-    // encuentre sin pasar por la cola de generación.
+    // Las imágenes subidas ya vienen listas -- se pre-cargan en el
+    // acumulado para que ensamblarCreativosDesde las encuentre sin pasar
+    // por la cola de generación. conjunto_nombre/anuncio_nombre/titulo/
+    // texto/cta tienen que venir completos acá mismo (igual que ya hace
+    // dispararAlbum con "ang"): publicar-estrategia reenvía "creativos"
+    // tal cual a n8n, y n8n agrupa los anuncios en conjuntos buscando por
+    // conjunto_nombre -- sin él (o con titulo/texto/cta vacíos) el
+    // anuncio subido terminaba huérfano en un conjunto nuevo y sin copy.
     const acumuladoInicial: Record<string, any> = {};
     Object.entries(creativosPropios).forEach(([clave, { url_imagen }]) => {
-      if (completos[clave] === "subida") {
-        acumuladoInicial[clave] = { url_imagen, origen: "subida", descripcion: descripcionPorClave(estrategia, clave) };
-      }
+      if (completos[clave] !== "subida") return;
+      const [ci, ai] = clave.split("-").map(Number);
+      const conjunto = estrategia?.conjuntos?.[ci];
+      const anuncio = conjunto?.anuncios?.[ai];
+      acumuladoInicial[clave] = {
+        conjunto_nombre: conjunto?.nombre || "",
+        anuncio_nombre: anuncio?.nombre || "",
+        titulo: anuncio?.copy?.titulo || "",
+        texto: anuncio?.copy?.texto || "",
+        descripcion: anuncio?.copy?.descripcion || "",
+        cta: anuncio?.copy?.cta || "",
+        url_imagen,
+        origen: "subida",
+      };
     });
 
     // Mismo orden fijo que handleConfirmarAsignaciones (video, imagen,
@@ -2369,6 +2385,22 @@ function EstrategiaContent() {
         const anuncio = conjunto?.anuncios?.find((a: any) => a.nombre === c.anuncio_nombre);
         return { ...c, descripcion: anuncio?.copy?.descripcion || "" };
       });
+
+      // n8n agrupa los anuncios en conjuntos buscando por conjunto_nombre
+      // -- un creativo con un conjunto_nombre que no existe en la
+      // estrategia (vacío, o de otra estrategia por un bug de origen)
+      // termina huérfano en un conjunto nuevo, sin que Meta llegue a
+      // crear ningún anuncio ahí. Mejor no publicar nada que publicar una
+      // campaña a medias.
+      const nombresConjuntosValidos = new Set((estrategiaSeleccionada?.conjuntos || []).map((cj: any) => cj.nombre));
+      const creativoInvalido = creativosConDescripcion.find((c: any) => !nombresConjuntosValidos.has(c.conjunto_nombre));
+      if (creativoInvalido) {
+        setErrorMsg(
+          `El anuncio "${creativoInvalido.anuncio_nombre || creativoInvalido.titulo || "sin nombre"}" no coincide con ningún conjunto de esta estrategia. No se publicó -- intenta de nuevo o contacta soporte si sigue pasando.`
+        );
+        return;
+      }
+
       const res = await fetch("/api/publicar-estrategia", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
@@ -2389,9 +2421,24 @@ function EstrategiaContent() {
         }
         return;
       }
+      const anunciosCreadosFinal = typeof data.anuncios_creados === "number" ? data.anuncios_creados : 0;
+      const anunciosFallidosFinal = Array.isArray(data.anuncios_fallidos) ? data.anuncios_fallidos : [];
+      // n8n puede responder ok:true (campaña/conjunto sí se crearon) con
+      // 0 anuncios creados y 0 reportados como fallidos -- sin esto se
+      // mostraba la pantalla verde de "publicada" aunque en Meta no haya
+      // ningún anuncio.
+      if (anunciosCreadosFinal === 0 && anunciosFallidosFinal.length === 0) {
+        setErrorMsg(
+          "No se envió ningún anuncio a Meta (revisa los creativos)." +
+            (data.meta_campaign_id
+              ? " La campaña quedó creada en tu cuenta de Meta pero sin anuncios, así que no está gastando dinero -- puedes eliminarla desde el Administrador de anuncios antes de volver a intentar."
+              : "")
+        );
+        return;
+      }
       setMetaCampaignId(data.meta_campaign_id || null);
-      setAnunciosCreados(typeof data.anuncios_creados === "number" ? data.anuncios_creados : 0);
-      setAnunciosFallidos(Array.isArray(data.anuncios_fallidos) ? data.anuncios_fallidos : []);
+      setAnunciosCreados(anunciosCreadosFinal);
+      setAnunciosFallidos(anunciosFallidosFinal);
       setPublicado(true);
       // Ya se publicó -- limpiamos el estado persistido (el de retomar un
       // job por notificacion, y el progreso general del wizard) para que
