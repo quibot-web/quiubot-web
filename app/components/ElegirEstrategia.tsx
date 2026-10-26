@@ -53,6 +53,14 @@ function fmtCOP(n: number | null | undefined): string {
 
 export type CreativoPropio = { url_imagen: string };
 
+// Revisión en segundo plano de "Subir el mío" (ver dispararRevisionImagen
+// más abajo) -- nunca bloquea nada, solo informa en la misma tarjeta.
+type ResultadoRevisionImagen = { cumple: boolean; puntos?: string[]; comentario?: string };
+type RevisionImagen =
+  | { estado: "revisando" }
+  | { estado: "lista"; resultado: ResultadoRevisionImagen }
+  | { estado: "no_disponible" };
+
 type Props = {
   estrategias: any[];
   objetivo: { id: string; destino?: string } | null;
@@ -85,6 +93,13 @@ export default function ElegirEstrategia({ estrategias, objetivo, esAdmin, onEle
   // debe mezclar la elección de una con la de otra.
   const [tiposPorEstrategia, setTiposPorEstrategia] = useState<Record<string, Record<string, TipoCreativo>>>({});
   const [propiosPorEstrategia, setPropiosPorEstrategia] = useState<Record<string, Record<string, CreativoPropio>>>({});
+  const [revisionesPorEstrategia, setRevisionesPorEstrategia] = useState<Record<string, Record<string, RevisionImagen>>>({});
+
+  // Para no seguir llamando setState (ni, peor, seguir poleando) después
+  // de que este componente se desmontó -- pasa en cuanto se hace clic en
+  // "Elegir esta estrategia →" mientras una revisión seguía en curso.
+  const montadoRef = useRef(true);
+  useEffect(() => () => { montadoRef.current = false; }, []);
 
   useEffect(() => {
     if (!selectedId && estrategias[0]) setSelectedId(estrategias[0].id);
@@ -99,6 +114,7 @@ export default function ElegirEstrategia({ estrategias, objetivo, esAdmin, onEle
 
   const tiposPorAnuncio = tiposPorEstrategia[seleccionada.id] || {};
   const creativosPropios = propiosPorEstrategia[seleccionada.id] || {};
+  const revisionesPorAnuncio = revisionesPorEstrategia[seleccionada.id] || {};
 
   const cambiarTipo = (clave: string, tipo: TipoCreativo) => {
     setTiposPorEstrategia((prev) => ({ ...prev, [seleccionada.id]: { ...(prev[seleccionada.id] || {}), [clave]: tipo } }));
@@ -110,6 +126,81 @@ export default function ElegirEstrategia({ estrategias, objetivo, esAdmin, onEle
       delete copia[clave];
       return { ...prev, [seleccionada.id]: copia };
     });
+  };
+
+  const descartarRevision = (estrategiaId: string, clave: string) => {
+    setRevisionesPorEstrategia((prev) => {
+      const copia = { ...(prev[estrategiaId] || {}) };
+      delete copia[clave];
+      return { ...prev, [estrategiaId]: copia };
+    });
+  };
+
+  // Revisión en segundo plano de la imagen que el cliente acaba de subir
+  // -- nunca bloquea nada (el usuario sigue eligiendo formatos de otros
+  // anuncios mientras corre). estrategiaId se recibe como parámetro (no
+  // se lee "seleccionada.id" en vivo) para que, si el cliente cambia de
+  // pestaña mientras esto sigue en curso, el resultado caiga en la
+  // estrategia correcta y no en la que esté viendo en ese momento.
+  const dispararRevisionImagen = async (estrategiaId: string, clave: string, urlImagen: string) => {
+    const estrategiaDeLaRevision = estrategias.find((e) => e.id === estrategiaId);
+    const [ci, ai] = clave.split("-").map(Number);
+    const conjunto = estrategiaDeLaRevision?.conjuntos?.[ci];
+    const anuncio = conjunto?.anuncios?.[ai];
+    if (!conjunto || !anuncio) return;
+
+    const marcar = (valor: RevisionImagen) => {
+      if (!montadoRef.current) return;
+      setRevisionesPorEstrategia((prev) => ({ ...prev, [estrategiaId]: { ...(prev[estrategiaId] || {}), [clave]: valor } }));
+    };
+
+    marcar({ estado: "revisando" });
+
+    try {
+      const res = await fetch("/api/estrategia/revisar-imagen-subida", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          url_imagen: urlImagen,
+          conjunto_nombre: conjunto.nombre,
+          anuncio_nombre: anuncio.nombre,
+          titulo: anuncio.copy?.titulo || "",
+          texto: anuncio.copy?.texto || "",
+          descripcion: anuncio.copy?.descripcion || "",
+          cta: anuncio.copy?.cta || "",
+          concepto: anuncio.concepto || null,
+          campana: estrategiaDeLaRevision?.campana || null,
+        }),
+      });
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok || !data.job_id) {
+        marcar({ estado: "no_disponible" });
+        return;
+      }
+
+      // Poll cada 3s con tope de 40s -- sin reintentos automáticos: si no
+      // hay resultado para entonces, se cae al mensaje de "no pude
+      // revisarla" y no se vuelve a intentar.
+      const inicio = Date.now();
+      const TOPE_MS = 40000;
+      while (Date.now() - inicio < TOPE_MS) {
+        await new Promise((resolve) => setTimeout(resolve, 3000));
+        if (!montadoRef.current) return;
+        const resPoll = await fetch(`/api/estrategia/revisar-imagen-jobs/${data.job_id}`);
+        const dataPoll = await resPoll.json().catch(() => ({}));
+        if (dataPoll.estado === "lista") {
+          marcar({ estado: "lista", resultado: dataPoll.resultado || { cumple: true } });
+          return;
+        }
+        if (dataPoll.estado === "fallida") {
+          marcar({ estado: "no_disponible" });
+          return;
+        }
+      }
+      marcar({ estado: "no_disponible" });
+    } catch {
+      marcar({ estado: "no_disponible" });
+    }
   };
 
   const manejarArchivoPropio = async (clave: string, file: File | undefined) => {
@@ -135,6 +226,7 @@ export default function ElegirEstrategia({ estrategias, objetivo, esAdmin, onEle
       setPropiosPorEstrategia((prev) => ({ ...prev, [seleccionada.id]: { ...(prev[seleccionada.id] || {}), [clave]: { url_imagen: data.url_imagen } } }));
       cambiarTipo(clave, "subida");
       setMenuSubirAbierto((prev) => ({ ...prev, [clave]: false }));
+      dispararRevisionImagen(seleccionada.id, clave, data.url_imagen);
     } catch {
       setErroresSubida((prev) => ({ ...prev, [clave]: "No se pudo conectar con el servidor." }));
     } finally {
@@ -208,6 +300,14 @@ export default function ElegirEstrategia({ estrategias, objetivo, esAdmin, onEle
         .qbe .propiaLista { position: relative; aspect-ratio: 1/1; overflow: hidden; }
         .qbe .propiaLista img { width: 100%; height: 100%; object-fit: cover; display: block; }
         .qbe .propiaLista .quitar { position: absolute; top: 8px; right: 8px; background: rgba(0,0,0,.55); color: #fff; border: none; border-radius: 999px; width: 26px; height: 26px; font-size: 13px; }
+        .qbe .revision { padding: 10px 12px; border-bottom: 1px solid #EFEFF3; font-size: 12.5px; }
+        .qbe .revision .estado { color: var(--soft); }
+        .qbe .revision .estado.ok { color: #0B7A5C; font-weight: 800; }
+        .qbe .revision .sug b { display: block; font-size: 12.5px; color: #92400E; margin-bottom: 4px; }
+        .qbe .revision .sug ul { margin: 0 0 8px 18px; padding: 0; color: var(--muted); }
+        .qbe .revision .sug ul li { margin-bottom: 2px; }
+        .qbe .revision .botones { display: flex; gap: 8px; }
+        .qbe .revision .botones button { flex: 1; border: 1px solid #DCD6F5; background: #fff; color: #4F40C9; border-radius: 8px; min-height: 32px; font-weight: 700; font-size: 11.5px; }
         .qbe .concepto { background: var(--card); border: 1px solid var(--line); border-radius: 14px; padding: 12px 13px; display: grid; gap: 6px; font-size: 13.5px; }
         .qbe .concepto .ang { display: flex; gap: 6px; flex-wrap: wrap; }
         .qbe .concepto .ang span { font-size: 12px; font-weight: 800; padding: 3px 8px; border-radius: 999px; background: #EFEBFF; color: #4F40C9; }
@@ -354,7 +454,17 @@ export default function ElegirEstrategia({ estrategias, objetivo, esAdmin, onEle
                 ) : tipoActual === "subida" && imagenPropia ? (
                   <div className="propiaLista">
                     <img src={imagenPropia.url_imagen} alt="" />
-                    <button className="quitar" title="Quitar" onClick={() => { quitarImagenPropia(clave); cambiarTipo(clave, "imagen"); }}>✕</button>
+                    <button
+                      className="quitar"
+                      title="Quitar"
+                      onClick={() => {
+                        quitarImagenPropia(clave);
+                        cambiarTipo(clave, "imagen");
+                        descartarRevision(seleccionada.id, clave);
+                      }}
+                    >
+                      ✕
+                    </button>
                   </div>
                 ) : tipoActual === "subida" && subiendoClave === clave ? (
                   <div className="sinboceto">
@@ -382,6 +492,38 @@ export default function ElegirEstrategia({ estrategias, objetivo, esAdmin, onEle
                   </div>
                 ) : (
                   <div className="sinboceto">🖼️</div>
+                )}
+
+                {tipoActual === "subida" && imagenPropia && revisionesPorAnuncio[clave] && (
+                  <div className="revision">
+                    {revisionesPorAnuncio[clave].estado === "revisando" && <span className="estado">Revisando tu imagen…</span>}
+                    {revisionesPorAnuncio[clave].estado === "no_disponible" && (
+                      <span className="estado">No pude revisarla, pero puedes usarla</span>
+                    )}
+                    {revisionesPorAnuncio[clave].estado === "lista" &&
+                      (revisionesPorAnuncio[clave] as { estado: "lista"; resultado: ResultadoRevisionImagen }).resultado.cumple ? (
+                      <span className="estado ok">✓ Encaja con este anuncio</span>
+                    ) : revisionesPorAnuncio[clave].estado === "lista" ? (
+                      <div className="sug">
+                        <b>Sugerencias</b>
+                        <ul>
+                          {(() => {
+                            const resultado = (revisionesPorAnuncio[clave] as { estado: "lista"; resultado: ResultadoRevisionImagen }).resultado;
+                            const puntos = resultado.puntos?.length ? resultado.puntos : resultado.comentario ? [resultado.comentario] : [];
+                            return puntos.slice(0, 3).map((p, i) => <li key={i}>{p}</li>);
+                          })()}
+                        </ul>
+                        <div className="botones">
+                          <button type="button" onClick={() => descartarRevision(seleccionada.id, clave)}>
+                            Usarla así
+                          </button>
+                          <button type="button" onClick={() => inputsRef.current[clave]?.click()}>
+                            Cambiar imagen
+                          </button>
+                        </div>
+                      </div>
+                    ) : null}
+                  </div>
                 )}
 
                 <div className="ctabar">
