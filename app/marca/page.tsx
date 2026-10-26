@@ -408,6 +408,81 @@ function CoberturaCiudades() {
   );
 }
 
+// Mismo patrón que CoberturaCiudades justo arriba: propio fetch/guardado,
+// tarjeta independiente, siempre visible sin importar si ya se construyó
+// el ADN o no -- info_adicional es un campo de texto que el cliente edita
+// a mano, no algo que salga del análisis de imágenes (por eso usa
+// /api/marca, no /api/marca-adn).
+const TOPE_INFO_ADICIONAL = 800;
+
+function InfoAdicionalNegocio() {
+  const [valor, setValor] = useState("");
+  const [cargando, setCargando] = useState(true);
+  const [guardando, setGuardando] = useState(false);
+  const [guardado, setGuardado] = useState(false);
+
+  useEffect(() => {
+    fetch("/api/marca")
+      .then((r) => r.json())
+      .then((data) => setValor(data?.info_adicional || ""))
+      .catch(() => {})
+      .finally(() => setCargando(false));
+  }, []);
+
+  const handleGuardar = async () => {
+    setGuardando(true);
+    setGuardado(false);
+    try {
+      await fetch("/api/marca", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ info_adicional: valor }),
+      });
+      setGuardado(true);
+    } finally {
+      setGuardando(false);
+    }
+  };
+
+  if (cargando) return null;
+
+  return (
+    <div style={{ maxWidth: 760, margin: "1.5rem auto 0", padding: "0 1.5rem" }}>
+      <div style={{ background: "#fff", border: "1px solid #e8e8e6", borderRadius: 14, padding: "1.25rem 1.5rem" }}>
+        <p style={{ fontSize: 14, fontWeight: 600, color: "#1a1a1a", margin: "0 0 4px" }}>
+          Lo que tus clientes deben saber de tu negocio
+        </p>
+        <p style={{ fontSize: 12.5, color: "#666", margin: "0 0 12px" }}>
+          Envíos, garantías, formas de pago, lo que te distingue de la competencia -- cualquier dato que la IA deba tener en cuenta al escribir tus anuncios, sin importar qué producto o servicio promociones.
+        </p>
+        <textarea
+          value={valor}
+          onChange={(e) => { setValor(e.target.value.slice(0, TOPE_INFO_ADICIONAL)); setGuardado(false); }}
+          placeholder="Ej.: envío a todo Colombia, garantía de 6 meses, pago contraentrega, distribuidores autorizados"
+          maxLength={TOPE_INFO_ADICIONAL}
+          rows={3}
+          style={{ width: "100%", padding: 12, borderRadius: 10, border: "1.5px solid #e0e0e0", background: "#fcfcff", fontSize: 13, color: "#1a1a1a", resize: "vertical", fontFamily: "inherit", boxSizing: "border-box", outline: "none" }}
+        />
+        <div style={{ fontSize: 11, color: "#999", textAlign: "right", margin: "4px 0 8px" }}>{valor.length}/{TOPE_INFO_ADICIONAL}</div>
+        <p style={{ fontSize: 11.5, color: "#999", margin: "0 0 10px" }}>
+          La IA usa esto para escribir tus anuncios. Mientras más concreto, mejor venden.
+        </p>
+        <button
+          onClick={handleGuardar}
+          disabled={guardando}
+          style={{
+            background: guardado ? "#10b981" : "#534AB7",
+            color: "#fff", border: "none", padding: "10px 18px", borderRadius: 8,
+            fontSize: 13, fontWeight: 600, cursor: guardando ? "not-allowed" : "pointer", alignSelf: "flex-start",
+          }}
+        >
+          {guardando ? "Guardando..." : guardado ? "✓ Guardado" : "Guardar"}
+        </button>
+      </div>
+    </div>
+  );
+}
+
 export default function MarcaPage() {
   const [cargandoInicial, setCargandoInicial] = useState(true);
   const [tieneAdn, setTieneAdn] = useState(false);
@@ -590,6 +665,7 @@ export default function MarcaPage() {
       </div>
 
       <CoberturaCiudades />
+      <InfoAdicionalNegocio />
 
       {!construyendoOListo && (
         <div style={{ flex: 1, padding: "2.5rem 1.5rem" }}>
@@ -603,7 +679,7 @@ export default function MarcaPage() {
                   Sube tus mejores creativos ya publicados
                 </h1>
                 <p style={{ fontSize: 14, color: "#666", lineHeight: 1.5 }}>
-                  El sistema analiza {MIN_IMAGENES} a {MAX_IMAGENES} piezas reales que ya usaste y con las que estás conforme — colores, tipografía, composición, tono — para poder generar creativos nuevos que se sientan hechos por ti. Esta pantalla es solo de lectura: no hay nada que editar, solo mira cómo se construye tu ADN.
+                  El sistema analiza {MIN_IMAGENES} a {MAX_IMAGENES} piezas reales que ya usaste y con las que estás conforme — colores, tipografía, composición, tono — para poder generar creativos nuevos que se sientan hechos por ti. Esta parte es de solo lectura: no hay nada que editar acá, solo mira cómo se construye tu ADN.
                 </p>
               </div>
 

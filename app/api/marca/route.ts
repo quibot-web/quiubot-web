@@ -7,7 +7,10 @@ import { NextRequest, NextResponse } from "next/server";
 // (ver app/api/marca-adn/route.ts). Lo único que queda aquí es el "destino
 // de venta" (sitio web / WhatsApp), que ahora vive como una tarjeta más en
 // Integraciones, porque es un dato funcional (a dónde mandar el tráfico de
-// los anuncios), no de identidad visual.
+// los anuncios), no de identidad visual. info_adicional se suma acá (no a
+// marca-adn) por el mismo motivo que sitio_web/whatsapp_numero: es un campo
+// de texto que el cliente edita a mano, no algo que salga del análisis de
+// imágenes -- se edita en "Mi marca" (app/marca/page.tsx).
 
 export async function GET() {
   const session = await auth();
@@ -17,11 +20,11 @@ export async function GET() {
 
   const { data } = await supabaseAdmin
     .from("marcas")
-    .select("sitio_web, whatsapp_numero")
+    .select("sitio_web, whatsapp_numero, info_adicional")
     .eq("email", session.user.email.trim().toLowerCase())
     .maybeSingle();
 
-  return NextResponse.json(data ?? { sitio_web: null, whatsapp_numero: null });
+  return NextResponse.json(data ?? { sitio_web: null, whatsapp_numero: null, info_adicional: null });
 }
 
 export async function POST(req: NextRequest) {
@@ -33,11 +36,11 @@ export async function POST(req: NextRequest) {
   const emailBusqueda = session.user.email.trim().toLowerCase();
   const bodyCrudo = await req.json();
 
-  // Lista blanca explícita: solo estos 2 campos pueden escribirse desde este
+  // Lista blanca explícita: solo estos campos pueden escribirse desde este
   // endpoint. Nunca hacemos `...body` a ciegas — eso dejaría que alguien
   // mande cualquier columna (incluyendo adn_marca, que solo debe escribir
   // el workflow de n8n) y la sobrescriba desde el navegador.
-  const datosPermitidos: { sitio_web?: string | null; whatsapp_numero?: string | null } = {};
+  const datosPermitidos: { sitio_web?: string | null; whatsapp_numero?: string | null; info_adicional?: string | null } = {};
 
   if (typeof bodyCrudo.sitio_web === "string") {
     let url = bodyCrudo.sitio_web.trim();
@@ -54,6 +57,11 @@ export async function POST(req: NextRequest) {
   if (typeof bodyCrudo.whatsapp_numero === "string") {
     const soloDigitos = bodyCrudo.whatsapp_numero.replace(/\D/g, "");
     datosPermitidos.whatsapp_numero = soloDigitos === "" ? null : soloDigitos;
+  }
+
+  if (typeof bodyCrudo.info_adicional === "string") {
+    const texto = bodyCrudo.info_adicional.trim().slice(0, 800);
+    datosPermitidos.info_adicional = texto === "" ? null : texto;
   }
 
   if (Object.keys(datosPermitidos).length === 0) {
