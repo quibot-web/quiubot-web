@@ -319,9 +319,9 @@ type TipoContenido = "producto" | "servicio";
 // "subida" (imagen propia del cliente, o elegida de su álbum) nunca entra
 // a colaDeTipos -- su creativo ya viene armado desde ElegirEstrategia, ver
 // handleElegirEstrategiaNueva.
-type TipoCreativo = "video" | "imagen" | "album" | "subida";
+type TipoCreativo = "video" | "imagen" | "album" | "subida" | "carrusel";
 
-const LABEL_TIPO: Record<TipoCreativo, string> = { video: "video", imagen: "imagen", album: "álbum", subida: "subida" };
+const LABEL_TIPO: Record<TipoCreativo, string> = { video: "video", imagen: "imagen", album: "álbum", subida: "subida", carrusel: "imagen" };
 
 type EstrategiaStep =
   | "tipo"

@@ -5,17 +5,47 @@ import { validarImagenPropia } from "@/app/lib/imagenes";
 import SelectorAlbum, { type ItemAlbum } from "@/app/components/SelectorAlbum";
 
 // Mismo shape que ya usa el resto de /estrategia (asignar-tipos) para la
-// cola de generación -- "subida" es el único valor nuevo de verdad
-// ("álbum" ya existía, "video"/"imagen" también). "subida" nunca entra a
-// la cola de generación (ver dispararTipo en estrategia/page.tsx): su
-// creativo ya viene armado desde que el cliente lo sube acá mismo.
-export type TipoCreativo = "video" | "imagen" | "album" | "subida";
+// cola de generación -- "subida" y "carrusel" son los únicos valores
+// nuevos de verdad ("álbum" ya existía, "video"/"imagen" también).
+// "subida" nunca entra a la cola de generación (ver dispararTipo en
+// estrategia/page.tsx): su creativo ya viene armado desde que el
+// cliente lo sube acá mismo. "carrusel" SÍ entra a generar -- pero
+// comparte la misma cola que "imagen" (ver filtrarEstrategiaPorTipo en
+// estrategia/page.tsx): es un solo job de crear_creativos con una
+// mezcla de anuncios planos y de carrusel, no una cola aparte.
+export type TipoCreativo = "video" | "imagen" | "album" | "subida" | "carrusel";
 
-// Preparado para la fase 2 (mezcla de formatos + indicador) -- todavía no
-// se construye la UI de carrusel, solo el tipo de dato que lo va a usar.
-export type FormatoAnuncio = "imagen" | "carrusel" | "video" | "propio";
-export type TarjetaCarrusel = { titulo: string; descripcion: string; escena: string };
-export type CarruselAnuncio = { tipo: string; tarjetas: TarjetaCarrusel[] };
+export type CarruselTipo = "beneficios" | "paso_a_paso" | "detalles" | "objeciones";
+export type CarruselConfig = { tipo: CarruselTipo; numTarjetas: number };
+
+const NOMBRES_CARRUSEL_TIPO: Record<CarruselTipo, string> = {
+  beneficios: "Beneficios",
+  paso_a_paso: "Paso a paso",
+  detalles: "Detalles",
+  objeciones: "Objeciones resueltas",
+};
+
+// Qué tipos de carrusel tiene sentido ofrecer según el objetivo de la
+// campaña (confirmado con el negocio) -- beneficios y paso_a_paso
+// sirven para cualquier objetivo; detalles y objeciones son más
+// específicos.
+const OBJETIVOS_POR_CARRUSEL_TIPO: Record<CarruselTipo, string[]> = {
+  beneficios: ["venta_directa_web", "venta_directa_whatsapp", "reconocimiento", "retargeting", "leads", "trafico_mensajes"],
+  paso_a_paso: ["venta_directa_web", "venta_directa_whatsapp", "reconocimiento", "retargeting", "leads", "trafico_mensajes"],
+  detalles: ["venta_directa_web", "venta_directa_whatsapp", "reconocimiento", "retargeting"],
+  objeciones: ["leads", "venta_directa_whatsapp", "trafico_mensajes", "retargeting"],
+};
+
+// Boceto genérico por tipo (no hay cómo mostrar contenido real de cada
+// tarjeta antes de generar -- generar_estrategia no desglosa un
+// concepto por tarjeta). Nunca se inventa un hook/claim específico como
+// si fuera real, igual que ya se evita en el boceto de imagen.
+const SUBTITULOS_CARRUSEL: Record<CarruselTipo, string[]> = {
+  beneficios: ["Beneficio 1", "Beneficio 2", "Beneficio 3", "Beneficio 4", "Beneficio 5"],
+  paso_a_paso: ["Paso 1", "Paso 2", "Paso 3", "Paso 4", "Paso 5"],
+  detalles: ["Detalle 1", "Detalle 2", "Detalle 3", "Detalle 4", "Detalle 5"],
+  objeciones: ["La objeción", "Por qué pasa", "La prueba", "Cómo se resuelve", "El siguiente paso"],
+};
 
 const NOMBRES_ANGULO: Record<string, string> = {
   dolor_problema: "Dolor / problema",
@@ -76,10 +106,15 @@ type Props = {
   paginaNombre?: string | null;
   nombreMarca?: string | null;
   logoUrl?: string | null;
-  // (estrategia, tiposPorAnuncio, creativosPropios) -- solo de la
-  // estrategia elegida, nunca arrastra nada de otra pestaña que el
-  // cliente haya mirado antes de decidirse.
-  onElegir: (estrategia: any, tiposPorAnuncio: Record<string, TipoCreativo>, creativosPropios: Record<string, CreativoPropio>) => void;
+  // (estrategia, tiposPorAnuncio, creativosPropios, carruselConfigPorAnuncio)
+  // -- solo de la estrategia elegida, nunca arrastra nada de otra
+  // pestaña que el cliente haya mirado antes de decidirse.
+  onElegir: (
+    estrategia: any,
+    tiposPorAnuncio: Record<string, TipoCreativo>,
+    creativosPropios: Record<string, CreativoPropio>,
+    carruselConfigPorAnuncio?: Record<string, CarruselConfig>
+  ) => void;
 };
 
 export default function ElegirEstrategia({ estrategias, objetivo, esAdmin, paginaNombre, nombreMarca, logoUrl, onElegir }: Props) {
@@ -106,6 +141,7 @@ export default function ElegirEstrategia({ estrategias, objetivo, esAdmin, pagin
   const [tiposPorEstrategia, setTiposPorEstrategia] = useState<Record<string, Record<string, TipoCreativo>>>({});
   const [propiosPorEstrategia, setPropiosPorEstrategia] = useState<Record<string, Record<string, CreativoPropio>>>({});
   const [revisionesPorEstrategia, setRevisionesPorEstrategia] = useState<Record<string, Record<string, RevisionImagen>>>({});
+  const [carruselConfigPorEstrategia, setCarruselConfigPorEstrategia] = useState<Record<string, Record<string, CarruselConfig>>>({});
 
   // Álbum, cacheado una sola vez (no por estrategia -- es el mismo álbum
   // del cliente sin importar qué estrategia esté mirando). null = todavía
@@ -141,10 +177,49 @@ export default function ElegirEstrategia({ estrategias, objetivo, esAdmin, pagin
   const tiposPorAnuncio = tiposPorEstrategia[seleccionada.id] || {};
   const creativosPropios = propiosPorEstrategia[seleccionada.id] || {};
   const revisionesPorAnuncio = revisionesPorEstrategia[seleccionada.id] || {};
+  const carruselConfigPorAnuncio = carruselConfigPorEstrategia[seleccionada.id] || {};
+
+  // Solo los tipos de carrusel que tienen sentido para el objetivo de
+  // esta campaña -- beneficios/paso_a_paso siempre incluyen todos los
+  // objetivos, así que esto nunca queda vacío.
+  const tiposCarruselDisponibles = (Object.keys(OBJETIVOS_POR_CARRUSEL_TIPO) as CarruselTipo[]).filter(
+    (tipo) => !objetivo?.id || OBJETIVOS_POR_CARRUSEL_TIPO[tipo].includes(objetivo.id)
+  );
 
   const cambiarTipo = (clave: string, tipo: TipoCreativo) => {
     setTiposPorEstrategia((prev) => ({ ...prev, [seleccionada.id]: { ...(prev[seleccionada.id] || {}), [clave]: tipo } }));
   };
+
+  const elegirCarrusel = (clave: string) => {
+    cambiarTipo(clave, "carrusel");
+    if (!carruselConfigPorAnuncio[clave]) {
+      const tipoDefault = tiposCarruselDisponibles[0] || "paso_a_paso";
+      setCarruselConfigPorEstrategia((prev) => ({
+        ...prev,
+        [seleccionada.id]: { ...(prev[seleccionada.id] || {}), [clave]: { tipo: tipoDefault, numTarjetas: 3 } },
+      }));
+    }
+  };
+
+  const cambiarCarruselConfig = (clave: string, cambios: Partial<CarruselConfig>) => {
+    setCarruselConfigPorEstrategia((prev) => {
+      const actual = (prev[seleccionada.id] || {})[clave] || { tipo: tiposCarruselDisponibles[0] || "paso_a_paso", numTarjetas: 3 };
+      return { ...prev, [seleccionada.id]: { ...(prev[seleccionada.id] || {}), [clave]: { ...actual, ...cambios } } };
+    });
+  };
+
+  // Indicador "Buena mezcla de formatos" (docs/diseno/estrategia_anuncios.html)
+  // -- puramente informativo, nunca bloquea nada. "propio" junta subida y
+  // álbum (ambos ya quedan como tipo "subida" en este punto).
+  const conteoFormatos = { imagen: 0, carrusel: 0, video: 0, propio: 0 };
+  anuncios.forEach(({ clave }) => {
+    const t = tiposPorAnuncio[clave] || "imagen";
+    if (t === "subida") conteoFormatos.propio++;
+    else if (t === "carrusel") conteoFormatos.carrusel++;
+    else if (t === "video") conteoFormatos.video++;
+    else conteoFormatos.imagen++;
+  });
+  const hayBuenaMezcla = Object.values(conteoFormatos).filter((n) => n > 0).length >= 2;
 
   const quitarImagenPropia = (clave: string) => {
     setPropiosPorEstrategia((prev) => {
@@ -390,6 +465,20 @@ export default function ElegirEstrategia({ estrategias, objetivo, esAdmin, pagin
         .qbe .concepto .ang span.f { background: #EAF6FF; color: #1D5FA8; }
         .qbe .concepto p { margin: 0; color: var(--muted); }
         .qbe .concepto p b { color: var(--ink); }
+        .qbe .mezcla { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; background: #E9F8F2; border: 1px solid #BFE9D8; color: #0B6B50; border-radius: 14px; padding: 11px 14px; font-size: 14.5px; font-weight: 600; margin: 0 0 14px; }
+        .qbe .mezcla b { color: #08513C; }
+        .qbe .mezcla .pill { background: #fff; border: 1px solid #BFE9D8; border-radius: 999px; padding: 3px 10px; font-size: 13px; font-weight: 700; }
+        .qbe .carrConfig { display: flex; flex-direction: column; gap: 8px; background: #F8F7FD; border: 1px solid var(--line); border-radius: 12px; padding: 10px; }
+        .qbe .carrConfig .fila { display: flex; gap: 6px; flex-wrap: wrap; align-items: center; }
+        .qbe .carrConfig .fila span.etiqueta { font-size: 11.5px; color: var(--muted); font-weight: 700; margin-right: 2px; }
+        .qbe .carrConfig .fila button { border: 1px solid #DCD6F5; background: #fff; color: #4F40C9; border-radius: 999px; padding: 6px 12px; font-weight: 700; font-size: 11.5px; min-height: 30px; }
+        .qbe .carrConfig .fila button[aria-pressed="true"] { background: #6C5CE7; color: #fff; border-color: #6C5CE7; }
+        .qbe .carrConfig .aviso { font-size: 11px; color: #7A7694; font-weight: 600; }
+        .qbe .carr { display: grid; grid-auto-flow: column; grid-auto-columns: 72%; gap: 8px; overflow-x: auto; margin: 8px -2px 0; padding-bottom: 4px; }
+        .qbe .tarj { background: #fff; border: 1px solid #DCD6F5; border-radius: 12px; padding: 10px; min-height: 90px; display: flex; flex-direction: column; gap: 6px; }
+        .qbe .tarj span { font-size: 11px; font-weight: 800; color: #4F40C9; }
+        .qbe .tarj p { margin: 0; font-size: 12.5px; color: #5A5672; line-height: 1.35; }
+        .qbe .boceto .costo { display: block; margin-top: 8px; font-size: 11.5px; color: #7A7694; font-weight: 600; }
         @media (max-width: 760px) { .qbe .tabs { grid-template-columns: none; grid-auto-flow: column; grid-auto-columns: 78%; overflow-x: auto; } .qbe .carrusel { grid-auto-columns: 86%; } }
         @media (prefers-reduced-motion: reduce) { .qbe * { scroll-behavior: auto !important; } }
       `}</style>
@@ -436,6 +525,17 @@ export default function ElegirEstrategia({ estrategias, objetivo, esAdmin, pagin
         </div>
       </div>
 
+      {hayBuenaMezcla && (
+        <div className="mezcla" role="status">
+          <span>✓ <b>Buena mezcla de formatos:</b></span>
+          {conteoFormatos.imagen > 0 && <span className="pill">{conteoFormatos.imagen} imagen{conteoFormatos.imagen !== 1 ? "es" : ""}</span>}
+          {conteoFormatos.carrusel > 0 && <span className="pill">{conteoFormatos.carrusel} carrusel{conteoFormatos.carrusel !== 1 ? "es" : ""}</span>}
+          {conteoFormatos.video > 0 && <span className="pill">{conteoFormatos.video} video{conteoFormatos.video !== 1 ? "s" : ""}</span>}
+          {conteoFormatos.propio > 0 && <span className="pill">{conteoFormatos.propio} tuyo{conteoFormatos.propio !== 1 ? "s" : ""}</span>}
+          <span style={{ fontWeight: 500 }}>Formatos distintos ayudan a Meta a llegar a más personas.</span>
+        </div>
+      )}
+
       <div className="carrusel">
         {anuncios.map(({ clave, conjunto, anuncio }) => {
           const tipoActual = tiposPorAnuncio[clave] || "imagen";
@@ -451,7 +551,7 @@ export default function ElegirEstrategia({ estrategias, objetivo, esAdmin, pagin
             <div className="anuncio" key={clave}>
               <div className="formato" role="group" aria-label={`Formato del anuncio: ${anuncio.copy?.titulo || anuncio.nombre}`}>
                 <button aria-pressed={tipoActual === "imagen"} onClick={() => cambiarTipo(clave, "imagen")}>Imagen</button>
-                <button aria-pressed={false} disabled title="Próximamente">Carrusel<small>Pronto</small></button>
+                <button aria-pressed={tipoActual === "carrusel"} onClick={() => elegirCarrusel(clave)}>Carrusel</button>
                 <button
                   aria-pressed={tipoActual === "video"}
                   disabled={videoBloqueado}
@@ -464,6 +564,30 @@ export default function ElegirEstrategia({ estrategias, objetivo, esAdmin, pagin
                   Subir el mío
                 </button>
               </div>
+
+              {tipoActual === "carrusel" && (() => {
+                const config = carruselConfigPorAnuncio[clave] || { tipo: tiposCarruselDisponibles[0] || "paso_a_paso", numTarjetas: 3 };
+                return (
+                  <div className="carrConfig">
+                    <div className="fila">
+                      {tiposCarruselDisponibles.map((tipo) => (
+                        <button key={tipo} type="button" aria-pressed={config.tipo === tipo} onClick={() => cambiarCarruselConfig(clave, { tipo })}>
+                          {NOMBRES_CARRUSEL_TIPO[tipo]}
+                        </button>
+                      ))}
+                    </div>
+                    <div className="fila">
+                      <span className="etiqueta">Tarjetas</span>
+                      {[3, 4, 5].map((n) => (
+                        <button key={n} type="button" aria-pressed={config.numTarjetas === n} onClick={() => cambiarCarruselConfig(clave, { numTarjetas: n })}>
+                          {n}
+                        </button>
+                      ))}
+                    </div>
+                    <span className="aviso">{config.numTarjetas} tarjetas = {config.numTarjetas} imágenes con IA</span>
+                  </div>
+                );
+              })()}
 
               {menuSubirAbierto[clave] && !esFormatoSubir && (
                 <div style={{ display: "flex", gap: 8 }}>
@@ -521,7 +645,27 @@ export default function ElegirEstrategia({ estrategias, objetivo, esAdmin, pagin
                   <div className="sinboceto">
                     <Video size={28} color="#6C5CE7" />
                   </div>
-                ) : tipoActual === "subida" && imagenPropia ? (
+                ) : tipoActual === "carrusel" ? (() => {
+                  const config = carruselConfigPorAnuncio[clave] || { tipo: tiposCarruselDisponibles[0] || "paso_a_paso", numTarjetas: 3 };
+                  const subtitulos = SUBTITULOS_CARRUSEL[config.tipo] || [];
+                  return (
+                    <div className="boceto" style={{ aspectRatio: "auto", minHeight: 0 }}>
+                      <div className="tipo">
+                        <ImageIcon size={16} />
+                        Carrusel · {NOMBRES_CARRUSEL_TIPO[config.tipo]}
+                      </div>
+                      <div className="carr">
+                        {Array.from({ length: config.numTarjetas }).map((_, i) => (
+                          <div className="tarj" key={i}>
+                            <span>Tarjeta {i + 1}{subtitulos[i] ? ` · ${subtitulos[i]}` : ""}</span>
+                            <p>Se crea con IA siguiendo tu concepto</p>
+                          </div>
+                        ))}
+                      </div>
+                      <span className="costo">{config.numTarjetas} tarjetas · se crean {config.numTarjetas} imágenes con tu llave de OpenAI</span>
+                    </div>
+                  );
+                })() : tipoActual === "subida" && imagenPropia ? (
                   <div className="propiaLista">
                     <img src={imagenPropia.url_imagen} alt="" />
                     <button
@@ -648,7 +792,7 @@ export default function ElegirEstrategia({ estrategias, objetivo, esAdmin, pagin
 
       <div style={{ display: "flex", justifyContent: "flex-end", marginTop: 20 }}>
         <button
-          onClick={() => onElegir(seleccionada, tiposPorAnuncio, creativosPropios)}
+          onClick={() => onElegir(seleccionada, tiposPorAnuncio, creativosPropios, carruselConfigPorAnuncio)}
           style={{ border: 0, minHeight: 52, padding: "0 28px", borderRadius: 14, background: "#6C5CE7", color: "#fff", fontWeight: 800, fontSize: 16, boxShadow: "0 12px 26px -12px #6C5CE7" }}
         >
           Elegir esta estrategia →
