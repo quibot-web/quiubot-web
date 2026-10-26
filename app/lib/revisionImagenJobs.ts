@@ -113,6 +113,24 @@ export async function procesarRevisionImagen(
     // creativos_album llevaba un solo item -- detalle[0] es su resultado.
     const detalle = Array.isArray(data.detalle) ? data.detalle[0] : null;
 
+    // error_analisis: true -- n8n sí respondió, pero el análisis de ESTA
+    // imagen falló puntualmente (ej. la visión de OpenAI no pudo
+    // procesarla). Se trata como fallo de job (no como "lista" con un
+    // resultado a medias) para que el cliente muestre el mismo "No pude
+    // revisarla" genérico, nunca el comentario técnico que venga en ese
+    // caso.
+    if (detalle?.error_analisis) {
+      await supabaseAdmin
+        .from("trabajos_ia")
+        .update({
+          estado: "fallida",
+          error: "El análisis de la imagen falló",
+          actualizado_en: new Date().toISOString(),
+        })
+        .eq("id", jobId);
+      return;
+    }
+
     await supabaseAdmin
       .from("trabajos_ia")
       .update({

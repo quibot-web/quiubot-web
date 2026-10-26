@@ -494,25 +494,44 @@ export default function ElegirEstrategia({ estrategias, objetivo, esAdmin, onEle
                   <div className="sinboceto">🖼️</div>
                 )}
 
-                {tipoActual === "subida" && imagenPropia && revisionesPorAnuncio[clave] && (
-                  <div className="revision">
-                    {revisionesPorAnuncio[clave].estado === "revisando" && <span className="estado">Revisando tu imagen…</span>}
-                    {revisionesPorAnuncio[clave].estado === "no_disponible" && (
-                      <span className="estado">No pude revisarla, pero puedes usarla</span>
-                    )}
-                    {revisionesPorAnuncio[clave].estado === "lista" &&
-                      (revisionesPorAnuncio[clave] as { estado: "lista"; resultado: ResultadoRevisionImagen }).resultado.cumple ? (
-                      <span className="estado ok">✓ Encaja con este anuncio</span>
-                    ) : revisionesPorAnuncio[clave].estado === "lista" ? (
+                {tipoActual === "subida" && imagenPropia && revisionesPorAnuncio[clave] && (() => {
+                  const revision = revisionesPorAnuncio[clave];
+                  if (revision.estado === "revisando") {
+                    return (
+                      <div className="revision">
+                        <span className="estado">Revisando tu imagen…</span>
+                      </div>
+                    );
+                  }
+                  if (revision.estado === "no_disponible") {
+                    return (
+                      <div className="revision">
+                        <span className="estado">No pude revisarla, pero puedes usarla</span>
+                      </div>
+                    );
+                  }
+                  // estado === "lista": puntos manda si viene alguno
+                  // (aunque cumple sea true) -- "✓ Encaja" es solo para
+                  // cuando no hay ninguna sugerencia que dar.
+                  const puntos = revision.resultado.puntos?.length
+                    ? revision.resultado.puntos
+                    : revision.resultado.cumple
+                    ? []
+                    : revision.resultado.comentario
+                    ? [revision.resultado.comentario]
+                    : [];
+                  if (puntos.length === 0) {
+                    return (
+                      <div className="revision">
+                        <span className="estado ok">✓ Encaja con este anuncio</span>
+                      </div>
+                    );
+                  }
+                  return (
+                    <div className="revision">
                       <div className="sug">
                         <b>Sugerencias</b>
-                        <ul>
-                          {(() => {
-                            const resultado = (revisionesPorAnuncio[clave] as { estado: "lista"; resultado: ResultadoRevisionImagen }).resultado;
-                            const puntos = resultado.puntos?.length ? resultado.puntos : resultado.comentario ? [resultado.comentario] : [];
-                            return puntos.slice(0, 3).map((p, i) => <li key={i}>{p}</li>);
-                          })()}
-                        </ul>
+                        <ul>{puntos.slice(0, 3).map((p, i) => <li key={i}>{p}</li>)}</ul>
                         <div className="botones">
                           <button type="button" onClick={() => descartarRevision(seleccionada.id, clave)}>
                             Usarla así
@@ -522,9 +541,9 @@ export default function ElegirEstrategia({ estrategias, objetivo, esAdmin, onEle
                           </button>
                         </div>
                       </div>
-                    ) : null}
-                  </div>
-                )}
+                    </div>
+                  );
+                })()}
 
                 <div className="ctabar">
                   <div><small>{esWhatsapp ? "wa.me" : "Anuncio"}</small><b>{anuncio.copy?.titulo}</b></div>

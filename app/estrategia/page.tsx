@@ -3349,7 +3349,15 @@ function EstrategiaContent() {
                         {d.angulo_elegido && (
                           <div style={{ fontSize: 11, color: "#999", marginTop: 2 }}>Ángulo más cercano: {d.angulo_elegido}</div>
                         )}
-                        <div style={{ fontSize: 12, color: "#666", marginTop: 2 }}>{d.comentario}</div>
+                        {Array.isArray(d.puntos) && d.puntos.length > 0 ? (
+                          <ul style={{ fontSize: 12, color: "#666", margin: "2px 0 0", paddingLeft: 16 }}>
+                            {d.puntos.slice(0, 3).map((p: string, pi: number) => (
+                              <li key={pi}>{p}</li>
+                            ))}
+                          </ul>
+                        ) : (
+                          <div style={{ fontSize: 12, color: "#666", marginTop: 2 }}>{d.comentario}</div>
+                        )}
                       </div>
                     </div>
                   ))}
