@@ -8,6 +8,8 @@ export const TIPO_LABEL: Record<string, string> = {
   conversaciones_whatsapp: "conversaciones de WhatsApp",
   leads: "leads",
   ventas_web: "ventas en tu sitio web",
+  visitas_web: "visitas a tu sitio web",
+  seguidores_facebook: "seguidores de Facebook",
 };
 
 function formatoCop(valor: number): string {

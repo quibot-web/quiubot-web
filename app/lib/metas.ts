@@ -5,7 +5,11 @@
 import { supabaseAdmin } from "@/lib/supabase";
 import { diasEntre, hoyBogota, ayerBogota } from "@/app/lib/fechaBogota";
 
-export type TipoMeta = "conversaciones_whatsapp" | "leads" | "ventas_web";
+// visitas_web y seguidores_facebook: fase 1 de los tipos nuevos.
+// seguidores_instagram queda para después de probar con una campaña
+// real si la Marketing API de verdad reporta seguidores de Instagram
+// como action_type, o si hay que medirlo por visitas al perfil.
+export type TipoMeta = "conversaciones_whatsapp" | "leads" | "ventas_web" | "visitas_web" | "seguidores_facebook";
 export type EstadoMeta = "activa" | "pausada" | "cumplida" | "vencida" | "cancelada";
 export type NivelAutonomia = "copiloto" | "autopiloto_con_limites";
 
@@ -85,11 +89,15 @@ const OBJETIVO_ID_POR_TIPO: Record<TipoMeta, string> = {
   conversaciones_whatsapp: "venta_directa_whatsapp",
   leads: "leads",
   ventas_web: "venta_directa_web",
+  visitas_web: "visitas_web",
+  seguidores_facebook: "seguidores_facebook",
 };
 const OBJETIVO_META_POR_TIPO: Record<TipoMeta, string> = {
   conversaciones_whatsapp: "OUTCOME_ENGAGEMENT",
   leads: "OUTCOME_LEADS",
   ventas_web: "OUTCOME_SALES",
+  visitas_web: "OUTCOME_TRAFFIC",
+  seguidores_facebook: "OUTCOME_ENGAGEMENT",
 };
 
 // Mismo objeto que manda /estrategia al webhook generar_estrategia (ver
@@ -122,6 +130,20 @@ export const OBJETIVO_PARA_TIPO: Record<
     meta_objective: "OUTCOME_SALES",
     destino: "sitio_web",
   },
+  visitas_web: {
+    id: "visitas_web",
+    label: "Visitas a tu sitio web",
+    desc: "Lleva visitas reales a tu página.",
+    meta_objective: "OUTCOME_TRAFFIC",
+    destino: "visitas_sitio",
+  },
+  seguidores_facebook: {
+    id: "seguidores_facebook",
+    label: "Seguidores de Facebook",
+    desc: "Haz crecer los seguidores de tu página.",
+    meta_objective: "OUTCOME_ENGAGEMENT",
+    destino: "pagina",
+  },
 };
 
 export type ObjetivoCatalogo = { id: string; label: string; desc: string; meta_objective: string; destino: string };
@@ -139,6 +161,13 @@ export const OBJETIVOS_CATALOGO: ObjetivoCatalogo[] = [
   { id: "retargeting", label: "Retargeting", desc: "Impacta a quienes ya te conocen.", meta_objective: "OUTCOME_TRAFFIC", destino: "sitio_web" },
   { id: "leads", label: "Generación de Leads", desc: "Captura contactos interesados en tu producto.", meta_objective: "OUTCOME_LEADS", destino: "formulario" },
   { id: "trafico_mensajes", label: "Tráfico", desc: "Lleva más visitas nuevas a tu sitio web.", meta_objective: "OUTCOME_TRAFFIC", destino: "sitio_web" },
+  // Agregados al final a propósito -- objetivoParaCampana usa el primer
+  // match de este arreglo por meta_objective como respaldo para
+  // campañas sin objetivo_id; con estos dos al final, una campaña vieja
+  // de WhatsApp o de tráfico sigue resolviendo al objetivo de siempre
+  // (venta_directa_whatsapp / retargeting), nunca a uno de estos nuevos.
+  { id: "visitas_web", label: "Visitas a tu sitio web", desc: "Lleva visitas reales a tu página.", meta_objective: "OUTCOME_TRAFFIC", destino: "visitas_sitio" },
+  { id: "seguidores_facebook", label: "Seguidores de Facebook", desc: "Haz crecer los seguidores de tu página.", meta_objective: "OUTCOME_ENGAGEMENT", destino: "pagina" },
 ];
 
 const OBJETIVOS_POR_ID = new Map(OBJETIVOS_CATALOGO.map((o) => [o.id, o]));
@@ -169,11 +198,24 @@ export function objetivoParaCampana(
   return OBJETIVO_PARA_TIPO[tipoMeta];
 }
 
+// Solo los tipos que ya existían antes de que objetivo_id existiera
+// pueden tener campañas viejas de verdad que respaldar por el objetivo
+// crudo de Meta -- los tipos nuevos (visitas_web, seguidores_facebook)
+// nacieron CON objetivo_id desde el día uno, así que ninguna campaña
+// vieja sin objetivo_id puede ser legítimamente de esos tipos. Esto
+// importa porque seguidores_facebook comparte OUTCOME_ENGAGEMENT con
+// conversaciones_whatsapp (ambos "me gusta"/"conversación" son
+// engagement para Meta) -- sin este freno, una campaña vieja de
+// WhatsApp sin objetivo_id calzaría también como "seguidores_facebook"
+// con solo mirar el objetivo crudo.
+const TIPOS_CON_RESPALDO_LEGACY = new Set<TipoMeta>(["conversaciones_whatsapp", "leads", "ventas_web"]);
+
 export function campanaCoincideConTipo(
   campana: { objetivo_id: string | null; objetivo: string | null },
   tipo: TipoMeta
 ): boolean {
   if (campana.objetivo_id) return campana.objetivo_id === OBJETIVO_ID_POR_TIPO[tipo];
+  if (!TIPOS_CON_RESPALDO_LEGACY.has(tipo)) return false;
   return campana.objetivo === OBJETIVO_META_POR_TIPO[tipo];
 }
 
@@ -201,7 +243,13 @@ export function campanaPerteneceAMeta(
 // meta, no hace falta cubrir los demás objetivos del catálogo.
 export function inferirObjetivoId(campana: { objetivo_id: string | null; objetivo: string | null }): string | null {
   if (campana.objetivo_id) return campana.objetivo_id;
+  // Mismo freno que campanaCoincideConTipo: solo los tipos que ya
+  // existían antes de objetivo_id pueden resolverse por el objetivo
+  // crudo -- si no, con conversaciones_whatsapp y seguidores_facebook
+  // compartiendo OUTCOME_ENGAGEMENT, el orden de las claves del objeto
+  // sería lo único que evitara el choque (implícito y frágil).
   for (const tipo of Object.keys(OBJETIVO_META_POR_TIPO) as TipoMeta[]) {
+    if (!TIPOS_CON_RESPALDO_LEGACY.has(tipo)) continue;
     if (campana.objetivo === OBJETIVO_META_POR_TIPO[tipo]) return OBJETIVO_ID_POR_TIPO[tipo];
   }
   return null;
