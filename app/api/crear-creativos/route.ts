@@ -78,11 +78,13 @@ export async function POST(req: NextRequest) {
   // arriba (3 cada 5 min), que no distingue plan ni pone techo mensual.
   // Cada llamada aqui (lote completo, "regenerar todos", o "regenerar un
   // anuncio") crea una fila en creativos_jobs, y eso es lo que se cuenta
-  // -- salvo las que terminaron en estado "error" (el job entero falló,
-  // ni una imagen salió bien): esas no se cuentan, para que un problema
-  // temporal de OpenAI no le gaste al cliente una generación de su plan.
-  // Un job "listo" con ALGUNAS imágenes fallidas sí sigue contando como
-  // 1 uso -- ahí el lote en general sí funcionó.
+  // -- salvo que no haya quedado ni una imagen usable: ni las que
+  // terminaron en estado "error" (el job entero falló), ni las "listo"
+  // donde n8n marcó ok:false en TODOS sus creativos (el job en sí no
+  // falló, pero ninguna imagen se generó -- visto en vivo). Un problema
+  // temporal de OpenAI no le gasta al cliente una generación de su plan.
+  // Un job "listo" con AL MENOS una imagen buena sí sigue contando como
+  // 1 uso, aunque otras de ese mismo lote hayan fallado.
   const plan = (usuario.plan as PlanId) || "arranque";
   const limiteJobs = PLANES[plan].creativosJobsPorMes;
 
@@ -91,14 +93,22 @@ export async function POST(req: NextRequest) {
     inicioMes.setDate(1);
     inicioMes.setHours(0, 0, 0, 0);
 
-    const { count } = await supabaseAdmin
+    const { data: jobsDelMes } = await supabaseAdmin
       .from("creativos_jobs")
-      .select("*", { count: "exact", head: true })
+      .select("estado, creativos")
       .eq("user_id", usuario.id)
-      .neq("estado", "error")
       .gte("creado_en", inicioMes.toISOString());
 
-    if ((count ?? 0) >= limiteJobs) {
+    const tieneImagenBuena = (creativos: unknown) =>
+      Array.isArray(creativos) && creativos.some((c: any) => !!c?.url_imagen);
+
+    const count = (jobsDelMes ?? []).filter((job) => {
+      if (job.estado === "error") return false;
+      if (job.estado === "listo" && !tieneImagenBuena(job.creativos)) return false;
+      return true; // procesando/pendiente cuentan igual (reserva el cupo mientras está en curso)
+    }).length;
+
+    if (count >= limiteJobs) {
       return NextResponse.json(
         {
           error: `Ya usaste tus ${limiteJobs} generaciones de creativos de este mes en el plan ${PLANES[plan].nombre}. Mejora tu plan para seguir generando, o espera al próximo mes.`,
