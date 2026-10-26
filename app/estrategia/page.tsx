@@ -1789,7 +1789,7 @@ function EstrategiaContent() {
     // conjunto_nombre -- sin él (o con titulo/texto/cta vacíos) el
     // anuncio subido terminaba huérfano en un conjunto nuevo y sin copy.
     const acumuladoInicial: Record<string, any> = {};
-    Object.entries(creativosPropios).forEach(([clave, { url_imagen }]) => {
+    Object.entries(creativosPropios).forEach(([clave, creativoPropio]) => {
       if (completos[clave] !== "subida") return;
       const [ci, ai] = clave.split("-").map(Number);
       const conjunto = estrategia?.conjuntos?.[ci];
@@ -1801,8 +1801,11 @@ function EstrategiaContent() {
         texto: anuncio?.copy?.texto || "",
         descripcion: anuncio?.copy?.descripcion || "",
         cta: anuncio?.copy?.cta || "",
-        url_imagen,
-        origen: "subida",
+        url_imagen: creativoPropio.url_imagen,
+        // "subida" (subió un archivo) o "album" (lo eligió de su álbum,
+        // sin pasar por el paso "album-selector" viejo) -- cualquiera de
+        // los dos ya llega "listo", ninguno entra a la cola de IA.
+        origen: creativoPropio.origen || "subida",
       };
     });
 
