@@ -2,7 +2,7 @@
 import { useState, useRef, useEffect, Suspense } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 import { ShoppingBag, Target, Camera, Sparkles, Check, Shirt, Smartphone, UtensilsCrossed, Plane, Briefcase, Palmtree, Video, Watch, Bot, FolderOpen, Dna, X, ShoppingCart, Tag, DollarSign, CheckCircle2, MessageCircle, Phone, Send, Megaphone, Eye, Heart, Star, RefreshCw, Repeat, Users, MousePointerClick, TrendingUp, Zap, Globe, Image as ImageIcon, Play, Upload, Lock } from "lucide-react";
-import ElegirEstrategia, { type CreativoPropio } from "@/app/components/ElegirEstrategia";
+import ElegirEstrategia, { type CreativoPropio, type CarruselConfig } from "@/app/components/ElegirEstrategia";
 import SelectorAlbum from "@/app/components/SelectorAlbum";
 import TutorialVideo from "@/app/components/TutorialVideo";
 import TourGuiado from "@/app/components/TourGuiado";
@@ -877,6 +877,10 @@ function EstrategiaContent() {
   // (ver handleSeleccionarEstrategia), así el usuario solo cambia las filas
   // que quiere distinto.
   const [tiposPorAnuncio, setTiposPorAnuncio] = useState<Record<string, TipoCreativo>>({});
+  // Solo para anuncios tipo "carrusel" -- elegido en ElegirEstrategia,
+  // necesario de nuevo acá para armar formato_creativo/carrusel en
+  // filtrarEstrategiaPorTipo y para reconstruirlo al "regenerar todos".
+  const [carruselConfigPorAnuncio, setCarruselConfigPorAnuncio] = useState<Record<string, CarruselConfig>>({});
   // Stepper de "asignar-tipos": qué anuncio se muestra (uno a la vez, en
   // vez de todos apilados). transicionAsignacion solo existe durante los
   // ~320ms de la animación de deslizamiento entre anuncios -- mientras
@@ -1107,6 +1111,7 @@ function EstrategiaContent() {
           if (data.estrategiaSeleccionada) setEstrategiaSeleccionada(data.estrategiaSeleccionada);
           if (data.descripcionVisual) setDescripcionVisual(data.descripcionVisual);
           if (data.tiposPorAnuncio) setTiposPorAnuncio(data.tiposPorAnuncio);
+          if (data.carruselConfigPorAnuncio) setCarruselConfigPorAnuncio(data.carruselConfigPorAnuncio);
           if (typeof data.pasoAsignacionIdx === "number") setPasoAsignacionIdx(data.pasoAsignacionIdx);
           if (data.colaDeTipos) setColaDeTipos(data.colaDeTipos);
           if (typeof data.tipoEnProcesoIdx === "number") setTipoEnProcesoIdx(data.tipoEnProcesoIdx);
@@ -1150,6 +1155,7 @@ function EstrategiaContent() {
           estrategiaSeleccionada,
           descripcionVisual,
           tiposPorAnuncio,
+          carruselConfigPorAnuncio,
           pasoAsignacionIdx,
           colaDeTipos,
           tipoEnProcesoIdx,
@@ -1177,6 +1183,7 @@ function EstrategiaContent() {
     estrategiaSeleccionada,
     descripcionVisual,
     tiposPorAnuncio,
+    carruselConfigPorAnuncio,
     pasoAsignacionIdx,
     colaDeTipos,
     tipoEnProcesoIdx,
@@ -1327,12 +1334,15 @@ function EstrategiaContent() {
         // Caso 2: este job era el lote de imagen de la cola nueva --
         // recalculamos las mismas claves que dispararImagen mandó (misma
         // función determinística sobre estrategiaSeleccionada +
-        // tiposPorAnuncio, así que el orden coincide exacto).
+        // tiposPorAnuncio, así que el orden coincide exacto). "carrusel"
+        // va en el mismo lote que "imagen" (ver filtrarEstrategiaPorTipo),
+        // así que también cuenta acá -- si no, las posiciones de
+        // creativosListos quedarían corridas apenas hubiera un carrusel.
         const clavesImagen: string[] = [];
         (estrategiaRestaurada?.conjuntos || []).forEach((conjunto: any, ci: number) => {
           (conjunto.anuncios || []).forEach((_anuncio: any, ai: number) => {
             const clave = `${ci}-${ai}`;
-            if (tiposPorAnuncioRestaurado[clave] === "imagen") clavesImagen.push(clave);
+            if (tiposPorAnuncioRestaurado[clave] === "imagen" || tiposPorAnuncioRestaurado[clave] === "carrusel") clavesImagen.push(clave);
           });
         });
         const acumulado = { ...acumuladoRestaurado };
@@ -1761,9 +1771,11 @@ function EstrategiaContent() {
   const handleElegirEstrategiaNueva = (
     estrategia: any,
     tiposElegidos: Record<string, TipoCreativo>,
-    creativosPropios: Record<string, CreativoPropio>
+    creativosPropios: Record<string, CreativoPropio>,
+    carruselConfigElegido?: Record<string, CarruselConfig>
   ) => {
     setEstrategiaSeleccionada(estrategia);
+    setCarruselConfigPorAnuncio(carruselConfigElegido || {});
     try {
       localStorage.setItem("quiubot_estrategia_seleccionada", JSON.stringify(estrategia));
     } catch {}
@@ -1810,11 +1822,14 @@ function EstrategiaContent() {
     });
 
     // Mismo orden fijo que handleConfirmarAsignaciones (video, imagen,
-    // álbum) -- "subida" nunca entra, ya quedó resuelta arriba.
+    // álbum) -- "subida" nunca entra, ya quedó resuelta arriba. "carrusel"
+    // comparte la cola de "imagen" (un solo crear_creativos con la mezcla
+    // de anuncios planos y de carrusel, ver filtrarEstrategiaPorTipo), no
+    // suma un tipo aparte.
     const presentes = new Set(Object.values(completos));
     const cola: TipoCreativo[] = [];
     if (presentes.has("video")) cola.push("video");
-    if (presentes.has("imagen")) cola.push("imagen");
+    if (presentes.has("imagen") || presentes.has("carrusel")) cola.push("imagen");
     if (presentes.has("album")) cola.push("album");
 
     setColaDeTipos(cola);
@@ -1888,8 +1903,19 @@ function EstrategiaContent() {
       const anunciosDelConjunto: any[] = [];
       (conjunto.anuncios || []).forEach((anuncio: any, ai: number) => {
         const clave = `${ci}-${ai}`;
-        if (tipos[clave] === tipo) {
-          anunciosDelConjunto.push(anuncio);
+        const tipoClave = tipos[clave];
+        // "carrusel" viaja dentro del mismo pedido que "imagen" -- un
+        // solo crear_creativos con la mezcla de anuncios planos y de
+        // carrusel (contrato: formato_creativo:"carrusel" + carrusel en
+        // los que correspondan, el resto sigue como imagen tal cual).
+        const coincide = tipoClave === tipo || (tipo === "imagen" && tipoClave === "carrusel");
+        if (coincide) {
+          const config = carruselConfigPorAnuncio[clave];
+          const anuncioFinal =
+            tipoClave === "carrusel" && config
+              ? { ...anuncio, formato_creativo: "carrusel", carrusel: { tipo: config.tipo, num_tarjetas: config.numTarjetas } }
+              : anuncio;
+          anunciosDelConjunto.push(anuncioFinal);
           claves.push(clave);
         }
       });
@@ -2141,6 +2167,13 @@ function EstrategiaContent() {
                 nombre: creativo.anuncio_nombre,
                 copy: { titulo: creativo.titulo, texto: creativo.texto, descripcion: creativo.descripcion, cta: creativo.cta },
                 argumentacion: creativo.argumentacion,
+                // Regenerar un carrusel rehace TODAS sus tarjetas, no una
+                // sola -- se reconstruye la config desde el propio
+                // creativo (no depende de carruselConfigPorAnuncio, que
+                // para este punto del flujo ya no es relevante).
+                ...(creativo.formato === "carrusel"
+                  ? { formato_creativo: "carrusel", carrusel: { tipo: creativo.carrusel_tipo, num_tarjetas: creativo.tarjetas?.length || 3 } }
+                  : {}),
               },
             ],
           },
@@ -3525,8 +3558,69 @@ function EstrategiaContent() {
                           </a>
                         )}
 
-                        {/* Imagen completa, sin recortar, con vista ampliada al hacer clic */}
-                        {c.url_imagen ? (
+                        {/* Si n8n no pudo planear el carrusel, el creativo vuelve como
+                            imagen normal (formato !== "carrusel") con esta bandera --
+                            aviso suave, no bloquea nada, el resto de la tarjeta sigue
+                            su camino normal (imagen plana) más abajo. */}
+                        {c.carrusel_fallido && (
+                          <div style={{ padding: "6px 12px", background: "#FFFBEB", borderBottom: "1px solid #FDE68A", fontSize: 11, color: "#92400E", fontWeight: 600 }}>
+                            No se pudo armar el carrusel; se creó como imagen.
+                          </div>
+                        )}
+
+                        {/* Carrusel con tarjetas reales -- vista previa deslizable, cada
+                            tarjeta con su propia ampliación/descarga. Un carrusel
+                            totalmente fallido (ok:false, formato:"carrusel" pero sin
+                            tarjetas) cae al mismo branch de imagenFallida de abajo. */}
+                        {c.formato === "carrusel" && Array.isArray(c.tarjetas) && c.tarjetas.length > 0 ? (
+                          <div>
+                            <div style={{ display: "flex", gap: 8, overflowX: "auto", padding: 10, scrollSnapType: "x mandatory" }}>
+                              {c.tarjetas.map((t: any, ti: number) => (
+                                <div
+                                  key={t.public_id || ti}
+                                  style={{ flex: "0 0 68%", scrollSnapAlign: "start", position: "relative", borderRadius: 8, overflow: "hidden", background: "#f3f2fe" }}
+                                >
+                                  {t.url_imagen && (
+                                    <>
+                                      <img
+                                        src={t.url_imagen}
+                                        alt=""
+                                        onClick={() => setImagenAmpliada(t.url_imagen)}
+                                        style={{ width: "100%", height: 160, objectFit: "cover", display: "block", cursor: "zoom-in" }}
+                                      />
+                                      <a
+                                        href={urlDescargaCloudinary(t.url_imagen)}
+                                        download
+                                        title="Descargar esta tarjeta"
+                                        style={{ position: "absolute", top: 6, right: 6, width: 24, height: 24, borderRadius: "50%", border: "none", background: "rgba(0,0,0,.55)", color: "#fff", fontSize: 11, display: "flex", alignItems: "center", justifyContent: "center", textDecoration: "none" }}
+                                      >
+                                        ⬇
+                                      </a>
+                                    </>
+                                  )}
+                                  <div style={{ padding: "6px 8px", background: "#fff" }}>
+                                    <div style={{ fontSize: 11.5, fontWeight: 600, color: "#1a1a1a" }}>{t.titulo}</div>
+                                    {t.descripcion && <div style={{ fontSize: 10.5, color: "#666" }}>{t.descripcion}</div>}
+                                  </div>
+                                </div>
+                              ))}
+                            </div>
+                            {(() => {
+                              const numFallidas = Array.isArray(c.tarjetas_fallidas)
+                                ? c.tarjetas_fallidas.length
+                                : typeof c.tarjetas_fallidas === "number"
+                                ? c.tarjetas_fallidas
+                                : 0;
+                              if (numFallidas <= 0) return null;
+                              return (
+                                <p style={{ margin: "0 12px 10px", fontSize: 11, color: "#991b1b" }}>
+                                  {numFallidas} tarjeta{numFallidas !== 1 ? "s" : ""} no se pudo{numFallidas !== 1 ? "ieron" : ""} crear.
+                                </p>
+                              );
+                            })()}
+                          </div>
+                        ) : /* Imagen completa, sin recortar, con vista ampliada al hacer clic */
+                        c.url_imagen ? (
                           c.tipo === "video" ? (
                             <video src={c.url_imagen} controls style={{ width: "100%", maxHeight: 320, objectFit: "contain", background: "#f3f2fe", display: "block" }} />
                           ) : (
