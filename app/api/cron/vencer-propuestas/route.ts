@@ -15,14 +15,16 @@ function compararSeguro(a: string, b: string): boolean {
 const VENCE_ESPERANDO_FOTOS_MS = 72 * 60 * 60 * 1000;
 
 // Llamado cada hora por un Schedule Trigger en n8n (mismo patrón que
-// sync-meta-insights). Tres cosas, todas respaldo de algo que normalmente
-// ya pasa solo: propuestas "pendiente" con vence_en cumplido (ver
+// sync-meta-insights). Todo esto es respaldo de algo que normalmente ya
+// pasa solo: propuestas "pendiente" con vence_en cumplido (ver
 // obtenerPropuestasPendientes), crear_creativos "aprobada" que lleva más
 // de 72h esperando que el cliente suba las fotos (ver
-// vencerPropuestasDelUsuario), y crear_creativos en etapa "generando" --
+// vencerPropuestasDelUsuario), crear_creativos en etapa "generando" --
 // normalmente el polling de /decisiones (mientras el cliente sigue ahí)
 // ya encadena la propuesta agregar_anuncios apenas el job termina, esto
-// es solo para cuando cerró la pestaña a mitad de la generación.
+// es solo para cuando cerró la pestaña a mitad de la generación -- y el
+// timeout de 10 minutos de estrategias_jobs/trabajos_ia (agregar_anuncios,
+// adn_marca), para cuando nadie quedó consultando el job.
 // revisarGeneracionCreativos es idempotente, así que no importa si el
 // polling y este cron la revisan casi al mismo tiempo.
 export async function POST(req: NextRequest) {
@@ -55,6 +57,32 @@ export async function POST(req: NextRequest) {
     .in("estado", ["pendiente", "procesando"])
     .lt("intento_desde", new Date(Date.now() - TIMEOUT_PROCESANDO_MS).toISOString())
     .select("id");
+
+  // Mismo respaldo, ahora para trabajos_ia (agregar_anuncios, adn_marca)
+  // -- mismos 10 minutos que estrategias_jobs. agregar_anuncios está
+  // ligado a una propuesta (resultado.job_id apunta a este trabajo), que
+  // también tiene que reflejar el mismo fallo; adn_marca no está ligado
+  // a ninguna otra fila, no hace falta nada más para esa.
+  const { data: trabajosVencidos } = await supabaseAdmin
+    .from("trabajos_ia")
+    .update({ estado: "fallida", error: "Se interrumpió el proceso, intenta de nuevo" })
+    .in("estado", ["pendiente", "procesando"])
+    .in("tipo", ["agregar_anuncios", "adn_marca"])
+    .lt("intento_desde", new Date(Date.now() - TIMEOUT_PROCESANDO_MS).toISOString())
+    .select("id, tipo");
+
+  const idsAgregarAnunciosVencidos = (trabajosVencidos ?? []).filter((t) => t.tipo === "agregar_anuncios").map((t) => t.id);
+  if (idsAgregarAnunciosVencidos.length > 0) {
+    await Promise.all(
+      idsAgregarAnunciosVencidos.map((jobId) =>
+        supabaseAdmin
+          .from("propuestas")
+          .update({ estado: "fallida", resultado: { error: "Se interrumpió el proceso, intenta de nuevo" } })
+          .eq("resultado->>job_id", jobId)
+          .eq("estado", "aprobada")
+      )
+    );
+  }
 
   const { data: vencidasPendiente, error: errorPendiente } = await supabaseAdmin
     .from("propuestas")
@@ -122,6 +150,7 @@ export async function POST(req: NextRequest) {
     ok: true,
     metas_cerradas: metasCerradas.length,
     estrategias_jobs_vencidos: estrategiasVencidas?.length ?? 0,
+    trabajos_ia_vencidos: trabajosVencidos?.length ?? 0,
     vencidas: vencidasPendiente?.length ?? 0,
     vencidas_esperando_fotos: vencidasEsperandoFotos?.length ?? 0,
     generando_revisadas: revisadas,
