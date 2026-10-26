@@ -2,7 +2,7 @@
 import { useState, useRef, useEffect, Suspense } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 import { ShoppingBag, Target, Camera, Sparkles, Check, Shirt, Smartphone, UtensilsCrossed, Plane, Briefcase, Palmtree, Video, Watch, Bot, FolderOpen, Dna, X, ShoppingCart, Tag, DollarSign, CheckCircle2, MessageCircle, Phone, Send, Megaphone, Eye, Heart, Star, RefreshCw, Repeat, Users, MousePointerClick, TrendingUp, Zap, Globe, Image as ImageIcon, Play, Upload, Lock } from "lucide-react";
-import AdBlueprintExplorer from "@/app/components/AdBlueprintExplorer";
+import ElegirEstrategia, { type CreativoPropio } from "@/app/components/ElegirEstrategia";
 import TutorialVideo from "@/app/components/TutorialVideo";
 import TourGuiado from "@/app/components/TourGuiado";
 import ProgresoPasos from "@/app/components/ProgresoPasos";
@@ -315,9 +315,12 @@ type TipoContenido = "producto" | "servicio";
 // "fuenteCreativos" global (una sola eleccion para toda la campaña) --
 // ahora cada anuncio tiene la suya, y el procesamiento es secuencial por
 // tipo (nunca 2 tipos generando al mismo tiempo, ver colaDeTipos).
-type TipoCreativo = "video" | "imagen" | "album";
+// "subida" (imagen propia del cliente, o elegida de su álbum) nunca entra
+// a colaDeTipos -- su creativo ya viene armado desde ElegirEstrategia, ver
+// handleElegirEstrategiaNueva.
+type TipoCreativo = "video" | "imagen" | "album" | "subida";
 
-const LABEL_TIPO: Record<TipoCreativo, string> = { video: "video", imagen: "imagen", album: "álbum" };
+const LABEL_TIPO: Record<TipoCreativo, string> = { video: "video", imagen: "imagen", album: "álbum", subida: "subida" };
 
 type EstrategiaStep =
   | "tipo"
@@ -875,6 +878,16 @@ function EstrategiaContent() {
   // cola va terminando -- se ensamblan en el array final "creativos" recién
   // cuando el usuario confirma la pantalla de transición del último tipo.
   const [creativosPorClave, setCreativosPorClave] = useState<Record<string, any>>({});
+  // handleElegirEstrategiaNueva (ElegirEstrategia, pasos 4+5 fusionados)
+  // necesita disparar la cola justo después de setEstrategiaSeleccionada/
+  // setTiposPorAnuncio -- pero dispararImagen/dispararVideo/dispararAlbum
+  // leen esas dos de su closure (no por parámetro, a diferencia de cola/
+  // idx/acumulado), y React no aplica ese setState hasta el próximo
+  // render. Guardar la intención acá y disparar desde un efecto (abajo)
+  // evita leer valores viejos -- mismo problema que el "Bug A" de
+  // dispararTipo, resuelto con la misma idea (esperar al siguiente render)
+  // en vez de parametrizar dos funciones más.
+  const [autoDisparoPendiente, setAutoDisparoPendiente] = useState<{ cola: TipoCreativo[]; acumuladoInicial: Record<string, any> } | null>(null);
   // true mientras se muestra "{tipo} listo ✓ -- ahora vamos con..." --
   // nunca se auto-continúa, el usuario siempre confirma.
   const [mostrandoTransicionTipo, setMostrandoTransicionTipo] = useState(false);
@@ -1704,6 +1717,76 @@ function EstrategiaContent() {
     setPasoAsignacionIdx(0);
     setStep("asignar-tipos");
   };
+
+  // Paso 4+5 fusionados (ver docs/diseno/estrategia_anuncios.html): el
+  // propio ElegirEstrategia ya deja elegido el formato de cada anuncio
+  // (imagen/video/álbum/subida) antes de llegar aquí, así que esto salta
+  // directo a generar -- "asignar-tipos" (arriba) queda intacto como
+  // respaldo, pero ya no es parte del camino normal.
+  const handleElegirEstrategiaNueva = (
+    estrategia: any,
+    tiposElegidos: Record<string, TipoCreativo>,
+    creativosPropios: Record<string, CreativoPropio>
+  ) => {
+    setEstrategiaSeleccionada(estrategia);
+    try {
+      localStorage.setItem("quiubot_estrategia_seleccionada", JSON.stringify(estrategia));
+    } catch {}
+
+    // Mismo respaldo que el useEffect de "faltantes" de abajo: cualquier
+    // anuncio sin elección explícita (no debería pasar) cae en "imagen".
+    const completos: Record<string, TipoCreativo> = {};
+    (estrategia?.conjuntos || []).forEach((conjunto: any, ci: number) => {
+      (conjunto.anuncios || []).forEach((_anuncio: any, ai: number) => {
+        const clave = `${ci}-${ai}`;
+        completos[clave] = tiposElegidos[clave] || "imagen";
+      });
+    });
+    setTiposPorAnuncio(completos);
+    setPasoAsignacionIdx(0);
+
+    // Las imágenes subidas/elegidas del álbum ya vienen listas -- se
+    // pre-cargan en el acumulado para que ensamblarCreativosDesde las
+    // encuentre sin pasar por la cola de generación.
+    const acumuladoInicial: Record<string, any> = {};
+    Object.entries(creativosPropios).forEach(([clave, { url_imagen }]) => {
+      if (completos[clave] === "subida") {
+        acumuladoInicial[clave] = { url_imagen, origen: "subida", descripcion: descripcionPorClave(estrategia, clave) };
+      }
+    });
+
+    // Mismo orden fijo que handleConfirmarAsignaciones (video, imagen,
+    // álbum) -- "subida" nunca entra, ya quedó resuelta arriba.
+    const presentes = new Set(Object.values(completos));
+    const cola: TipoCreativo[] = [];
+    if (presentes.has("video")) cola.push("video");
+    if (presentes.has("imagen")) cola.push("imagen");
+    if (presentes.has("album")) cola.push("album");
+
+    setColaDeTipos(cola);
+    setTipoEnProcesoIdx(0);
+    setCreativosPorClave(acumuladoInicial);
+
+    if (cola.length === 0) {
+      // Todos los anuncios eran "subida" -- nada que generar.
+      ensamblarCreativosDesde(estrategia, acumuladoInicial);
+      setStep("creativos");
+      return;
+    }
+    setAutoDisparoPendiente({ cola, acumuladoInicial });
+  };
+
+  // Dispara el primer tipo de la cola una vez que estrategiaSeleccionada y
+  // tiposPorAnuncio (que dispararImagen/dispararVideo/dispararAlbum leen
+  // de su closure) ya quedaron al día en este render -- ver el comentario
+  // de autoDisparoPendiente donde se declara el state.
+  useEffect(() => {
+    if (!autoDisparoPendiente) return;
+    const { cola, acumuladoInicial } = autoDisparoPendiente;
+    setAutoDisparoPendiente(null);
+    dispararTipo(cola[0], cola, 0, acumuladoInicial);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [autoDisparoPendiente]);
 
   // Respaldo defensivo: handleSeleccionarEstrategia ya deja tiposPorAnuncio
   // con "imagen" para cada clave al elegir una estrategia nueva, pero si se
@@ -2877,7 +2960,12 @@ function EstrategiaContent() {
                 Usamos Advantage+ para esta estrategia: el presupuesto no alcanzaba para probar varios conceptos por separado.
               </div>
             )}
-            <AdBlueprintExplorer estrategias={estrategiasGeneradas ?? undefined} onPublish={handleSeleccionarEstrategia} />
+            <ElegirEstrategia
+              estrategias={estrategiasGeneradas ?? []}
+              objetivo={objetivo}
+              esAdmin={esAdminObjetivos}
+              onElegir={handleElegirEstrategiaNueva}
+            />
           </div>
         )}
 

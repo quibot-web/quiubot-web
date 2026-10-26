@@ -1,6 +1,6 @@
 "use client";
 import { useEffect, useMemo, useRef, useState } from "react";
-import { Image as ImageIcon, Layers, Video, Upload, FolderOpen, Lock } from "lucide-react";
+import { Image as ImageIcon, Video, Upload, FolderOpen } from "lucide-react";
 import { validarImagenPropia } from "@/app/lib/imagenes";
 
 // Mismo shape que ya usa el resto de /estrategia (asignar-tipos) para la
@@ -51,29 +51,19 @@ function fmtCOP(n: number | null | undefined): string {
   return n == null ? "—" : new Intl.NumberFormat("es-CO", { style: "currency", currency: "COP", maximumFractionDigits: 0 }).format(n);
 }
 
+export type CreativoPropio = { url_imagen: string };
+
 type Props = {
   estrategias: any[];
   objetivo: { id: string; destino?: string } | null;
   esAdmin: boolean | null;
-  tiposPorAnuncio: Record<string, TipoCreativo>;
-  onCambiarTipo: (clave: string, tipo: TipoCreativo) => void;
-  creativosPropios: Record<string, { url_imagen: string; origen: "subida" }>;
-  onImagenPropiaSubida: (clave: string, urlImagen: string) => void;
-  onQuitarImagenPropia: (clave: string) => void;
-  onElegir: (estrategia: any) => void;
+  // (estrategia, tiposPorAnuncio, creativosPropios) -- solo de la
+  // estrategia elegida, nunca arrastra nada de otra pestaña que el
+  // cliente haya mirado antes de decidirse.
+  onElegir: (estrategia: any, tiposPorAnuncio: Record<string, TipoCreativo>, creativosPropios: Record<string, CreativoPropio>) => void;
 };
 
-export default function ElegirEstrategia({
-  estrategias,
-  objetivo,
-  esAdmin,
-  tiposPorAnuncio,
-  onCambiarTipo,
-  creativosPropios,
-  onImagenPropiaSubida,
-  onQuitarImagenPropia,
-  onElegir,
-}: Props) {
+export default function ElegirEstrategia({ estrategias, objetivo, esAdmin, onElegir }: Props) {
   const esWhatsapp = objetivo?.destino === "whatsapp";
 
   const idMasEfectivo = useMemo(
@@ -88,6 +78,14 @@ export default function ElegirEstrategia({
   const [erroresSubida, setErroresSubida] = useState<Record<string, string>>({});
   const inputsRef = useRef<Record<string, HTMLInputElement | null>>({});
 
+  // Por estrategia (id -> clave -> ...) -- a propósito, no un solo mapa
+  // compartido: dos estrategias distintas pueden reusar las mismas
+  // claves "ci-ai" (son índices de SU PROPIO array de conjuntos/
+  // anuncios), así que mirar varias pestañas antes de decidirse nunca
+  // debe mezclar la elección de una con la de otra.
+  const [tiposPorEstrategia, setTiposPorEstrategia] = useState<Record<string, Record<string, TipoCreativo>>>({});
+  const [propiosPorEstrategia, setPropiosPorEstrategia] = useState<Record<string, Record<string, CreativoPropio>>>({});
+
   useEffect(() => {
     if (!selectedId && estrategias[0]) setSelectedId(estrategias[0].id);
   }, [estrategias, selectedId]);
@@ -98,6 +96,21 @@ export default function ElegirEstrategia({
   const anuncios: { clave: string; conjunto: any; anuncio: any }[] = (seleccionada.conjuntos || []).flatMap((conjunto: any, ci: number) =>
     (conjunto.anuncios || []).map((anuncio: any, ai: number) => ({ clave: `${ci}-${ai}`, conjunto, anuncio }))
   );
+
+  const tiposPorAnuncio = tiposPorEstrategia[seleccionada.id] || {};
+  const creativosPropios = propiosPorEstrategia[seleccionada.id] || {};
+
+  const cambiarTipo = (clave: string, tipo: TipoCreativo) => {
+    setTiposPorEstrategia((prev) => ({ ...prev, [seleccionada.id]: { ...(prev[seleccionada.id] || {}), [clave]: tipo } }));
+  };
+
+  const quitarImagenPropia = (clave: string) => {
+    setPropiosPorEstrategia((prev) => {
+      const copia = { ...(prev[seleccionada.id] || {}) };
+      delete copia[clave];
+      return { ...prev, [seleccionada.id]: copia };
+    });
+  };
 
   const manejarArchivoPropio = async (clave: string, file: File | undefined) => {
     if (!file) return;
@@ -119,8 +132,8 @@ export default function ElegirEstrategia({
         setErroresSubida((prev) => ({ ...prev, [clave]: data.error || "No se pudo subir la imagen." }));
         return;
       }
-      onImagenPropiaSubida(clave, data.url_imagen);
-      onCambiarTipo(clave, "subida");
+      setPropiosPorEstrategia((prev) => ({ ...prev, [seleccionada.id]: { ...(prev[seleccionada.id] || {}), [clave]: { url_imagen: data.url_imagen } } }));
+      cambiarTipo(clave, "subida");
       setMenuSubirAbierto((prev) => ({ ...prev, [clave]: false }));
     } catch {
       setErroresSubida((prev) => ({ ...prev, [clave]: "No se pudo conectar con el servidor." }));
@@ -261,13 +274,13 @@ export default function ElegirEstrategia({
           return (
             <div className="anuncio" key={clave}>
               <div className="formato" role="group" aria-label={`Formato del anuncio: ${anuncio.copy?.titulo || anuncio.nombre}`}>
-                <button aria-pressed={tipoActual === "imagen"} onClick={() => onCambiarTipo(clave, "imagen")}>Imagen</button>
+                <button aria-pressed={tipoActual === "imagen"} onClick={() => cambiarTipo(clave, "imagen")}>Imagen</button>
                 <button aria-pressed={false} disabled title="Próximamente">Carrusel<small>Pronto</small></button>
                 <button
                   aria-pressed={tipoActual === "video"}
                   disabled={videoBloqueado}
                   title={videoProximamente ? "Próximamente" : videoBloqueado ? "Solo se puede usar video en un anuncio por estrategia" : undefined}
-                  onClick={() => onCambiarTipo(clave, "video")}
+                  onClick={() => cambiarTipo(clave, "video")}
                 >
                   Video{videoProximamente && <small>Pronto</small>}
                 </button>
@@ -288,7 +301,7 @@ export default function ElegirEstrategia({
                   <button
                     type="button"
                     onClick={() => {
-                      onCambiarTipo(clave, "album");
+                      cambiarTipo(clave, "album");
                       setMenuSubirAbierto((prev) => ({ ...prev, [clave]: false }));
                     }}
                     style={{ flex: 1, display: "flex", alignItems: "center", justifyContent: "center", gap: 6, border: "1.5px solid #6C5CE7", color: "#6C5CE7", background: "#fff", borderRadius: 10, minHeight: 38, fontWeight: 700, fontSize: 12.5 }}
@@ -331,7 +344,7 @@ export default function ElegirEstrategia({
                 ) : tipoActual === "subida" && imagenPropia ? (
                   <div className="propiaLista">
                     <img src={imagenPropia.url_imagen} alt="" />
-                    <button className="quitar" title="Quitar" onClick={() => { onQuitarImagenPropia(clave); onCambiarTipo(clave, "imagen"); }}>✕</button>
+                    <button className="quitar" title="Quitar" onClick={() => { quitarImagenPropia(clave); cambiarTipo(clave, "imagen"); }}>✕</button>
                   </div>
                 ) : tipoActual === "subida" && subiendoClave === clave ? (
                   <div className="sinboceto">
@@ -384,7 +397,7 @@ export default function ElegirEstrategia({
 
       <div style={{ display: "flex", justifyContent: "flex-end", marginTop: 20 }}>
         <button
-          onClick={() => onElegir(seleccionada)}
+          onClick={() => onElegir(seleccionada, tiposPorAnuncio, creativosPropios)}
           style={{ border: 0, minHeight: 52, padding: "0 28px", borderRadius: 14, background: "#6C5CE7", color: "#fff", fontWeight: 800, fontSize: 16, boxShadow: "0 12px 26px -12px #6C5CE7" }}
         >
           Elegir esta estrategia →
