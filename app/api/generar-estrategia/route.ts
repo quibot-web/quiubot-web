@@ -28,6 +28,7 @@ export async function POST(req: NextRequest) {
     presupuesto_diario_cop,
     tipo_contenido,       // "producto" | "servicio"
     descripcion_servicio, // opcional, solo aplica si tipo_contenido === "servicio"
+    datos_producto,       // opcional, solo aplica si tipo_contenido === "producto"
     modo_estructura,      // "advantage" | "prueba_conceptos" (estructura Andromeda)
     angulos_a_evitar,      // opcional -- viene de la regla "abrir otro frente" del Director
   } = await req.json();
@@ -52,6 +53,11 @@ export async function POST(req: NextRequest) {
   const descripcionServicioFinal: string | null =
     tipoContenidoFinal === "servicio" && typeof descripcion_servicio === "string"
       ? descripcion_servicio.trim().slice(0, 500) || null
+      : null;
+
+  const datosProductoFinal: string | null =
+    tipoContenidoFinal === "producto" && typeof datos_producto === "string"
+      ? datos_producto.trim().slice(0, 500) || null
       : null;
 
   // Mismo patrón que tipo_contenido: si no llega o llega con un valor
@@ -188,6 +194,7 @@ export async function POST(req: NextRequest) {
       openaiKey: openaiKeyDescifrada,
       tipoContenido: tipoContenidoFinal,
       descripcionServicio: descripcionServicioFinal,
+      datosProducto: datosProductoFinal,
       modoEstructura: modoEstructuraFinal,
       angulosAEvitar: angulosAEvitarFinal,
     }).catch(async (err) => {

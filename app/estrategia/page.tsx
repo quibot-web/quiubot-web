@@ -806,6 +806,13 @@ function EstrategiaContent() {
   const [tipoContenido, setTipoContenido] = useState<TipoContenido | null>(null);
   const [hoverTipo, setHoverTipo] = useState<TipoContenido | null>(null);
   const [descripcionServicio, setDescripcionServicio] = useState<string>("");
+  // Mismo patrón que descripcionServicio, pero para tipoContenido === "producto"
+  // -- ver handleGenerarEstrategia (body.datos_producto).
+  const [datosProducto, setDatosProducto] = useState<string>("");
+  // null mientras no se sabe -- el enlace a "Mi marca" (paso 2) solo se
+  // muestra cuando ya se confirmó que info_adicional está vacío, nunca
+  // antes de tener la respuesta.
+  const [tieneInfoAdicional, setTieneInfoAdicional] = useState<boolean | null>(null);
   // Precio en los creativos (nuevo en crear_creativos): si mostrarPrecio
   // está marcado, n8n lo pone en algunos de los creativos del lote, no en
   // todos -- "precio" guarda solo el número (sin formato), el input lo
@@ -1088,6 +1095,7 @@ function EstrategiaContent() {
           const data = JSON.parse(guardado);
           if (data.tipoContenido) setTipoContenido(data.tipoContenido);
           if (data.descripcionServicio) setDescripcionServicio(data.descripcionServicio);
+          if (data.datosProducto) setDatosProducto(data.datosProducto);
           if (typeof data.mostrarPrecio === "boolean") setMostrarPrecio(data.mostrarPrecio);
           if (typeof data.precio === "number") setPrecio(data.precio);
           if (data.imagenesBase64) setImagenesBase64(data.imagenesBase64);
@@ -1130,6 +1138,7 @@ function EstrategiaContent() {
         JSON.stringify({
           tipoContenido,
           descripcionServicio,
+          datosProducto,
           mostrarPrecio,
           precio,
           imagenesBase64,
@@ -1156,6 +1165,7 @@ function EstrategiaContent() {
     publicado,
     tipoContenido,
     descripcionServicio,
+    datosProducto,
     mostrarPrecio,
     precio,
     imagenesBase64,
@@ -1225,6 +1235,13 @@ function EstrategiaContent() {
         setPaginaNombre(data?.pagina || null);
       })
       .catch(() => setMetaAdAccountId(null));
+
+    // Para el enlace discreto a "Mi marca" en el paso 2 (solo producto) --
+    // mismo GET que ya usa Integraciones para sitio_web/whatsapp_numero.
+    fetch("/api/marca")
+      .then((r) => r.json())
+      .then((data) => setTieneInfoAdicional(!!(data?.info_adicional && data.info_adicional.trim())))
+      .catch(() => setTieneInfoAdicional(null));
   }, []);
 
   // Si el usuario llega desde la notificación "creativos_listos" (?job=<id>),
@@ -1674,6 +1691,7 @@ function EstrategiaContent() {
           presupuesto_diario_cop: presupuestoDiario,
           tipo_contenido: tipoContenido,
           descripcion_servicio: tipoContenido === "servicio" ? descripcionServicio : null,
+          datos_producto: tipoContenido === "producto" ? datosProducto : null,
           modo_estructura: modoEstructura,
           angulos_a_evitar: angulosAEvitarSugeridos,
         }),
@@ -2788,6 +2806,45 @@ function EstrategiaContent() {
                   style={{ width: "100%", padding: 12, borderRadius: 10, border: "1.5px solid #e0e0e0", background: "#fcfcff", fontSize: 13, color: "#1a1a1a", resize: "none", height: 42, maxHeight: 200, overflowY: "auto", fontFamily: "inherit", boxSizing: "border-box", outline: "none", transition: "height .18s ease, border-color .15s ease, box-shadow .15s ease" }}
                 />
                 <div style={{ fontSize: 11, color: "#999", textAlign: "right", marginTop: 4 }}>{descripcionServicio.length}/500</div>
+              </div>
+            )}
+
+            {tipoContenido === "producto" && (
+              <div>
+                <label style={{ fontSize: 13, fontWeight: 600, color: "#1a1a1a", display: "block", marginBottom: 6 }}>
+                  ¿Qué quieres destacar de este producto? <span style={{ fontWeight: 400, color: "#999" }}>(opcional)</span>
+                </label>
+                <textarea
+                  className="quiubot-textarea-servicio"
+                  value={datosProducto}
+                  onChange={(e) => {
+                    setDatosProducto(e.target.value.slice(0, 500));
+                    e.target.style.height = "auto";
+                    e.target.style.height = Math.min(e.target.scrollHeight, 200) + "px";
+                  }}
+                  onFocus={(e) => {
+                    e.target.style.height = "auto";
+                    e.target.style.height = Math.min(e.target.scrollHeight, 200) + "px";
+                  }}
+                  onBlur={(e) => {
+                    e.target.style.height = "42px";
+                  }}
+                  placeholder="Ej.: precio $1.200.000, combo con 3 herramientas, 10% de descuento esta semana"
+                  maxLength={500}
+                  style={{ width: "100%", padding: 12, borderRadius: 10, border: "1.5px solid #e0e0e0", background: "#fcfcff", fontSize: 13, color: "#1a1a1a", resize: "none", height: 42, maxHeight: 200, overflowY: "auto", fontFamily: "inherit", boxSizing: "border-box", outline: "none", transition: "height .18s ease, border-color .15s ease, box-shadow .15s ease" }}
+                />
+                <div style={{ fontSize: 11, color: "#999", textAlign: "right", marginTop: 4 }}>{datosProducto.length}/500</div>
+                <p style={{ fontSize: 11.5, color: "#999", margin: "4px 0 0" }}>
+                  La IA usa esto para escribir tus anuncios. Mientras más concreto, mejor venden.
+                </p>
+                {tieneInfoAdicional === false && (
+                  <a
+                    href="/marca"
+                    style={{ display: "inline-block", marginTop: 8, fontSize: 12, color: "#7F77DD", textDecoration: "none" }}
+                  >
+                    Tus anuncios venden mejor si completas lo que tus clientes deben saber de tu negocio →
+                  </a>
+                )}
               </div>
             )}
 

@@ -67,6 +67,7 @@ export async function procesarGeneracionEstrategia(
     openaiKey: string;
     tipoContenido: "producto" | "servicio";
     descripcionServicio: string | null;
+    datosProducto: string | null;
     modoEstructura: "advantage" | "prueba_conceptos";
     angulosAEvitar: string[];
   }
@@ -91,6 +92,7 @@ export async function procesarGeneracionEstrategia(
         openai_key: datos.openaiKey,
         tipo_contenido: datos.tipoContenido,
         descripcion_servicio: datos.descripcionServicio,
+        datos_producto: datos.datosProducto,
         modo_estructura: datos.modoEstructura,
         angulos_a_evitar: datos.angulosAEvitar,
       }),
