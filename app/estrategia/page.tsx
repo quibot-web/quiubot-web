@@ -2448,6 +2448,12 @@ function EstrategiaContent() {
           fuente_creativos: fuenteCreativosFinal,
           efectividad_final: efectividadFinal,
           meta_id: metaIdDeOrigen,
+          // Para que el refresco de Autopiloto pueda reenviarlos más
+          // adelante -- ver campanas_publicadas.tipo_contenido/
+          // descripcion_servicio/datos_producto.
+          tipo_contenido: tipoContenido,
+          descripcion_servicio: tipoContenido === "servicio" ? descripcionServicio : null,
+          datos_producto: tipoContenido === "producto" ? datosProducto : null,
         }),
       });
       const data = await res.json().catch(() => ({}));

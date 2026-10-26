@@ -60,7 +60,7 @@ export async function POST(req: NextRequest) {
   }
 
   const emailBusqueda = session.user.email.trim().toLowerCase();
-  const { estrategia, creativos, fuente_creativos, efectividad_final, meta_id } = await req.json();
+  const { estrategia, creativos, fuente_creativos, efectividad_final, meta_id, tipo_contenido, descripcion_servicio, datos_producto } = await req.json();
 
   if (!estrategia) {
     return NextResponse.json({ error: "Falta la estrategia a publicar" }, { status: 400 });
@@ -196,6 +196,19 @@ export async function POST(req: NextRequest) {
         metaIdValidado = metaDelUsuario?.id ?? null;
       }
 
+      // Para que el refresco de Autopiloto (intentarGenerarYCrearCreativos)
+      // pueda reenviar el mismo contexto más adelante, sin tener que
+      // volver a pedírselo al cliente -- ver app/lib/propuestas.ts.
+      const tipoContenidoFinal: string = tipo_contenido === "servicio" ? "servicio" : "producto";
+      const descripcionServicioFinal: string | null =
+        tipoContenidoFinal === "servicio" && typeof descripcion_servicio === "string"
+          ? descripcion_servicio.trim().slice(0, 500) || null
+          : null;
+      const datosProductoFinal: string | null =
+        tipoContenidoFinal === "producto" && typeof datos_producto === "string"
+          ? datos_producto.trim().slice(0, 500) || null
+          : null;
+
       const { data: campana, error: insertError } = await supabaseAdmin
         .from("campanas_publicadas")
         .insert({
@@ -209,6 +222,9 @@ export async function POST(req: NextRequest) {
           meta_campaign_id: data?.meta_campaign_id ?? null,
           meta_adset_id: data?.meta_adset_id ?? null,
           meta_id: metaIdValidado,
+          tipo_contenido: tipoContenidoFinal,
+          descripcion_servicio: descripcionServicioFinal,
+          datos_producto: datosProductoFinal,
         })
         .select()
         .single();
