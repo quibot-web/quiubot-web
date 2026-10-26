@@ -13,6 +13,30 @@ const MAX_IMAGENES = 5;
 const COLOR_ACTIVO = "#534AB7";
 const COLOR_CLARO = "#7F77DD";
 
+// El análisis corre en segundo plano (trabajos_ia, ver
+// app/lib/adnMarcaJobs.ts) -- esto deja al cliente salir de /marca y
+// volver sin perder el progreso. Mismo patrón que quiubot_video_job_activo
+// en /video, sin respaldo tipo /ultimo (si se pierde el localStorage, el
+// cliente simplemente vuelve a subir sus fotos -- bajo costo, no hace
+// falta la vuelta extra por otro dispositivo).
+const LLAVE_ADN_JOB = "quiubot_adn_job_activo";
+
+async function pollAdnJobHasta(jobId: string, maxMs = 10 * 60 * 1000): Promise<{ adn_marca: Record<string, any>; adn_resumen: string }> {
+  const inicio = Date.now();
+  while (Date.now() - inicio < maxMs) {
+    const res = await fetch(`/api/marca-adn-jobs/${jobId}`);
+    const data = await res.json().catch(() => ({}));
+    if (data.estado === "lista") {
+      return data.resultado;
+    }
+    if (data.estado === "fallida") {
+      throw new Error(data.error || "No se pudo analizar tu ADN de marca.");
+    }
+    await new Promise((resolve) => setTimeout(resolve, 4000));
+  }
+  throw new Error("El análisis está tardando más de lo esperado. Intenta de nuevo en unos minutos.");
+}
+
 type CategoriaKey =
   | "paleta_color"
   | "tipografia"
@@ -531,6 +555,42 @@ export default function MarcaPage() {
       .finally(() => setCargandoInicial(false));
   }, []);
 
+  // Si el cliente salió de /marca con un análisis en curso y volvió,
+  // retoma el polling de ese mismo job en vez de mostrarle la pantalla
+  // de "sube tus fotos" de cero -- no hay forma de saber en qué categoría
+  // iba, así que salta directo al estado "sigue trabajando" (el mismo
+  // que ya existía para cuando el análisis tarda más que la animación).
+  useEffect(() => {
+    let jobGuardado: string | null = null;
+    try {
+      jobGuardado = localStorage.getItem(LLAVE_ADN_JOB);
+    } catch {}
+    if (!jobGuardado) return;
+
+    setAnalizando(true);
+    setErrorMsg(null);
+    setFaseAnimacion(CATEGORIAS.length);
+
+    pollAdnJobHasta(jobGuardado)
+      .then((data) => {
+        try {
+          localStorage.removeItem(LLAVE_ADN_JOB);
+        } catch {}
+        setAdn(data.adn_marca);
+        setResumen(data.adn_resumen || "");
+        setTieneAdn(true);
+      })
+      .catch((e: any) => {
+        try {
+          localStorage.removeItem(LLAVE_ADN_JOB);
+        } catch {}
+        setErrorMsg(e?.message || "No se pudo conectar con el servidor.");
+        setFaseAnimacion(-1);
+      })
+      .finally(() => setAnalizando(false));
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
   // Admite elegir (o soltar) varias imágenes a la vez, igual que en
   // /estrategia -- se agregan en el orden en que llegaron, hasta donde
   // alcance el cupo. No se comprime acá (se guarda el File crudo, igual
@@ -601,25 +661,35 @@ export default function MarcaPage() {
       // reventar el límite de tamaño del body del proxy con varias fotos
       // de varios MB cada una.
       const imagenesBase64 = await Promise.all(imagenes.map(comprimirSiHaceFalta));
-      const [res] = await Promise.all([
-        fetch("/api/marca-adn", {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ imagenes_base64: imagenesBase64 }),
-        }),
-        avanzarAnimacion,
-      ]);
-      const data = await res.json().catch(() => ({}));
-      if (!res.ok || data.ok === false) {
-        setErrorMsg(data.error || "No se pudo analizar tu ADN de marca. Intenta de nuevo.");
+      const res = await fetch("/api/marca-adn", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ imagenes_base64: imagenesBase64 }),
+      });
+      const dataInicial = await res.json().catch(() => ({}));
+      if (!res.ok || !dataInicial.job_id) {
+        setErrorMsg(dataInicial.error || "No se pudo analizar tu ADN de marca. Intenta de nuevo.");
         setFaseAnimacion(-1);
         return;
       }
+
+      try {
+        localStorage.setItem(LLAVE_ADN_JOB, dataInicial.job_id);
+      } catch {}
+
+      const [data] = await Promise.all([pollAdnJobHasta(dataInicial.job_id), avanzarAnimacion]);
+
+      try {
+        localStorage.removeItem(LLAVE_ADN_JOB);
+      } catch {}
       setAdn(data.adn_marca);
       setResumen(data.adn_resumen || "");
       setTieneAdn(true);
-    } catch (e) {
-      setErrorMsg("No se pudo conectar con el servidor.");
+    } catch (e: any) {
+      try {
+        localStorage.removeItem(LLAVE_ADN_JOB);
+      } catch {}
+      setErrorMsg(e?.message || "No se pudo conectar con el servidor.");
       setFaseAnimacion(-1);
     } finally {
       setAnalizando(false);

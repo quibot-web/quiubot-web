@@ -1,7 +1,8 @@
 import { auth } from "@/auth";
-import { NextRequest, NextResponse } from "next/server";
+import { after, NextRequest, NextResponse } from "next/server";
 import { supabaseAdmin } from "@/lib/supabase";
 import { desencriptarSiHaceFalta } from "@/lib/crypto";
+import { procesarAdnMarca, TIPO_TRABAJO } from "@/app/lib/adnMarcaJobs";
 
 const MIN_IMAGENES = 3;
 const MAX_IMAGENES = 5;
@@ -34,7 +35,13 @@ export async function GET() {
   });
 }
 
-// Dispara el análisis de ADN de marca con 3 a 5 imágenes de creativos ya existentes.
+// Dispara el análisis de ADN de marca con 3 a 5 imágenes de creativos ya
+// existentes -- en segundo plano (trabajos_ia, ver app/lib/adnMarcaJobs.ts)
+// en vez de esperar la respuesta de n8n dentro del ciclo de esta
+// petición: el proxy de Coolify corta la conexión antes de que n8n
+// termine, y mata con ella el trabajo del lado del servidor. El
+// cliente (app/marca/page.tsx) hace polling de
+// GET /api/marca-adn-jobs/[id] hasta que quede "lista" o "fallida".
 export async function POST(req: NextRequest) {
   const session = await auth();
   if (!session?.user?.email) {
@@ -81,29 +88,31 @@ export async function POST(req: NextRequest) {
     );
   }
 
-  try {
-    const n8nRes = await fetch("https://n8n.quiubot.site/webhook/analizar_adn_marca", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({
-        email: emailBusqueda,
-        openai_key: openaiKeyDescifrada,
-        imagenes_base64: imagenesFinal,
-      }),
-    });
+  const ahora = new Date().toISOString();
+  const { data: job, error: errorCrearJob } = await supabaseAdmin
+    .from("trabajos_ia")
+    .insert({ user_id: usuario.id, tipo: TIPO_TRABAJO, estado: "pendiente", intento_desde: ahora })
+    .select()
+    .single();
 
-    const data = await n8nRes.json().catch(() => ({}));
-
-    if (!n8nRes.ok || data.ok === false) {
-      return NextResponse.json(
-        { error: data.error || "No se pudo analizar el ADN de marca" },
-        { status: n8nRes.status || 502 }
-      );
-    }
-
-    return NextResponse.json({ ok: true, adn_marca: data.adn_marca, adn_resumen: data.adn_resumen });
-  } catch (err) {
-    console.error("Error al conectar con n8n (analizar_adn_marca):", err);
-    return NextResponse.json({ error: "No se pudo conectar con el servidor de IA" }, { status: 503 });
+  if (errorCrearJob || !job) {
+    console.error("Error creando trabajos_ia (adn_marca):", errorCrearJob);
+    return NextResponse.json({ error: "No se pudo iniciar el análisis. Intenta de nuevo." }, { status: 500 });
   }
+
+  after(() =>
+    procesarAdnMarca(job.id, {
+      emailBusqueda,
+      openaiKey: openaiKeyDescifrada,
+      imagenesBase64: imagenesFinal,
+    }).catch(async (err) => {
+      console.error("Error no manejado en procesarAdnMarca:", err);
+      await supabaseAdmin
+        .from("trabajos_ia")
+        .update({ estado: "fallida", error: "Error inesperado analizando el ADN de marca." })
+        .eq("id", job.id);
+    })
+  );
+
+  return NextResponse.json({ job_id: job.id });
 }
