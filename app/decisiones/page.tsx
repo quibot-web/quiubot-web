@@ -606,7 +606,7 @@ function DecisionesContenido() {
           {p.accion === "crear_creativos" && etapa === "esperando_fotos" ? (
             <>
               <p style={{ fontSize: 13.5, color: "#1a1a1a", margin: "0 0 2px", lineHeight: 1.5 }}>{narracionEtapaCreativos("esperando_fotos")}</p>
-              <PasoSubirFotos propuestaId={p.id} onListo={cargarPropuestas} />
+              <PasoSubirFotos propuestaId={p.id} campanaId={(p.parametros as any)?.campana_id ?? null} onListo={cargarPropuestas} />
             </>
           ) : p.accion === "crear_creativos" && etapa === "generando_conceptos" ? (
             <>
@@ -1087,11 +1087,18 @@ type FotoElegida = { tipo: "base64" | "url"; valor: string; preview: string };
 // imágenes que ya existen en el Álbum de creativos del cliente (lo más
 // cercano a "fotos del ADN o de la estrategia" que hay guardado hoy) y
 // también deja subir otras nuevas.
-function PasoSubirFotos({ propuestaId, onListo }: { propuestaId: string; onListo: () => void }) {
+function PasoSubirFotos({ propuestaId, campanaId, onListo }: { propuestaId: string; campanaId: string | null; onListo: () => void }) {
   const [album, setAlbum] = useState<{ id: string; url_imagen: string }[]>([]);
   const [elegidas, setElegidas] = useState<FotoElegida[]>([]);
   const [subiendo, setSubiendo] = useState(false);
   const [errorLocal, setErrorLocal] = useState<{ mensaje: string; paso?: string } | null>(null);
+
+  // tipo_contenido real de la campaña (nunca del formulario) -- "producto"
+  // por default si la campaña es vieja y no lo tiene guardado (mismo
+  // comportamiento que hoy). Prellena con lo que ya se guardó al
+  // publicar; el cliente puede editarlo para este refresco puntual.
+  const [tipoContenidoCampana, setTipoContenidoCampana] = useState<"producto" | "servicio">("producto");
+  const [textoContexto, setTextoContexto] = useState("");
 
   useEffect(() => {
     fetch("/api/album")
@@ -1099,6 +1106,20 @@ function PasoSubirFotos({ propuestaId, onListo }: { propuestaId: string; onListo
       .then((d) => setAlbum((d.imagenes ?? d ?? []).slice(0, 8)))
       .catch(() => setAlbum([]));
   }, []);
+
+  useEffect(() => {
+    if (!campanaId) return;
+    fetch("/api/campanas")
+      .then((r) => (r.ok ? r.json() : { campanas: [] }))
+      .then((d) => {
+        const campana = (d.campanas ?? []).find((c: any) => c.id === campanaId);
+        if (!campana) return;
+        const tipo = campana.tipo_contenido === "servicio" ? "servicio" : "producto";
+        setTipoContenidoCampana(tipo);
+        setTextoContexto((tipo === "servicio" ? campana.descripcion_servicio : campana.datos_producto) || "");
+      })
+      .catch(() => {});
+  }, [campanaId]);
 
   const alternarDelAlbum = (url: string) => {
     setElegidas((prev) => {
@@ -1139,6 +1160,7 @@ function PasoSubirFotos({ propuestaId, onListo }: { propuestaId: string; onListo
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           imagenes: elegidas.map(({ tipo, valor }) => ({ tipo, valor })),
+          texto_contexto: textoContexto,
         }),
       });
       const data = await leerJsonSeguro(res);
@@ -1187,6 +1209,26 @@ function PasoSubirFotos({ propuestaId, onListo }: { propuestaId: string; onListo
           ))}
         </div>
       )}
+
+      <label style={{ fontSize: 12, fontWeight: 600, color: "#1a1a1a", display: "block", marginBottom: 4 }}>
+        {tipoContenidoCampana === "servicio" ? "¿Quieres darnos más contexto?" : "¿Qué quieres destacar de este producto?"}{" "}
+        <span style={{ fontWeight: 400, color: "#999" }}>(opcional)</span>
+      </label>
+      <textarea
+        value={textoContexto}
+        onChange={(e) => setTextoContexto(e.target.value.slice(0, 500))}
+        placeholder={
+          tipoContenidoCampana === "servicio"
+            ? 'Ej: "Paquete todo incluido a Cartagena, 4 noches, incluye vuelos"'
+            : "Ej.: precio $1.200.000, combo con 3 herramientas, 10% de descuento esta semana"
+        }
+        maxLength={500}
+        rows={2}
+        style={{ width: "100%", padding: 10, borderRadius: 8, border: "1.5px solid #e0e0e0", background: "#fff", fontSize: 12.5, color: "#1a1a1a", resize: "vertical", fontFamily: "inherit", boxSizing: "border-box", outline: "none", marginBottom: 4 }}
+      />
+      <p style={{ fontSize: 11, color: "#999", margin: "0 0 10px" }}>
+        La IA usa esto para escribir tus anuncios. Mientras más concreto, mejor venden.
+      </p>
 
       {errorLocal && (
         <p style={{ fontSize: 12, color: "#B3261E", margin: "0 0 8px" }}>

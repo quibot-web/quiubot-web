@@ -58,7 +58,7 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
       return NextResponse.json({ error: "Esta propuesta no está esperando fotos." }, { status: 409 });
     }
 
-    const { imagenes, tipo_contenido, descripcion_servicio } = await req.json();
+    const { imagenes, texto_contexto } = await req.json();
 
     if (!Array.isArray(imagenes) || imagenes.length < MIN_IMAGENES || imagenes.length > MAX_IMAGENES) {
       return NextResponse.json({ error: `Elige entre ${MIN_IMAGENES} y ${MAX_IMAGENES} fotos.` }, { status: 400 });
@@ -67,7 +67,7 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
     const campanaId = (propuesta.parametros as any)?.campana_id;
     const { data: campana } = await supabaseAdmin
       .from("campanas_publicadas")
-      .select("id")
+      .select("id, tipo_contenido, descripcion_servicio, datos_producto")
       .eq("id", campanaId)
       .eq("user_id", usuario.id)
       .maybeSingle();
@@ -75,6 +75,14 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
     if (!campana) {
       return NextResponse.json({ error: "Esa campaña no pertenece a tu cuenta." }, { status: 403 });
     }
+
+    // tipo_contenido viene SIEMPRE de la campaña real, nunca del
+    // formulario (que ni lo manda) -- campañas viejas sin este campo se
+    // tratan como "producto", igual que hoy.
+    const tipoContenidoReal: "producto" | "servicio" = campana.tipo_contenido === "servicio" ? "servicio" : "producto";
+
+    const textoContextoNormalizado: string | null =
+      typeof texto_contexto === "string" ? texto_contexto.trim().slice(0, 500) || null : null;
 
     if (!usuario.cloudinary_name || !usuario.cloudinary_key || !usuario.cloudinary_secret) {
       return NextResponse.json({ error: "Necesitas conectar tus credenciales de Cloudinary en Integraciones antes de generar creativos." }, { status: 400 });
@@ -116,11 +124,25 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
         resultado: { etapa: "generando_conceptos", fotos_urls: fotosUrls, generando_desde: ahora, intentos: 0 },
         parametros: {
           ...(propuesta.parametros as object),
-          tipo_contenido: tipo_contenido === "servicio" ? "servicio" : "producto",
-          descripcion_servicio: tipo_contenido === "servicio" ? descripcion_servicio ?? null : null,
+          tipo_contenido: tipoContenidoReal,
+          descripcion_servicio: tipoContenidoReal === "servicio" ? textoContextoNormalizado : null,
+          datos_producto: tipoContenidoReal === "producto" ? textoContextoNormalizado : null,
         },
       })
       .eq("id", id);
+
+    // Si el cliente editó el texto para este refresco, se actualiza
+    // también en la campaña -- así el próximo refresco ya prellena con
+    // lo más reciente, en vez de quedarse con lo que se escribió al
+    // publicar por primera vez.
+    const campoCampana = tipoContenidoReal === "servicio" ? "descripcion_servicio" : "datos_producto";
+    const valorActualCampana = tipoContenidoReal === "servicio" ? campana.descripcion_servicio : campana.datos_producto;
+    if (textoContextoNormalizado !== (valorActualCampana ?? null)) {
+      await supabaseAdmin
+        .from("campanas_publicadas")
+        .update({ [campoCampana]: textoContextoNormalizado })
+        .eq("id", campana.id);
+    }
 
     await supabaseAdmin.from("bitacora").insert({
       user_id: usuario.id,
