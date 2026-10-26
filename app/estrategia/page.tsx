@@ -50,6 +50,8 @@ const OBJETIVOS = [
   { id: "retargeting", label: "Retargeting", icon: "🔄", desc: "Impacta a quienes ya te conocen.", meta_objective: "OUTCOME_TRAFFIC", destino: "sitio_web" },
   { id: "leads", label: "Generación de Leads", icon: "🎯", desc: "Captura contactos interesados en tu producto.", meta_objective: "OUTCOME_LEADS", destino: "formulario" },
   { id: "trafico_mensajes", label: "Tráfico", icon: "🌐", desc: "Lleva más visitas nuevas a tu sitio web.", meta_objective: "OUTCOME_TRAFFIC", destino: "sitio_web" },
+  { id: "visitas_web", label: "Visitas al sitio web", icon: "🖱️", desc: "Lleva visitas reales a tu página, medidas de verdad.", meta_objective: "OUTCOME_TRAFFIC", destino: "visitas_sitio" },
+  { id: "seguidores_facebook", label: "Seguidores de Facebook", icon: "👍", desc: "Haz crecer los seguidores de tu página.", meta_objective: "OUTCOME_ENGAGEMENT", destino: "pagina" },
 ];
 
 // Tema visual por objetivo -- color de acento + set de iconos tematicos
@@ -63,6 +65,8 @@ const TEMA_OBJETIVO: Record<string, { color: string; colorClaro: string; iconos:
   retargeting: { color: "#2563EB", colorClaro: "#DBEAFE", iconos: [RefreshCw, Target, Repeat, Users] },
   leads: { color: "#D97706", colorClaro: "#FEF3C7", iconos: [Target, Users, Send, CheckCircle2] },
   trafico_mensajes: { color: "#0891B2", colorClaro: "#CFFAFE", iconos: [MousePointerClick, TrendingUp, Zap, Globe] },
+  visitas_web: { color: "#0D9488", colorClaro: "#CCFBF1", iconos: [MousePointerClick, Globe, TrendingUp, Zap] },
+  seguidores_facebook: { color: "#1877F2", colorClaro: "#E7F0FD", iconos: [Heart, Users, Star, MessageCircle] },
 };
 
 // Consulta /api/creativos-jobs/[id] cada 5s hasta que el job quede "listo" o "error".
