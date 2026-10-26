@@ -3,6 +3,7 @@ import { useState, useRef, useEffect, Suspense } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 import { ShoppingBag, Target, Camera, Sparkles, Check, Shirt, Smartphone, UtensilsCrossed, Plane, Briefcase, Palmtree, Video, Watch, Bot, FolderOpen, Dna, X, ShoppingCart, Tag, DollarSign, CheckCircle2, MessageCircle, Phone, Send, Megaphone, Eye, Heart, Star, RefreshCw, Repeat, Users, MousePointerClick, TrendingUp, Zap, Globe, Image as ImageIcon, Play, Upload, Lock } from "lucide-react";
 import ElegirEstrategia, { type CreativoPropio } from "@/app/components/ElegirEstrategia";
+import SelectorAlbum from "@/app/components/SelectorAlbum";
 import TutorialVideo from "@/app/components/TutorialVideo";
 import TourGuiado from "@/app/components/TourGuiado";
 import ProgresoPasos from "@/app/components/ProgresoPasos";
@@ -3327,44 +3328,12 @@ function EstrategiaContent() {
 
             {/* Modal selector: elegir qué imagen del álbum va en el hueco actual */}
             {slotEligiendo !== null && (
-              <div
-                onClick={cerrarPicker}
-                style={{ position: "fixed", inset: 0, background: "rgba(23,21,43,0.6)", zIndex: 2000, display: "flex", alignItems: "center", justifyContent: "center", padding: 24 }}
-              >
-                <div
-                  onClick={(e) => e.stopPropagation()}
-                  style={{ background: "#fff", borderRadius: 16, width: "100%", maxWidth: 640, maxHeight: "80vh", overflowY: "auto", padding: "1.5rem" }}
-                >
-                  <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 14 }}>
-                    <p style={{ fontSize: 14, fontWeight: 600, color: "#1a1a1a", margin: 0 }}>
-                      Elige la imagen para "{angulosRecomendados[slotEligiendo]?.titulo}"
-                    </p>
-                    <button onClick={cerrarPicker} style={{ background: "none", border: "none", color: "#999", cursor: "pointer", fontSize: 16 }}>✕</button>
-                  </div>
-                  <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(120px, 1fr))", gap: 10 }}>
-                    {albumItems.map((item, i) => {
-                      const itemId = item.public_id || item.url_imagen;
-                      return (
-                        <div
-                          key={itemId || i}
-                          onClick={() => elegirImagenParaSlot(item)}
-                          style={{
-                            position: "relative", borderRadius: 8, overflow: "hidden",
-                            cursor: "pointer",
-                            border: "1px solid #e8e8e6",
-                          }}
-                        >
-                          {item.tipo === "video" ? (
-                            <video src={item.url_imagen} style={{ width: "100%", height: 90, objectFit: "cover", background: "#000", display: "block" }} muted />
-                          ) : (
-                            <img src={item.url_imagen} alt="" style={{ width: "100%", height: 90, objectFit: "cover", display: "block" }} />
-                          )}
-                        </div>
-                      );
-                    })}
-                  </div>
-                </div>
-              </div>
+              <SelectorAlbum
+                titulo={`Elige la imagen para "${angulosRecomendados[slotEligiendo]?.titulo}"`}
+                items={albumItems}
+                onElegir={elegirImagenParaSlot}
+                onCerrar={cerrarPicker}
+              />
             )}
           </div>
         )}
