@@ -5,7 +5,7 @@ import { calcularAvanceMeta, cerrarMetasVencidas, type TipoMeta } from "@/app/li
 import { hoyBogota } from "@/app/lib/fechaBogota";
 import { tieneAutopiloto } from "@/app/lib/planesConfig";
 
-const TIPOS_VALIDOS: TipoMeta[] = ["conversaciones_whatsapp", "leads", "ventas_web"];
+const TIPOS_VALIDOS: TipoMeta[] = ["conversaciones_whatsapp", "leads", "ventas_web", "visitas_web", "seguidores_facebook"];
 const DIAS_MINIMOS = 14;
 
 export async function GET() {
@@ -101,6 +101,24 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ error: `La meta debe durar al menos ${DIAS_MINIMOS} días.` }, { status: 400 });
   }
 
+  // visitas_web necesita un sitio web real al que mandar la campaña --
+  // sin esto, generar_estrategia/publicar_estrategia no tienen a dónde
+  // apuntar el anuncio. redirigir_a lo usa el cliente para mandar
+  // directo a Integraciones en vez de solo mostrar el error.
+  if (tipo === "visitas_web") {
+    const { data: marca } = await supabaseAdmin
+      .from("marcas")
+      .select("sitio_web")
+      .eq("email", session.user.email.trim().toLowerCase())
+      .maybeSingle();
+    if (!marca?.sitio_web) {
+      return NextResponse.json(
+        { error: "Necesitas conectar el sitio web de tu negocio en Integraciones antes de crear esta meta.", redirigir_a: "/?tab=integraciones" },
+        { status: 400 }
+      );
+    }
+  }
+
   // Por seguridad: si quedó una meta de este mismo tipo con la
   // fecha_fin ya vencida pero todavía marcada "activa" (ej. el cron
   // horario no ha pasado desde que venció), se cierra antes de
@@ -139,7 +157,17 @@ export async function POST(req: NextRequest) {
     .single();
 
   if (error || !metaCreada) {
-    return NextResponse.json({ error: error?.message || "No se pudo crear la meta." }, { status: 500 });
+    // 23514 = check_violation -- pasó de verdad en producción con
+    // "ventas_web" antes de que metas_tipo_check lo aceptara: el
+    // mensaje crudo de Postgres ("new row ... violates check
+    // constraint ...") llegaba tal cual al cliente, sin que nada lo
+    // escondiera (ver app/metas/crear/page.tsx, que solo hace
+    // setError(data.error)) -- solo que era un mensaje incomprensible
+    // en vez de uno claro. Con TIPOS_VALIDOS y el constraint ya
+    // alineados esto no debería volver a pasar, pero si algún día se
+    // desincronizan de nuevo, que al menos se vea un mensaje legible.
+    const mensaje = error?.code === "23514" ? "Ese tipo de meta no está disponible todavía." : error?.message || "No se pudo crear la meta.";
+    return NextResponse.json({ error: mensaje }, { status: 500 });
   }
 
   await supabaseAdmin.from("bitacora").insert({

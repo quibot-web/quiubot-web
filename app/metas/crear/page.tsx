@@ -1,7 +1,7 @@
 "use client";
 import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
-import { MessageCircle, Target, ShoppingCart, Calendar, Wallet, Clock } from "lucide-react";
+import { MessageCircle, Target, ShoppingCart, Calendar, Wallet, Clock, Globe, ThumbsUp } from "lucide-react";
 import CargandoQuiubot from "@/app/components/CargandoQuiubot";
 import { hoyBogota } from "@/app/lib/fechaBogota";
 import type { TipoMeta } from "@/app/lib/metas";
@@ -51,6 +51,8 @@ export default function CrearMetaPage() {
   const [previsualizacion, setPrevisualizacion] = useState<Previsualizacion | null>(null);
   const [cargando, setCargando] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  // Solo lo manda /api/metas cuando falta el sitio web para visitas_web.
+  const [redirigirA, setRedirigirA] = useState<string | null>(null);
 
   useEffect(() => {
     fetch("/api/usuario/rol")
@@ -130,6 +132,7 @@ export default function CrearMetaPage() {
   async function crearMeta(cantidadFinal: number, presupuestoFinal: number) {
     setCargando(true);
     setError(null);
+    setRedirigirA(null);
     try {
       const res = await fetch("/api/metas", {
         method: "POST",
@@ -143,7 +146,12 @@ export default function CrearMetaPage() {
         }),
       });
       const data = await res.json();
-      if (!res.ok) throw new Error(data.error || "No se pudo crear la meta.");
+      if (!res.ok) {
+        setError(data.error || "No se pudo crear la meta.");
+        if (typeof data.redirigir_a === "string") setRedirigirA(data.redirigir_a);
+        setCargando(false);
+        return;
+      }
       router.push("/");
     } catch (err: any) {
       setError(err.message || "Algo salió mal.");
@@ -203,6 +211,11 @@ export default function CrearMetaPage() {
         {error && (
           <div style={{ background: "#FEF0EF", color: "#B3261E", padding: "10px 14px", borderRadius: 10, fontSize: 13.5, marginBottom: 16 }}>
             {error}
+            {redirigirA && (
+              <a href={redirigirA} style={{ display: "block", marginTop: 6, color: "#B3261E", fontWeight: 700, textDecoration: "underline" }}>
+                Ir a Integraciones →
+              </a>
+            )}
           </div>
         )}
 
@@ -214,6 +227,8 @@ export default function CrearMetaPage() {
                 { id: "conversaciones_whatsapp" as TipoMeta, icono: MessageCircle, label: "Conversaciones de WhatsApp" },
                 { id: "leads" as TipoMeta, icono: Target, label: "Leads (contactos)" },
                 { id: "ventas_web" as TipoMeta, icono: ShoppingCart, label: "Ventas en tu sitio web" },
+                { id: "visitas_web" as TipoMeta, icono: Globe, label: "Visitas a tu sitio web" },
+                { id: "seguidores_facebook" as TipoMeta, icono: ThumbsUp, label: "Seguidores de Facebook" },
               ].map(({ id, icono: Icono, label }) => {
                 const yaActivo = tiposYaActivos.has(id);
                 const pixelOk = saludPixel?.conectado && saludPixel.compras_7d > 0;
@@ -224,7 +239,11 @@ export default function CrearMetaPage() {
                     ? !saludPixel.conectado
                       ? "Conecta tu pixel de Meta en Integraciones."
                       : "Tu pixel no ha recibido compras en los últimos 7 días."
-                    : null;
+                    : // Aviso suave, no bloquea -- visitas_web igual mide con
+                      // clics si no hay pixel (ver /api/cron/sync-meta-insights).
+                      id === "visitas_web" && saludPixel && !saludPixel.conectado
+                      ? "Sin píxel medimos clics; instálalo para medir visitas reales."
+                      : null;
                 return (
                   <div key={id}>
                     <button

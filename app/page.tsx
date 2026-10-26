@@ -283,6 +283,21 @@ export default function Home() {
   const { data: session } = useSession();
   const router = useRouter();
   const [tab, setTab] = useState<"inicio" | "album" | "integraciones">("inicio");
+
+  // "tab" nunca viajó por la URL (era solo estado de React) -- varios
+  // lugares del producto ya enlazaban a "/integraciones" como si fuera
+  // una ruta real, pero esa carpeta no existe, así que esos links
+  // daban 404. En vez de restructurar esta página para useSearchParams
+  // (que exigiría envolver todo en Suspense), se lee window.location
+  // directo en un efecto -- mismo criterio ya usado en el resto del
+  // producto para leer localStorage de forma defensiva.
+  useEffect(() => {
+    try {
+      const params = new URLSearchParams(window.location.search);
+      const tabParam = params.get("tab");
+      if (tabParam === "integraciones" || tabParam === "album") setTab(tabParam);
+    } catch {}
+  }, []);
   const [albumItems, setAlbumItems] = useState<{ id: string; url_imagen: string; tipo: string; public_id: string }[]>([]);
   const [subiendoArchivo, setSubiendoArchivo] = useState(false);
   const [eliminandoId, setEliminandoId] = useState<string | null>(null);

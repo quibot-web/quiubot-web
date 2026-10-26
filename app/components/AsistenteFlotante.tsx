@@ -145,7 +145,7 @@ export default function AsistenteFlotante() {
                 }}
               >
                 Para activar el asistente, conecta tu cuenta de OpenAI en{" "}
-                <a href="/integraciones" style={{ color: "#7F77DD", fontWeight: 600 }}>
+                <a href="/?tab=integraciones" style={{ color: "#7F77DD", fontWeight: 600 }}>
                   Integraciones
                 </a>
                 .

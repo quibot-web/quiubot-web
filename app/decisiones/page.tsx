@@ -763,7 +763,7 @@ function DecisionesContenido() {
               {confirmacion.avisoReconectarMeta && (
                 <>
                   <p style={{ fontSize: 13.5, color: "#1a1a1a", margin: "4px 0 0", lineHeight: 1.5 }}>Necesito que reconectes tu cuenta de Meta para seguir trabajando.</p>
-                  <a href="/integraciones" style={{ display: "inline-block", marginTop: 4, color: "#534AB7", fontWeight: 600, fontSize: 12.5, textDecoration: "underline" }}>
+                  <a href="/?tab=integraciones" style={{ display: "inline-block", marginTop: 4, color: "#534AB7", fontWeight: 600, fontSize: 12.5, textDecoration: "underline" }}>
                     Reconectar mi cuenta de Meta
                   </a>
                 </>
@@ -977,7 +977,7 @@ function DecisionesContenido() {
                       {r.confirmacion.avisoReconectarMeta && (
                         <>
                           <p style={{ fontSize: 13.5, color: "#1a1a1a", margin: "4px 0 0", lineHeight: 1.5 }}>Necesito que reconectes tu cuenta de Meta para seguir trabajando.</p>
-                          <a href="/integraciones" style={{ display: "inline-block", marginTop: 4, color: "#534AB7", fontWeight: 600, fontSize: 12.5, textDecoration: "underline" }}>
+                          <a href="/?tab=integraciones" style={{ display: "inline-block", marginTop: 4, color: "#534AB7", fontWeight: 600, fontSize: 12.5, textDecoration: "underline" }}>
                             Reconectar mi cuenta de Meta
                           </a>
                         </>
