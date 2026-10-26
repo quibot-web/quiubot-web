@@ -337,6 +337,30 @@ function DecisionesContenido() {
     }
   };
 
+  // "Reintentar" en el historial para un agregar_anuncios que quedó
+  // "fallida" (timeout de 10 min, o un error real de n8n) -- es seguro
+  // porque n8n ya es idempotente por propuesta_id (agregar_anuncios v2),
+  // así que un reintento completo nunca duplica lo que ya se haya
+  // creado en Meta.
+  const reintentarAgregarAnuncios = async (id: string) => {
+    setProcesandoId(id);
+    try {
+      const res = await fetch(`/api/propuestas/${id}/reintentar`, { method: "POST" });
+      const data = await leerJsonSeguro(res);
+      if (!res.ok || data.ok === false) {
+        setError({ mensaje: data.error || "No se pudo reintentar." });
+      } else {
+        setError(null);
+        cargarHistorial();
+        cargarPropuestas();
+      }
+    } catch {
+      setError({ mensaje: "No se pudo conectar con el servidor." });
+    } finally {
+      setProcesandoId(null);
+    }
+  };
+
   const nombreCampanaDe = (p: { parametros: Record<string, unknown> | null }): string | null => {
     const id = campanaIdDe(p);
     return id ? campanasPorId[id] ?? null : null;
@@ -618,6 +642,11 @@ function DecisionesContenido() {
               <p style={{ fontSize: 13.5, color: "#1a1a1a", margin: 0, lineHeight: 1.5 }}>{narracionEtapaCreativos("generando")}</p>
               <EstadoGenerandoCreativos propuestaId={p.id} onListo={cargarPropuestas} />
             </>
+          ) : p.accion === "agregar_anuncios" && etapa === "procesando" ? (
+            <>
+              <p style={{ fontSize: 13.5, color: "#1a1a1a", margin: 0, lineHeight: 1.5 }}>Agregando tus anuncios a la campaña...</p>
+              <EstadoAgregandoAnuncios onListo={cargarPropuestas} />
+            </>
           ) : (
             <>
               <p style={{ fontSize: 14, fontWeight: 700, color: "#1a1a1a", margin: "0 0 4px" }}>{p.titulo}</p>
@@ -738,6 +767,18 @@ function DecisionesContenido() {
                     Reconectar mi cuenta de Meta
                   </a>
                 </>
+              )}
+              {/* Reintentar solo para agregar_anuncios: n8n ya es idempotente
+                  por propuesta_id (agregar_anuncios v2), así que un reintento
+                  completo nunca duplica anuncios que ya se hayan creado. */}
+              {p.estado === "fallida" && p.accion === "agregar_anuncios" && (
+                <button
+                  onClick={() => reintentarAgregarAnuncios(p.id)}
+                  disabled={procesandoId === p.id}
+                  style={{ marginTop: 8, background: "none", border: "1px solid #534AB7", color: "#534AB7", borderRadius: 8, padding: "6px 12px", fontSize: 12.5, fontWeight: 600, cursor: procesandoId === p.id ? "not-allowed" : "pointer" }}
+                >
+                  {procesandoId === p.id ? "Reintentando..." : "Reintentar"}
+                </button>
               )}
             </div>
           </div>
@@ -1261,6 +1302,23 @@ function EstadoGenerandoConceptos({ onListo }: { onListo: () => void }) {
   return (
     <div style={{ marginTop: 10, display: "flex", alignItems: "center", gap: 8 }}>
       <CargandoQuiubotInline mensaje="Pensando conceptos nuevos" />
+    </div>
+  );
+}
+
+// Mismo patrón que EstadoGenerandoConceptos -- dispararAgregarAnunciosEnSegundoPlano
+// ya dejó el trabajo corriendo solo en el servidor (trabajos_ia, after()),
+// esto no dispara nada, solo refresca la lista cada pocos segundos para
+// notar apenas termine (ejecutada) o falle (fallida).
+function EstadoAgregandoAnuncios({ onListo }: { onListo: () => void }) {
+  useEffect(() => {
+    const intervalo = setInterval(onListo, 5000);
+    return () => clearInterval(intervalo);
+  }, [onListo]);
+
+  return (
+    <div style={{ marginTop: 10, display: "flex", alignItems: "center", gap: 8 }}>
+      <CargandoQuiubotInline mensaje="Agregando anuncios a tu campaña" />
     </div>
   );
 }

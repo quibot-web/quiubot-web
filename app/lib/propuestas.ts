@@ -6,10 +6,12 @@
 // factorizada para reusarla desde /api/propuestas/[id]/aprobar y
 // /ajustar sin duplicar sus verificaciones de seguridad.
 import { randomUUID } from "crypto";
+import { after } from "next/server";
 import { supabaseAdmin } from "@/lib/supabase";
 import { desencriptarSiHaceFalta } from "@/lib/crypto";
 import { inferirObjetivoId, objetivoParaCampana, type TipoMeta } from "@/app/lib/metas";
 import type { Asistente, AccionPropuesta, Propuesta } from "@/app/lib/metas";
+import { procesarAgregarAnuncios, TIPO_TRABAJO as TIPO_TRABAJO_AGREGAR_ANUNCIOS } from "@/app/lib/agregarAnunciosJobs";
 
 export type PropuestaUnificada = {
   id: string; // id real de "propuestas", o "notif-<id>" para las de notificaciones
@@ -118,7 +120,7 @@ export async function vencerPropuestasDelUsuario(userId: string) {
 export async function obtenerPropuestasPendientes(userId: string): Promise<PropuestaUnificada[]> {
   await vencerPropuestasDelUsuario(userId);
 
-  const [propuestasRes, enProgresoRes, notisRes, campanasProblemaRes, notisInformativasRes] = await Promise.all([
+  const [propuestasRes, enProgresoRes, enProgresoAgregarRes, notisRes, campanasProblemaRes, notisInformativasRes] = await Promise.all([
     supabaseAdmin
       .from("propuestas")
       .select("*")
@@ -135,6 +137,17 @@ export async function obtenerPropuestasPendientes(userId: string): Promise<Propu
       .eq("estado", "aprobada")
       .eq("accion", "crear_creativos")
       .in("resultado->>etapa", ["esperando_fotos", "generando_conceptos", "generando"])
+      .order("creado_en", { ascending: false }),
+    // agregar_anuncios ya aprobada, corriendo en segundo plano (ver
+    // dispararAgregarAnunciosEnSegundoPlano) -- mismo motivo que
+    // crear_creativos arriba.
+    supabaseAdmin
+      .from("propuestas")
+      .select("*")
+      .eq("user_id", userId)
+      .eq("estado", "aprobada")
+      .eq("accion", "agregar_anuncios")
+      .eq("resultado->>etapa", "procesando")
       .order("creado_en", { ascending: false }),
     supabaseAdmin
       .from("notificaciones")
@@ -165,7 +178,7 @@ export async function obtenerPropuestasPendientes(userId: string): Promise<Propu
       .order("creado_en", { ascending: false }),
   ]);
 
-  const dePropuestas: PropuestaUnificada[] = [...(propuestasRes.data ?? []), ...(enProgresoRes.data ?? [])].map((p) => ({
+  const dePropuestas: PropuestaUnificada[] = [...(propuestasRes.data ?? []), ...(enProgresoRes.data ?? []), ...(enProgresoAgregarRes.data ?? [])].map((p) => ({
     id: p.id,
     origen: "propuesta",
     asistente: p.asistente,
@@ -360,7 +373,7 @@ export async function ejecutarPropuesta(propuesta: Propuesta, usuario: UsuarioEj
   const { campana } = validacion;
 
   if (propuesta.accion === "agregar_anuncios") {
-    return ejecutarAgregarAnuncios(propuesta, usuario, campana, ahora);
+    return dispararAgregarAnunciosEnSegundoPlano(propuesta, usuario, campana, ahora);
   }
 
   // pausar / ajustar_presupuesto, via aplicar_sugerencia.
@@ -450,10 +463,16 @@ export async function ejecutarPropuesta(propuesta: Propuesta, usuario: UsuarioEj
   }
 }
 
-// Ejecuta agregar_anuncios contra el webhook nuevo de n8n -- publica los
-// creativos que generó crear_creativos (ya revisados/ajustados por el
-// cliente) como anuncios reales dentro de la campaña existente.
-async function ejecutarAgregarAnuncios(
+// Dispara agregar_anuncios en segundo plano (trabajos_ia, ver
+// app/lib/agregarAnunciosJobs.ts) en vez de esperar la respuesta de n8n
+// dentro del ciclo de esta petición -- mismo motivo que crear_creativos/
+// generar_estrategia: el proxy de Coolify corta la conexión antes de
+// que n8n termine, y mata con ella el trabajo del lado del servidor.
+// after() se llama acá mismo (no en el route.ts que la dispara) porque
+// esta función la comparten dos rutas distintas (/aprobar y /ajustar) y
+// Next.js permite registrar after() desde cualquier punto de la cadena
+// de la petición, no solo desde el propio route handler.
+async function dispararAgregarAnunciosEnSegundoPlano(
   propuesta: Propuesta,
   usuario: UsuarioEjecutor,
   campana: CampanaEjecucion,
@@ -486,75 +505,46 @@ async function ejecutarAgregarAnuncios(
   };
   if (campana.meta_adset_id) payloadN8n.meta_adset_id = campana.meta_adset_id;
 
-  try {
-    const n8nRes = await fetch("https://n8n.quiubot.site/webhook/agregar_anuncios", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify(payloadN8n),
-    });
+  const { data: trabajo, error: errorTrabajo } = await supabaseAdmin
+    .from("trabajos_ia")
+    .insert({ user_id: usuario.id, tipo: TIPO_TRABAJO_AGREGAR_ANUNCIOS, estado: "pendiente", intento_desde: ahora })
+    .select()
+    .single();
 
-    const data = await n8nRes.json().catch(() => ({}));
+  if (errorTrabajo || !trabajo) {
+    console.error("Error creando trabajos_ia (agregar_anuncios):", errorTrabajo);
+    return { ok: false, error: "No se pudo iniciar el proceso. Intenta de nuevo.", status: 500 };
+  }
 
-    if (!n8nRes.ok || data.ok === false) {
-      // 422/400 {ok:false, paso, motivo?, error} -- se muestra tal cual,
-      // sin reescribirlo (igual que aplicar_sugerencia). motivo:"token_meta"
-      // además dispara un aviso de reconectar Meta en la bandeja, sin
-      // reemplazar el mensaje real del webhook.
-      const motivo = data.motivo as string | undefined;
-      const paso = data.paso as string | undefined;
-      const mensajeError = data.error || "No se pudo agregar los anuncios en Meta";
+  await supabaseAdmin
+    .from("propuestas")
+    .update({
+      estado: "aprobada",
+      decidido_en: ahora,
+      decidido_por: usuario.id,
+      resultado: { etapa: "procesando", job_id: trabajo.id },
+    })
+    .eq("id", propuesta.id);
 
+  after(() =>
+    procesarAgregarAnuncios(trabajo.id, propuesta.id, {
+      userId: usuario.id,
+      metaId: propuesta.meta_id,
+      payloadN8n,
+    }).catch(async (err) => {
+      console.error("Error no manejado en procesarAgregarAnuncios:", err);
+      await supabaseAdmin
+        .from("trabajos_ia")
+        .update({ estado: "fallida", error: "Error inesperado agregando los anuncios." })
+        .eq("id", trabajo.id);
       await supabaseAdmin
         .from("propuestas")
-        .update({ estado: "fallida", decidido_en: ahora, decidido_por: usuario.id, resultado: { error: mensajeError, motivo, paso } })
+        .update({ estado: "fallida", resultado: { error: "Error inesperado agregando los anuncios." } })
         .eq("id", propuesta.id);
-      await supabaseAdmin.from("bitacora").insert({
-        user_id: usuario.id,
-        meta_id: propuesta.meta_id,
-        propuesta_id: propuesta.id,
-        tipo_evento: "propuesta_aprobada_fallo",
-        detalle: { accion: "agregar_anuncios", error: mensajeError, motivo, paso },
-      });
-      return { ok: false, error: mensajeError, motivo, paso, status: n8nRes.status || 502 };
-    }
+    })
+  );
 
-    await supabaseAdmin
-      .from("propuestas")
-      .update({
-        estado: "ejecutada",
-        decidido_en: ahora,
-        decidido_por: usuario.id,
-        resultado: {
-          meta_adset_id: data.meta_adset_id ?? campana.meta_adset_id,
-          anuncios_creados: data.anuncios_creados ?? [],
-          anuncios_fallidos: data.anuncios_fallidos ?? [],
-          omitidos: data.omitidos ?? [],
-        },
-      })
-      .eq("id", propuesta.id);
-    await supabaseAdmin.from("bitacora").insert({
-      user_id: usuario.id,
-      meta_id: propuesta.meta_id,
-      propuesta_id: propuesta.id,
-      tipo_evento: "propuesta_aprobada_ejecutada",
-      detalle: { accion: "agregar_anuncios", campana_id: campana.id, anuncios_creados: (data.anuncios_creados ?? []).length },
-    });
-    return { ok: true };
-  } catch (err) {
-    const mensajeError = "No se pudo conectar con n8n";
-    await supabaseAdmin
-      .from("propuestas")
-      .update({ estado: "fallida", decidido_en: ahora, decidido_por: usuario.id, resultado: { error: mensajeError } })
-      .eq("id", propuesta.id);
-    await supabaseAdmin.from("bitacora").insert({
-      user_id: usuario.id,
-      meta_id: propuesta.meta_id,
-      propuesta_id: propuesta.id,
-      tipo_evento: "propuesta_aprobada_fallo",
-      detalle: { accion: "agregar_anuncios", error: mensajeError },
-    });
-    return { ok: false, error: mensajeError, status: 503 };
-  }
+  return { ok: true };
 }
 
 // El límite de generando_conceptos (sin job_id todavía -- generar_estrategia
