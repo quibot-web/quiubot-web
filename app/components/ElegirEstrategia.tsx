@@ -293,7 +293,17 @@ export default function ElegirEstrategia({ estrategias, objetivo, esAdmin, onEle
                 <div style={{ display: "flex", gap: 8 }}>
                   <button
                     type="button"
-                    onClick={() => inputsRef.current[clave]?.click()}
+                    onClick={() => {
+                      // Pasa a "subida" ANTES de abrir el picker (no al
+                      // terminar de subir) -- si no, mientras sube (o si
+                      // falla) la tarjeta seguía mostrando el boceto de
+                      // "imagen" normal, sin "Subiendo..." ni el error,
+                      // porque esas dos vistas están condicionadas a
+                      // tipoActual === "subida" más abajo.
+                      cambiarTipo(clave, "subida");
+                      setMenuSubirAbierto((prev) => ({ ...prev, [clave]: false }));
+                      inputsRef.current[clave]?.click();
+                    }}
                     style={{ flex: 1, display: "flex", alignItems: "center", justifyContent: "center", gap: 6, border: "1.5px solid #6C5CE7", color: "#6C5CE7", background: "#fff", borderRadius: 10, minHeight: 38, fontWeight: 700, fontSize: 12.5 }}
                   >
                     <Upload size={14} /> Subir una imagen
