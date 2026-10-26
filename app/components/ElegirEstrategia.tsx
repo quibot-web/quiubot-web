@@ -65,14 +65,22 @@ type Props = {
   estrategias: any[];
   objetivo: { id: string; destino?: string } | null;
   esAdmin: boolean | null;
+  // Encabezado de cada tarjeta ("Tu página" + avatar, antes genérico):
+  // el nombre real de la página de Facebook conectada manda; si no hay,
+  // el nombre de marca (ADN); si tampoco, el fallback "Tu marca" de acá
+  // mismo. El logo (si existe) reemplaza el avatar genérico.
+  paginaNombre?: string | null;
+  nombreMarca?: string | null;
+  logoUrl?: string | null;
   // (estrategia, tiposPorAnuncio, creativosPropios) -- solo de la
   // estrategia elegida, nunca arrastra nada de otra pestaña que el
   // cliente haya mirado antes de decidirse.
   onElegir: (estrategia: any, tiposPorAnuncio: Record<string, TipoCreativo>, creativosPropios: Record<string, CreativoPropio>) => void;
 };
 
-export default function ElegirEstrategia({ estrategias, objetivo, esAdmin, onElegir }: Props) {
+export default function ElegirEstrategia({ estrategias, objetivo, esAdmin, paginaNombre, nombreMarca, logoUrl, onElegir }: Props) {
   const esWhatsapp = objetivo?.destino === "whatsapp";
+  const nombreEncabezado = paginaNombre || nombreMarca || "Tu marca";
 
   const idMasEfectivo = useMemo(
     () => estrategias.reduce((mejor: any, e: any) => (!mejor || (e.efectividad ?? 0) > (mejor.efectividad ?? 0) ? e : mejor), null)?.id,
@@ -266,6 +274,7 @@ export default function ElegirEstrategia({ estrategias, objetivo, esAdmin, onEle
         .qbe .fh { display: flex; align-items: center; gap: 9px; padding: 10px 12px; }
         .qbe .av { width: 32px; height: 32px; border-radius: 50%; background: linear-gradient(135deg,#F2B640,#C94680,#6C5CE7); padding: 2px; display: block; flex-shrink: 0; }
         .qbe .av i { display: block; width: 100%; height: 100%; border-radius: 50%; background: #2B2117; border: 2px solid #fff; }
+        .qbe .av img { display: block; width: 100%; height: 100%; border-radius: 50%; object-fit: cover; border: 2px solid #fff; background: #fff; }
         .qbe .fh b { font-size: 13.5px; display: block; line-height: 1.2; color: var(--ink); }
         .qbe .fh small { font-size: 11.5px; color: var(--soft); }
         .qbe .fh .dots { margin-left: auto; color: var(--soft); font-weight: 800; letter-spacing: 1px; }
@@ -435,8 +444,8 @@ export default function ElegirEstrategia({ estrategias, objetivo, esAdmin, onEle
 
               <div className="feed">
                 <div className="fh">
-                  <span className="av"><i /></span>
-                  <div><b>Tu página</b><small>Publicidad</small></div>
+                  <span className="av">{logoUrl ? <img src={logoUrl} alt="" /> : <i />}</span>
+                  <div><b>{nombreEncabezado}</b><small>Publicidad</small></div>
                   <span className="dots">···</span>
                 </div>
 
@@ -549,7 +558,7 @@ export default function ElegirEstrategia({ estrategias, objetivo, esAdmin, onEle
                   <div><small>{esWhatsapp ? "wa.me" : "Anuncio"}</small><b>{anuncio.copy?.titulo}</b></div>
                   <span className={esWhatsapp ? "btnwa" : "btnct"}>{botonTexto}</span>
                 </div>
-                <div className="cuerpo"><b>Tu página</b>{anuncio.copy?.texto} <span className="mas">más</span></div>
+                <div className="cuerpo"><b>{nombreEncabezado}</b>{anuncio.copy?.texto} <span className="mas">más</span></div>
               </div>
 
               {concepto && (

@@ -795,6 +795,13 @@ function EstrategiaContent() {
   // "hechos a la medida" en vez de genéricos -- por eso es un requisito
   // previo, no un simple detalle opcional.
   const [tieneAdn, setTieneAdn] = useState<boolean | null>(null);
+  // Para el encabezado de cada tarjeta en ElegirEstrategia ("Tu página"
+  // genérico, hoy): nombre de la página de Facebook conectada si la
+  // hay, si no el nombre de marca, si no queda el fallback genérico
+  // dentro del propio componente. logoUrl es el logo subido en /marca.
+  const [paginaNombre, setPaginaNombre] = useState<string | null>(null);
+  const [nombreMarca, setNombreMarca] = useState<string | null>(null);
+  const [logoUrl, setLogoUrl] = useState<string | null>(null);
   const [step, setStep] = useState<EstrategiaStep>("tipo");
   const [tipoContenido, setTipoContenido] = useState<TipoContenido | null>(null);
   const [hoverTipo, setHoverTipo] = useState<TipoContenido | null>(null);
@@ -1199,15 +1206,24 @@ function EstrategiaContent() {
   useEffect(() => {
     fetch("/api/marca-adn")
       .then((r) => r.json())
-      .then((data) => setTieneAdn(!!data.tieneAdn))
+      .then((data) => {
+        setTieneAdn(!!data.tieneAdn);
+        setNombreMarca(data?.nombre_marca || null);
+        setLogoUrl(data?.logo_url || null);
+      })
       .catch(() => setTieneAdn(false));
 
     // Cuenta publicitaria de Meta -- solo se usa para armar el link directo
     // a la campaña en Ads Manager una vez publicada, no bloquea nada si
     // Meta todavía no está conectado (el link cae a un fallback genérico).
+    // "pagina" (meta_page_name) es el nombre real de la página conectada,
+    // para el encabezado de cada tarjeta en ElegirEstrategia.
     fetch("/api/meta/estado")
       .then((r) => r.json())
-      .then((data) => setMetaAdAccountId(data?.cuentaPublicitaria || null))
+      .then((data) => {
+        setMetaAdAccountId(data?.cuentaPublicitaria || null);
+        setPaginaNombre(data?.pagina || null);
+      })
       .catch(() => setMetaAdAccountId(null));
   }, []);
 
@@ -3011,6 +3027,9 @@ function EstrategiaContent() {
               estrategias={estrategiasGeneradas ?? []}
               objetivo={objetivo}
               esAdmin={esAdminObjetivos}
+              paginaNombre={paginaNombre}
+              nombreMarca={nombreMarca}
+              logoUrl={logoUrl}
               onElegir={handleElegirEstrategiaNueva}
             />
           </div>

@@ -17,7 +17,7 @@ export async function GET() {
 
   const { data } = await supabaseAdmin
     .from("marcas")
-    .select("adn_marca, adn_resumen, adn_generado_en")
+    .select("adn_marca, adn_resumen, adn_generado_en, nombre_marca, logo_url")
     .eq("email", emailBusqueda)
     .maybeSingle();
 
@@ -26,6 +26,11 @@ export async function GET() {
     adn_marca: data?.adn_marca ?? null,
     adn_resumen: data?.adn_resumen ?? null,
     adn_generado_en: data?.adn_generado_en ?? null,
+    // Para el encabezado de cada tarjeta en ElegirEstrategia ("Tu
+    // página" con el nombre/foto reales en vez del genérico) -- ver
+    // app/estrategia/page.tsx, donde esta misma llamada ya se hacía.
+    nombre_marca: data?.nombre_marca ?? null,
+    logo_url: data?.logo_url ?? null,
   });
 }
 
