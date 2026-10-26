@@ -71,3 +71,47 @@ export function esArchivoDeImagen(file: File): boolean {
   const nombre = file.name.toLowerCase();
   return EXTENSIONES_IMAGEN.some((ext) => nombre.endsWith(ext));
 }
+
+// Más estricto que esArchivoDeImagen a propósito -- es solo para "Subir
+// el mío" en /estrategia (reemplaza la imagen generada por IA de un
+// anuncio puntual): JPG/PNG/WebP nada más (sin HEIC, que Meta tampoco
+// acepta tal cual) y un mínimo de 600px por lado, porque por debajo de
+// eso Meta la rechaza directamente o se ve borrosa en el feed. El resto
+// de la app (fotos de producto) sigue usando esArchivoDeImagen, más
+// permisivo, sin tocar.
+const TIPOS_PERMITIDOS_SUBIDA = ["image/jpeg", "image/png", "image/webp"];
+const LADO_MINIMO_SUBIDA = 600;
+
+export async function validarImagenPropia(file: File): Promise<{ ok: true; base64: string } | { ok: false; error: string }> {
+  if (!TIPOS_PERMITIDOS_SUBIDA.includes(file.type)) {
+    return { ok: false, error: "Solo se aceptan imágenes JPG, PNG o WebP." };
+  }
+
+  const dimensiones = await new Promise<{ width: number; height: number } | null>((resolve) => {
+    const img = new Image();
+    const url = URL.createObjectURL(file);
+    img.onload = () => {
+      URL.revokeObjectURL(url);
+      resolve({ width: img.width, height: img.height });
+    };
+    img.onerror = () => {
+      URL.revokeObjectURL(url);
+      resolve(null);
+    };
+    img.src = url;
+  });
+
+  if (!dimensiones) {
+    return { ok: false, error: "No se pudo leer esa imagen." };
+  }
+  if (dimensiones.width < LADO_MINIMO_SUBIDA || dimensiones.height < LADO_MINIMO_SUBIDA) {
+    return { ok: false, error: `La imagen es muy pequeña (mínimo ${LADO_MINIMO_SUBIDA}×${LADO_MINIMO_SUBIDA}px).` };
+  }
+
+  try {
+    const base64 = await comprimirSiHaceFalta(file);
+    return { ok: true, base64 };
+  } catch {
+    return { ok: false, error: "No se pudo procesar esa imagen." };
+  }
+}
