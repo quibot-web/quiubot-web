@@ -1974,6 +1974,27 @@ function EstrategiaContent() {
     }
   }
 
+  // Red de seguridad para la transición en vivo del paso 6: "creativos"
+  // arranca en null y SOLO se vuelve [] por una acción real del usuario
+  // (eliminar todos los creativos de la campaña) -- así que si llegamos a
+  // step "creativos" ya sin cargar ni en la pantalla de transición y
+  // "creativos" sigue en null, es que ensamblarCreativosDesde nunca corrió
+  // (o su resultado se perdió) para este render, y la pantalla se queda
+  // en blanco esperando un refresh. En vez de depender de que el usuario
+  // actualice la página para que la restauración normal lo arme, este
+  // efecto hace exactamente lo mismo que esa restauración -- recalcula
+  // desde creativosPorClave (la misma fuente de verdad que ya quedó
+  // demostrada correcta al recargar) apenas React vuelva a renderizar.
+  useEffect(() => {
+    if (!progresoListo) return;
+    if (step !== "creativos") return;
+    if (cargandoCreativos || mostrandoTransicionTipo) return;
+    if (creativos !== null) return;
+    if (!estrategiaSeleccionada) return;
+    ensamblarCreativosDesde(estrategiaSeleccionada, creativosPorClave);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [progresoListo, step, cargandoCreativos, mostrandoTransicionTipo, creativos, estrategiaSeleccionada, creativosPorClave]);
+
   // Bug A (closures obsoletos): cola/idx/acumulado se reciben como
   // parámetros explícitos en vez de leerse de colaDeTipos/tipoEnProcesoIdx/
   // creativosPorClave (React state) -- estas funciones se llaman
@@ -3578,10 +3599,15 @@ function EstrategiaContent() {
                             tarjeta con su propia ampliación/descarga. Un carrusel
                             totalmente fallido (ok:false, formato:"carrusel" pero sin
                             tarjetas) cae al mismo branch de imagenFallida de abajo. */}
-                        {c.formato === "carrusel" && Array.isArray(c.tarjetas) && c.tarjetas.length > 0 ? (
+                        {c.formato === "carrusel" && Array.isArray(c.tarjetas) && c.tarjetas.filter(Boolean).length > 0 ? (
                           <div>
                             <div style={{ display: "flex", gap: 8, overflowX: "auto", padding: 10, scrollSnapType: "x mandatory" }}>
-                              {c.tarjetas.map((t: any, ti: number) => (
+                              {/* filter(Boolean) -- si n8n llega a mandar una tarjeta
+                                  null/undefined (una que falló del todo, en vez de
+                                  omitirla o marcarla con su propio ok:false), un .map
+                                  directo revienta el render de TODA la grilla del paso
+                                  6 (no solo esta tarjeta) sin ningún error visible. */}
+                              {c.tarjetas.filter(Boolean).map((t: any, ti: number) => (
                                 <div
                                   key={t.public_id || ti}
                                   style={{ flex: "0 0 68%", scrollSnapAlign: "start", position: "relative", borderRadius: 8, overflow: "hidden", background: "#f3f2fe" }}
