@@ -42,12 +42,23 @@ export async function POST(
   if (activo !== undefined) cambios.activo = activo;
   if (plan_minimo !== undefined) cambios.plan_minimo = plan_minimo;
 
-  const { data, error } = await supabaseAdmin
-    .from("objetivos_config")
-    .update(cambios)
-    .eq("id", id)
-    .select()
-    .single();
+  // Un objetivo recién agregado al catálogo (ej. visitas_web,
+  // seguidores_facebook) todavía no tiene fila en objetivos_config --
+  // .update() no crea nada si no hay fila que matchee, así que el
+  // primer toggle de un objetivo nuevo fallaba siempre con "No se pudo
+  // actualizar", sin ninguna forma de activarlo de verdad. Se revisa
+  // primero si existe: si sí, se actualiza solo lo que vino en el body
+  // (igual que antes); si no, se inserta con defaults sensatos
+  // combinados con lo que sí vino.
+  const { data: existente } = await supabaseAdmin.from("objetivos_config").select("id").eq("id", id).maybeSingle();
+
+  const { data, error } = existente
+    ? await supabaseAdmin.from("objetivos_config").update(cambios).eq("id", id).select().single()
+    : await supabaseAdmin
+        .from("objetivos_config")
+        .insert({ id, activo: activo ?? false, plan_minimo: plan_minimo ?? "arranque", actualizado_en: cambios.actualizado_en })
+        .select()
+        .single();
 
   if (error) {
     return NextResponse.json({ error: "No se pudo actualizar" }, { status: 500 });
@@ -61,6 +72,8 @@ export async function POST(
       retargeting: "Retargeting",
       leads: "Generacion de Leads",
       trafico_mensajes: "Trafico / Mensajes",
+      visitas_web: "Visitas al sitio web",
+      seguidores_facebook: "Seguidores de Facebook",
     };
     await supabaseAdmin.from("novedades").insert({
       tipo: "objetivo_activado",

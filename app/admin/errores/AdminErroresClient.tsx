@@ -41,6 +41,8 @@ const NOMBRES_OBJETIVO: Record<string, string> = {
   retargeting: "Retargeting",
   leads: "Generación de Leads",
   trafico_mensajes: "Tráfico",
+  visitas_web: "Visitas al sitio web",
+  seguidores_facebook: "Seguidores de Facebook",
 };
 
 const NOMBRES_PASO: Record<string, string> = {

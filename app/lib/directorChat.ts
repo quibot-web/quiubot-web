@@ -180,8 +180,22 @@ export function narracionEtapaCreativos(etapa: "esperando_fotos" | "generando_co
 // propuesta, etc.) y quedarían fuera del historial, tal como se
 // acordó. ---
 
+// Mismo texto que ya usan FilaMeta/directorTextos/renovacion para cada
+// tipo -- acá vivía como un ternario de solo 2 ramas (leads vs. todo lo
+// demás = WhatsApp), que ya daba un texto incorrecto para "ventas_web"
+// desde antes de que existieran los tipos nuevos. "conversaciones de
+// WhatsApp" queda como último respaldo para un tipo desconocido/vacío,
+// igual que antes.
+const TIPO_LABEL_NARRACION: Record<string, string> = {
+  conversaciones_whatsapp: "conversaciones de WhatsApp",
+  leads: "leads",
+  ventas_web: "ventas en tu sitio web",
+  visitas_web: "visitas a tu sitio web",
+  seguidores_facebook: "seguidores de Facebook",
+};
+
 export function narracionMetaCreada(detalle: { tipo?: string; cantidad_objetivo?: number; fecha_fin?: string }): string {
-  const tipoLabel = detalle.tipo === "leads" ? "leads" : "conversaciones de WhatsApp";
+  const tipoLabel = (detalle.tipo && TIPO_LABEL_NARRACION[detalle.tipo]) || "conversaciones de WhatsApp";
   const fecha = detalle.fecha_fin ? new Date(detalle.fecha_fin).toLocaleDateString("es-CO") : null;
   return detalle.cantidad_objetivo
     ? `Creamos tu meta: ${detalle.cantidad_objetivo} ${tipoLabel}${fecha ? ` antes del ${fecha}` : ""}.`

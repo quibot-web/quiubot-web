@@ -250,8 +250,13 @@ export async function POST(req: NextRequest) {
 // no tiene una meta activa de verdad -- nunca se inserta en "metas".
 // Tipo: según el objetivo de sus campañas activas, con esta prioridad --
 // ventas_web primero (es el tipo con mayor valor real por resultado),
-// si no leads, si no conversaciones_whatsapp como default declarado si
-// ninguna campaña coincide con ningún tipo conocido.
+// si no leads, si no conversaciones_whatsapp, si no visitas_web, si no
+// seguidores_facebook, y conversaciones_whatsapp de nuevo como default
+// declarado si ninguna campaña coincide con ningún tipo conocido (antes
+// de que existieran visitas_web/seguidores_facebook, "si no" terminaba
+// directo en ese mismo default -- con usuarios que solo tienen campañas
+// de esos dos tipos nuevos, caer en ese default sin pasar por ellos
+// primero los etiquetaba mal).
 // Ventana: 30 días terminando hoy (para que SÍ haya historial real en
 // campanas_snapshots que las reglas puedan leer -- una ventana que
 // arrancara hoy no tendría ningún día con datos todavía).
@@ -272,7 +277,13 @@ async function construirMetaSimulada(userId: string): Promise<Meta | null> {
     ? "ventas_web"
     : campanasActivas.some((c) => campanaCoincideConTipo(c, "leads"))
       ? "leads"
-      : "conversaciones_whatsapp";
+      : campanasActivas.some((c) => campanaCoincideConTipo(c, "conversaciones_whatsapp"))
+        ? "conversaciones_whatsapp"
+        : campanasActivas.some((c) => campanaCoincideConTipo(c, "visitas_web"))
+          ? "visitas_web"
+          : campanasActivas.some((c) => campanaCoincideConTipo(c, "seguidores_facebook"))
+            ? "seguidores_facebook"
+            : "conversaciones_whatsapp";
 
   const campanasDelTipo = campanasActivas.filter((c) => campanaCoincideConTipo(c, tipo));
   const campanasParaGasto = campanasDelTipo.length > 0 ? campanasDelTipo : campanasActivas;

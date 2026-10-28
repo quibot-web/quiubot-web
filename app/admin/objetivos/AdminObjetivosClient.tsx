@@ -81,7 +81,14 @@ export default function AdminObjetivosClient() {
           <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
             {OBJETIVOS_INFO.map((info) => {
               const item = config.find((c) => c.id === info.id);
-              const activo = item?.activo ?? true;
+              // Mismo default que la validación real en generar-estrategia
+              // (configObjetivo?.activo ?? false) -- un objetivo sin fila
+              // todavía (ej. visitas_web/seguidores_facebook recién
+              // agregados) está bloqueado de verdad para usuarios no admin,
+              // aunque antes este toggle lo mostrara como "Activo" sin
+              // tener fila. Con el default alineado, el primer clic ya
+              // activa de verdad en vez de necesitar dos.
+              const activo = item?.activo ?? false;
               const planMinimo = item?.plan_minimo ?? "arranque";
               const guardando = guardandoId === info.id;
               return (
