@@ -254,7 +254,7 @@ export default function CrearMetaPage() {
                       id === "visitas_web" && saludPixel && !saludPixel.conectado
                       ? "Sin píxel medimos clics; instálalo para medir visitas reales."
                       : id === "seguidores_instagram" && saludInstagram && !saludInstagram.conectado
-                        ? "Conecta una cuenta de Instagram profesional a tu página, desde Meta Business Suite."
+                        ? "Necesitas que tu Instagram profesional esté vinculado a tu página de Facebook y autorizado en tu cuenta publicitaria (Meta Business Manager → Cuentas de Instagram → Conectar activos)."
                         : null;
                 return (
                   <div key={id}>

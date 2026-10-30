@@ -121,12 +121,16 @@ export async function POST(req: NextRequest) {
   }
 
   // seguidores_instagram se mide por foto diaria de followers_count, así
-  // que sin una cuenta de Instagram profesional vinculada a la página de
-  // Facebook no hay nada que fotografiar. La conexión en sí se hace en
-  // Meta (Business Suite), no dentro de Quiubot -- por eso no hay
-  // redirigir_a acá, solo la instrucción de dónde hacerlo. La foto
-  // inicial se toma en caliente, en este mismo momento, para no esperar
-  // a la próxima corrida del cron.
+  // que sin una cuenta de Instagram profesional vinculada no hay nada
+  // que fotografiar -- y para publicar la campaña real (ver
+  // /api/publicar-estrategia) además hace falta que esa cuenta esté
+  // autorizada en la cuenta publicitaria, no solo en la página (se
+  // confirmó en una prueba real: sin esa autorización Meta rechaza el
+  // creativo con "must be a valid Instagram account id"). La conexión
+  // en sí se hace en Meta Business Manager, no dentro de Quiubot -- por
+  // eso no hay redirigir_a acá, solo la instrucción de dónde hacerlo. La
+  // foto inicial se toma en caliente, en este mismo momento, para no
+  // esperar a la próxima corrida del cron.
   let valorInicialSeguidoresInstagram: number | null = null;
   if (tipo === "seguidores_instagram") {
     if (!usuario.meta_page_id || !usuario.meta_access_token) {
@@ -145,7 +149,7 @@ export async function POST(req: NextRequest) {
         return NextResponse.json(
           {
             error:
-              "Tu página de Facebook no tiene una cuenta de Instagram profesional vinculada. Conéctala desde Meta Business Suite (Configuración de la página → Instagram) y vuelve a intentar.",
+              "Necesitas que tu Instagram profesional esté vinculado a tu página de Facebook y autorizado en tu cuenta publicitaria (Meta Business Manager → Cuentas de Instagram → Conectar activos) antes de crear esta meta.",
           },
           { status: 400 }
         );
