@@ -1,0 +1,279 @@
+<!doctype html>
+<html lang="es">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Paso 3 · Selecciona tu objetivo · Quiubot</title>
+<style>
+:root{--bg:#F6F5FB;--card:#fff;--line:#E7E4F3;--ink:#16142A;--muted:#5A5672;--soft:#8A86A3;--brand:#534AB7;--brand-d:#453d99}
+*{box-sizing:border-box}
+body{margin:0;background:var(--bg);color:var(--ink);font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Inter,Roboto,Helvetica,Arial,sans-serif;-webkit-font-smoothing:antialiased;line-height:1.45}
+button{font:inherit;cursor:pointer}
+.w{max-width:1180px;margin:0 auto;padding:28px 20px 80px}
+.top small{color:var(--soft);font-weight:600}
+h1{margin:4px 0 0;font-size:22px;letter-spacing:-.01em}
+
+/* Pestañas */
+.tabs{display:flex;gap:8px;margin:22px 0 18px;overflow-x:auto;padding-bottom:2px}
+.tab{flex:none;display:flex;align-items:center;gap:7px;background:var(--card);border:1.5px solid var(--line);border-radius:999px;padding:10px 16px;font-weight:700;font-size:13.5px;color:var(--muted);transition:border-color .15s,color .15s,background .15s}
+.tab[aria-selected="true"]{border-color:var(--brand);color:var(--brand);background:#F3F2FE}
+.tab .n{background:#ECEAF6;color:var(--muted);border-radius:999px;padding:1px 7px;font-size:11.5px;font-weight:800}
+.tab[aria-selected="true"] .n{background:var(--brand);color:#fff}
+
+/* Pista del carrusel */
+.pista-wrap{position:relative}
+.pista-wrap::after{content:"";position:absolute;top:0;right:0;bottom:14px;width:64px;background:linear-gradient(90deg,rgba(246,245,251,0),var(--bg));pointer-events:none;transition:opacity .2s}
+.pista-wrap.al-final::after{opacity:0}
+.pista{display:flex;gap:16px;overflow-x:auto;scroll-snap-type:x mandatory;scroll-behavior:smooth;padding:4px 2px 18px;-ms-overflow-style:none;scrollbar-width:none}
+.pista::-webkit-scrollbar{display:none}
+.grupo-sep{flex:none;width:1px}
+
+.tarjeta{
+  flex:none;scroll-snap-align:start;position:relative;
+  width:calc((100% - 3*16px)/4); /* 4 por pantalla en escritorio, asomando la 5ta */
+  min-width:220px;
+  padding:1.5rem;border-radius:16px;border:1px solid var(--line);background:var(--card);
+  text-align:center;cursor:pointer;transition:border-color .18s,transform .15s,box-shadow .2s;
+}
+.tarjeta:hover{border-color:#C9C2F5}
+.tarjeta[aria-pressed="true"]{border:2px solid var(--brand);background:#F8F7FE;transform:scale(1.015);box-shadow:0 10px 26px -10px rgba(83,74,183,.5)}
+.tarjeta .icono{width:54px;height:54px;border-radius:50%;margin:0 auto 10px;display:flex;align-items:center;justify-content:center;font-size:26px}
+.tarjeta .icono img{width:26px;height:26px;display:block;filter:brightness(0) invert(1)}
+.tarjeta .label{font-weight:700;margin-bottom:6px;font-size:15px}
+.tarjeta .desc{font-size:12.5px;color:var(--muted)}
+.tarjeta .badge-meta{
+  position:absolute;top:10px;right:10px;background:#E7F7F1;color:#0B7A5C;
+  font-size:10.5px;font-weight:800;padding:3px 9px;border-radius:999px;white-space:nowrap;
+}
+.tarjeta .badge-estado{position:absolute;top:10px;left:10px;background:#e5e7eb;color:#666;font-size:10px;font-weight:700;padding:2px 8px;border-radius:10px}
+
+/* Tarjeta de ayuda, visualmente distinta (no es un objetivo elegible) */
+.tarjeta.ayuda{background:#F8F7FE;border:1.5px dashed #C9C2F5}
+.tarjeta.ayuda .icono{background:#fff}
+
+/* Flechas */
+.flecha{position:absolute;top:50%;transform:translateY(-50%);z-index:2;width:40px;height:40px;border-radius:50%;background:#fff;border:1px solid var(--line);box-shadow:0 6px 18px -8px rgba(22,20,42,.3);display:flex;align-items:center;justify-content:center;color:var(--ink);transition:opacity .15s}
+.flecha.izq{left:-14px}
+.flecha.der{right:-14px}
+.flecha[disabled]{opacity:0;pointer-events:none}
+.flecha-zona{position:relative}
+
+/* Puntos + texto de ayuda */
+.pie-carrusel{display:flex;flex-direction:column;align-items:center;gap:8px;margin-top:4px}
+.puntos{display:flex;gap:6px}
+.punto{width:7px;height:7px;border-radius:50%;background:#DCD8EE}
+.punto[aria-current="true"]{background:var(--brand);width:20px;border-radius:4px;transition:width .2s}
+.hint{font-size:12.5px;color:var(--soft);font-weight:600}
+
+@media (max-width:760px){
+  .tarjeta{width:68%;min-width:0}
+  .flecha{display:none}
+}
+</style>
+</head>
+<body>
+<div class="w">
+<div class="top"><small>Paso 3 de 6</small><h1>Selecciona tu objetivo publicitario</h1></div>
+
+<!--
+  Notas de comportamiento para la implementación real (no se ve en este
+  mockup estático salvo por el JS mínimo de abajo, que sí sincroniza
+  pestañas/flechas/puntos/hint con el scroll real):
+
+  - Objetivo desactivado en /admin/objetivos -> no aparece en la pista.
+    El contador de cada pestaña cuenta solo los activos. Si un grupo
+    queda en 0 objetivos activos, su pestaña completa se oculta (no se
+    muestra "(0)"). La tarjeta de ayuda de "Más opciones" no cuenta para
+    el contador de esa pestaña (no es un objetivo elegible).
+  - "Tu meta activa": se compara el objetivo_id de cada meta activa del
+    usuario (GET /api/metas, meta.tipo -> OBJETIVO_ID_POR_TIPO) contra
+    el id de cada tarjeta.
+  - Al entrar al paso, si alguna tarjeta tiene "Tu meta activa", el
+    carrusel abre (scrollIntoView) en la pestaña de ese grupo. Si hay
+    varias, gana la primera meta activa devuelta por la API.
+  - Pregunta abierta para el equipo: hoy, un admin ve los objetivos
+    inactivos en gris con la etiqueta "Solo tú lo ves" (para probarlos
+    antes de activarlos) -- este mockup asume que ESO se mantiene igual
+    (la tarjeta aparece gris con su etiqueta, no se oculta) y que la
+    regla de "no aparece/no cuenta" de arriba es solo para usuarios
+    no-admin. A confirmar antes de implementar.
+-->
+
+<div class="tabs" role="tablist" aria-label="Grupos de objetivos">
+  <button class="tab" role="tab" aria-selected="true" data-grupo="clientes">Conseguir clientes <span class="n">4</span></button>
+  <button class="tab" role="tab" aria-selected="false" data-grupo="marca">Hacer crecer tu marca <span class="n">4</span></button>
+  <button class="tab" role="tab" aria-selected="false" data-grupo="otras">Más opciones <span class="n">1</span></button>
+</div>
+
+<div class="flecha-zona">
+  <button class="flecha izq" id="flIzq" aria-label="Ver objetivos anteriores" disabled>
+    <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" aria-hidden="true"><path d="M15 18l-6-6 6-6"/></svg>
+  </button>
+  <button class="flecha der" id="flDer" aria-label="Ver más objetivos">
+    <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" aria-hidden="true"><path d="M9 18l6-6-6-6"/></svg>
+  </button>
+
+  <div class="pista-wrap" id="pistaWrap">
+    <div class="pista" id="pista" role="list" aria-label="Objetivos publicitarios" tabindex="0">
+
+      <!-- Grupo: Conseguir clientes -->
+      <button class="tarjeta" role="listitem" aria-pressed="false" data-grupo="clientes" style="--c:#25D366">
+        <span class="icono" style="background:#25D366"><img src="https://cdn.simpleicons.org/whatsapp/ffffff" alt=""></span>
+        <div class="label">Venta Directa (WhatsApp)</div>
+        <div class="desc">Ventas por conversación directa en WhatsApp.</div>
+      </button>
+      <button class="tarjeta" role="listitem" aria-pressed="false" data-grupo="clientes">
+        <span class="icono" style="background:#DCFCE7">🛒</span>
+        <div class="label">Venta Directa</div>
+        <div class="desc">Ventas inmediatas en tu sitio web.</div>
+      </button>
+      <button class="tarjeta" role="listitem" aria-pressed="false" data-grupo="clientes">
+        <span class="icono" style="background:#FEF3C7">🎯</span>
+        <div class="label">Generación de Leads</div>
+        <div class="desc">Captura contactos interesados en tu producto.</div>
+      </button>
+      <button class="tarjeta" role="listitem" aria-pressed="false" data-grupo="clientes">
+        <span class="badge-estado">Sin pixel medimos clics</span>
+        <span class="icono" style="background:#CCFBF1">🖱️</span>
+        <div class="label">Visitas al sitio web</div>
+        <div class="desc">Lleva visitas reales a tu página, medidas de verdad.</div>
+      </button>
+
+      <!-- Grupo: Hacer crecer tu marca -->
+      <button class="tarjeta" role="listitem" aria-pressed="true" data-grupo="marca">
+        <span class="badge-meta">Tu meta activa</span>
+        <span class="icono" style="background:#C13584"><img src="https://cdn.simpleicons.org/instagram/ffffff" alt=""></span>
+        <div class="label">Seguidores de Instagram</div>
+        <div class="desc">Haz crecer los seguidores de tu perfil de Instagram.</div>
+      </button>
+      <button class="tarjeta" role="listitem" aria-pressed="false" data-grupo="marca">
+        <span class="icono" style="background:#1877F2"><img src="https://cdn.simpleicons.org/facebook/ffffff" alt=""></span>
+        <div class="label">Seguidores de Facebook</div>
+        <div class="desc">Haz crecer los seguidores de tu página.</div>
+      </button>
+      <button class="tarjeta" role="listitem" aria-pressed="false" data-grupo="marca">
+        <span class="icono" style="background:#FFEDD5">📢</span>
+        <div class="label">Reconocimiento</div>
+        <div class="desc">Más personas conocerán tu marca.</div>
+      </button>
+      <button class="tarjeta" role="listitem" aria-pressed="false" data-grupo="marca">
+        <span class="icono" style="background:#DBEAFE">🔄</span>
+        <div class="label">Volver a impactar</div>
+        <div class="desc">Impacta a quienes ya te conocen.</div>
+      </button>
+
+      <!-- Grupo: Más opciones -->
+      <button class="tarjeta" role="listitem" aria-pressed="false" data-grupo="otras">
+        <span class="icono" style="background:#CFFAFE">🌐</span>
+        <div class="label">Clics al enlace</div>
+        <div class="desc">Lleva más visitas nuevas a tu sitio web.</div>
+      </button>
+      <button class="tarjeta ayuda" role="listitem" data-grupo="otras">
+        <span class="icono">🤔</span>
+        <div class="label">¿No sabes cuál elegir?</div>
+        <div class="desc">Cuéntale al Director qué necesitas y te recomienda uno.</div>
+      </button>
+
+    </div>
+  </div>
+</div>
+
+<div class="pie-carrusel">
+  <div class="puntos" id="puntos" role="tablist" aria-label="Posición en el carrusel">
+    <span class="punto" aria-current="true"></span>
+    <span class="punto" aria-current="false"></span>
+    <span class="punto" aria-current="false"></span>
+  </div>
+  <div class="hint" id="hint">Desliza para ver más objetivos →</div>
+</div>
+
+</div>
+
+<script>
+// Demo mínima de sincronización scroll <-> pestañas/flechas/puntos/hint --
+// en la implementación real esto se porta a React (IntersectionObserver
+// sobre la primera tarjeta de cada grupo, en vez de recalcular límites a
+// mano cada vez).
+(function () {
+  var pista = document.getElementById('pista');
+  var wrap = document.getElementById('pistaWrap');
+  var tabs = Array.prototype.slice.call(document.querySelectorAll('.tab'));
+  var puntos = Array.prototype.slice.call(document.querySelectorAll('.punto'));
+  var flIzq = document.getElementById('flIzq');
+  var flDer = document.getElementById('flDer');
+  var hint = document.getElementById('hint');
+  var grupos = ['clientes', 'marca', 'otras'];
+
+  function primeraTarjetaDe(grupo) {
+    return pista.querySelector('.tarjeta[data-grupo="' + grupo + '"]');
+  }
+
+  function grupoVisibleActual() {
+    var centro = pista.scrollLeft + 24; // el borde izquierdo + un margen, no el centro del viewport
+    var actual = grupos[0];
+    grupos.forEach(function (g) {
+      var el = primeraTarjetaDe(g);
+      if (el && el.offsetLeft <= centro) actual = g;
+    });
+    return actual;
+  }
+
+  function actualizar() {
+    var actual = grupoVisibleActual();
+    tabs.forEach(function (t, i) {
+      var activo = t.dataset.grupo === actual;
+      t.setAttribute('aria-selected', String(activo));
+      if (puntos[i]) puntos[i].setAttribute('aria-current', String(activo));
+    });
+
+    var alInicio = pista.scrollLeft <= 4;
+    var alFinal = pista.scrollLeft >= pista.scrollWidth - pista.clientWidth - 4;
+    flIzq.disabled = alInicio;
+    flDer.disabled = alFinal;
+    wrap.classList.toggle('al-final', alFinal);
+    hint.textContent = alFinal ? 'Viste todos los objetivos' : 'Desliza para ver más objetivos →';
+  }
+
+  pista.addEventListener('scroll', actualizar, { passive: true });
+  window.addEventListener('resize', actualizar);
+
+  tabs.forEach(function (t) {
+    t.addEventListener('click', function () {
+      var el = primeraTarjetaDe(t.dataset.grupo);
+      if (el) el.scrollIntoView({ behavior: 'smooth', inline: 'start', block: 'nearest' });
+    });
+  });
+
+  function desplazarUnaTarjeta(dir) {
+    var ancho = pista.querySelector('.tarjeta').getBoundingClientRect().width + 16;
+    pista.scrollBy({ left: dir * ancho, behavior: 'smooth' });
+  }
+  flIzq.addEventListener('click', function () { desplazarUnaTarjeta(-1); });
+  flDer.addEventListener('click', function () { desplazarUnaTarjeta(1); });
+
+  // Teclado: con el foco en la pista, las flechas mueven el scroll una
+  // tarjeta a la vez (además del tabulado normal entre tarjetas, que ya
+  // funciona solo por ser <button>).
+  pista.addEventListener('keydown', function (e) {
+    if (e.key === 'ArrowRight') { desplazarUnaTarjeta(1); e.preventDefault(); }
+    if (e.key === 'ArrowLeft') { desplazarUnaTarjeta(-1); e.preventDefault(); }
+  });
+
+  document.querySelectorAll('.tarjeta:not(.ayuda)').forEach(function (t) {
+    t.addEventListener('click', function () {
+      document.querySelectorAll('.tarjeta').forEach(function (o) { o.setAttribute('aria-pressed', 'false'); });
+      t.setAttribute('aria-pressed', 'true');
+    });
+  });
+  document.querySelector('.tarjeta.ayuda').addEventListener('click', function () {
+    alert('Abriría el chat flotante del Director (window event "quiubot:abrir-asistente").');
+  });
+
+  // Abre en el grupo de "Tu meta activa" -- en este mockup está fijo en
+  // "marca" (seguidores_instagram); en la app real se calcula.
+  primeraTarjetaDe('marca').scrollIntoView({ inline: 'start', block: 'nearest' });
+  actualizar();
+})();
+</script>
+</body>
+</html>
