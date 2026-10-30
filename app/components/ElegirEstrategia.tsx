@@ -1,7 +1,8 @@
 "use client";
 import { useEffect, useMemo, useRef, useState } from "react";
 import { Image as ImageIcon, Video, Upload, FolderOpen } from "lucide-react";
-import { validarImagenPropia } from "@/app/lib/imagenes";
+import { validarImagenPropia, validarVideoPropio } from "@/app/lib/imagenes";
+import { urlPortadaVideo } from "@/app/lib/cloudinaryUrl";
 import SelectorAlbum, { type ItemAlbum } from "@/app/components/SelectorAlbum";
 
 // Mismo shape que ya usa el resto de /estrategia (asignar-tipos) para la
@@ -85,7 +86,11 @@ function fmtCOP(n: number | null | undefined): string {
 // origen distingue de dónde vino -- puramente informativo (bookkeeping
 // honesto hacia el padre), publicar-estrategia no lo necesita: ambos
 // orígenes llegan igual de "listos" a ensamblarCreativosDesde.
-export type CreativoPropio = { url_imagen: string; origen?: "subida" | "album" };
+// tipo/url_video: cuando el archivo es un video, url_imagen deja de ser
+// "la imagen del anuncio" y pasa a ser la portada (ver urlPortadaVideo) --
+// url_video es el mp4 real. Sin tipo (o tipo:"imagen"), todo sigue como
+// antes: url_imagen es la imagen del anuncio.
+export type CreativoPropio = { url_imagen: string; origen?: "subida" | "album"; tipo?: "imagen" | "video"; url_video?: string };
 
 // Revisión en segundo plano de "Subir el mío" (ver dispararRevisionImagen
 // más abajo) -- nunca bloquea nada, solo informa en la misma tarjeta.
@@ -131,6 +136,11 @@ export default function ElegirEstrategia({ estrategias, objetivo, esAdmin, pagin
   const [menuSubirAbierto, setMenuSubirAbierto] = useState<Record<string, boolean>>({});
   const [subiendoClave, setSubiendoClave] = useState<string | null>(null);
   const [erroresSubida, setErroresSubida] = useState<Record<string, string>>({});
+  // Aviso "suave" (no bloquea, no es error) de validarVideoPropio -- ej.
+  // video horizontal en vez de vertical/cuadrado. Vive aparte de
+  // erroresSubida porque ese se pinta en rojo y solo se muestra ANTES de
+  // subir; esto se muestra DESPUÉS, sobre el video ya subido.
+  const [avisosSubida, setAvisosSubida] = useState<Record<string, string>>({});
   const inputsRef = useRef<Record<string, HTMLInputElement | null>>({});
 
   // Por estrategia (id -> clave -> ...) -- a propósito, no un solo mapa
@@ -243,7 +253,11 @@ export default function ElegirEstrategia({ estrategias, objetivo, esAdmin, pagin
   // se lee "seleccionada.id" en vivo) para que, si el cliente cambia de
   // pestaña mientras esto sigue en curso, el resultado caiga en la
   // estrategia correcta y no en la que esté viendo en ese momento.
-  const dispararRevisionImagen = async (estrategiaId: string, clave: string, urlImagen: string) => {
+  const dispararRevisionImagen = async (
+    estrategiaId: string,
+    clave: string,
+    creativo: { url_imagen: string; tipo?: "imagen" | "video"; url_video?: string }
+  ) => {
     const estrategiaDeLaRevision = estrategias.find((e) => e.id === estrategiaId);
     const [ci, ai] = clave.split("-").map(Number);
     const conjunto = estrategiaDeLaRevision?.conjuntos?.[ci];
@@ -262,7 +276,8 @@ export default function ElegirEstrategia({ estrategias, objetivo, esAdmin, pagin
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
-          url_imagen: urlImagen,
+          url_imagen: creativo.url_imagen,
+          ...(creativo.tipo === "video" && creativo.url_video ? { tipo: "video", url_video: creativo.url_video } : {}),
           conjunto_nombre: conjunto.nombre,
           anuncio_nombre: anuncio.nombre,
           titulo: anuncio.copy?.titulo || "",
@@ -307,8 +322,32 @@ export default function ElegirEstrategia({ estrategias, objetivo, esAdmin, pagin
   const manejarArchivoPropio = async (clave: string, file: File | undefined) => {
     if (!file) return;
     setErroresSubida((prev) => ({ ...prev, [clave]: "" }));
+    setAvisosSubida((prev) => ({ ...prev, [clave]: "" }));
     setSubiendoClave(clave);
     try {
+      if (file.type.startsWith("video/")) {
+        const resultado = await validarVideoPropio(file);
+        if (!resultado.ok) {
+          setErroresSubida((prev) => ({ ...prev, [clave]: resultado.error }));
+          return;
+        }
+        const formData = new FormData();
+        formData.append("archivo", file);
+        const res = await fetch("/api/estrategia/subir-video-anuncio", { method: "POST", body: formData });
+        const data = await res.json().catch(() => ({}));
+        if (!res.ok || !data.url_video || !data.url_imagen) {
+          setErroresSubida((prev) => ({ ...prev, [clave]: data.error || "No se pudo subir el video." }));
+          return;
+        }
+        const propio: CreativoPropio = { tipo: "video", url_video: data.url_video, url_imagen: data.url_imagen, origen: "subida" };
+        if (resultado.aviso) setAvisosSubida((prev) => ({ ...prev, [clave]: resultado.aviso! }));
+        setPropiosPorEstrategia((prev) => ({ ...prev, [seleccionada.id]: { ...(prev[seleccionada.id] || {}), [clave]: propio } }));
+        cambiarTipo(clave, "subida");
+        setMenuSubirAbierto((prev) => ({ ...prev, [clave]: false }));
+        dispararRevisionImagen(seleccionada.id, clave, propio);
+        return;
+      }
+
       const resultado = await validarImagenPropia(file);
       if (!resultado.ok) {
         setErroresSubida((prev) => ({ ...prev, [clave]: resultado.error }));
@@ -324,10 +363,11 @@ export default function ElegirEstrategia({ estrategias, objetivo, esAdmin, pagin
         setErroresSubida((prev) => ({ ...prev, [clave]: data.error || "No se pudo subir la imagen." }));
         return;
       }
-      setPropiosPorEstrategia((prev) => ({ ...prev, [seleccionada.id]: { ...(prev[seleccionada.id] || {}), [clave]: { url_imagen: data.url_imagen, origen: "subida" } } }));
+      const propio: CreativoPropio = { url_imagen: data.url_imagen, origen: "subida" };
+      setPropiosPorEstrategia((prev) => ({ ...prev, [seleccionada.id]: { ...(prev[seleccionada.id] || {}), [clave]: propio } }));
       cambiarTipo(clave, "subida");
       setMenuSubirAbierto((prev) => ({ ...prev, [clave]: false }));
-      dispararRevisionImagen(seleccionada.id, clave, data.url_imagen);
+      dispararRevisionImagen(seleccionada.id, clave, propio);
     } catch {
       setErroresSubida((prev) => ({ ...prev, [clave]: "No se pudo conectar con el servidor." }));
     } finally {
@@ -337,16 +377,16 @@ export default function ElegirEstrategia({ estrategias, objetivo, esAdmin, pagin
 
   // Mismo /api/album que ya usa el paso "album-selector" (dispararAlbum en
   // estrategia/page.tsx) -- se pide una sola vez (no por estrategia: es el
-  // mismo álbum del cliente) y se cachea. Solo imágenes por ahora (el
-  // video de álbum sigue su flujo viejo, no entra acá todavía).
+  // mismo álbum del cliente) y se cachea. Imágenes y videos por igual
+  // (SelectorAlbum ya sabe mostrar ambos); elegirImagenDeAlbum es quien
+  // distingue el tipo al armar el CreativoPropio.
   const asegurarAlbumCargado = async () => {
     if (albumItems !== null || cargandoAlbum) return;
     setCargandoAlbum(true);
     try {
       const res = await fetch("/api/album");
       const data = await res.json().catch(() => ({}));
-      const soloImagenes = ((data.imagenes || []) as ItemAlbum[]).filter((it) => it.tipo === "imagen");
-      setAlbumItems(soloImagenes);
+      setAlbumItems((data.imagenes || []) as ItemAlbum[]);
     } catch {
       setAlbumItems([]);
     } finally {
@@ -365,7 +405,11 @@ export default function ElegirEstrategia({ estrategias, objetivo, esAdmin, pagin
     Object.entries(creativosPropios).forEach(([claveUsada, propio]) => {
       if (claveUsada === albumPickerAbierto.clave) return;
       if (propio.origen !== "album") return;
-      const item = albumItems.find((it) => it.url_imagen === propio.url_imagen);
+      // Para un creativo de video, propio.url_imagen es la portada
+      // derivada (urlPortadaVideo), no el mp4 que vive en album_creativos
+      // -- hay que comparar contra url_video, que sí es ese mismo mp4.
+      const urlParaComparar = propio.tipo === "video" ? propio.url_video : propio.url_imagen;
+      const item = albumItems.find((it) => it.url_imagen === urlParaComparar);
       if (!item) return;
       const [ci, ai] = claveUsada.split("-").map(Number);
       const anuncioUsado = seleccionada.conjuntos?.[ci]?.anuncios?.[ai];
@@ -378,10 +422,18 @@ export default function ElegirEstrategia({ estrategias, objetivo, esAdmin, pagin
   const elegirImagenDeAlbum = (item: ItemAlbum) => {
     if (!albumPickerAbierto) return;
     const { estrategiaId, clave } = albumPickerAbierto;
-    setPropiosPorEstrategia((prev) => ({ ...prev, [estrategiaId]: { ...(prev[estrategiaId] || {}), [clave]: { url_imagen: item.url_imagen, origen: "album" } } }));
+    // item.url_imagen de un item de álbum tipo "video" es el mp4 real
+    // (así lo guarda /api/album/subir) -- la portada se deriva al vuelo
+    // con el mismo truco de so_1 que usa /api/estrategia/subir-video-anuncio,
+    // nunca se sube nada de nuevo.
+    const propio: CreativoPropio =
+      item.tipo === "video"
+        ? { tipo: "video", url_video: item.url_imagen, url_imagen: urlPortadaVideo(item.url_imagen), origen: "album" }
+        : { url_imagen: item.url_imagen, origen: "album" };
+    setPropiosPorEstrategia((prev) => ({ ...prev, [estrategiaId]: { ...(prev[estrategiaId] || {}), [clave]: propio } }));
     setTiposPorEstrategia((prev) => ({ ...prev, [estrategiaId]: { ...(prev[estrategiaId] || {}), [clave]: "subida" } }));
     setAlbumPickerAbierto(null);
-    dispararRevisionImagen(estrategiaId, clave, item.url_imagen);
+    dispararRevisionImagen(estrategiaId, clave, propio);
   };
 
   return (
@@ -449,8 +501,9 @@ export default function ElegirEstrategia({ estrategias, objetivo, esAdmin, pagin
         .qbe .subir .costo { font-size: 10.5px; color: #7A7694; font-weight: 600; }
         .qbe .subir .err { font-size: 11.5px; color: #B3261E; font-weight: 600; max-width: 220px; }
         .qbe .propiaLista { position: relative; aspect-ratio: 1/1; overflow: hidden; }
-        .qbe .propiaLista img { width: 100%; height: 100%; object-fit: cover; display: block; }
+        .qbe .propiaLista img, .qbe .propiaLista video { width: 100%; height: 100%; object-fit: cover; display: block; background: #000; }
         .qbe .propiaLista .quitar { position: absolute; top: 8px; right: 8px; background: rgba(0,0,0,.55); color: #fff; border: none; border-radius: 999px; width: 26px; height: 26px; font-size: 13px; }
+        .qbe .propiaLista .aviso { position: absolute; bottom: 0; left: 0; right: 0; background: rgba(0,0,0,.65); color: #fff; font-size: 11px; padding: 6px 8px; text-align: center; line-height: 1.3; }
         .qbe .revision { padding: 10px 12px; border-bottom: 1px solid #EFEFF3; font-size: 12.5px; }
         .qbe .revision .estado { color: var(--soft); }
         .qbe .revision .estado.ok { color: #0B7A5C; font-weight: 800; }
@@ -606,7 +659,7 @@ export default function ElegirEstrategia({ estrategias, objetivo, esAdmin, pagin
                     }}
                     style={{ flex: 1, display: "flex", alignItems: "center", justifyContent: "center", gap: 6, border: "1.5px solid #6C5CE7", color: "#6C5CE7", background: "#fff", borderRadius: 10, minHeight: 38, fontWeight: 700, fontSize: 12.5 }}
                   >
-                    <Upload size={14} /> Subir una imagen
+                    <Upload size={14} /> Subir foto o video
                   </button>
                   <button
                     type="button"
@@ -625,7 +678,7 @@ export default function ElegirEstrategia({ estrategias, objetivo, esAdmin, pagin
               <input
                 ref={(el) => { inputsRef.current[clave] = el; }}
                 type="file"
-                accept="image/jpeg,image/png,image/webp"
+                accept="image/jpeg,image/png,image/webp,video/mp4,video/quicktime"
                 style={{ display: "none" }}
                 onChange={(e) => {
                   const file = e.target.files?.[0];
@@ -667,7 +720,11 @@ export default function ElegirEstrategia({ estrategias, objetivo, esAdmin, pagin
                   );
                 })() : tipoActual === "subida" && imagenPropia ? (
                   <div className="propiaLista">
-                    <img src={imagenPropia.url_imagen} alt="" />
+                    {imagenPropia.tipo === "video" ? (
+                      <video src={imagenPropia.url_video} poster={imagenPropia.url_imagen} controls muted playsInline />
+                    ) : (
+                      <img src={imagenPropia.url_imagen} alt="" />
+                    )}
                     <button
                       className="quitar"
                       title="Quitar"
@@ -679,6 +736,7 @@ export default function ElegirEstrategia({ estrategias, objetivo, esAdmin, pagin
                     >
                       ✕
                     </button>
+                    {imagenPropia.tipo === "video" && avisosSubida[clave] && <div className="aviso">{avisosSubida[clave]}</div>}
                   </div>
                 ) : tipoActual === "subida" && subiendoClave === clave ? (
                   <div className="sinboceto">
@@ -687,9 +745,9 @@ export default function ElegirEstrategia({ estrategias, objetivo, esAdmin, pagin
                 ) : tipoActual === "subida" ? (
                   <div className="subir">
                     <div className="ic"><Upload size={20} /></div>
-                    <b>Usa tu propia imagen</b>
-                    <p>JPG, PNG o WebP, mínimo 600×600px. Los textos del anuncio se mantienen.</p>
-                    <button className="btn" type="button" onClick={() => inputsRef.current[clave]?.click()}>Elegir imagen</button>
+                    <b>Usa tu propia foto o video</b>
+                    <p>JPG, PNG o WebP (mínimo 600×600px), o MP4/MOV de 3 a 60 segundos y máximo 100MB. Los textos del anuncio se mantienen.</p>
+                    <button className="btn" type="button" onClick={() => inputsRef.current[clave]?.click()}>Elegir archivo</button>
                     {erroresSubida[clave] ? <span className="err">{erroresSubida[clave]}</span> : <span className="costo">No gasta generación de IA</span>}
                   </div>
                 ) : concepto ? (
@@ -829,7 +887,7 @@ export default function ElegirEstrategia({ estrategias, objetivo, esAdmin, pagin
                 }}
                 style={{ border: "1.5px solid #6C5CE7", color: "#6C5CE7", background: "#fff", borderRadius: 10, minHeight: 38, padding: "0 16px", fontWeight: 700, fontSize: 12.5 }}
               >
-                Subir una imagen
+                Subir foto o video
               </button>
             </div>
           </div>
