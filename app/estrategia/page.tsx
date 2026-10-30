@@ -994,7 +994,10 @@ function CarruselObjetivos({
       <div className="qbo-tabs" role="tablist" aria-label="Grupos de objetivos">
         {grupos.map((g) => (
           <button key={g.id} type="button" className="qbo-tab" role="tab" aria-selected={grupoActivo === g.id} onClick={() => irAGrupo(g.id)}>
-            {g.label} <span className="n">{g.count}</span>
+            {/* count puede ser 0 solo en "otras" (la tarjeta de ayuda la
+                mantiene visible aunque "Clics al enlace" esté desactivado)
+                -- un "(0)" ahí se ve a medio hacer, mejor sin número. */}
+            {g.label} {g.count > 0 && <span className="n">{g.count}</span>}
           </button>
         ))}
       </div>
