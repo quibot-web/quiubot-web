@@ -64,6 +64,7 @@ const GRUPOS_OBJETIVO: Record<string, { id: string; label: string }> = {
   trafico_mensajes: { id: "otras", label: "Más opciones" },
 };
 const ORDEN_GRUPOS = ["clientes", "marca", "otras"];
+const ORDEN_PLANES = ["arranque", "crecimiento", "escala"];
 
 // Tema visual por objetivo -- color de acento + set de iconos tematicos
 // que se dispersan de fondo cuando el usuario selecciona esa tarjeta
@@ -835,6 +836,255 @@ function TarjetaObjetivo({
   );
 }
 
+// Carrusel del paso 3 -- ver docs/diseno/objetivos_carrusel.html para la
+// referencia visual e interactiva (mismo comportamiento, portado a React
+// con refs + estado en vez del scroll/IntersectionObserver manual del
+// mockup). Calcula acá mismo las pestañas/tarjetas visibles a partir de
+// objetivosActivos, para que EstrategiaContent no tenga que hacerlo.
+function CarruselObjetivos({
+  objetivoSeleccionadoId,
+  objetivosActivos,
+  planUsuario,
+  planMinimoPorId,
+  esAdminObjetivos,
+  objetivoIdsConMetaActiva,
+  onSelect,
+  onBloqueadoPorPlan,
+}: {
+  objetivoSeleccionadoId: string | null;
+  objetivosActivos: string[];
+  planUsuario: string;
+  planMinimoPorId: Record<string, string>;
+  esAdminObjetivos: boolean | null;
+  objetivoIdsConMetaActiva: string[];
+  onSelect: (opt: (typeof OBJETIVOS)[number]) => void;
+  onBloqueadoPorPlan: () => void;
+}) {
+  const pistaRef = useRef<HTMLDivElement>(null);
+  const primeraTarjetaRefs = useRef<Record<string, HTMLDivElement | null>>({});
+  const [grupoActivo, setGrupoActivo] = useState(ORDEN_GRUPOS[0]);
+  const [puedeIzq, setPuedeIzq] = useState(false);
+  const [puedeDer, setPuedeDer] = useState(true);
+
+  const entradas = OBJETIVOS.map((opt) => {
+    const estaActivo = objetivosActivos.includes(opt.id);
+    const planRequerido = planMinimoPorId[opt.id] || "arranque";
+    const planAlcanza = ORDEN_PLANES.indexOf(planUsuario) >= ORDEN_PLANES.indexOf(planRequerido);
+    const soloVisualParaAdmin = !!esAdminObjetivos && !estaActivo;
+    const bloqueadoPorPlan = estaActivo && !planAlcanza && !esAdminObjetivos;
+    const clicable = (estaActivo && planAlcanza) || !!esAdminObjetivos;
+    const grisDelTodo = !estaActivo || bloqueadoPorPlan;
+    let etiqueta: string | null = null;
+    if (!estaActivo) etiqueta = soloVisualParaAdmin ? "Solo tú lo ves" : "Próximamente";
+    else if (bloqueadoPorPlan) etiqueta = `Plan ${nombreVisiblePlan(planRequerido as PlanId)}`;
+    return { opt, estaActivo, soloVisualParaAdmin, bloqueadoPorPlan, clicable, grisDelTodo, etiqueta };
+  });
+
+  // Un objetivo desactivado no aparece para usuarios normales (se filtra
+  // del todo); un admin lo sigue viendo gris con "Solo tú lo ves", para
+  // poder probarlo antes de activarlo en /admin/objetivos.
+  const visibleParaUsuario = (e: (typeof entradas)[number]) => e.estaActivo || !!esAdminObjetivos;
+
+  const grupos = ORDEN_GRUPOS.map((gid) => {
+    const entradasDelGrupo = entradas.filter((e) => GRUPOS_OBJETIVO[e.opt.id]?.id === gid && visibleParaUsuario(e));
+    const activosDelGrupo = entradas.filter((e) => GRUPOS_OBJETIVO[e.opt.id]?.id === gid && e.estaActivo).length;
+    const label = Object.values(GRUPOS_OBJETIVO).find((g) => g.id === gid)?.label || gid;
+    // "otras" nunca se oculta: siempre tiene la tarjeta de ayuda, aunque
+    // trafico_mensajes esté desactivado.
+    const visible = gid === "otras" || entradasDelGrupo.length > 0;
+    return { id: gid, label, count: activosDelGrupo, entradas: entradasDelGrupo, visible };
+  }).filter((g) => g.visible);
+
+  function primeraTarjetaDe(gid: string): HTMLDivElement | null {
+    return primeraTarjetaRefs.current[gid] || null;
+  }
+
+  function actualizar() {
+    const pista = pistaRef.current;
+    if (!pista) return;
+    const margen = 24;
+    let actual = grupos[0]?.id;
+    for (const g of grupos) {
+      const el = primeraTarjetaDe(g.id);
+      if (el && el.offsetLeft <= pista.scrollLeft + margen) actual = g.id;
+    }
+    if (actual) setGrupoActivo(actual);
+    setPuedeIzq(pista.scrollLeft > 4);
+    setPuedeDer(pista.scrollLeft < pista.scrollWidth - pista.clientWidth - 4);
+  }
+
+  useEffect(() => {
+    const pista = pistaRef.current;
+    if (!pista) return;
+
+    // Abre en el grupo de la primera meta activa que matchee algún
+    // objetivo visible; si no hay ninguna, se queda en el primer grupo.
+    const grupoInicial = grupos.find((g) => g.entradas.some((e) => objetivoIdsConMetaActiva.includes(e.opt.id)))?.id;
+    if (grupoInicial) {
+      const el = primeraTarjetaDe(grupoInicial);
+      if (el) pista.scrollLeft = el.offsetLeft;
+    }
+    actualizar();
+
+    pista.addEventListener("scroll", actualizar, { passive: true });
+    window.addEventListener("resize", actualizar);
+    return () => {
+      pista.removeEventListener("scroll", actualizar);
+      window.removeEventListener("resize", actualizar);
+    };
+    // Solo al montar (y si cambia la lista de grupos visibles) -- no se
+    // quiere reabrir en el grupo de la meta activa cada vez que el
+    // usuario ya movió el scroll por su cuenta.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [grupos.length]);
+
+  function irAGrupo(gid: string) {
+    const pista = pistaRef.current;
+    const el = primeraTarjetaDe(gid);
+    if (pista && el) pista.scrollTo({ left: el.offsetLeft, behavior: "smooth" });
+  }
+
+  function desplazarUnaTarjeta(dir: 1 | -1) {
+    const pista = pistaRef.current;
+    const tarjeta = pista?.querySelector(".qbo-tarjeta");
+    if (!pista || !tarjeta) return;
+    const ancho = tarjeta.getBoundingClientRect().width + 16;
+    pista.scrollBy({ left: dir * ancho, behavior: "smooth" });
+  }
+
+  return (
+    <div className="qbo">
+      <style>{`
+        .qbo-tabs { display: flex; gap: 8px; margin-bottom: 14px; overflow-x: auto; padding-bottom: 2px; }
+        .qbo-tabs::-webkit-scrollbar { display: none; }
+        .qbo-tab { flex: none; display: flex; align-items: center; gap: 7px; background: #fff; border: 1.5px solid #e8e8e6; border-radius: 999px; padding: 10px 16px; font-weight: 700; font-size: 13.5px; color: #666; transition: border-color .15s, color .15s, background .15s; }
+        .qbo-tab[aria-selected="true"] { border-color: #534AB7; color: #534AB7; background: #F3F2FE; }
+        .qbo-tab .n { background: #ECEAF6; color: #666; border-radius: 999px; padding: 1px 7px; font-size: 11.5px; font-weight: 800; }
+        .qbo-tab[aria-selected="true"] .n { background: #534AB7; color: #fff; }
+
+        .qbo-flecha-zona { position: relative; }
+        .qbo-pista-wrap { position: relative; }
+        .qbo-pista-wrap::after { content: ""; position: absolute; top: 0; right: 0; bottom: 14px; width: 64px; background: linear-gradient(90deg, rgba(255,255,255,0), #f9f9f8); pointer-events: none; transition: opacity .2s; }
+        .qbo-pista-wrap.al-final::after { opacity: 0; }
+        .qbo-pista { display: flex; gap: 16px; overflow-x: auto; scroll-snap-type: x mandatory; scroll-behavior: smooth; padding: 4px 2px 18px; -ms-overflow-style: none; scrollbar-width: none; }
+        .qbo-pista::-webkit-scrollbar { display: none; }
+        .qbo-tarjeta, .qbo-ayuda-wrap { flex: none; scroll-snap-align: start; width: calc((100% - 3 * 16px) / 4 * 0.92); min-width: 200px; }
+        .qbo-ayuda { width: 100%; height: 100%; padding: 1.5rem; border-radius: 16px; border: 1.5px dashed #C9C2F5; background: #F8F7FE; text-align: center; cursor: pointer; font: inherit; }
+        .qbo-ayuda .icono { width: 54px; height: 54px; border-radius: 50%; margin: 0 auto 10px; background: #fff; display: flex; align-items: center; justify-content: center; font-size: 26px; }
+        .qbo-ayuda .label { font-weight: 700; margin-bottom: 6px; color: #1a1a1a; }
+        .qbo-ayuda .desc { font-size: 12.5px; color: #666; }
+
+        .qbo-flecha { position: absolute; top: 50%; transform: translateY(-50%); z-index: 2; width: 40px; height: 40px; border-radius: 50%; background: #fff; border: 1px solid #e8e8e6; box-shadow: 0 6px 18px -8px rgba(22,20,42,.3); display: flex; align-items: center; justify-content: center; color: #1a1a1a; transition: opacity .15s; }
+        .qbo-flecha.izq { left: -14px; }
+        .qbo-flecha.der { right: -14px; }
+        .qbo-flecha[disabled] { opacity: 0; pointer-events: none; }
+
+        .qbo-pie { display: flex; flex-direction: column; align-items: center; gap: 8px; margin-top: 4px; }
+        .qbo-puntos { display: flex; gap: 6px; }
+        .qbo-punto { width: 7px; height: 7px; border-radius: 50%; background: #DCD8EE; }
+        .qbo-punto[aria-current="true"] { background: #534AB7; width: 20px; border-radius: 4px; transition: width .2s; }
+        .qbo-hint { font-size: 12.5px; color: #8A86A3; font-weight: 600; }
+
+        @media (max-width: 760px) {
+          .qbo-tarjeta, .qbo-ayuda-wrap { width: 68%; min-width: 0; }
+          .qbo-flecha { display: none; }
+        }
+      `}</style>
+
+      <div className="qbo-tabs" role="tablist" aria-label="Grupos de objetivos">
+        {grupos.map((g) => (
+          <button key={g.id} type="button" className="qbo-tab" role="tab" aria-selected={grupoActivo === g.id} onClick={() => irAGrupo(g.id)}>
+            {g.label} <span className="n">{g.count}</span>
+          </button>
+        ))}
+      </div>
+
+      <div className="qbo-flecha-zona">
+        <button type="button" className="qbo-flecha izq" aria-label="Ver objetivos anteriores" disabled={!puedeIzq} onClick={() => desplazarUnaTarjeta(-1)}>
+          <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.4" strokeLinecap="round" aria-hidden="true"><path d="M15 18l-6-6 6-6" /></svg>
+        </button>
+        <button type="button" className="qbo-flecha der" aria-label="Ver más objetivos" disabled={!puedeDer} onClick={() => desplazarUnaTarjeta(1)}>
+          <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.4" strokeLinecap="round" aria-hidden="true"><path d="M9 18l6-6-6-6" /></svg>
+        </button>
+
+        <div className={`qbo-pista-wrap${!puedeDer ? " al-final" : ""}`}>
+          <div
+            className="qbo-pista"
+            ref={pistaRef}
+            role="list"
+            aria-label="Objetivos publicitarios"
+            tabIndex={0}
+            onKeyDown={(e) => {
+              if (e.key === "ArrowRight") { desplazarUnaTarjeta(1); e.preventDefault(); }
+              if (e.key === "ArrowLeft") { desplazarUnaTarjeta(-1); e.preventDefault(); }
+            }}
+          >
+            {grupos.map((g) =>
+              g.entradas.map((e, i) => (
+                <div
+                  key={e.opt.id}
+                  className="qbo-tarjeta"
+                  role="listitem"
+                  ref={i === 0 ? (el) => { primeraTarjetaRefs.current[g.id] = el; } : undefined}
+                >
+                  <TarjetaObjetivo
+                    opt={e.opt}
+                    seleccionado={objetivoSeleccionadoId === e.opt.id}
+                    clicable={e.clicable}
+                    grisDelTodo={e.grisDelTodo}
+                    bloqueadoPorPlan={e.bloqueadoPorPlan}
+                    etiqueta={e.etiqueta}
+                    soloVisualParaAdmin={e.soloVisualParaAdmin}
+                    metaActiva={objetivoIdsConMetaActiva.includes(e.opt.id)}
+                    onSelect={() => {
+                      if (e.clicable) onSelect(e.opt);
+                      else if (e.bloqueadoPorPlan) onBloqueadoPorPlan();
+                    }}
+                  />
+                </div>
+              ))
+            )}
+            {grupos.some((g) => g.id === "otras") && (
+              <div
+                className="qbo-ayuda-wrap"
+                role="listitem"
+                // Si "otras" no tiene ningún objetivo real visible (ej.
+                // trafico_mensajes desactivado), la tarjeta de ayuda es la
+                // única cosa del grupo -- tiene que poder servir de ancla
+                // para la pestaña/el scroll inicial, o irAGrupo("otras")
+                // no tendría a dónde ir.
+                ref={(el) => {
+                  const otras = grupos.find((g) => g.id === "otras");
+                  if (otras && otras.entradas.length === 0) primeraTarjetaRefs.current["otras"] = el;
+                }}
+              >
+                <button
+                  type="button"
+                  className="qbo-ayuda"
+                  onClick={() => window.dispatchEvent(new CustomEvent("quiubot:abrir-asistente"))}
+                >
+                  <div className="icono">🤔</div>
+                  <div className="label">¿No sabes cuál elegir?</div>
+                  <div className="desc">Cuéntale al Director qué necesitas y te recomienda uno.</div>
+                </button>
+              </div>
+            )}
+          </div>
+        </div>
+      </div>
+
+      <div className="qbo-pie">
+        <div className="qbo-puntos" aria-hidden="true">
+          {grupos.map((g) => (
+            <span key={g.id} className="qbo-punto" aria-current={grupoActivo === g.id} />
+          ))}
+        </div>
+        <div className="qbo-hint">{puedeDer ? "Desliza para ver más objetivos →" : "Viste todos los objetivos"}</div>
+      </div>
+    </div>
+  );
+}
+
 function EstrategiaContent() {
   const router = useRouter();
   const searchParams = useSearchParams();
@@ -992,6 +1242,16 @@ function EstrategiaContent() {
   const [esAdminObjetivos, setEsAdminObjetivos] = useState<boolean | null>(null);
   const [planUsuario, setPlanUsuario] = useState<string>("arranque");
   const [planMinimoPorId, setPlanMinimoPorId] = useState<Record<string, string>>({});
+  // Ids de objetivo con una meta de Autopiloto activa (OBJETIVO_ID_POR_TIPO
+  // de arriba) -- para el badge "Tu meta activa" del carrusel del paso 3 y
+  // para decidir en qué grupo abre.
+  const [objetivoIdsConMetaActiva, setObjetivoIdsConMetaActiva] = useState<string[]>([]);
+  // El carrusel decide en qué grupo abrir mirando objetivoIdsConMetaActiva
+  // una sola vez, al montarse -- si se montara antes de que esta consulta
+  // termine, se quedaría abierto en el primer grupo aunque sí hubiera una
+  // meta activa. Por eso el carrusel espera a los dos fetches, no solo a
+  // objetivosActivos.
+  const [metasParaCarruselListas, setMetasParaCarruselListas] = useState(false);
   const [tutorialListo, setTutorialListo] = useState(false);
 
   // Se pone en true apenas se restaura (o se confirma que NO hay nada que
@@ -1645,6 +1905,20 @@ function EstrategiaContent() {
         setPlanMinimoPorId(data.planMinimoPorId || {});
       })
       .catch(() => setObjetivosActivos([]));
+
+    // Autopiloto es opcional (no todos los planes lo tienen) -- un 403 o
+    // cualquier error acá se trata igual que "sin metas activas", nunca
+    // bloquea el paso 3.
+    fetch("/api/metas")
+      .then((r) => (r.ok ? r.json() : { metas: [] }))
+      .then((data) => {
+        const ids = (data.metas ?? [])
+          .map((it: any) => OBJETIVO_ID_POR_TIPO[it.meta.tipo as TipoMeta])
+          .filter((id: string | undefined): id is string => !!id);
+        setObjetivoIdsConMetaActiva(ids);
+      })
+      .catch(() => {})
+      .finally(() => setMetasParaCarruselListas(true));
   }, []);
 
   // Video es admin-only (ver plan "Video como Próximamente"). Si el rol ya
@@ -3011,41 +3285,20 @@ function EstrategiaContent() {
         {step === "objetivo" && (
           <div style={{ display: "flex", flexDirection: "column", gap: "1.5rem" }}>
             <p style={{ fontSize: 15, fontWeight: 600, color: "#1a1a1a" }}>3. Selecciona tu objetivo publicitario</p>
-            {objetivosActivos === null && <p style={{ fontSize: 13, color: "#999" }}>Cargando objetivos disponibles...</p>}
-            {objetivosActivos !== null && (
-              <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(180px, 1fr))", gap: "1rem" }}>
-                {OBJETIVOS.map((opt) => {
-                  const estaActivo = objetivosActivos.includes(opt.id);
-                  const planRequerido = planMinimoPorId[opt.id] || "arranque";
-                  const ORDEN_PLANES = ["arranque", "crecimiento", "escala"];
-                  const planAlcanza = ORDEN_PLANES.indexOf(planUsuario) >= ORDEN_PLANES.indexOf(planRequerido);
-                  const soloVisualParaAdmin = !!esAdminObjetivos && !estaActivo;
-                  const bloqueadoPorPlan = estaActivo && !planAlcanza && !esAdminObjetivos;
-                  const clicable = (estaActivo && planAlcanza) || !!esAdminObjetivos;
-                  const grisDelTodo = !estaActivo || bloqueadoPorPlan;
-
-                  let etiqueta: string | null = null;
-                  if (!estaActivo) etiqueta = soloVisualParaAdmin ? "Solo tú lo ves" : "Próximamente";
-                  else if (bloqueadoPorPlan) etiqueta = `Plan ${nombreVisiblePlan(planRequerido as PlanId)}`;
-
-                  return (
-                    <TarjetaObjetivo
-                      key={opt.id}
-                      opt={opt}
-                      seleccionado={objetivo?.id === opt.id}
-                      clicable={clicable}
-                      grisDelTodo={grisDelTodo}
-                      bloqueadoPorPlan={bloqueadoPorPlan}
-                      etiqueta={etiqueta}
-                      soloVisualParaAdmin={soloVisualParaAdmin}
-                      onSelect={() => {
-                        if (clicable) setObjetivo(opt);
-                        else if (bloqueadoPorPlan) router.push("/pricing");
-                      }}
-                    />
-                  );
-                })}
-              </div>
+            {(objetivosActivos === null || !metasParaCarruselListas) && (
+              <p style={{ fontSize: 13, color: "#999" }}>Cargando objetivos disponibles...</p>
+            )}
+            {objetivosActivos !== null && metasParaCarruselListas && (
+              <CarruselObjetivos
+                objetivoSeleccionadoId={objetivo?.id ?? null}
+                objetivosActivos={objetivosActivos}
+                planUsuario={planUsuario}
+                planMinimoPorId={planMinimoPorId}
+                esAdminObjetivos={esAdminObjetivos}
+                objetivoIdsConMetaActiva={objetivoIdsConMetaActiva}
+                onSelect={(opt) => setObjetivo(opt)}
+                onBloqueadoPorPlan={() => router.push("/pricing")}
+              />
             )}
             {objetivo?.id === "venta_directa_whatsapp" && (
               <div style={{ padding: "10px 14px", background: "#fef3c7", borderRadius: 10, fontSize: 13, color: "#92400e" }}>
