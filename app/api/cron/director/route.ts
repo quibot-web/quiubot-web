@@ -561,15 +561,22 @@ async function revisarMeta(meta: Meta, simular: boolean) {
       }
     }
 
-    const regla1Aplica = campanasActivas.length > 1 && (sinResultadosAplica || roasBajoAplica);
+    // seguidores_instagram nunca pausa por esta regla: conversionesCampana
+    // es el avance de TODA la meta (no hay forma de atribuir seguidores
+    // ganados a una campaña puntual), así que "pausar esta campaña por
+    // no tener resultados" sería pausar una al azar sin evidencia real
+    // contra ESA campaña en particular.
+    const regla1Aplica = meta.tipo !== "seguidores_instagram" && campanasActivas.length > 1 && (sinResultadosAplica || roasBajoAplica);
     const regla1Condicion =
-      campanasActivas.length <= 1
-        ? "no se evalúa: es la única campaña activa de la meta"
-        : `${
-            conversionesCampana > 0
-              ? `resultados ${conversionesCampana} > 0: no cumple "sin resultados"`
-              : `gasto $${Math.round(gastoCampana)} ${gastoCampana >= umbralGastoSinResultados ? "≥" : "<"} 2× objetivo ($${Math.round(umbralGastoSinResultados)}): ${sinResultadosAplica ? "cumple" : "no cumple"}`
-          }${roasBajoDetalle}`;
+      meta.tipo === "seguidores_instagram"
+        ? "no se evalúa: no hay forma de atribuir seguidores ganados a una campaña puntual"
+        : campanasActivas.length <= 1
+          ? "no se evalúa: es la única campaña activa de la meta"
+          : `${
+              conversionesCampana > 0
+                ? `resultados ${conversionesCampana} > 0: no cumple "sin resultados"`
+                : `gasto $${Math.round(gastoCampana)} ${gastoCampana >= umbralGastoSinResultados ? "≥" : "<"} 2× objetivo ($${Math.round(umbralGastoSinResultados)}): ${sinResultadosAplica ? "cumple" : "no cumple"}`
+            }${roasBajoDetalle}`;
 
     // 2) Funciona y la meta va atrasada -> subir presupuesto 20%. Para
     //    ventas_web, "funciona" también cuenta si el retorno de toda
@@ -625,7 +632,7 @@ async function revisarMeta(meta: Meta, simular: boolean) {
     // 3) Se está cansando -> refrescar creativos. Compara los primeros 3
     // días con datos contra los últimos 3 días con datos dentro de la
     // ventana de la meta (necesita al menos 6 días para no solaparse).
-    let motivoCansancio: "costo" | "frecuencia" | "ambos" | null = null;
+    let motivoCansancio: "costo" | "frecuencia" | "ambos" | "costo_seguidores" | null = null;
     let regla3Condicion: string;
     if (snapshotsCampana.length >= 6) {
       const primeros = snapshotsCampana.slice(0, 3);
@@ -653,6 +660,18 @@ async function revisarMeta(meta: Meta, simular: boolean) {
       regla3Condicion = `${costoTexto}; ${frecuenciaTexto}`;
     } else {
       regla3Condicion = `no evaluable: hacen falta 6 días con datos (hay ${snapshotsCampana.length})`;
+    }
+
+    // seguidores_instagram no tiene, por su propia cuenta, una forma de
+    // detectar "subió el costo" (sus snapshots de campaña siempre dan 0
+    // conversiones) -- en su lugar, si el costo por seguidor de TODA la
+    // meta ya es malo (el mismo costoCampana meta-level de la regla 2),
+    // se propone refrescar creativos en vez de no proponer nada. No se
+    // pisa un motivoCansancio que ya aplicó por su propio criterio
+    // (frecuencia alta, por ejemplo).
+    if (meta.tipo === "seguidores_instagram" && !motivoCansancio && costoCampana != null && !costoOk) {
+      motivoCansancio = "costo_seguidores";
+      regla3Condicion = `costo por seguidor de la meta $${Math.round(costoCampana)} > 80% de $${Math.round(meta.costo_objetivo_cop)}: cumple`;
     }
 
     if (regla1Aplica || regla2Aplica) pausarOAjustarAplicoEstaCorrida = true;
@@ -755,6 +774,14 @@ async function revisarMeta(meta: Meta, simular: boolean) {
     );
     if (resultado.propuso && !simular) propuestasCreadasEnEstaCorrida++;
     evaluaciones.push({ regla: "ninguna_campana_con_gasto_reciente", propuso: resultado.propuso, propuesta: resultado.propuesta });
+  } else if (meta.tipo === "seguidores_instagram") {
+    // seguidores_instagram nunca abre un segundo frente mientras tenga
+    // una campaña activa -- con un solo perfil y una sola foto de
+    // seguidores no hay forma de saber si una campaña paralela de
+    // verdad ayudaría o solo duplicaría gasto sobre el mismo resultado
+    // que ya se está midiendo. Si el costo está mal, la regla de arriba
+    // ya propuso refrescar creativos en su lugar.
+    evaluaciones.push({ regla: "abrir_otro_frente", aplico: false, condicion: "no aplica a seguidores_instagram mientras tenga una campaña activa" });
   } else if (!pausarOAjustarAplicoEstaCorrida) {
     // 4) "Abrir otro frente": la meta va atrasada, nadie necesitó
     // pausar ni subir presupuesto esta corrida (prioridad frente a

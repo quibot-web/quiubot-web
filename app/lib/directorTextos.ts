@@ -112,13 +112,15 @@ export function textoAbrirOtroFrente(datos: {
   };
 }
 
-export function textoCrearCreativos(datos: { nombreCampana: string; motivo: "costo" | "frecuencia" | "ambos" }): TextoPropuesta {
+export function textoCrearCreativos(datos: { nombreCampana: string; motivo: "costo" | "frecuencia" | "ambos" | "costo_seguidores" }): TextoPropuesta {
   const detalleMotivo =
     datos.motivo === "ambos"
       ? "el costo por resultado subió y la frecuencia con la que la misma persona ve el anuncio ya es alta"
       : datos.motivo === "frecuencia"
         ? "la frecuencia con la que la misma persona ve el anuncio ya es alta"
-        : "el costo por resultado de los últimos días subió bastante respecto a los primeros días";
+        : datos.motivo === "costo_seguidores"
+          ? "el costo por seguidor de la meta ya es más alto de lo que buscas"
+          : "el costo por resultado de los últimos días subió bastante respecto a los primeros días";
 
   return {
     titulo: `Refrescar los creativos de "${datos.nombreCampana}"`,
