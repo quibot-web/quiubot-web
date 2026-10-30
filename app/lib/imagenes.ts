@@ -115,3 +115,53 @@ export async function validarImagenPropia(file: File): Promise<{ ok: true; base6
     return { ok: false, error: "No se pudo procesar esa imagen." };
   }
 }
+
+// Mismo lugar que validarImagenPropia ("Subir el mío" en /estrategia),
+// pero para video: MP4/MOV nada más (lo que Meta recomienda), de 3 a 60
+// segundos y hasta 100MB -- no hay compresión posible del lado del
+// cliente como con imágenes, así que el archivo se sube tal cual (ver
+// /api/estrategia/subir-video-anuncio). El aspecto no bloquea: solo se
+// avisa si no es vertical/cuadrado, porque igual se puede publicar.
+const TIPOS_PERMITIDOS_VIDEO = ["video/mp4", "video/quicktime"];
+const DURACION_MIN_VIDEO_SEG = 3;
+const DURACION_MAX_VIDEO_SEG = 60;
+const PESO_MAXIMO_VIDEO = 100 * 1024 * 1024; // 100MB
+
+export async function validarVideoPropio(file: File): Promise<{ ok: true; aviso?: string } | { ok: false; error: string }> {
+  if (!TIPOS_PERMITIDOS_VIDEO.includes(file.type)) {
+    return { ok: false, error: "Solo se aceptan videos MP4 o MOV." };
+  }
+  if (file.size > PESO_MAXIMO_VIDEO) {
+    return { ok: false, error: "El video pesa demasiado (máximo 100MB)." };
+  }
+
+  const metadata = await new Promise<{ duracion: number; ancho: number; alto: number } | null>((resolve) => {
+    const video = document.createElement("video");
+    const url = URL.createObjectURL(file);
+    video.preload = "metadata";
+    video.onloadedmetadata = () => {
+      URL.revokeObjectURL(url);
+      resolve({ duracion: video.duration, ancho: video.videoWidth, alto: video.videoHeight });
+    };
+    video.onerror = () => {
+      URL.revokeObjectURL(url);
+      resolve(null);
+    };
+    video.src = url;
+  });
+
+  if (!metadata) {
+    return { ok: false, error: "No se pudo leer ese video." };
+  }
+  if (metadata.duracion < DURACION_MIN_VIDEO_SEG || metadata.duracion > DURACION_MAX_VIDEO_SEG) {
+    return { ok: false, error: `El video debe durar entre ${DURACION_MIN_VIDEO_SEG} y ${DURACION_MAX_VIDEO_SEG} segundos.` };
+  }
+
+  const esVerticalOCuadrado = metadata.alto >= metadata.ancho;
+  return {
+    ok: true,
+    aviso: esVerticalOCuadrado
+      ? undefined
+      : "Tu video es horizontal. En Meta se ve mejor en formato vertical o cuadrado (9:16, 4:5 o 1:1).",
+  };
+}

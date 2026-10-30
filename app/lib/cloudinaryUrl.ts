@@ -30,3 +30,15 @@ export function extraerFramesVideo(url: string): string[] {
     conExtensionJpg.replace("/upload/", `/upload/${offset}/`)
   );
 }
+
+// Portada fija para un video subido en "Subir el mío" (ver
+// app/components/ElegirEstrategia.tsx) -- a diferencia de
+// extraerFramesVideo (3 frames por porcentaje, para mandarle un video
+// completo a un modelo de visión), esto es UNA sola miniatura en un
+// segundo absoluto (so_1, no so_1p) para usar como poster del <video> en
+// la tarjeta y como url_imagen del creativo. Mismo truco de inserción
+// después de "/upload/" + cambiar la extensión a .jpg.
+export function urlPortadaVideo(url: string): string {
+  const conExtensionJpg = url.replace(/\.[a-zA-Z0-9]+(\?.*)?$/, ".jpg$1");
+  return conExtensionJpg.replace("/upload/", "/upload/so_1/");
+}
