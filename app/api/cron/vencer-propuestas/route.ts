@@ -4,6 +4,12 @@ import { supabaseAdmin } from "@/lib/supabase";
 import { revisarGeneracionCreativos, procesarCreacionCreativos } from "@/app/lib/propuestas";
 import { cerrarMetasVencidas } from "@/app/lib/metas";
 import { TIMEOUT_PROCESANDO_MS } from "@/app/lib/estrategiasJobs";
+import {
+  TIPO_TRABAJO as TIPO_TRABAJO_PUBLICAR_ESTRATEGIA,
+  TIMEOUT_PROCESANDO_MS as TIMEOUT_PUBLICAR_ESTRATEGIA_MS,
+  MENSAJE_SIN_CONFIRMAR,
+  ACCION_ADS_MANAGER,
+} from "@/app/lib/publicarEstrategiaJobs";
 
 function compararSeguro(a: string, b: string): boolean {
   const bufA = Buffer.from(a);
@@ -70,6 +76,26 @@ export async function POST(req: NextRequest) {
     .in("tipo", ["agregar_anuncios", "adn_marca"])
     .lt("intento_desde", new Date(Date.now() - TIMEOUT_PROCESANDO_MS).toISOString())
     .select("id, tipo");
+
+  // Respaldo propio para publicar_estrategia -- 30 minutos, no los 10 de
+  // arriba (ver TIMEOUT_PROCESANDO_MS en app/lib/publicarEstrategiaJobs.ts):
+  // un video puede tardar hasta ~4 min en Meta, y necesita mucho más
+  // margen que cualquier otro webhook que esperamos hoy. Publicar crea
+  // campañas reales, así que nunca reintenta solo -- un trabajo vencido
+  // simplemente queda "fallida" con un mensaje que manda a revisar el
+  // Administrador de anuncios antes de volver a intentar, nunca "intenta
+  // de nuevo" a secas.
+  const { data: publicarEstrategiaVencidos } = await supabaseAdmin
+    .from("trabajos_ia")
+    .update({
+      estado: "fallida",
+      error: MENSAJE_SIN_CONFIRMAR,
+      resultado: { error_accion_texto: ACCION_ADS_MANAGER.texto, error_accion_url: ACCION_ADS_MANAGER.url },
+    })
+    .eq("tipo", TIPO_TRABAJO_PUBLICAR_ESTRATEGIA)
+    .in("estado", ["pendiente", "procesando"])
+    .lt("intento_desde", new Date(Date.now() - TIMEOUT_PUBLICAR_ESTRATEGIA_MS).toISOString())
+    .select("id");
 
   const idsAgregarAnunciosVencidos = (trabajosVencidos ?? []).filter((t) => t.tipo === "agregar_anuncios").map((t) => t.id);
   if (idsAgregarAnunciosVencidos.length > 0) {
@@ -151,6 +177,7 @@ export async function POST(req: NextRequest) {
     metas_cerradas: metasCerradas.length,
     estrategias_jobs_vencidos: estrategiasVencidas?.length ?? 0,
     trabajos_ia_vencidos: trabajosVencidos?.length ?? 0,
+    publicar_estrategia_vencidos: publicarEstrategiaVencidos?.length ?? 0,
     vencidas: vencidasPendiente?.length ?? 0,
     vencidas_esperando_fotos: vencidasEsperandoFotos?.length ?? 0,
     generando_revisadas: revisadas,
