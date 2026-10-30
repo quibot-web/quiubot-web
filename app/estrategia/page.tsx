@@ -704,10 +704,15 @@ function TarjetaObjetivo({
   const esLogoMarca = OBJETIVOS_CON_LOGO_MARCA.has(opt.id);
 
   return (
-    <div
+    <button
+      type="button"
       onClick={onSelect}
+      disabled={!clicable && !bloqueadoPorPlan}
+      aria-pressed={seleccionado}
       style={{
         position: "relative",
+        width: "100%",
+        height: "100%",
         padding: "1.5rem",
         borderRadius: 16,
         border: seleccionado ? `2px solid ${tema.color}` : "1px solid #e8e8e6",
@@ -720,6 +725,7 @@ function TarjetaObjetivo({
         transform: seleccionado ? "scale(1.015)" : "scale(1)",
         boxShadow: seleccionado ? `0 10px 26px -10px ${tema.color}88` : "none",
         transition: "border-color .18s ease, background-color .18s ease, transform .15s ease, box-shadow .2s ease, opacity .18s ease",
+        font: "inherit",
       }}
     >
       {/* Mosaico de iconos tematicos + marca de agua, solo visible cuando
@@ -825,7 +831,7 @@ function TarjetaObjetivo({
           <div style={{ fontSize: 11, color: tema.color, fontWeight: 600, marginTop: 8 }}>Mejorar plan →</div>
         )}
       </div>
-    </div>
+    </button>
   );
 }
 
