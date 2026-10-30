@@ -9,6 +9,7 @@ import TourGuiado from "@/app/components/TourGuiado";
 import ProgresoPasos from "@/app/components/ProgresoPasos";
 import EsperaCreativos from "@/app/components/EsperaCreativos";
 import CargandoQuiubot from "@/app/components/CargandoQuiubot";
+import LogoMarca from "@/app/components/LogoMarca";
 import { urlDescargaCloudinary, extraerFramesVideo } from "@/app/lib/cloudinaryUrl";
 import { comprimirSiHaceFalta, esArchivoDeImagen } from "@/app/lib/imagenes";
 import { nombreVisiblePlan, type PlanId } from "@/app/lib/planesConfig";
@@ -29,32 +30,40 @@ const OBJETIVO_ID_POR_TIPO: Record<TipoMeta, string> = {
   seguidores_instagram: "seguidores_instagram",
 };
 
-function IconoWhatsApp() {
-  return (
-    <svg width="32" height="32" viewBox="0 0 32 32" fill="none" style={{ display: "inline-block" }}>
-      <circle cx="16" cy="16" r="16" fill="#25D366" />
-      <path
-        fill="#fff"
-        d="M23.47 8.52A9.86 9.86 0 0 0 16.06 5.5c-5.46 0-9.9 4.44-9.9 9.9 0 1.75.46 3.45 1.33 4.95L6 25.5l5.28-1.39a9.9 9.9 0 0 0 4.78 1.22h.01c5.46 0 9.9-4.44 9.9-9.9a9.85 9.85 0 0 0-2.5-6.91zm-7.41 15.24h-.01a8.22 8.22 0 0 1-4.19-1.15l-.3-.18-3.13.82.84-3.05-.2-.31a8.23 8.23 0 0 1-1.26-4.39c0-4.55 3.7-8.25 8.26-8.25a8.2 8.2 0 0 1 5.84 2.42 8.2 8.2 0 0 1 2.42 5.84c0 4.56-3.71 8.25-8.27 8.25zm4.53-6.18c-.25-.12-1.47-.72-1.7-.81-.23-.08-.39-.12-.56.13-.17.25-.64.81-.78.97-.14.17-.29.19-.53.06-.25-.12-1.05-.39-2-1.23-.74-.66-1.24-1.47-1.39-1.72-.14-.25-.02-.38.11-.51.11-.11.25-.29.37-.43.12-.15.16-.25.25-.42.08-.17.04-.31-.02-.43-.06-.12-.56-1.35-.77-1.85-.2-.48-.41-.42-.56-.42-.14-.01-.31-.01-.48-.01-.17 0-.43.06-.66.31s-.87.85-.87 2.08.89 2.41 1.01 2.58c.13.17 1.75 2.67 4.24 3.74.59.26 1.05.41 1.41.52.59.19 1.13.16 1.56.1.48-.07 1.47-.6 1.67-1.18.21-.58.21-1.08.15-1.18-.06-.1-.23-.16-.48-.28z"
-      />
-    </svg>
-  );
-}
-
 const MIN_IMAGENES_PRODUCTO = 1;
 const MAX_IMAGENES_PRODUCTO = 3;
 
 const OBJETIVOS = [
   { id: "venta_directa_web", label: "Venta Directa", icon: "🛒", desc: "Ventas inmediatas en tu sitio web.", meta_objective: "OUTCOME_SALES", destino: "sitio_web" },
-  { id: "venta_directa_whatsapp", label: "Venta Directa (WhatsApp)", icon: <IconoWhatsApp />, desc: "Ventas por conversación directa en WhatsApp.", meta_objective: "OUTCOME_ENGAGEMENT", destino: "whatsapp" },
+  { id: "venta_directa_whatsapp", label: "Venta Directa (WhatsApp)", icon: <LogoMarca marca="whatsapp" nombre="WhatsApp" tamano={28} />, desc: "Ventas por conversación directa en WhatsApp.", meta_objective: "OUTCOME_ENGAGEMENT", destino: "whatsapp" },
   { id: "reconocimiento", label: "Reconocimiento", icon: "📢", desc: "Más personas conocerán tu marca.", meta_objective: "OUTCOME_AWARENESS", destino: "pagina" },
-  { id: "retargeting", label: "Retargeting", icon: "🔄", desc: "Impacta a quienes ya te conocen.", meta_objective: "OUTCOME_TRAFFIC", destino: "sitio_web" },
+  // "Retargeting" tal cual confunde a quien no conoce el término de
+  // ads -- el id interno no cambia (campanas_publicadas.objetivo_id,
+  // Director, etc. siguen viéndolo como "retargeting"), solo la
+  // etiqueta visible.
+  { id: "retargeting", label: "Volver a impactar", icon: "🔄", desc: "Impacta a quienes ya te conocen.", meta_objective: "OUTCOME_TRAFFIC", destino: "sitio_web" },
   { id: "leads", label: "Generación de Leads", icon: "🎯", desc: "Captura contactos interesados en tu producto.", meta_objective: "OUTCOME_LEADS", destino: "formulario" },
-  { id: "trafico_mensajes", label: "Tráfico", icon: "🌐", desc: "Lleva más visitas nuevas a tu sitio web.", meta_objective: "OUTCOME_TRAFFIC", destino: "sitio_web" },
+  { id: "trafico_mensajes", label: "Clics al enlace", icon: "🌐", desc: "Lleva más visitas nuevas a tu sitio web.", meta_objective: "OUTCOME_TRAFFIC", destino: "sitio_web" },
   { id: "visitas_web", label: "Visitas al sitio web", icon: "🖱️", desc: "Lleva visitas reales a tu página, medidas de verdad.", meta_objective: "OUTCOME_TRAFFIC", destino: "visitas_sitio" },
-  { id: "seguidores_facebook", label: "Seguidores de Facebook", icon: "👍", desc: "Haz crecer los seguidores de tu página.", meta_objective: "OUTCOME_ENGAGEMENT", destino: "pagina" },
-  { id: "seguidores_instagram", label: "Seguidores de Instagram", icon: "📸", desc: "Haz crecer los seguidores de tu perfil de Instagram.", meta_objective: "OUTCOME_TRAFFIC", destino: "perfil_instagram" },
+  { id: "seguidores_facebook", label: "Seguidores de Facebook", icon: <LogoMarca marca="facebook" nombre="Facebook" tamano={28} />, desc: "Haz crecer los seguidores de tu página.", meta_objective: "OUTCOME_ENGAGEMENT", destino: "pagina" },
+  { id: "seguidores_instagram", label: "Seguidores de Instagram", icon: <LogoMarca marca="instagram" nombre="Instagram" tamano={28} />, desc: "Haz crecer los seguidores de tu perfil de Instagram.", meta_objective: "OUTCOME_TRAFFIC", destino: "perfil_instagram" },
 ];
+
+// Grupos del carrusel del paso 3 (ver docs/diseno/objetivos_carrusel.html).
+// Orden de las claves = orden de las pestañas; dentro de cada grupo, el
+// orden es el orden de aparición en OBJETIVOS.
+const GRUPOS_OBJETIVO: Record<string, { id: string; label: string }> = {
+  venta_directa_whatsapp: { id: "clientes", label: "Conseguir clientes" },
+  venta_directa_web: { id: "clientes", label: "Conseguir clientes" },
+  leads: { id: "clientes", label: "Conseguir clientes" },
+  visitas_web: { id: "clientes", label: "Conseguir clientes" },
+  seguidores_instagram: { id: "marca", label: "Hacer crecer tu marca" },
+  seguidores_facebook: { id: "marca", label: "Hacer crecer tu marca" },
+  reconocimiento: { id: "marca", label: "Hacer crecer tu marca" },
+  retargeting: { id: "marca", label: "Hacer crecer tu marca" },
+  trafico_mensajes: { id: "otras", label: "Más opciones" },
+};
+const ORDEN_GRUPOS = ["clientes", "marca", "otras"];
 
 // Tema visual por objetivo -- color de acento + set de iconos tematicos
 // que se dispersan de fondo cuando el usuario selecciona esa tarjeta
@@ -664,6 +673,12 @@ function TarjetaTipoContenido({
 // por objetivo en vez de un solo color fijo. El icono principal (emoji o
 // el componente de WhatsApp) se mantiene igual que antes; la logica de
 // bloqueo por plan / "proximamente" tampoco cambia, solo la capa visual.
+// Objetivos cuyo ícono es un logo oficial de marca (ver LogoMarca) en vez
+// de un emoji genérico -- llevan el logo en sus colores reales sobre un
+// círculo claro, nunca invertido a blanco sobre el color sólido (evita
+// tener que pedirle a LogoMarca una variante blanca que hoy no existe).
+const OBJETIVOS_CON_LOGO_MARCA = new Set(["venta_directa_whatsapp", "seguidores_facebook", "seguidores_instagram"]);
+
 function TarjetaObjetivo({
   opt,
   seleccionado,
@@ -672,6 +687,7 @@ function TarjetaObjetivo({
   bloqueadoPorPlan,
   etiqueta,
   soloVisualParaAdmin,
+  metaActiva = false,
   onSelect,
 }: {
   opt: { id: string; label: string; icon: React.ReactNode; desc: string };
@@ -681,10 +697,11 @@ function TarjetaObjetivo({
   bloqueadoPorPlan: boolean;
   etiqueta: string | null;
   soloVisualParaAdmin: boolean;
+  metaActiva?: boolean;
   onSelect: () => void;
 }) {
   const tema = TEMA_OBJETIVO[opt.id] || { color: "#534AB7", colorClaro: "#F3F2FE", iconos: [ShoppingBag, Target, Sparkles, Check] };
-  const esWhatsapp = opt.id === "venta_directa_whatsapp";
+  const esLogoMarca = OBJETIVOS_CON_LOGO_MARCA.has(opt.id);
 
   return (
     <div
@@ -742,6 +759,25 @@ function TarjetaObjetivo({
           {etiqueta}
         </span>
       )}
+      {!etiqueta && metaActiva && (
+        <span
+          style={{
+            position: "absolute",
+            top: 8,
+            right: 8,
+            zIndex: 1,
+            background: "#E7F7F1",
+            color: "#0B7A5C",
+            fontSize: 10,
+            fontWeight: 700,
+            padding: "2px 8px",
+            borderRadius: 10,
+            whiteSpace: "nowrap",
+          }}
+        >
+          Tu meta activa
+        </span>
+      )}
 
       {/* Insignia de check, igual que en el Paso 1 -- aparece con resorte al seleccionar */}
       <div
@@ -766,27 +802,23 @@ function TarjetaObjetivo({
       </div>
 
       <div style={{ position: "relative", zIndex: 1 }}>
-        {esWhatsapp ? (
-          <div style={{ display: "flex", justifyContent: "center", marginBottom: 10 }}>{opt.icon}</div>
-        ) : (
-          <div
-            style={{
-              width: 54,
-              height: 54,
-              borderRadius: "50%",
-              margin: "0 auto 10px",
-              background: seleccionado ? tema.color : tema.colorClaro,
-              display: "flex",
-              alignItems: "center",
-              justifyContent: "center",
-              fontSize: 26,
-              boxShadow: seleccionado ? `0 6px 16px -5px ${tema.color}99` : "none",
-              transition: "background-color .18s ease",
-            }}
-          >
-            {opt.icon}
-          </div>
-        )}
+        <div
+          style={{
+            width: 54,
+            height: 54,
+            borderRadius: "50%",
+            margin: "0 auto 10px",
+            background: esLogoMarca ? tema.colorClaro : seleccionado ? tema.color : tema.colorClaro,
+            display: "flex",
+            alignItems: "center",
+            justifyContent: "center",
+            fontSize: 26,
+            boxShadow: seleccionado ? `0 6px 16px -5px ${tema.color}99` : "none",
+            transition: "background-color .18s ease",
+          }}
+        >
+          {opt.icon}
+        </div>
         <div style={{ fontWeight: 600, marginBottom: 8, color: seleccionado ? tema.color : "#1a1a1a", transition: "color .18s ease" }}>{opt.label}</div>
         <div style={{ fontSize: 12, color: "#666" }}>{opt.desc}</div>
         {bloqueadoPorPlan && (
