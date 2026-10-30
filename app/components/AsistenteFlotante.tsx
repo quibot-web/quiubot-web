@@ -43,6 +43,16 @@ export default function AsistenteFlotante() {
     finRef.current?.scrollIntoView({ behavior: "smooth" })
   }, [mensajes, abierto])
 
+  // Otras partes de la app (ej. la tarjeta "¿No sabes cuál elegir?" del
+  // carrusel de objetivos en /estrategia) necesitan abrir este chat sin
+  // tener acceso directo a su estado -- un evento global es más simple
+  // que subir "abierto" a un contexto solo para este único caso.
+  useEffect(() => {
+    const abrir = () => setAbierto(true)
+    window.addEventListener("quiubot:abrir-asistente", abrir)
+    return () => window.removeEventListener("quiubot:abrir-asistente", abrir)
+  }, [])
+
   async function enviar() {
     const contenido = texto.trim()
     if (!contenido || enviando) return
