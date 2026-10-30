@@ -7,4 +7,5 @@ export const OBJETIVOS_INFO = [
   { id: "trafico_mensajes", label: "Tráfico / Mensajes", desc: "Lleva visitas a tu web o inicia conversaciones." },
   { id: "visitas_web", label: "Visitas al sitio web", desc: "Lleva visitas reales a tu página." },
   { id: "seguidores_facebook", label: "Seguidores de Facebook", desc: "Haz crecer los seguidores de tu página." },
+  { id: "seguidores_instagram", label: "Seguidores de Instagram", desc: "Haz crecer los seguidores de tu perfil de Instagram." },
 ];

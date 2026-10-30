@@ -53,6 +53,7 @@ const OBJETIVOS = [
   { id: "trafico_mensajes", label: "Tráfico", icon: "🌐", desc: "Lleva más visitas nuevas a tu sitio web.", meta_objective: "OUTCOME_TRAFFIC", destino: "sitio_web" },
   { id: "visitas_web", label: "Visitas al sitio web", icon: "🖱️", desc: "Lleva visitas reales a tu página, medidas de verdad.", meta_objective: "OUTCOME_TRAFFIC", destino: "visitas_sitio" },
   { id: "seguidores_facebook", label: "Seguidores de Facebook", icon: "👍", desc: "Haz crecer los seguidores de tu página.", meta_objective: "OUTCOME_ENGAGEMENT", destino: "pagina" },
+  { id: "seguidores_instagram", label: "Seguidores de Instagram", icon: "📸", desc: "Haz crecer los seguidores de tu perfil de Instagram.", meta_objective: "OUTCOME_TRAFFIC", destino: "perfil_instagram" },
 ];
 
 // Tema visual por objetivo -- color de acento + set de iconos tematicos
@@ -68,6 +69,7 @@ const TEMA_OBJETIVO: Record<string, { color: string; colorClaro: string; iconos:
   trafico_mensajes: { color: "#0891B2", colorClaro: "#CFFAFE", iconos: [MousePointerClick, TrendingUp, Zap, Globe] },
   visitas_web: { color: "#0D9488", colorClaro: "#CCFBF1", iconos: [MousePointerClick, Globe, TrendingUp, Zap] },
   seguidores_facebook: { color: "#1877F2", colorClaro: "#E7F0FD", iconos: [Heart, Users, Star, MessageCircle] },
+  seguidores_instagram: { color: "#C13584", colorClaro: "#FBE4F1", iconos: [Camera, Heart, Users, Star] },
 };
 
 // Consulta /api/creativos-jobs/[id] cada 5s hasta que el job quede "listo" o "error".

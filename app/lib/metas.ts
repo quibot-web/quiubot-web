@@ -95,12 +95,6 @@ export type EventoBitacora = {
 // publicar-estrategia/route.ts) le corresponde cada tipo de meta, con
 // fallback al objetivo crudo de Meta para campañas publicadas antes de
 // que objetivo_id existiera.
-// seguidores_instagram: reservado para cuando (si) exista una campaña
-// real de Meta para esto -- hoy ninguna campaña puede tener este
-// objetivo_id (no se ofrece en /estrategia todavía), así que
-// obtenerCampanasDeMeta/sumarResultados siempre dan 0 campañas para
-// este tipo, lo cual es correcto: el avance se calcula aparte, por
-// snapshot (ver calcularAvanceSeguidoresInstagram).
 const OBJETIVO_ID_POR_TIPO: Record<TipoMeta, string> = {
   conversaciones_whatsapp: "venta_directa_whatsapp",
   leads: "leads",
@@ -115,7 +109,11 @@ const OBJETIVO_META_POR_TIPO: Record<TipoMeta, string> = {
   ventas_web: "OUTCOME_SALES",
   visitas_web: "OUTCOME_TRAFFIC",
   seguidores_facebook: "OUTCOME_ENGAGEMENT",
-  seguidores_instagram: "OUTCOME_ENGAGEMENT",
+  // Confirmado con una campaña real de prueba (creada en pausa y
+  // borrada de inmediato): OUTCOME_TRAFFIC + optimization_goal
+  // PROFILE_VISIT + destination_type INSTAGRAM_PROFILE sí es una
+  // combinación válida para Meta.
+  seguidores_instagram: "OUTCOME_TRAFFIC",
 };
 
 // Mismo objeto que manda /estrategia al webhook generar_estrategia (ver
@@ -162,14 +160,12 @@ export const OBJETIVO_PARA_TIPO: Record<
     meta_objective: "OUTCOME_ENGAGEMENT",
     destino: "pagina",
   },
-  // Sin campaña real dedicada todavía -- no se ofrece en /estrategia,
-  // solo existe para que este Record quede completo.
   seguidores_instagram: {
     id: "seguidores_instagram",
     label: "Seguidores de Instagram",
     desc: "Haz crecer los seguidores de tu perfil de Instagram.",
-    meta_objective: "OUTCOME_ENGAGEMENT",
-    destino: "instagram",
+    meta_objective: "OUTCOME_TRAFFIC",
+    destino: "perfil_instagram",
   },
 };
 
@@ -195,6 +191,11 @@ export const OBJETIVOS_CATALOGO: ObjetivoCatalogo[] = [
   // (venta_directa_whatsapp / retargeting), nunca a uno de estos nuevos.
   { id: "visitas_web", label: "Visitas a tu sitio web", desc: "Lleva visitas reales a tu página.", meta_objective: "OUTCOME_TRAFFIC", destino: "visitas_sitio" },
   { id: "seguidores_facebook", label: "Seguidores de Facebook", desc: "Haz crecer los seguidores de tu página.", meta_objective: "OUTCOME_ENGAGEMENT", destino: "pagina" },
+  // También al final, mismo motivo: comparte OUTCOME_TRAFFIC con
+  // retargeting/trafico_mensajes/visitas_web, pero nació CON objetivo_id
+  // desde el día uno, así que ninguna campaña vieja sin objetivo_id
+  // puede ser legítimamente de este tipo.
+  { id: "seguidores_instagram", label: "Seguidores de Instagram", desc: "Haz crecer los seguidores de tu perfil de Instagram.", meta_objective: "OUTCOME_TRAFFIC", destino: "perfil_instagram" },
 ];
 
 const OBJETIVOS_POR_ID = new Map(OBJETIVOS_CATALOGO.map((o) => [o.id, o]));
@@ -545,8 +546,12 @@ function valorEnFecha(snapshots: { fecha_bogota: string; followers_count: number
 // Mismo criterio de ventana/proyección que calcularAvanceMeta, pero
 // sobre instagram_seguidores_snapshots en vez de campanas_snapshots:
 // "conversiones" aquí es followers ganados (foto de hoy - foto inicial),
-// que puede ser negativo si el perfil perdió más de los que ganó. spend
-// e ingreso quedan en 0 (no hay campaña propia que les dé sentido).
+// que puede ser negativo si el perfil perdió más de los que ganó. El
+// spend sí viene de una campaña real (confirmado: Meta acepta
+// OUTCOME_TRAFFIC + PROFILE_VISIT + INSTAGRAM_PROFILE) -- se reutiliza
+// sumarResultados solo por su spend, ignorando sus conversiones (que
+// para este tipo siempre dan 0: no hay action_type de "follow" que
+// contar, ver sync-meta-insights). ingreso queda en 0, no aplica aquí.
 async function calcularAvanceSeguidoresInstagram(meta: {
   id: string;
   user_id: string;
@@ -557,6 +562,14 @@ async function calcularAvanceSeguidoresInstagram(meta: {
   const hoy = hoyBogota();
   const metaEnCurso = hoy <= meta.fecha_fin;
   const hastaEfectivo = metaEnCurso ? hoy : meta.fecha_fin;
+
+  const { spend } = await sumarResultados({
+    tipo: "seguidores_instagram",
+    userId: meta.user_id,
+    desde: meta.fecha_inicio,
+    hasta: hastaEfectivo,
+    metaId: meta.id,
+  });
 
   const { data: filas, error } = await supabaseAdmin
     .from("instagram_seguidores_snapshots")
@@ -598,7 +611,7 @@ async function calcularAvanceSeguidoresInstagram(meta: {
     proyeccion = Math.round(ritmo * duracionTotal) + deltaHoy;
   }
 
-  return { conversiones, spend: 0, diasTranscurridos, diasRestantes, proyeccion, ingreso: 0, roas: null };
+  return { conversiones, spend, diasTranscurridos, diasRestantes, proyeccion, ingreso: 0, roas: null };
 }
 
 // ingreso ÷ gasto -- más alto es mejor (lo opuesto a costoPorResultado).

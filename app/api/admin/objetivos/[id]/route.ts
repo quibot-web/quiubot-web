@@ -74,6 +74,7 @@ export async function POST(
       trafico_mensajes: "Trafico / Mensajes",
       visitas_web: "Visitas al sitio web",
       seguidores_facebook: "Seguidores de Facebook",
+      seguidores_instagram: "Seguidores de Instagram",
     };
     await supabaseAdmin.from("novedades").insert({
       tipo: "objetivo_activado",
