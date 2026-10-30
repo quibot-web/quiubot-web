@@ -13,10 +13,12 @@ export const TIPO_LABEL: Record<string, string> = {
   seguidores_instagram: "seguidores de Instagram",
 };
 
-// Solo seguidores_instagram se mide por foto de perfil, no por campaña
-// propia (ver calcularAvanceSeguidoresInstagram en app/lib/metas.ts) --
-// esto es lo que distingue esta meta de todas las demás: cuenta
-// cualquier seguidor nuevo, no solo los que llegaron por un anuncio.
+// Solo seguidores_instagram mide el AVANCE por foto de perfil, no por
+// conversiones de campaña (ver calcularAvanceSeguidoresInstagram en
+// app/lib/metas.ts) -- cuenta cualquier seguidor nuevo, no solo los que
+// llegaron por un anuncio. El gasto sí es real (hay una campaña
+// dedicada, confirmada contra Meta), así que a diferencia de la Fase A
+// la barra de "Gastado" se muestra igual que en cualquier otro tipo.
 const TIPOS_POR_FOTO = new Set(["seguidores_instagram"]);
 
 function formatoCop(valor: number): string {
@@ -140,16 +142,12 @@ export default function FilaMeta({
         <div style={{ height: "100%", width: `${proporcion * 100}%`, background: "#534AB7", borderRadius: 999 }} />
       </div>
 
-      {!porFoto && (
-        <>
-          <p style={{ fontSize: 12.5, color: "#888", margin: "0 0 6px" }}>
-            Gastado {formatoCop(avance?.spend ?? 0)} de {formatoCop(meta.presupuesto_maximo_cop)}
-          </p>
-          <div style={{ height: 6, borderRadius: 999, background: "#F3F2FE", overflow: "hidden" }}>
-            <div style={{ height: "100%", width: `${proporcionGasto * 100}%`, background: proporcionGasto >= 1 ? "#B3261E" : "#9B93E8", borderRadius: 999 }} />
-          </div>
-        </>
-      )}
+      <p style={{ fontSize: 12.5, color: "#888", margin: "0 0 6px" }}>
+        Gastado {formatoCop(avance?.spend ?? 0)} de {formatoCop(meta.presupuesto_maximo_cop)}
+      </p>
+      <div style={{ height: 6, borderRadius: 999, background: "#F3F2FE", overflow: "hidden" }}>
+        <div style={{ height: "100%", width: `${proporcionGasto * 100}%`, background: proporcionGasto >= 1 ? "#B3261E" : "#9B93E8", borderRadius: 999 }} />
+      </div>
 
       {meta.pausado_autopiloto && (
         <p style={{ fontSize: 12, color: "#B3261E", margin: "14px 0 0" }}>Autopiloto en pausa -- no se generan nuevas propuestas para esta meta.</p>
