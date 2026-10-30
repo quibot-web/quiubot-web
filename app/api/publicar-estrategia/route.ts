@@ -68,9 +68,39 @@ export async function POST(req: NextRequest) {
 
   const { data: usuario } = await supabaseAdmin
     .from("usuarios")
-    .select("id")
+    .select("id, meta_page_id, meta_access_token")
     .eq("email", emailBusqueda)
     .single();
+
+  // seguidores_instagram necesita mandarle a n8n QUÉ cuenta de Instagram
+  // usar en el creativo (instagram_user_id) -- se lee en caliente en vez
+  // de confiar en algo que mandó el cliente, igual que la precondición
+  // al crear la meta (ver /api/metas). Sin esto, n8n no tiene forma de
+  // armar object_story_spec.instagram_user_id y Meta rechazaría el
+  // creativo (ya lo vimos en la prueba: "must be a valid Instagram
+  // account id").
+  const MENSAJE_INSTAGRAM_NO_CONECTADO =
+    "Necesitas que tu Instagram profesional esté vinculado a tu página de Facebook y autorizado en tu cuenta publicitaria (Meta Business Manager → Cuentas de Instagram → Conectar activos) antes de publicar con este objetivo.";
+  let instagram: { id: string; username: string } | null = null;
+  if (estrategia?.campana?.objetivo_id === "seguidores_instagram") {
+    if (!usuario?.meta_page_id || !usuario.meta_access_token) {
+      return NextResponse.json({ error: MENSAJE_INSTAGRAM_NO_CONECTADO }, { status: 400 });
+    }
+    try {
+      const igRes = await fetch(
+        `https://graph.facebook.com/v21.0/${usuario.meta_page_id}?fields=instagram_business_account{id,username}&access_token=${usuario.meta_access_token}`
+      );
+      const igData = await igRes.json();
+      const ig = igData.instagram_business_account;
+      if (!ig?.id || !ig?.username) {
+        return NextResponse.json({ error: MENSAJE_INSTAGRAM_NO_CONECTADO }, { status: 400 });
+      }
+      instagram = { id: ig.id, username: ig.username };
+    } catch (err) {
+      console.error("Error consultando instagram_business_account al publicar:", err);
+      return NextResponse.json({ error: "No se pudo verificar tu cuenta de Instagram en este momento." }, { status: 500 });
+    }
+  }
 
   try {
     const n8nRes = await fetch("https://n8n.quiubot.site/webhook/publicar_estrategia", {
@@ -82,6 +112,7 @@ export async function POST(req: NextRequest) {
         creativos,
         fuente_creativos,
         efectividad_final,
+        ...(instagram ? { instagram } : {}),
       }),
     });
 
