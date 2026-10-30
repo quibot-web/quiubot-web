@@ -5,11 +5,17 @@
 import { supabaseAdmin } from "@/lib/supabase";
 import { diasEntre, hoyBogota, ayerBogota } from "@/app/lib/fechaBogota";
 
-// visitas_web y seguidores_facebook: fase 1 de los tipos nuevos.
-// seguidores_instagram queda para después de probar con una campaña
-// real si la Marketing API de verdad reporta seguidores de Instagram
-// como action_type, o si hay que medirlo por visitas al perfil.
-export type TipoMeta = "conversaciones_whatsapp" | "leads" | "ventas_web" | "visitas_web" | "seguidores_facebook";
+// seguidores_instagram: a diferencia de todos los demás tipos, no se
+// mide sumando conversiones de campañas (Meta no reporta "follow" como
+// action_type en Instagram -- ya se probó en vivo). Se mide por foto
+// diaria de followers_count (instagram_seguidores_snapshots) contra
+// metas.valor_inicial, capturado al crear la meta -- ver
+// calcularAvanceSeguidoresInstagram más abajo. Todavía no tiene un
+// objetivo_id de campaña real (eso depende de si Meta permite crear una
+// campaña OUTCOME_TRAFFIC con destino al perfil de Instagram), así que
+// el Director no le propone nada por ahora (ver revisarMeta en
+// app/api/cron/director/route.ts).
+export type TipoMeta = "conversaciones_whatsapp" | "leads" | "ventas_web" | "visitas_web" | "seguidores_facebook" | "seguidores_instagram";
 export type EstadoMeta = "activa" | "pausada" | "cumplida" | "vencida" | "cancelada";
 export type NivelAutonomia = "copiloto" | "autopiloto_con_limites";
 
@@ -45,6 +51,10 @@ export type Meta = {
   // necesita cada peso invertido para que la meta lo considere bueno.
   // null hasta que el asistente la pregunte, o en metas de otro tipo.
   roas_minimo: number | null;
+  // Solo aplica a tipos que se miden por foto (hoy, seguidores_instagram)
+  // -- el followers_count del momento en que se creó la meta, para poder
+  // restar y saber cuánto creció. null en todos los demás tipos.
+  valor_inicial: number | null;
   nivel_autonomia: NivelAutonomia;
   estado: EstadoMeta;
   pausado_autopiloto: boolean;
@@ -85,12 +95,19 @@ export type EventoBitacora = {
 // publicar-estrategia/route.ts) le corresponde cada tipo de meta, con
 // fallback al objetivo crudo de Meta para campañas publicadas antes de
 // que objetivo_id existiera.
+// seguidores_instagram: reservado para cuando (si) exista una campaña
+// real de Meta para esto -- hoy ninguna campaña puede tener este
+// objetivo_id (no se ofrece en /estrategia todavía), así que
+// obtenerCampanasDeMeta/sumarResultados siempre dan 0 campañas para
+// este tipo, lo cual es correcto: el avance se calcula aparte, por
+// snapshot (ver calcularAvanceSeguidoresInstagram).
 const OBJETIVO_ID_POR_TIPO: Record<TipoMeta, string> = {
   conversaciones_whatsapp: "venta_directa_whatsapp",
   leads: "leads",
   ventas_web: "venta_directa_web",
   visitas_web: "visitas_web",
   seguidores_facebook: "seguidores_facebook",
+  seguidores_instagram: "seguidores_instagram",
 };
 const OBJETIVO_META_POR_TIPO: Record<TipoMeta, string> = {
   conversaciones_whatsapp: "OUTCOME_ENGAGEMENT",
@@ -98,6 +115,7 @@ const OBJETIVO_META_POR_TIPO: Record<TipoMeta, string> = {
   ventas_web: "OUTCOME_SALES",
   visitas_web: "OUTCOME_TRAFFIC",
   seguidores_facebook: "OUTCOME_ENGAGEMENT",
+  seguidores_instagram: "OUTCOME_ENGAGEMENT",
 };
 
 // Mismo objeto que manda /estrategia al webhook generar_estrategia (ver
@@ -143,6 +161,15 @@ export const OBJETIVO_PARA_TIPO: Record<
     desc: "Haz crecer los seguidores de tu página.",
     meta_objective: "OUTCOME_ENGAGEMENT",
     destino: "pagina",
+  },
+  // Sin campaña real dedicada todavía -- no se ofrece en /estrategia,
+  // solo existe para que este Record quede completo.
+  seguidores_instagram: {
+    id: "seguidores_instagram",
+    label: "Seguidores de Instagram",
+    desc: "Haz crecer los seguidores de tu perfil de Instagram.",
+    meta_objective: "OUTCOME_ENGAGEMENT",
+    destino: "instagram",
   },
 };
 
@@ -436,7 +463,15 @@ export async function calcularAvanceMeta(meta: {
   user_id: string;
   fecha_inicio: string;
   fecha_fin: string;
+  valor_inicial?: number | null;
 }): Promise<AvanceMeta> {
+  // seguidores_instagram no tiene campañas propias que sumar (ver
+  // OBJETIVO_ID_POR_TIPO arriba) -- su avance es la foto de hoy menos la
+  // foto del día en que se creó la meta, no una suma de conversiones.
+  if (meta.tipo === "seguidores_instagram") {
+    return calcularAvanceSeguidoresInstagram(meta);
+  }
+
   const hoy = hoyBogota();
   const metaEnCurso = hoy <= meta.fecha_fin;
   const hastaEfectivo = metaEnCurso ? hoy : meta.fecha_fin;
@@ -494,6 +529,78 @@ export async function calcularAvanceMeta(meta: {
   };
 }
 
+// Valor vigente en una fecha dada: el snapshot más reciente con
+// fecha_bogota <= fecha, o el valor por defecto si todavía no hay
+// ninguno (meta recién creada hoy, antes de que corra el cron).
+// `snapshots` viene ordenado ascendente por fecha_bogota.
+function valorEnFecha(snapshots: { fecha_bogota: string; followers_count: number }[], fecha: string, porDefecto: number): number {
+  let valor = porDefecto;
+  for (const s of snapshots) {
+    if (s.fecha_bogota > fecha) break;
+    valor = s.followers_count;
+  }
+  return valor;
+}
+
+// Mismo criterio de ventana/proyección que calcularAvanceMeta, pero
+// sobre instagram_seguidores_snapshots en vez de campanas_snapshots:
+// "conversiones" aquí es followers ganados (foto de hoy - foto inicial),
+// que puede ser negativo si el perfil perdió más de los que ganó. spend
+// e ingreso quedan en 0 (no hay campaña propia que les dé sentido).
+async function calcularAvanceSeguidoresInstagram(meta: {
+  id: string;
+  user_id: string;
+  fecha_inicio: string;
+  fecha_fin: string;
+  valor_inicial?: number | null;
+}): Promise<AvanceMeta> {
+  const hoy = hoyBogota();
+  const metaEnCurso = hoy <= meta.fecha_fin;
+  const hastaEfectivo = metaEnCurso ? hoy : meta.fecha_fin;
+
+  const { data: filas, error } = await supabaseAdmin
+    .from("instagram_seguidores_snapshots")
+    .select("fecha_bogota, followers_count")
+    .eq("user_id", meta.user_id)
+    .gte("fecha_bogota", meta.fecha_inicio)
+    .lte("fecha_bogota", hastaEfectivo)
+    .order("fecha_bogota", { ascending: true });
+
+  if (error) {
+    throw new Error(`calcularAvanceSeguidoresInstagram(${meta.id}): ${error.message}`);
+  }
+
+  const snapshots = filas ?? [];
+  // Si por lo que sea la meta no tiene valor_inicial (no debería pasar
+  // para este tipo), se usa el primer snapshot disponible como piso --
+  // mejor un avance de 0 ese primer tramo que una resta sin sentido
+  // contra 0 seguidores.
+  const valorInicial = meta.valor_inicial ?? snapshots[0]?.followers_count ?? 0;
+  const valorHoy = valorEnFecha(snapshots, hastaEfectivo, valorInicial);
+  const conversiones = valorHoy - valorInicial;
+
+  const diasTranscurridos = diasEntre(meta.fecha_inicio, hastaEfectivo).length;
+  const diasRestantes = hoy > meta.fecha_fin ? 0 : diasEntre(hoy, meta.fecha_fin).length;
+  const duracionTotal = diasEntre(meta.fecha_inicio, meta.fecha_fin).length;
+
+  const ayer = ayerBogota();
+  const diasCompletos = metaEnCurso
+    ? ayer >= meta.fecha_inicio
+      ? diasEntre(meta.fecha_inicio, ayer)
+      : []
+    : diasEntre(meta.fecha_inicio, meta.fecha_fin);
+
+  let proyeccion: number | null = null;
+  if (diasCompletos.length >= 3) {
+    const valorDiasCompletos = valorEnFecha(snapshots, diasCompletos[diasCompletos.length - 1], valorInicial);
+    const ritmo = (valorDiasCompletos - valorInicial) / diasCompletos.length;
+    const deltaHoy = metaEnCurso ? valorHoy - valorDiasCompletos : 0;
+    proyeccion = Math.round(ritmo * duracionTotal) + deltaHoy;
+  }
+
+  return { conversiones, spend: 0, diasTranscurridos, diasRestantes, proyeccion, ingreso: 0, roas: null };
+}
+
 // ingreso ÷ gasto -- más alto es mejor (lo opuesto a costoPorResultado).
 // null cuando no hay valor de compra registrado, nunca 0: "no se sabe
 // el retorno" no es lo mismo que "el retorno fue cero".
@@ -525,7 +632,7 @@ export async function cerrarMetasVencidas(filtro: { userId?: string; tipo?: Tipo
   const hoy = hoyBogota();
   let query = supabaseAdmin
     .from("metas")
-    .select("id, user_id, tipo, cantidad_objetivo, fecha_inicio, fecha_fin")
+    .select("id, user_id, tipo, cantidad_objetivo, fecha_inicio, fecha_fin, valor_inicial")
     .eq("estado", "activa")
     .lt("fecha_fin", hoy);
   if (filtro.userId) query = query.eq("user_id", filtro.userId);

@@ -26,6 +26,7 @@ const OBJETIVO_ID_POR_TIPO: Record<TipoMeta, string> = {
   ventas_web: "venta_directa_web",
   visitas_web: "visitas_web",
   seguidores_facebook: "seguidores_facebook",
+  seguidores_instagram: "seguidores_instagram",
 };
 
 function IconoWhatsApp() {
