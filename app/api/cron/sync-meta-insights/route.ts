@@ -19,7 +19,11 @@ function compararSeguro(a: string, b: string): boolean {
 // con venta_directa_whatsapp -- clasificar por el objetivo crudo ya no
 // alcanza para distinguirlos. reconocimiento no tiene un "resultado"
 // claro tipo conversión (es alcance/impresiones), se deja sin entrada
-// a propósito (cae en 0).
+// a propósito (cae en 0). seguidores_instagram también se deja sin
+// entrada a propósito -- no existe un action_type de "follow" en
+// Instagram (comprobado contra campañas reales), así que su avance se
+// calcula aparte, por foto diaria de followers_count, no desde acá (ver
+// calcularAvanceSeguidoresInstagram en app/lib/metas.ts).
 //
 // Cada lista es de PRIORIDAD, no un conjunto para sumar: purchase y
 // omni_purchase (igual que lead y onsite_conversion.lead_grouped)

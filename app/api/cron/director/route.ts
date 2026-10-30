@@ -317,16 +317,6 @@ async function construirMetaSimulada(userId: string): Promise<Meta | null> {
 }
 
 async function revisarMeta(meta: Meta, simular: boolean) {
-  // seguidores_instagram todavía no tiene un tipo de campaña real en
-  // /estrategia (ver app/lib/metas.ts) -- sin eso, "generar_estrategia"
-  // no tendría a qué objetivo apuntar. El Director no propone nada para
-  // este tipo hasta que exista una forma real de pautarle; el avance
-  // (foto de seguidores) igual se calcula y se muestra en /metas, solo
-  // que sin automatización todavía.
-  if (meta.tipo === "seguidores_instagram") {
-    return { meta_id: meta.id, simulado: simular, propuestas_creadas: 0, motivo: "sin_automatizacion_todavia" };
-  }
-
   const hoy = hoyBogota();
   const inicioHoy = inicioDiaBogota(hoy).toISOString();
 
@@ -511,8 +501,21 @@ async function revisarMeta(meta: Meta, simular: boolean) {
       continue;
     }
 
-    const { spend: gastoCampana, conversiones: conversionesCampana } = sumarSnapshots(snapshotsCampana);
-    const costoCampana = costoPorResultado(snapshotsCampana);
+    let { spend: gastoCampana, conversiones: conversionesCampana } = sumarSnapshots(snapshotsCampana);
+    let costoCampana = costoPorResultado(snapshotsCampana);
+    // seguidores_instagram: el crecimiento del perfil es una foto DE LA
+    // META completa, no algo que n8n reparta por campaña (no hay
+    // action_type de "follow" que contar -- conversionesCampana de sus
+    // propios snapshots siempre da 0, ver sync-meta-insights). Se usa en
+    // su lugar avance.conversiones/avance.spend (ya calculados para toda
+    // la meta más arriba, sumando el gasto real de sus campañas) --
+    // mismo número para cualquier campaña que le pertenezca, porque no
+    // hay forma de atribuir seguidores ganados a una campaña puntual.
+    if (meta.tipo === "seguidores_instagram") {
+      conversionesCampana = avance.conversiones;
+      gastoCampana = avance.spend;
+      costoCampana = avance.conversiones > 0 ? avance.spend / avance.conversiones : null;
+    }
     const frecuenciaPromedio = promedio(
       snapshotsCampana.map((f) => f.frequency).filter((f): f is number => f != null)
     );
