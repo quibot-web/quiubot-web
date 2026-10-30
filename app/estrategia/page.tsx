@@ -2138,6 +2138,8 @@ function EstrategiaContent() {
         descripcion: anuncio?.copy?.descripcion || "",
         cta: anuncio?.copy?.cta || "",
         url_imagen: creativoPropio.url_imagen,
+        tipo: creativoPropio.tipo === "video" ? "video" : "imagen",
+        ...(creativoPropio.tipo === "video" && creativoPropio.url_video ? { url_video: creativoPropio.url_video } : {}),
         // "subida" (subió un archivo) o "album" (lo eligió de su álbum,
         // sin pasar por el paso "album-selector" viejo) -- cualquiera de
         // los dos ya llega "listo", ninguno entra a la cola de IA.
