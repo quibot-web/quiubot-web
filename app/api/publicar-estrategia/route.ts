@@ -66,21 +66,10 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ error: "Falta la estrategia a publicar" }, { status: 400 });
   }
 
-  // "Subir el mío" ya deja elegir video (ver ElegirEstrategia.tsx), pero
-  // publicar_estrategia en n8n todavía no sabe armar object_story_spec.
-  // video_data (subir a advideos, esperar a que esté listo, etc.) -- en
-  // vez de publicarlo como si fuera imagen (rompería o publicaría algo
-  // distinto a lo que el cliente eligió), se bloquea con un mensaje claro
-  // hasta que ese camino esté listo del lado de n8n.
-  if (Array.isArray(creativos) && creativos.some((c: any) => c?.tipo === "video")) {
-    return NextResponse.json(
-      {
-        error:
-          "Publicar anuncios de video todavía no está disponible. Cambia ese anuncio a imagen (o quítalo) antes de publicar la estrategia.",
-      },
-      { status: 400 }
-    );
-  }
+  // publicar_estrategia v10 ya soporta creativos de video (sube a
+  // advideos, espera a que Meta lo procese y crea el anuncio con
+  // video_data) -- ya no hace falta bloquearlo acá como en versiones
+  // anteriores de este endpoint.
 
   const { data: usuario } = await supabaseAdmin
     .from("usuarios")
