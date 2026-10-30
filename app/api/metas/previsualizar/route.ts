@@ -4,7 +4,7 @@ import { supabaseAdmin } from "@/lib/supabase";
 import { calcularCostoReferencia, type TipoMeta } from "@/app/lib/metas";
 import { tieneAutopiloto } from "@/app/lib/planesConfig";
 
-const TIPOS_VALIDOS: TipoMeta[] = ["conversaciones_whatsapp", "leads", "ventas_web", "visitas_web", "seguidores_facebook"];
+const TIPOS_VALIDOS: TipoMeta[] = ["conversaciones_whatsapp", "leads", "ventas_web", "visitas_web", "seguidores_facebook", "seguidores_instagram"];
 
 // Chequeo de realismo del paso 4 del wizard, sin crear nada todavía --
 // compara lo que implica el presupuesto/cantidad elegidos contra el

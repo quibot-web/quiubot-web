@@ -38,6 +38,7 @@ export async function GET(req: NextRequest, { params }: { params: Promise<{ id: 
       user_id: meta.user_id,
       fecha_inicio: meta.fecha_inicio,
       fecha_fin: meta.fecha_fin,
+      valor_inicial: meta.valor_inicial,
     });
     return NextResponse.json({ meta, avance });
   } catch (err) {

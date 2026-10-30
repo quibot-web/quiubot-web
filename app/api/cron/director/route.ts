@@ -307,6 +307,7 @@ async function construirMetaSimulada(userId: string): Promise<Meta | null> {
     presupuesto_maximo_cop: presupuestoMaximo,
     costo_objetivo_cop: costoObjetivo,
     roas_minimo: null,
+    valor_inicial: null,
     nivel_autonomia: "copiloto",
     estado: "activa",
     pausado_autopiloto: false,
@@ -316,6 +317,16 @@ async function construirMetaSimulada(userId: string): Promise<Meta | null> {
 }
 
 async function revisarMeta(meta: Meta, simular: boolean) {
+  // seguidores_instagram todavía no tiene un tipo de campaña real en
+  // /estrategia (ver app/lib/metas.ts) -- sin eso, "generar_estrategia"
+  // no tendría a qué objetivo apuntar. El Director no propone nada para
+  // este tipo hasta que exista una forma real de pautarle; el avance
+  // (foto de seguidores) igual se calcula y se muestra en /metas, solo
+  // que sin automatización todavía.
+  if (meta.tipo === "seguidores_instagram") {
+    return { meta_id: meta.id, simulado: simular, propuestas_creadas: 0, motivo: "sin_automatizacion_todavia" };
+  }
+
   const hoy = hoyBogota();
   const inicioHoy = inicioDiaBogota(hoy).toISOString();
 
@@ -358,6 +369,7 @@ async function revisarMeta(meta: Meta, simular: boolean) {
       user_id: meta.user_id,
       fecha_inicio: meta.fecha_inicio,
       fecha_fin: meta.fecha_fin,
+      valor_inicial: meta.valor_inicial,
     });
   } catch (err) {
     errorAvance = err instanceof Error ? err.message : "Error desconocido calculando el avance.";

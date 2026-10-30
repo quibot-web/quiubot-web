@@ -5,7 +5,7 @@ import { calcularAvanceMeta, cerrarMetasVencidas, type TipoMeta } from "@/app/li
 import { hoyBogota } from "@/app/lib/fechaBogota";
 import { tieneAutopiloto } from "@/app/lib/planesConfig";
 
-const TIPOS_VALIDOS: TipoMeta[] = ["conversaciones_whatsapp", "leads", "ventas_web", "visitas_web", "seguidores_facebook"];
+const TIPOS_VALIDOS: TipoMeta[] = ["conversaciones_whatsapp", "leads", "ventas_web", "visitas_web", "seguidores_facebook", "seguidores_instagram"];
 const DIAS_MINIMOS = 14;
 
 export async function GET() {
@@ -39,6 +39,7 @@ export async function GET() {
           user_id: meta.user_id,
           fecha_inicio: meta.fecha_inicio,
           fecha_fin: meta.fecha_fin,
+          valor_inicial: meta.valor_inicial,
         });
         return { meta, avance };
       } catch (err) {
@@ -57,7 +58,7 @@ export async function POST(req: NextRequest) {
 
   const { data: usuario } = await supabaseAdmin
     .from("usuarios")
-    .select("id, rol, plan, en_trial, trial_termina_en, fecha_vencimiento, beta_autopiloto")
+    .select("id, rol, plan, en_trial, trial_termina_en, fecha_vencimiento, beta_autopiloto, meta_page_id, meta_access_token")
     .eq("email", session.user.email.trim().toLowerCase())
     .single();
 
@@ -119,6 +120,43 @@ export async function POST(req: NextRequest) {
     }
   }
 
+  // seguidores_instagram se mide por foto diaria de followers_count, así
+  // que sin una cuenta de Instagram profesional vinculada a la página de
+  // Facebook no hay nada que fotografiar. La conexión en sí se hace en
+  // Meta (Business Suite), no dentro de Quiubot -- por eso no hay
+  // redirigir_a acá, solo la instrucción de dónde hacerlo. La foto
+  // inicial se toma en caliente, en este mismo momento, para no esperar
+  // a la próxima corrida del cron.
+  let valorInicialSeguidoresInstagram: number | null = null;
+  if (tipo === "seguidores_instagram") {
+    if (!usuario.meta_page_id || !usuario.meta_access_token) {
+      return NextResponse.json(
+        { error: "Necesitas conectar tu cuenta de Meta antes de crear esta meta." },
+        { status: 400 }
+      );
+    }
+    try {
+      const res = await fetch(
+        `https://graph.facebook.com/v21.0/${usuario.meta_page_id}?fields=instagram_business_account{followers_count}&access_token=${usuario.meta_access_token}`
+      );
+      const data = await res.json();
+      const followers = data.instagram_business_account?.followers_count;
+      if (typeof followers !== "number") {
+        return NextResponse.json(
+          {
+            error:
+              "Tu página de Facebook no tiene una cuenta de Instagram profesional vinculada. Conéctala desde Meta Business Suite (Configuración de la página → Instagram) y vuelve a intentar.",
+          },
+          { status: 400 }
+        );
+      }
+      valorInicialSeguidoresInstagram = followers;
+    } catch (err) {
+      console.error("Error consultando instagram_business_account:", err);
+      return NextResponse.json({ error: "No se pudo verificar tu cuenta de Instagram en este momento." }, { status: 500 });
+    }
+  }
+
   // Por seguridad: si quedó una meta de este mismo tipo con la
   // fecha_fin ya vencida pero todavía marcada "activa" (ej. el cron
   // horario no ha pasado desde que venció), se cierra antes de
@@ -149,6 +187,7 @@ export async function POST(req: NextRequest) {
       presupuesto_maximo_cop: presupuesto,
       costo_objetivo_cop: presupuesto / cantidad,
       roas_minimo: roasMinimo,
+      valor_inicial: valorInicialSeguidoresInstagram,
       nivel_autonomia: "copiloto",
       estado: "activa",
       pausado_autopiloto: false,
