@@ -123,8 +123,47 @@ export async function POST(req: NextRequest) {
 
   const { data: usuarios } = await supabaseAdmin
     .from("usuarios")
-    .select("id, email, meta_access_token, meta_ad_account_id")
+    .select("id, email, meta_access_token, meta_ad_account_id, meta_page_id")
     .not("meta_access_token", "is", null);
+
+  // Foto diaria de seguidores de Instagram (seguidores_instagram, ver
+  // app/lib/metas.ts) -- independiente de si el usuario tiene campañas
+  // activas, porque es una foto del PERFIL, no de un anuncio. Solo en el
+  // modo "hoy": a diferencia del gasto/alcance de una campaña, Meta no
+  // tiene un "followers_count de ayer" que recuperar en el cierre -- es
+  // un valor vivo, siempre "ahora mismo", así que correrlo en modo
+  // cierre solo escribiría el valor de hoy bajo la fecha de ayer.
+  let instagramSincronizados = 0;
+  let instagramConError = 0;
+  if (!esCierre) {
+    for (const usuario of usuarios || []) {
+      if (!usuario.meta_page_id) continue;
+      try {
+        const res = await fetch(
+          `https://graph.facebook.com/v21.0/${usuario.meta_page_id}?fields=instagram_business_account{id,followers_count}&access_token=${usuario.meta_access_token}`
+        );
+        const data = await res.json();
+        const ig = data.instagram_business_account;
+        if (!ig || typeof ig.followers_count !== "number") continue;
+
+        const { error } = await supabaseAdmin.from("instagram_seguidores_snapshots").upsert(
+          {
+            user_id: usuario.id,
+            ig_account_id: ig.id,
+            fecha_bogota: fechaBogotaFila,
+            followers_count: ig.followers_count,
+            capturado_en: new Date().toISOString(),
+          },
+          { onConflict: "user_id,fecha_bogota" }
+        );
+        if (error) throw new Error(error.message);
+        instagramSincronizados++;
+      } catch (err) {
+        console.error(`Error sincronizando seguidores de Instagram de ${usuario.email}:`, err);
+        instagramConError++;
+      }
+    }
+  }
 
   let campanasActualizadas = 0;
   let campanasConError = 0;
@@ -246,5 +285,5 @@ export async function POST(req: NextRequest) {
     }
   }
 
-  return NextResponse.json({ ok: true, campanasActualizadas, campanasConError });
+  return NextResponse.json({ ok: true, campanasActualizadas, campanasConError, instagramSincronizados, instagramConError });
 }
