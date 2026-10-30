@@ -10,7 +10,14 @@ export const TIPO_LABEL: Record<string, string> = {
   ventas_web: "ventas en tu sitio web",
   visitas_web: "visitas a tu sitio web",
   seguidores_facebook: "seguidores de Facebook",
+  seguidores_instagram: "seguidores de Instagram",
 };
+
+// Solo seguidores_instagram se mide por foto de perfil, no por campaña
+// propia (ver calcularAvanceSeguidoresInstagram en app/lib/metas.ts) --
+// esto es lo que distingue esta meta de todas las demás: cuenta
+// cualquier seguidor nuevo, no solo los que llegaron por un anuncio.
+const TIPOS_POR_FOTO = new Set(["seguidores_instagram"]);
 
 function formatoCop(valor: number): string {
   return new Intl.NumberFormat("es-CO", { style: "currency", currency: "COP", maximumFractionDigits: 0 }).format(valor);
@@ -36,8 +43,12 @@ export default function FilaMeta({
   const [confirmandoCancelar, setConfirmandoCancelar] = useState(false);
 
   const tipoLabel = TIPO_LABEL[meta.tipo] || meta.tipo;
+  const porFoto = TIPOS_POR_FOTO.has(meta.tipo);
   const conversiones = avance?.conversiones ?? 0;
-  const proporcion = Math.min(1, conversiones / meta.cantidad_objetivo);
+  // porFoto puede dar conversiones negativas (el perfil perdió más
+  // seguidores de los que ganó) -- una barra no puede tener ancho
+  // negativo.
+  const proporcion = Math.max(0, Math.min(1, conversiones / meta.cantidad_objetivo));
   const proporcionGasto = Math.min(1, (avance?.spend ?? 0) / meta.presupuesto_maximo_cop);
 
   let textoDias = "";
@@ -120,16 +131,25 @@ export default function FilaMeta({
         {conversiones} de {meta.cantidad_objetivo} {tipoLabel} · {textoDias}
         {avance?.proyeccion != null && ` · a este ritmo llegas a ~${avance.proyeccion}`}
       </p>
+      {porFoto && (
+        <p style={{ fontSize: 12, color: "#888", margin: "0 0 8px" }}>
+          Crecimiento total de tu perfil (incluye seguidores que llegan sin anuncios).
+        </p>
+      )}
       <div style={{ height: 8, borderRadius: 999, background: "#F3F2FE", overflow: "hidden", marginBottom: 14 }}>
         <div style={{ height: "100%", width: `${proporcion * 100}%`, background: "#534AB7", borderRadius: 999 }} />
       </div>
 
-      <p style={{ fontSize: 12.5, color: "#888", margin: "0 0 6px" }}>
-        Gastado {formatoCop(avance?.spend ?? 0)} de {formatoCop(meta.presupuesto_maximo_cop)}
-      </p>
-      <div style={{ height: 6, borderRadius: 999, background: "#F3F2FE", overflow: "hidden" }}>
-        <div style={{ height: "100%", width: `${proporcionGasto * 100}%`, background: proporcionGasto >= 1 ? "#B3261E" : "#9B93E8", borderRadius: 999 }} />
-      </div>
+      {!porFoto && (
+        <>
+          <p style={{ fontSize: 12.5, color: "#888", margin: "0 0 6px" }}>
+            Gastado {formatoCop(avance?.spend ?? 0)} de {formatoCop(meta.presupuesto_maximo_cop)}
+          </p>
+          <div style={{ height: 6, borderRadius: 999, background: "#F3F2FE", overflow: "hidden" }}>
+            <div style={{ height: "100%", width: `${proporcionGasto * 100}%`, background: proporcionGasto >= 1 ? "#B3261E" : "#9B93E8", borderRadius: 999 }} />
+          </div>
+        </>
+      )}
 
       {meta.pausado_autopiloto && (
         <p style={{ fontSize: 12, color: "#B3261E", margin: "14px 0 0" }}>Autopiloto en pausa -- no se generan nuevas propuestas para esta meta.</p>

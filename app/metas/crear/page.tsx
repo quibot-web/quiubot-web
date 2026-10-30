@@ -1,7 +1,7 @@
 "use client";
 import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
-import { MessageCircle, Target, ShoppingCart, Calendar, Wallet, Clock, Globe, ThumbsUp } from "lucide-react";
+import { MessageCircle, Target, ShoppingCart, Calendar, Wallet, Clock, Globe, ThumbsUp, Camera } from "lucide-react";
 import CargandoQuiubot from "@/app/components/CargandoQuiubot";
 import { hoyBogota } from "@/app/lib/fechaBogota";
 import type { TipoMeta } from "@/app/lib/metas";
@@ -10,6 +10,7 @@ const DIAS_MINIMOS = 14;
 const ROAS_MINIMO_SUGERIDO = "2";
 
 type SaludPixel = { conectado: boolean; ultimo_disparo: string | null; compras_7d: number; compras_con_valor: boolean | null };
+type SaludInstagram = { conectado: boolean; username: string | null; followers_count: number | null };
 
 type Previsualizacion = {
   costoObjetivoCop: number;
@@ -39,6 +40,7 @@ export default function CrearMetaPage() {
   const router = useRouter();
   const [puedeUsarAutopiloto, setPuedeUsarAutopiloto] = useState<boolean | null>(null);
   const [saludPixel, setSaludPixel] = useState<SaludPixel | null>(null);
+  const [saludInstagram, setSaludInstagram] = useState<SaludInstagram | null>(null);
   const [tiposYaActivos, setTiposYaActivos] = useState<Set<TipoMeta>>(new Set());
 
   const [paso, setPaso] = useState(1);
@@ -68,6 +70,12 @@ export default function CrearMetaPage() {
       .then((r) => r.json())
       .then((data) => setSaludPixel(data))
       .catch(() => setSaludPixel({ conectado: false, ultimo_disparo: null, compras_7d: 0, compras_con_valor: false }));
+    // Mismo patrón que el pixel: seguidores_instagram se muestra pero
+    // deshabilitada si no hay una cuenta de Instagram vinculada.
+    fetch("/api/meta/instagram/salud")
+      .then((r) => r.json())
+      .then((data) => setSaludInstagram(data))
+      .catch(() => setSaludInstagram({ conectado: false, username: null, followers_count: null }));
     // El asistente solo ofrece los tipos que el usuario no tiene
     // activos todavía -- el índice único (user_id, tipo) WHERE
     // estado='activa' los dejaría crear igual y fallar con un 409, esto
@@ -229,10 +237,12 @@ export default function CrearMetaPage() {
                 { id: "ventas_web" as TipoMeta, icono: ShoppingCart, label: "Ventas en tu sitio web" },
                 { id: "visitas_web" as TipoMeta, icono: Globe, label: "Visitas a tu sitio web" },
                 { id: "seguidores_facebook" as TipoMeta, icono: ThumbsUp, label: "Seguidores de Facebook" },
+                { id: "seguidores_instagram" as TipoMeta, icono: Camera, label: "Seguidores de Instagram" },
               ].map(({ id, icono: Icono, label }) => {
                 const yaActivo = tiposYaActivos.has(id);
                 const pixelOk = saludPixel?.conectado && saludPixel.compras_7d > 0;
-                const habilitada = !yaActivo && (id !== "ventas_web" || pixelOk);
+                const instagramOk = id !== "seguidores_instagram" || saludInstagram?.conectado;
+                const habilitada = !yaActivo && (id !== "ventas_web" || pixelOk) && instagramOk;
                 const motivo = yaActivo
                   ? "Ya tienes una meta activa de este tipo."
                   : id === "ventas_web" && saludPixel && !pixelOk
@@ -243,7 +253,9 @@ export default function CrearMetaPage() {
                       // clics si no hay pixel (ver /api/cron/sync-meta-insights).
                       id === "visitas_web" && saludPixel && !saludPixel.conectado
                       ? "Sin píxel medimos clics; instálalo para medir visitas reales."
-                      : null;
+                      : id === "seguidores_instagram" && saludInstagram && !saludInstagram.conectado
+                        ? "Conecta una cuenta de Instagram profesional a tu página, desde Meta Business Suite."
+                        : null;
                 return (
                   <div key={id}>
                     <button
