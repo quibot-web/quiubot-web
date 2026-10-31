@@ -122,6 +122,14 @@ async function pollJobHasta(
 // por si el storage se perdió o cambió de navegador/dispositivo.
 const LLAVE_ESTRATEGIA_JOB = "quiubot_estrategia_job_activo";
 
+// Mismo patrón, para retomar una publicación en curso (o recién
+// resuelta) si el cliente cierra la pestaña y vuelve -- publicar_estrategia
+// ahora corre en segundo plano (trabajos_ia) y puede tardar varios
+// minutos si hay video, así que no basta con el spinner síncrono de
+// antes. GET /api/publicar-estrategia-jobs/ultimo es el respaldo por si
+// el storage se perdió o cambió de navegador/dispositivo.
+const LLAVE_PUBLICAR_JOB = "quiubot_publicar_estrategia_job_activo";
+
 type ErrorJobEstrategia = Error & { tipoError?: string | null };
 
 // Consulta /api/estrategias-jobs/[id] cada 5s hasta "lista" o "fallida".
@@ -144,6 +152,37 @@ async function pollEstrategiaJobHasta(jobId: string, onProgress?: (segundos: num
     await new Promise((resolve) => setTimeout(resolve, 5000));
   }
   throw new Error("La generación está tardando más de lo esperado. Intenta de nuevo en unos minutos.");
+}
+
+type ErrorPublicarEstrategia = { message: string; titulo?: string | null; accionTexto?: string | null; accionUrl?: string | null };
+
+// Consulta /api/publicar-estrategia-jobs/[id] cada 5s hasta "lista" o
+// "fallida" -- publicar_estrategia ahora corre en segundo plano
+// (trabajos_ia, timeout propio de 30 min) porque puede tardar varios
+// minutos por video, así que el tope acá es generoso (32 min, un poco
+// por encima de ese timeout) en vez de los 8 min de pollEstrategiaJobHasta.
+async function pollPublicarEstrategiaJobHasta(jobId: string, maxMs = 32 * 60 * 1000): Promise<any> {
+  const inicio = Date.now();
+  while (Date.now() - inicio < maxMs) {
+    const res = await fetch(`/api/publicar-estrategia-jobs/${jobId}`);
+    const data = await res.json().catch(() => ({}));
+    if (!data.ok) throw { message: data.error || "No se pudo consultar el estado de la publicación." } as ErrorPublicarEstrategia;
+    if (data.estado === "lista") return data.resultado;
+    if (data.estado === "fallida") {
+      throw {
+        message: data.error || "No pudimos confirmar la publicación. Revisa en el Administrador de anuncios si la campaña se creó antes de volver a intentar.",
+        titulo: data.resultado?.error_titulo ?? null,
+        accionTexto: data.resultado?.error_accion_texto ?? "Ver Administrador de anuncios",
+        accionUrl: data.resultado?.error_accion_url ?? "https://adsmanager.facebook.com/adsmanager",
+      } as ErrorPublicarEstrategia;
+    }
+    await new Promise((resolve) => setTimeout(resolve, 5000));
+  }
+  throw {
+    message: "La publicación está tardando más de lo esperado. Revisa el Administrador de anuncios antes de volver a intentar.",
+    accionTexto: "Ver Administrador de anuncios",
+    accionUrl: "https://adsmanager.facebook.com/adsmanager",
+  } as ErrorPublicarEstrategia;
 }
 
 function mensajeProgresoGeneracion(segundos: number): string {
@@ -1433,6 +1472,59 @@ function EstrategiaContent() {
           setStep(pasoRestaurable(data));
         }
       } catch {}
+
+      // ¿Había una publicación en curso (o recién resuelta) cuando se
+      // cerró la pestaña? Esto gana sobre pasoRestaurable -- el wizard ya
+      // quedó restaurado arriba (estrategiaSeleccionada/creativos/etc.),
+      // solo falta decidir si el paso "resultado" debe mostrar el
+      // progreso o el resultado final en vez de arrancar en el botón
+      // "Publicar". Nunca se retoma una "fallida" -- no hay nada que
+      // reintentar solo, el botón vuelve a estar disponible como si nada.
+      try {
+        let jobPublicarId: string | null = null;
+        try {
+          jobPublicarId = localStorage.getItem(LLAVE_PUBLICAR_JOB);
+        } catch {}
+
+        let jobPublicar: { estado: string; resultado: any; error: string | null } | null = null;
+        if (jobPublicarId) {
+          const r = await fetch(`/api/publicar-estrategia-jobs/${jobPublicarId}`);
+          const d = await r.json();
+          if (d.ok) jobPublicar = d;
+        }
+        if (!jobPublicar) {
+          try {
+            jobPublicarId = null;
+            const r = await fetch("/api/publicar-estrategia-jobs/ultimo");
+            const d = await r.json();
+            if (d.ok && d.job) {
+              jobPublicarId = d.job.id;
+              jobPublicar = d.job;
+            }
+          } catch {}
+        }
+
+        if (jobPublicar && jobPublicarId) {
+          if (jobPublicar.estado === "pendiente" || jobPublicar.estado === "procesando") {
+            try {
+              localStorage.setItem(LLAVE_PUBLICAR_JOB, jobPublicarId);
+            } catch {}
+            setStep("resultado");
+            setPublicando(true);
+            pollPublicarEstrategiaJobHasta(jobPublicarId)
+              .then((resultado) => aplicarResultadoPublicacion(resultado))
+              .catch((e: any) => aplicarFallaPublicacion(e && typeof e === "object" ? e : { message: "No se pudo conectar con el servidor." }));
+          } else if (jobPublicar.estado === "lista") {
+            setStep("resultado");
+            aplicarResultadoPublicacion(jobPublicar.resultado);
+          } else {
+            try {
+              localStorage.removeItem(LLAVE_PUBLICAR_JOB);
+            } catch {}
+          }
+        }
+      } catch {}
+
       setProgresoListo(true);
     })();
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -2138,6 +2230,8 @@ function EstrategiaContent() {
         descripcion: anuncio?.copy?.descripcion || "",
         cta: anuncio?.copy?.cta || "",
         url_imagen: creativoPropio.url_imagen,
+        tipo: creativoPropio.tipo === "video" ? "video" : "imagen",
+        ...(creativoPropio.tipo === "video" && creativoPropio.url_video ? { url_video: creativoPropio.url_video } : {}),
         // "subida" (subió un archivo) o "album" (lo eligió de su álbum,
         // sin pasar por el paso "album-selector" viejo) -- cualquiera de
         // los dos ya llega "listo", ninguno entra a la cola de IA.
@@ -2774,6 +2868,57 @@ function EstrategiaContent() {
     setCreativos((prev) => prev?.map((c, i) => (i === idx ? { ...c, [campo]: valor } : c)) ?? null);
   };
 
+  // Compartido entre handlePublicarEnMeta y el efecto de retomo (si el
+  // cliente cerró la pestaña mientras el trabajo seguía en curso) -- lo
+  // que antes era el final feliz inline de handlePublicarEnMeta, ahora
+  // separado porque dos caminos distintos llegan al mismo "resultado".
+  const aplicarResultadoPublicacion = (resultado: any) => {
+    const anunciosCreadosFinal = typeof resultado?.anuncios_creados === "number" ? resultado.anuncios_creados : 0;
+    const anunciosFallidosFinal = Array.isArray(resultado?.anuncios_fallidos) ? resultado.anuncios_fallidos : [];
+    // n8n puede responder ok:true (campaña/conjunto sí se crearon) con 0
+    // anuncios creados y 0 reportados como fallidos -- sin esto se
+    // mostraba la pantalla verde de "publicada" aunque en Meta no haya
+    // ningún anuncio.
+    if (anunciosCreadosFinal === 0 && anunciosFallidosFinal.length === 0) {
+      setPublicando(false);
+      setErrorMsg(
+        "No se envió ningún anuncio a Meta (revisa los creativos)." +
+          (resultado?.meta_campaign_id
+            ? " La campaña quedó creada en tu cuenta de Meta pero sin anuncios, así que no está gastando dinero -- puedes eliminarla desde el Administrador de anuncios antes de volver a intentar."
+            : "")
+      );
+      return;
+    }
+    setMetaCampaignId(resultado?.meta_campaign_id || null);
+    setAnunciosCreados(anunciosCreadosFinal);
+    setAnunciosFallidos(anunciosFallidosFinal);
+    setPublicando(false);
+    setPublicado(true);
+    // Ya se publicó -- limpiamos el estado persistido (el de retomar un
+    // job por notificacion, el progreso general del wizard, y el job de
+    // publicación) para que la próxima vez que se entre a /estrategia
+    // empiece una campaña nueva desde cero, no arrastre esta ya publicada.
+    try {
+      localStorage.removeItem("quiubot_estrategia_seleccionada");
+      localStorage.removeItem(LLAVE_PUBLICAR_JOB);
+    } catch {}
+    limpiarProgresoGuardado();
+  };
+
+  // Mismo reparto: lo que antes era el catch de handlePublicarEnMeta,
+  // ahora también usado cuando el retomo detecta que el trabajo terminó
+  // en "fallida". Nunca reintenta solo -- el botón "Publicar" vuelve a
+  // estar disponible para que la persona decida.
+  const aplicarFallaPublicacion = (error: { message: string; titulo?: string | null; accionTexto?: string | null; accionUrl?: string | null }) => {
+    setPublicando(false);
+    setErrorMsg(error.message);
+    setErrorTitulo(error.titulo || null);
+    if (error.accionTexto && error.accionUrl) setErrorAccion({ texto: error.accionTexto, url: error.accionUrl });
+    try {
+      localStorage.removeItem(LLAVE_PUBLICAR_JOB);
+    } catch {}
+  };
+
   const handlePublicarEnMeta = async () => {
     setPublicando(true);
     setErrorMsg(null);
@@ -2835,7 +2980,7 @@ function EstrategiaContent() {
         }),
       });
       const data = await res.json().catch(() => ({}));
-      if (!res.ok) {
+      if (!res.ok || !data.job_id) {
         setErrorMsg(data.error || "No se pudo publicar la estrategia en Meta.");
         setErrorTitulo(data.error_titulo || null);
         if (data.error_accion_texto && data.error_accion_url) {
@@ -2843,35 +2988,27 @@ function EstrategiaContent() {
         }
         return;
       }
-      const anunciosCreadosFinal = typeof data.anuncios_creados === "number" ? data.anuncios_creados : 0;
-      const anunciosFallidosFinal = Array.isArray(data.anuncios_fallidos) ? data.anuncios_fallidos : [];
-      // n8n puede responder ok:true (campaña/conjunto sí se crearon) con
-      // 0 anuncios creados y 0 reportados como fallidos -- sin esto se
-      // mostraba la pantalla verde de "publicada" aunque en Meta no haya
-      // ningún anuncio.
-      if (anunciosCreadosFinal === 0 && anunciosFallidosFinal.length === 0) {
-        setErrorMsg(
-          "No se envió ningún anuncio a Meta (revisa los creativos)." +
-            (data.meta_campaign_id
-              ? " La campaña quedó creada en tu cuenta de Meta pero sin anuncios, así que no está gastando dinero -- puedes eliminarla desde el Administrador de anuncios antes de volver a intentar."
-              : "")
-        );
-        return;
-      }
-      setMetaCampaignId(data.meta_campaign_id || null);
-      setAnunciosCreados(anunciosCreadosFinal);
-      setAnunciosFallidos(anunciosFallidosFinal);
-      setPublicado(true);
-      // Ya se publicó -- limpiamos el estado persistido (el de retomar un
-      // job por notificacion, y el progreso general del wizard) para que
-      // la próxima vez que se entre a /estrategia empiece una campaña
-      // nueva desde cero, no arrastre esta ya publicada.
+
+      // publicar_estrategia ya no responde directo -- corre en segundo
+      // plano (puede tardar varios minutos si hay video) y esto hace
+      // polling hasta que termine. Se guarda el job_id ANTES de esperar,
+      // para poder retomarlo si se cierra la pestaña a mitad de camino.
       try {
-        localStorage.removeItem("quiubot_estrategia_seleccionada");
+        localStorage.setItem(LLAVE_PUBLICAR_JOB, data.job_id);
       } catch {}
-      limpiarProgresoGuardado();
+
+      const resultado = await pollPublicarEstrategiaJobHasta(data.job_id);
+      aplicarResultadoPublicacion(resultado);
     } catch (e) {
-      setErrorMsg("No se pudo conectar con el servidor.");
+      // pollPublicarEstrategiaJobHasta lanza un objeto plano (no Error)
+      // con message/titulo/accionTexto/accionUrl -- cualquier otra cosa
+      // (fetch roto, JSON inválido, etc.) cae en el mensaje genérico de
+      // siempre, nunca se le muestra al usuario el error técnico crudo.
+      if (e && typeof e === "object" && !(e instanceof Error) && "message" in e) {
+        aplicarFallaPublicacion(e as ErrorPublicarEstrategia);
+      } else {
+        aplicarFallaPublicacion({ message: "No se pudo conectar con el servidor." });
+      }
     } finally {
       setPublicando(false);
     }
@@ -2883,6 +3020,13 @@ function EstrategiaContent() {
       : estrategiaSeleccionada?.efectividad;
 
   const algunaRegenerando = Object.values(regenerandoIndices).some(Boolean);
+
+  // Para la pantalla de "Publicando tu campaña" -- si hay al menos un
+  // creativo de video, Meta puede tardar varios minutos en procesarlo
+  // (sube a advideos, espera a que quede listo) antes de poder crear el
+  // anuncio, así que se avisa explícitamente en vez de dejar el progreso
+  // "colgado" sin explicación.
+  const hayCreativoVideo = (creativos || []).some((c: any) => c?.tipo === "video");
 
   // Mientras se confirma si tiene ADN de marca, no mostramos ni el wizard
   // ni el bloqueo -- evita el parpadeo de "bloqueado" por una fracción de
@@ -4027,14 +4171,29 @@ function EstrategiaContent() {
                   {publicando ? (
                     <ProgresoPasos
                       activo={publicando}
-                      duracionEstimadaMs={16000}
+                      duracionEstimadaMs={20000}
                       tituloEnCurso="Publicando tu campaña"
-                      pasos={[
-                        "Creando la campaña en Meta",
-                        "Configurando tu conjunto de anuncios",
-                        "Subiendo tus creativos",
-                        "Activando los anuncios",
-                      ]}
+                      pasos={
+                        hayCreativoVideo
+                          ? [
+                              "Creando la campaña en Meta",
+                              "Configurando tu conjunto de anuncios",
+                              "Subiendo tus videos a Meta",
+                              "Procesando tus videos",
+                              "Activando los anuncios",
+                            ]
+                          : [
+                              "Creando la campaña en Meta",
+                              "Configurando tu conjunto de anuncios",
+                              "Subiendo tus creativos",
+                              "Activando los anuncios",
+                            ]
+                      }
+                      nota={
+                        hayCreativoVideo
+                          ? "Puede tardar unos minutos mientras Meta procesa tus videos. Puedes cerrar esta pestaña -- cuando vuelvas, seguimos donde quedamos."
+                          : "Puedes cerrar esta pestaña -- cuando vuelvas, seguimos donde quedamos."
+                      }
                     />
                   ) : publicado ? (
                     anunciosFallidos.length > 0 ? (

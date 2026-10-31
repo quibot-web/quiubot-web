@@ -1,58 +1,17 @@
 import { auth } from "@/auth";
-import { NextRequest, NextResponse } from "next/server";
+import { after, NextRequest, NextResponse } from "next/server";
 import { supabaseAdmin } from "@/lib/supabase";
-import { registrarError } from "@/lib/registrarError";
+import { procesarPublicarEstrategia, TIPO_TRABAJO, MENSAJE_SIN_CONFIRMAR } from "@/app/lib/publicarEstrategiaJobs";
 
-// Errores conocidos de Meta que YA hemos visto en producción y que no se
-// resuelven con codigo -- son pasos que el usuario (o el admin de su
-// Pagina de Facebook) tiene que hacer directamente en Meta. En vez de
-// mostrarle al usuario el JSON crudo de n8n, se traduce a un mensaje
-// claro con una accion sugerida cuando aplica.
-const MENSAJES_AMIGABLES: Record<number, { titulo: string; mensaje: string; accionTexto?: string; accionUrl?: string }> = {
-  1815089: {
-    titulo: "Falta aceptar los Términos de Generación de Leads",
-    mensaje: "Tu página de Facebook todavía no ha aceptado los Términos de Servicio de Meta para generación de clientes potenciales. Es un paso único y rápido (menos de 1 minuto) que debe hacer un administrador de esa página.",
-    accionTexto: "Aceptar términos en Meta",
-    accionUrl: "https://facebook.com/ads/leadgen/tos",
-  },
-  2923003: {
-    titulo: "Tu número de WhatsApp Business está suspendido",
-    mensaje: "Meta suspendió el número de WhatsApp Business conectado a esta cuenta. Tienes que resolverlo directamente con el soporte de WhatsApp antes de poder publicar campañas de venta por WhatsApp — esto no depende de Quiubot.",
-  },
-};
-
-// Los errores de n8n llegan como un string con varios niveles de JSON
-// anidados y escapados (axios arma el mensaje como `${status} - ${JSON.stringify(cuerpo)}`,
-// y ese cuerpo a su vez es el JSON de error de Meta) -- en vez de intentar
-// parsear esa estructura exacta (fragil, cambia segun cuantas capas de
-// escapado tenga), se buscan directamente los campos que interesan con
-// una expresion regular, que tolera cualquier nivel de escapado.
-function extraerDetalleMeta(textoCrudo: string): { paso: string | null; subcode: number | null; mensajeMeta: string | null } {
-  let paso: string | null = null;
-  try {
-    const externo = JSON.parse(textoCrudo);
-    paso = externo?.paso ?? null;
-  } catch {
-    // el texto externo no siempre es JSON valido (a veces n8n devuelve
-    // solo texto plano si el fallo ocurrio antes de llegar a un nodo de
-    // error formal) -- no pasa nada, sigue sin "paso".
-  }
-
-  const subcodeMatch = textoCrudo.match(/error_subcode\\*"?\s*:\s*(\d+)/);
-  const mensajeMatch = textoCrudo.match(/error_user_msg\\*"?\s*:\s*\\*"([^"\\]*(?:\\.[^"\\]*)*)/);
-  let mensajeMeta: string | null = null;
-  if (mensajeMatch) {
-    mensajeMeta = mensajeMatch[1]
-      .replace(/\\u([0-9a-fA-F]{4})/g, (_, hex) => String.fromCharCode(parseInt(hex, 16)))
-      .replace(/\\\\/g, "\\");
-  }
-  return {
-    paso,
-    subcode: subcodeMatch ? parseInt(subcodeMatch[1], 10) : null,
-    mensajeMeta,
-  };
-}
-
+// Dispara publicar_estrategia en segundo plano (trabajos_ia, ver
+// app/lib/publicarEstrategiaJobs.ts) en vez de esperar la respuesta de
+// n8n dentro del ciclo de esta petición -- mismo motivo que crear_creativos/
+// generar_estrategia/agregar_anuncios: el proxy de Coolify corta la
+// conexión antes de que n8n termine, y publicar_estrategia v10 puede
+// tardar hasta ~4 minutos por video (sube a advideos, espera a que Meta
+// lo procese). Este endpoint ya no espera nada de Meta: valida, resuelve
+// la precondición de Instagram (rápida), y devuelve un job_id para que
+// el cliente haga polling en /api/publicar-estrategia-jobs/[id].
 export async function POST(req: NextRequest) {
   const session = await auth();
   if (!session?.user?.email) {
@@ -72,18 +31,24 @@ export async function POST(req: NextRequest) {
     .eq("email", emailBusqueda)
     .single();
 
+  // Antes no se validaba esto (el resto del handler toleraba "usuario"
+  // nulo) -- ahora sí hace falta de verdad: trabajos_ia.user_id no puede
+  // quedar vacío, y sin fila no hay cómo lanzar el trabajo en segundo plano.
+  if (!usuario) {
+    return NextResponse.json({ error: "Usuario no encontrado" }, { status: 404 });
+  }
+
   // seguidores_instagram necesita mandarle a n8n QUÉ cuenta de Instagram
   // usar en el creativo (instagram_user_id) -- se lee en caliente en vez
   // de confiar en algo que mandó el cliente, igual que la precondición
-  // al crear la meta (ver /api/metas). Sin esto, n8n no tiene forma de
-  // armar object_story_spec.instagram_user_id y Meta rechazaría el
-  // creativo (ya lo vimos en la prueba: "must be a valid Instagram
-  // account id").
+  // al crear la meta (ver /api/metas). Esto es rápido (una sola llamada a
+  // Graph API), así que se queda en el ciclo de la petición -- no hace
+  // falta meterlo en el trabajo en segundo plano.
   const MENSAJE_INSTAGRAM_NO_CONECTADO =
     "Necesitas que tu Instagram profesional esté vinculado a tu página de Facebook y autorizado en tu cuenta publicitaria (Meta Business Manager → Cuentas de Instagram → Conectar activos) antes de publicar con este objetivo.";
   let instagram: { id: string; username: string } | null = null;
   if (estrategia?.campana?.objetivo_id === "seguidores_instagram") {
-    if (!usuario?.meta_page_id || !usuario.meta_access_token) {
+    if (!usuario.meta_page_id || !usuario.meta_access_token) {
       return NextResponse.json({ error: MENSAJE_INSTAGRAM_NO_CONECTADO }, { status: 400 });
     }
     try {
@@ -102,191 +67,64 @@ export async function POST(req: NextRequest) {
     }
   }
 
-  try {
-    const n8nRes = await fetch("https://n8n.quiubot.site/webhook/publicar_estrategia", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({
-        email: emailBusqueda,
-        estrategia,
-        creativos,
-        fuente_creativos,
-        efectividad_final,
-        ...(instagram ? { instagram } : {}),
-      }),
-    });
+  // Nada de duplicados: publicar crea campañas reales en Meta, así que
+  // dos trabajos corriendo a la vez para la MISMA estrategia publicarían
+  // dos veces. Si ya hay uno pendiente/procesando, se devuelve su
+  // job_id en vez de crear uno nuevo -- el botón "Publicar" además
+  // queda deshabilitado del lado del cliente mientras tanto (ver
+  // app/estrategia/page.tsx), esto es el respaldo del lado del servidor.
+  const estrategiaId = typeof estrategia?.id === "string" ? estrategia.id : null;
+  if (estrategiaId) {
+    const { data: existente } = await supabaseAdmin
+      .from("trabajos_ia")
+      .select("id")
+      .eq("tipo", TIPO_TRABAJO)
+      .eq("user_id", usuario.id)
+      .eq("resultado->>estrategia_id", estrategiaId)
+      .in("estado", ["pendiente", "procesando"])
+      .maybeSingle();
 
-    if (!n8nRes.ok) {
-      const text = await n8nRes.text();
-      console.error("Error al publicar estrategia (n8n respondió no-ok):", text);
-
-      let paso: string | null = null;
-      let subcode: number | null = null;
-      let tituloAmigable: string | null = null;
-      let accionTexto: string | null = null;
-      let accionUrl: string | null = null;
-      let mensajeFinal: string;
-      let metaCampaignId: string | null = null;
-      let anunciosFallidos: unknown = null;
-
-      // Formato nuevo de publicar_estrategia (ej. paso "crear_anuncios"):
-      // JSON con ok:false y un error ya legible -- se usa tal cual, sin
-      // pasar por extraerDetalleMeta (que es para el formato viejo, errores
-      // de Meta anidados en texto). Para cualquier otra cosa (no es JSON,
-      // o no trae ok:false + error string) se conserva la lógica de
-      // siempre.
-      let parseado: any = null;
-      try {
-        parseado = JSON.parse(text);
-      } catch {
-        parseado = null;
-      }
-
-      if (parseado && parseado.ok === false && typeof parseado.error === "string") {
-        paso = typeof parseado.paso === "string" ? parseado.paso : null;
-        metaCampaignId = typeof parseado.meta_campaign_id === "string" ? parseado.meta_campaign_id : null;
-        anunciosFallidos = Array.isArray(parseado.anuncios_fallidos) ? parseado.anuncios_fallidos : null;
-        mensajeFinal = parseado.error;
-        if (paso === "crear_anuncios") {
-          // El error genérico de n8n ("No se pudieron crear los
-          // anuncios") no sirve para diagnosticar nada -- si viene el
-          // detalle real de Meta en anuncios_fallidos, se muestra ese tal
-          // cual (el primero, que suele ser representativo de todos). Si
-          // no viene ninguno, es porque no se llegó a intentar crear ni
-          // un anuncio.
-          const primerFallido = Array.isArray(anunciosFallidos) && anunciosFallidos.length > 0 ? (anunciosFallidos[0] as any) : null;
-          mensajeFinal = primerFallido?.error
-            ? primerFallido.titulo
-              ? `"${primerFallido.titulo}": ${primerFallido.error}`
-              : primerFallido.error
-            : "No se envió ningún anuncio a Meta (revisa los creativos).";
-          mensajeFinal +=
-            " La campaña quedó creada en tu cuenta de Meta pero sin anuncios, así que no está gastando dinero — puedes eliminarla desde el Administrador de anuncios antes de volver a intentar.";
-        }
-      } else {
-        const detalle = extraerDetalleMeta(text);
-        paso = detalle.paso;
-        subcode = detalle.subcode;
-        const amigable = subcode ? MENSAJES_AMIGABLES[subcode] : null;
-        tituloAmigable = amigable?.titulo ?? null;
-        accionTexto = amigable?.accionTexto ?? null;
-        accionUrl = amigable?.accionUrl ?? null;
-        // Nunca se manda el texto/JSON crudo al usuario -- si no hay un
-        // mensaje amigable conocido, mensaje genérico. El texto crudo queda
-        // solo en el console.error de arriba y en detalleTecnico (admin).
-        mensajeFinal =
-          amigable?.mensaje || detalle.mensajeMeta || "No se pudo publicar la estrategia en Meta. Intenta de nuevo en unos minutos.";
-      }
-
-      // Registro central: guarda en errores_publicacion Y notifica a los
-      // contactos de admin -- una sola llamada, reutilizable desde
-      // cualquier endpoint de Quiubot. meta_campaign_id y anuncios_fallidos
-      // van en detalleTecnico (no hay un campo propio para ellos) para que
-      // el admin pueda diagnosticar sin tener que ir a buscar el texto
-      // crudo en los logs del servidor.
-      registrarError({
-        origen: "publicar_estrategia",
-        userId: usuario?.id ?? null,
-        email: emailBusqueda,
-        paso,
-        errorSubcode: subcode,
-        errorTitulo: tituloAmigable,
-        errorMensaje: mensajeFinal,
-        detalleTecnico: JSON.stringify({ meta_campaign_id: metaCampaignId, anuncios_fallidos: anunciosFallidos, raw: text }),
-        campanaNombre: estrategia?.campana?.nombre ?? null,
-        objetivoId: estrategia?.campana?.objetivo_id ?? null,
-      });
-
-      return NextResponse.json(
-        {
-          error: mensajeFinal,
-          error_titulo: tituloAmigable,
-          error_accion_texto: accionTexto,
-          error_accion_url: accionUrl,
-        },
-        { status: n8nRes.status || 502 }
-      );
+    if (existente) {
+      return NextResponse.json({ job_id: existente.id });
     }
-
-    const data = await n8nRes.json().catch(() => ({}));
-
-    // Registrar la campaña en nuestra BD para poder monitorearla luego
-    if (usuario) {
-      // meta_id llega del cliente (?meta_id= de /estrategia, ver ese
-      // archivo) -- se valida que de verdad sea una meta de este mismo
-      // usuario antes de confiar en ella, para que nadie pueda ligar su
-      // campaña nueva a la meta de otra cuenta solo editando el body.
-      let metaIdValidado: string | null = null;
-      if (typeof meta_id === "string" && meta_id) {
-        const { data: metaDelUsuario } = await supabaseAdmin
-          .from("metas")
-          .select("id")
-          .eq("id", meta_id)
-          .eq("user_id", usuario.id)
-          .maybeSingle();
-        metaIdValidado = metaDelUsuario?.id ?? null;
-      }
-
-      // Para que el refresco de Autopiloto (intentarGenerarYCrearCreativos)
-      // pueda reenviar el mismo contexto más adelante, sin tener que
-      // volver a pedírselo al cliente -- ver app/lib/propuestas.ts.
-      const tipoContenidoFinal: string = tipo_contenido === "servicio" ? "servicio" : "producto";
-      const descripcionServicioFinal: string | null =
-        tipoContenidoFinal === "servicio" && typeof descripcion_servicio === "string"
-          ? descripcion_servicio.trim().slice(0, 500) || null
-          : null;
-      const datosProductoFinal: string | null =
-        tipoContenidoFinal === "producto" && typeof datos_producto === "string"
-          ? datos_producto.trim().slice(0, 500) || null
-          : null;
-
-      const { data: campana, error: insertError } = await supabaseAdmin
-        .from("campanas_publicadas")
-        .insert({
-          user_id: usuario.id,
-          nombre: estrategia?.campana?.nombre ?? "Campaña sin nombre",
-          objetivo: estrategia?.campana?.objetivo_meta ?? null,
-          objetivo_id: estrategia?.campana?.objetivo_id ?? null,
-          presupuesto_diario: estrategia?.campana?.presupuesto_diario_cop ?? null,
-          efectividad_estimada: efectividad_final ?? estrategia?.efectividad ?? null,
-          estado: "activa",
-          meta_campaign_id: data?.meta_campaign_id ?? null,
-          meta_adset_id: data?.meta_adset_id ?? null,
-          meta_id: metaIdValidado,
-          tipo_contenido: tipoContenidoFinal,
-          descripcion_servicio: descripcionServicioFinal,
-          datos_producto: datosProductoFinal,
-        })
-        .select()
-        .single();
-
-      if (!insertError && campana) {
-        await supabaseAdmin.from("notificaciones").insert({
-          user_id: usuario.id,
-          campana_id: campana.id,
-          tipo: "campana_publicada",
-          titulo: "Campaña publicada",
-          mensaje: `Tu campaña "${campana.nombre}" fue publicada correctamente en Meta.`,
-          estado: "pendiente",
-        });
-      }
-    }
-
-    return NextResponse.json({ ok: true, ...data });
-  } catch (err) {
-    console.error("Error al publicar estrategia:", err);
-
-    registrarError({
-      origen: "publicar_estrategia",
-      userId: usuario?.id ?? null,
-      email: emailBusqueda,
-      paso: "conexion_con_n8n",
-      errorMensaje: "No se pudo conectar con n8n",
-      detalleTecnico: String(err),
-      campanaNombre: estrategia?.campana?.nombre ?? null,
-      objetivoId: estrategia?.campana?.objetivo_id ?? null,
-    });
-
-    return NextResponse.json({ error: "No se pudo conectar con n8n" }, { status: 503 });
   }
+
+  const ahora = new Date().toISOString();
+  const { data: trabajo, error: errorTrabajo } = await supabaseAdmin
+    .from("trabajos_ia")
+    .insert({
+      user_id: usuario.id,
+      tipo: TIPO_TRABAJO,
+      estado: "pendiente",
+      intento_desde: ahora,
+      resultado: estrategiaId ? { estrategia_id: estrategiaId } : null,
+    })
+    .select()
+    .single();
+
+  if (errorTrabajo || !trabajo) {
+    console.error("Error creando trabajos_ia (publicar_estrategia):", errorTrabajo);
+    return NextResponse.json({ error: "No se pudo iniciar la publicación. Intenta de nuevo." }, { status: 500 });
+  }
+
+  after(() =>
+    procesarPublicarEstrategia(trabajo.id, {
+      emailBusqueda,
+      userId: usuario.id,
+      estrategia,
+      creativos,
+      fuenteCreativos: fuente_creativos,
+      efectividadFinal: efectividad_final,
+      instagram,
+      metaId: typeof meta_id === "string" ? meta_id : null,
+      tipoContenido: tipo_contenido,
+      descripcionServicio: typeof descripcion_servicio === "string" ? descripcion_servicio : null,
+      datosProducto: typeof datos_producto === "string" ? datos_producto : null,
+    }).catch(async (err) => {
+      console.error("Error no manejado en procesarPublicarEstrategia:", err);
+      await supabaseAdmin.from("trabajos_ia").update({ estado: "fallida", error: MENSAJE_SIN_CONFIRMAR }).eq("id", trabajo.id);
+    })
+  );
+
+  return NextResponse.json({ job_id: trabajo.id });
 }

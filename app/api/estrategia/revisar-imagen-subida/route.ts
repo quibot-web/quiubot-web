@@ -16,11 +16,19 @@ export async function POST(req: NextRequest) {
   }
 
   const emailBusqueda = session.user.email.trim().toLowerCase();
-  const { url_imagen, conjunto_nombre, anuncio_nombre, titulo, texto, descripcion, cta, concepto, campana } = await req.json();
+  const { url_imagen, tipo, url_video, conjunto_nombre, anuncio_nombre, titulo, texto, descripcion, cta, concepto, campana } =
+    await req.json();
 
   if (typeof url_imagen !== "string" || !url_imagen) {
     return NextResponse.json({ error: "Falta la imagen a revisar" }, { status: 400 });
   }
+
+  // tipo:"video" -- analizar_creativos_album v4 ya saca sus propios
+  // cuadros a partir de url_video (no hace falta mandarle frame_urls,
+  // como sí hacía el flujo viejo de álbum para versiones anteriores del
+  // workflow). url_imagen sigue mandándose: es la portada, que n8n puede
+  // usar para mostrarla en cualquier resumen sin tener que derivarla.
+  const esVideo = tipo === "video" && typeof url_video === "string" && !!url_video;
   if (typeof conjunto_nombre !== "string" || typeof anuncio_nombre !== "string" || !conjunto_nombre || !anuncio_nombre) {
     return NextResponse.json({ error: "Falta el anuncio a revisar" }, { status: 400 });
   }
@@ -70,9 +78,10 @@ export async function POST(req: NextRequest) {
 
   const creativoAlbum = {
     id: `subida_${conjunto_nombre}_${anuncio_nombre}`,
-    tipo: "imagen",
+    tipo: esVideo ? "video" : "imagen",
     origen: "subida",
     url_imagen,
+    ...(esVideo ? { url_video } : {}),
     titulo: titulo || "",
     texto: texto || "",
     descripcion: descripcion || "",
