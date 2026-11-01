@@ -54,7 +54,7 @@ export async function POST(req: NextRequest) {
 
   const { data: usuario } = await supabaseAdmin
     .from("usuarios")
-    .select("id, openai_key, rol")
+    .select("id, openai_key")
     .eq("email", emailBusqueda)
     .single();
 
@@ -85,12 +85,8 @@ export async function POST(req: NextRequest) {
     }
     imagenesUrlsFinal = imagenes_urls.slice(0, MAX_IMAGENES);
   } else {
-    // fuente === "web" -- mientras n8n no tenga lista esta ruta, solo
-    // admins pueden probarla (ver POST /api/usuario/rol en el cliente,
-    // que ya oculta la opción -- esto es el respaldo del servidor).
-    if (usuario.rol !== "admin") {
-      return NextResponse.json({ error: "Esta opción todavía no está disponible." }, { status: 403 });
-    }
+    // fuente === "web" -- analizar_adn_marca v2 ya lee el sitio (n8n).
+    // Se valida que empiece con http/https antes de mandarlo.
     const url = typeof body.url === "string" ? body.url.trim() : "";
     if (!url || !/^https?:\/\/.+/i.test(url)) {
       return NextResponse.json({ error: "Escribe un link válido de tu sitio web." }, { status: 400 });
