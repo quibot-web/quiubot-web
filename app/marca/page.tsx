@@ -507,12 +507,29 @@ function InfoAdicionalNegocio() {
   );
 }
 
+// Las tres fuentes que acepta POST /api/marca-adn (ver app/api/marca-adn/
+// route.ts) -- "elegir_fuente" es la pantalla previa, no una fuente real.
+type PasoAdn = "elegir_fuente" | "imagenes" | "meta" | "web";
+
+type CandidatoAdnMeta = { id: string; url: string; tipo: "post" | "creativo"; creado_en: string };
+
 export default function MarcaPage() {
   const [cargandoInicial, setCargandoInicial] = useState(true);
   const [tieneAdn, setTieneAdn] = useState(false);
   const [adn, setAdn] = useState<Record<string, any> | null>(null);
   const [resumen, setResumen] = useState<string>("");
   const [tutorialListo, setTutorialListo] = useState(false);
+
+  const [paso, setPaso] = useState<PasoAdn>("elegir_fuente");
+  const [esAdmin, setEsAdmin] = useState(false);
+
+  const [metaInfo, setMetaInfo] = useState<{ conectado: boolean; disponible: boolean; candidatos: CandidatoAdnMeta[] } | null>(null);
+  const [cargandoMeta, setCargandoMeta] = useState(false);
+  const [seleccionMeta, setSeleccionMeta] = useState<string[]>([]);
+
+  const [sitioWebValor, setSitioWebValor] = useState("");
+  const [sitioWebGuardado, setSitioWebGuardado] = useState<string | null>(null);
+  const sitioWebPrellenadoRef = useRef(false);
 
   const [imagenes, setImagenes] = useState<File[]>([]);
   const [previews, setPreviews] = useState<string[]>([]);
@@ -554,6 +571,49 @@ export default function MarcaPage() {
       })
       .finally(() => setCargandoInicial(false));
   }, []);
+
+  // Solo para mostrar la opción "Pegar el link de mi sitio web" mientras
+  // n8n no tiene lista esa parte (ver POST /api/marca-adn, que además
+  // bloquea esto del lado del servidor -- esto es solo para la vista).
+  useEffect(() => {
+    fetch("/api/usuario/rol")
+      .then((r) => r.json())
+      .then((data) => setEsAdmin(data?.rol === "admin"))
+      .catch(() => {});
+  }, []);
+
+  // Para prellenar el link del sitio con el que el cliente ya guardó en
+  // Integraciones (marcas.sitio_web) -- no bloquea nada si no hay uno.
+  useEffect(() => {
+    fetch("/api/marca")
+      .then((r) => r.json())
+      .then((data) => setSitioWebGuardado(data?.sitio_web || null))
+      .catch(() => {});
+  }, []);
+
+  useEffect(() => {
+    if (paso === "web" && !sitioWebPrellenadoRef.current && sitioWebGuardado) {
+      setSitioWebValor(sitioWebGuardado);
+      sitioWebPrellenadoRef.current = true;
+    }
+  }, [paso, sitioWebGuardado]);
+
+  // Candidatas de Meta (publicaciones + anuncios anteriores, ver GET
+  // /api/marca-adn/fuente-meta) -- se piden recién cuando el cliente
+  // llega al selector de fuente (no en cada carga de la página, aunque
+  // ya tenga un ADN armado y nunca toque "Volver a analizar"), y solo
+  // una vez por sesión.
+  useEffect(() => {
+    if (paso !== "elegir_fuente" || metaInfo !== null || cargandoMeta) return;
+    setCargandoMeta(true);
+    fetch("/api/marca-adn/fuente-meta")
+      .then((r) => r.json())
+      .then((data) =>
+        setMetaInfo({ conectado: !!data.conectado, disponible: !!data.disponible, candidatos: data.candidatos || [] })
+      )
+      .catch(() => setMetaInfo({ conectado: false, disponible: false, candidatos: [] }))
+      .finally(() => setCargandoMeta(false));
+  }, [paso, metaInfo, cargandoMeta]);
 
   // Si el cliente salió de /marca con un análisis en curso y volvió,
   // retoma el polling de ese mismo job en vez de mostrarle la pantalla
@@ -637,8 +697,12 @@ export default function MarcaPage() {
     setPreviews((prev) => prev.filter((_, i) => i !== idx));
   }
 
-  const handleAnalizar = async () => {
-    if (imagenes.length < MIN_IMAGENES) return;
+  // Compartido entre las tres fuentes -- lo único que cambia entre
+  // "imagenes", "meta" y "web" es qué va en el body de POST /api/marca-adn
+  // (construirBody corre DESPUÉS de entrar en "analizando", igual que antes
+  // con la compresión de imágenes, para que la animación ya esté corriendo
+  // mientras se prepara lo que sea que haya que preparar).
+  const ejecutarAnalisis = async (construirBody: () => Promise<Record<string, any>>) => {
     setAnalizando(true);
     setErrorMsg(null);
     setFaseAnimacion(0);
@@ -656,15 +720,11 @@ export default function MarcaPage() {
     });
 
     try {
-      // Se comprime recién acá (no al agregarlas) -- antes se mandaban los
-      // archivos crudos del celular sin redimensionar, con riesgo real de
-      // reventar el límite de tamaño del body del proxy con varias fotos
-      // de varios MB cada una.
-      const imagenesBase64 = await Promise.all(imagenes.map(comprimirSiHaceFalta));
+      const bodyPost = await construirBody();
       const res = await fetch("/api/marca-adn", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ imagenes_base64: imagenesBase64 }),
+        body: JSON.stringify(bodyPost),
       });
       const dataInicial = await res.json().catch(() => ({}));
       if (!res.ok || !dataInicial.job_id) {
@@ -696,12 +756,53 @@ export default function MarcaPage() {
     }
   };
 
+  const handleAnalizar = async () => {
+    if (imagenes.length < MIN_IMAGENES) return;
+    // Se comprime recién acá (no al agregarlas) -- antes se mandaban los
+    // archivos crudos del celular sin redimensionar, con riesgo real de
+    // reventar el límite de tamaño del body del proxy con varias fotos
+    // de varios MB cada una.
+    await ejecutarAnalisis(async () => ({
+      fuente: "imagenes",
+      imagenes_base64: await Promise.all(imagenes.map(comprimirSiHaceFalta)),
+    }));
+  };
+
+  const handleToggleCandidatoMeta = (id: string) => {
+    setSeleccionMeta((prev) => {
+      if (prev.includes(id)) return prev.filter((x) => x !== id);
+      if (prev.length >= MAX_IMAGENES) return prev;
+      return [...prev, id];
+    });
+  };
+
+  const handleAnalizarMeta = async () => {
+    if (seleccionMeta.length < MIN_IMAGENES || !metaInfo) return;
+    await ejecutarAnalisis(async () => ({
+      fuente: "meta",
+      imagenes_urls: seleccionMeta
+        .map((id) => metaInfo.candidatos.find((c) => c.id === id)?.url)
+        .filter((url): url is string => !!url),
+    }));
+  };
+
+  const handleAnalizarWeb = async () => {
+    const url = sitioWebValor.trim();
+    if (!url || !/^https?:\/\/.+/i.test(url)) {
+      setErrorMsg("Escribe un link válido de tu sitio web (con https://).");
+      return;
+    }
+    await ejecutarAnalisis(async () => ({ fuente: "web", url }));
+  };
+
   const handleVolverAAnalizar = () => {
     setTieneAdn(false);
     setAdn(null);
     setResumen("");
     setImagenes([]);
     setPreviews([]);
+    setSeleccionMeta([]);
+    setPaso("elegir_fuente");
     setFaseAnimacion(-1);
     setNodoSeleccionado(null);
   };
@@ -740,88 +841,300 @@ export default function MarcaPage() {
       {!construyendoOListo && (
         <div style={{ flex: 1, padding: "2.5rem 1.5rem" }}>
           <div style={{ maxWidth: 760, margin: "0 auto" }}>
-            <>
-              <div style={{ marginBottom: "2rem" }}>
-                <div style={{ fontSize: 11, fontWeight: 600, color: "#7F77DD", textTransform: "uppercase", letterSpacing: 1, marginBottom: 8 }}>
-                  ADN de marca
-                </div>
-                <h1 style={{ fontSize: 24, fontWeight: 700, color: "#1a1a1a", marginBottom: 8, lineHeight: 1.3 }}>
-                  Sube tus mejores creativos ya publicados
-                </h1>
-                <p style={{ fontSize: 14, color: "#666", lineHeight: 1.5 }}>
-                  El sistema analiza {MIN_IMAGENES} a {MAX_IMAGENES} piezas reales que ya usaste y con las que estás conforme — colores, tipografía, composición, tono — para poder generar creativos nuevos que se sientan hechos por ti. Esta parte es de solo lectura: no hay nada que editar acá, solo mira cómo se construye tu ADN.
-                </p>
-              </div>
-
-              <div data-tour="marca-subir" style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(130px, 1fr))", gap: 12, marginBottom: 20 }}>
-                {previews.map((src, idx) => (
-                  <div key={idx} style={{ position: "relative", aspectRatio: "1" }}>
-                    <img src={src} alt={`Creativo ${idx + 1}`} style={{ width: "100%", height: "100%", objectFit: "cover", borderRadius: 12, border: "1px solid #e0e0e0" }} />
-                    <button
-                      onClick={() => handleQuitar(idx)}
-                      title="Quitar"
-                      style={{ position: "absolute", top: -6, right: -6, width: 24, height: 24, borderRadius: "50%", background: "#1a1a1a", color: "#fff", border: "2px solid #fff", display: "flex", alignItems: "center", justifyContent: "center", cursor: "pointer" }}
-                    >
-                      <X size={12} strokeWidth={3} />
-                    </button>
+            {paso === "elegir_fuente" && (
+              <>
+                <div style={{ marginBottom: "2rem" }}>
+                  <div style={{ fontSize: 11, fontWeight: 600, color: "#7F77DD", textTransform: "uppercase", letterSpacing: 1, marginBottom: 8 }}>
+                    ADN de marca
                   </div>
-                ))}
-                {imagenes.length < MAX_IMAGENES && (
-                  <div
-                    onClick={() => fileRef.current?.click()}
-                    onDragOver={(e) => { e.preventDefault(); setArrastrandoImagenes(true); }}
-                    onDragLeave={() => setArrastrandoImagenes(false)}
-                    onDrop={handleDropImagenes}
-                    style={{
-                      aspectRatio: "1", borderRadius: 12,
-                      border: arrastrandoImagenes ? "1.5px dashed #534AB7" : "1.5px dashed #7F77DD",
-                      display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center",
-                      cursor: "pointer", background: arrastrandoImagenes ? "#F3F2FE" : "#fcfcff", gap: 6,
-                    }}
-                  >
-                    <Upload size={22} color="#534AB7" strokeWidth={2} />
-                    <span style={{ fontSize: 11, color: "#534AB7", fontWeight: 500, textAlign: "center", padding: "0 8px" }}>
-                      {arrastrandoImagenes ? "Suelta tus imágenes aquí" : "Subir creativo"}
-                    </span>
+                  <h1 style={{ fontSize: 24, fontWeight: 700, color: "#1a1a1a", marginBottom: 8, lineHeight: 1.3 }}>
+                    ¿De dónde sacamos tu ADN de marca?
+                  </h1>
+                  <p style={{ fontSize: 14, color: "#666", lineHeight: 1.5 }}>
+                    El sistema analiza {MIN_IMAGENES} a {MAX_IMAGENES} piezas reales con las que estás conforme — colores, tipografía, composición, tono — para generar creativos nuevos que se sientan hechos por ti.
+                  </p>
+                </div>
+
+                {errorMsg && (
+                  <div style={{ background: "#FEF2F2", border: "1px solid #FCA5A5", borderRadius: 10, padding: "10px 14px", fontSize: 13, color: "#991B1B", marginBottom: 16 }}>
+                    {errorMsg}
                   </div>
                 )}
-                <input ref={fileRef} type="file" accept="image/*" multiple style={{ display: "none" }} onChange={handleFile} />
-              </div>
 
-              <p style={{ fontSize: 12, color: "#999", marginBottom: 20 }}>
-                {imagenes.length}/{MAX_IMAGENES} subidos · mínimo {MIN_IMAGENES} para analizar
-              </p>
+                <div data-tour="marca-subir" style={{ display: "flex", flexDirection: "column", gap: 12 }}>
+                  {metaInfo?.conectado && (
+                    <button
+                      onClick={() => metaInfo.disponible && setPaso("meta")}
+                      disabled={!metaInfo.disponible}
+                      style={{
+                        textAlign: "left", display: "flex", flexDirection: "column", gap: 4,
+                        background: metaInfo.disponible ? "#fff" : "#f7f7f6",
+                        border: `1.5px solid ${metaInfo.disponible ? "#7F77DD" : "#e0e0e0"}`,
+                        borderRadius: 14, padding: "16px 18px", cursor: metaInfo.disponible ? "pointer" : "not-allowed",
+                      }}
+                    >
+                      <span style={{ fontSize: 15, fontWeight: 600, color: metaInfo.disponible ? "#1a1a1a" : "#999" }}>
+                        Usar lo que ya publiqué en Meta
+                      </span>
+                      <span style={{ fontSize: 12.5, color: "#666" }}>
+                        {metaInfo.disponible
+                          ? `Elige entre tus publicaciones y anuncios más recientes (encontramos ${metaInfo.candidatos.length}).`
+                          : `No encontramos suficientes publicaciones o anuncios con imagen en tu cuenta de Meta (mínimo ${MIN_IMAGENES}). Prueba otra opción.`}
+                      </span>
+                    </button>
+                  )}
 
-              {errorMsg && (
-                <div style={{ background: "#FEF2F2", border: "1px solid #FCA5A5", borderRadius: 10, padding: "10px 14px", fontSize: 13, color: "#991B1B", marginBottom: 16 }}>
-                  {errorMsg}
+                  <button
+                    onClick={() => setPaso("imagenes")}
+                    style={{ textAlign: "left", display: "flex", flexDirection: "column", gap: 4, background: "#fff", border: "1.5px solid #7F77DD", borderRadius: 14, padding: "16px 18px", cursor: "pointer" }}
+                  >
+                    <span style={{ fontSize: 15, fontWeight: 600, color: "#1a1a1a" }}>Subir imágenes</span>
+                    <span style={{ fontSize: 12.5, color: "#666" }}>
+                      Sube directamente {MIN_IMAGENES} a {MAX_IMAGENES} creativos desde tu computador.
+                    </span>
+                  </button>
+
+                  {esAdmin && (
+                    <button
+                      onClick={() => setPaso("web")}
+                      style={{ textAlign: "left", display: "flex", flexDirection: "column", gap: 4, background: "#fff", border: "1.5px solid #7F77DD", borderRadius: 14, padding: "16px 18px", cursor: "pointer" }}
+                    >
+                      <span style={{ fontSize: 15, fontWeight: 600, color: "#1a1a1a" }}>
+                        Pegar el link de mi sitio web{" "}
+                        <span style={{ fontSize: 10, color: "#7F77DD", fontWeight: 700, textTransform: "uppercase" }}>admin</span>
+                      </span>
+                      <span style={{ fontSize: 12.5, color: "#666" }}>Analiza el logo, los colores, las tipografías y los textos de tu sitio.</span>
+                    </button>
+                  )}
                 </div>
-              )}
+              </>
+            )}
 
-              <button
-                data-tour="marca-analizar"
-                onClick={handleAnalizar}
-                disabled={imagenes.length < MIN_IMAGENES}
-                style={{
-                  width: "100%",
-                  display: "flex",
-                  alignItems: "center",
-                  justifyContent: "center",
-                  gap: 8,
-                  background: imagenes.length < MIN_IMAGENES ? "#eee" : "#534AB7",
-                  color: imagenes.length < MIN_IMAGENES ? "#aaa" : "#fff",
-                  border: "none",
-                  padding: "14px",
-                  borderRadius: 10,
-                  fontSize: 15,
-                  fontWeight: 600,
-                  cursor: imagenes.length < MIN_IMAGENES ? "not-allowed" : "pointer",
-                }}
-              >
-                <Sparkles size={17} strokeWidth={2} />
-                Analizar mis creativos
-              </button>
-            </>
+            {paso === "imagenes" && (
+              <>
+                <button
+                  onClick={() => setPaso("elegir_fuente")}
+                  style={{ background: "none", border: "none", color: "#7F77DD", fontSize: 13, fontWeight: 600, cursor: "pointer", padding: 0, marginBottom: 20 }}
+                >
+                  ← Elegir otra fuente
+                </button>
+
+                <div style={{ marginBottom: "2rem" }}>
+                  <h1 style={{ fontSize: 24, fontWeight: 700, color: "#1a1a1a", marginBottom: 8, lineHeight: 1.3 }}>
+                    Sube tus mejores creativos ya publicados
+                  </h1>
+                  <p style={{ fontSize: 14, color: "#666", lineHeight: 1.5 }}>
+                    El sistema analiza {MIN_IMAGENES} a {MAX_IMAGENES} piezas reales que ya usaste y con las que estás conforme — colores, tipografía, composición, tono — para poder generar creativos nuevos que se sientan hechos por ti. Esta parte es de solo lectura: no hay nada que editar acá, solo mira cómo se construye tu ADN.
+                  </p>
+                </div>
+
+                <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(130px, 1fr))", gap: 12, marginBottom: 20 }}>
+                  {previews.map((src, idx) => (
+                    <div key={idx} style={{ position: "relative", aspectRatio: "1" }}>
+                      <img src={src} alt={`Creativo ${idx + 1}`} style={{ width: "100%", height: "100%", objectFit: "cover", borderRadius: 12, border: "1px solid #e0e0e0" }} />
+                      <button
+                        onClick={() => handleQuitar(idx)}
+                        title="Quitar"
+                        style={{ position: "absolute", top: -6, right: -6, width: 24, height: 24, borderRadius: "50%", background: "#1a1a1a", color: "#fff", border: "2px solid #fff", display: "flex", alignItems: "center", justifyContent: "center", cursor: "pointer" }}
+                      >
+                        <X size={12} strokeWidth={3} />
+                      </button>
+                    </div>
+                  ))}
+                  {imagenes.length < MAX_IMAGENES && (
+                    <div
+                      onClick={() => fileRef.current?.click()}
+                      onDragOver={(e) => { e.preventDefault(); setArrastrandoImagenes(true); }}
+                      onDragLeave={() => setArrastrandoImagenes(false)}
+                      onDrop={handleDropImagenes}
+                      style={{
+                        aspectRatio: "1", borderRadius: 12,
+                        border: arrastrandoImagenes ? "1.5px dashed #534AB7" : "1.5px dashed #7F77DD",
+                        display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center",
+                        cursor: "pointer", background: arrastrandoImagenes ? "#F3F2FE" : "#fcfcff", gap: 6,
+                      }}
+                    >
+                      <Upload size={22} color="#534AB7" strokeWidth={2} />
+                      <span style={{ fontSize: 11, color: "#534AB7", fontWeight: 500, textAlign: "center", padding: "0 8px" }}>
+                        {arrastrandoImagenes ? "Suelta tus imágenes aquí" : "Subir creativo"}
+                      </span>
+                    </div>
+                  )}
+                  <input ref={fileRef} type="file" accept="image/*" multiple style={{ display: "none" }} onChange={handleFile} />
+                </div>
+
+                <p style={{ fontSize: 12, color: "#999", marginBottom: 20 }}>
+                  {imagenes.length}/{MAX_IMAGENES} subidos · mínimo {MIN_IMAGENES} para analizar
+                </p>
+
+                {errorMsg && (
+                  <div style={{ background: "#FEF2F2", border: "1px solid #FCA5A5", borderRadius: 10, padding: "10px 14px", fontSize: 13, color: "#991B1B", marginBottom: 16 }}>
+                    {errorMsg}
+                  </div>
+                )}
+
+                <button
+                  data-tour="marca-analizar"
+                  onClick={handleAnalizar}
+                  disabled={imagenes.length < MIN_IMAGENES}
+                  style={{
+                    width: "100%",
+                    display: "flex",
+                    alignItems: "center",
+                    justifyContent: "center",
+                    gap: 8,
+                    background: imagenes.length < MIN_IMAGENES ? "#eee" : "#534AB7",
+                    color: imagenes.length < MIN_IMAGENES ? "#aaa" : "#fff",
+                    border: "none",
+                    padding: "14px",
+                    borderRadius: 10,
+                    fontSize: 15,
+                    fontWeight: 600,
+                    cursor: imagenes.length < MIN_IMAGENES ? "not-allowed" : "pointer",
+                  }}
+                >
+                  <Sparkles size={17} strokeWidth={2} />
+                  Analizar mis creativos
+                </button>
+              </>
+            )}
+
+            {paso === "meta" && (
+              <>
+                <button
+                  onClick={() => setPaso("elegir_fuente")}
+                  style={{ background: "none", border: "none", color: "#7F77DD", fontSize: 13, fontWeight: 600, cursor: "pointer", padding: 0, marginBottom: 20 }}
+                >
+                  ← Elegir otra fuente
+                </button>
+
+                <div style={{ marginBottom: "2rem" }}>
+                  <h1 style={{ fontSize: 24, fontWeight: 700, color: "#1a1a1a", marginBottom: 8, lineHeight: 1.3 }}>
+                    Elige entre {MIN_IMAGENES} y {MAX_IMAGENES} publicaciones o anuncios
+                  </h1>
+                  <p style={{ fontSize: 14, color: "#666", lineHeight: 1.5 }}>
+                    Mostramos lo más reciente de tus publicaciones y anuncios anteriores. Elige con las que estés conforme.
+                  </p>
+                </div>
+
+                <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(130px, 1fr))", gap: 12, marginBottom: 20 }}>
+                  {(metaInfo?.candidatos || []).map((candidato) => {
+                    const seleccionado = seleccionMeta.includes(candidato.id);
+                    return (
+                      <div
+                        key={candidato.id}
+                        onClick={() => handleToggleCandidatoMeta(candidato.id)}
+                        style={{ position: "relative", aspectRatio: "1", cursor: "pointer" }}
+                      >
+                        <img
+                          src={candidato.url}
+                          alt="Candidata de Meta"
+                          style={{
+                            width: "100%", height: "100%", objectFit: "cover", borderRadius: 12,
+                            border: seleccionado ? "2.5px solid #534AB7" : "1px solid #e0e0e0",
+                            opacity: seleccionado ? 1 : 0.85,
+                          }}
+                        />
+                        {seleccionado && (
+                          <span style={{ position: "absolute", top: -6, right: -6, width: 24, height: 24, borderRadius: "50%", background: "#534AB7", color: "#fff", border: "2px solid #fff", display: "flex", alignItems: "center", justifyContent: "center" }}>
+                            <Check size={12} strokeWidth={3} />
+                          </span>
+                        )}
+                      </div>
+                    );
+                  })}
+                </div>
+
+                <p style={{ fontSize: 12, color: "#999", marginBottom: 20 }}>
+                  {seleccionMeta.length}/{MAX_IMAGENES} elegidas · mínimo {MIN_IMAGENES} para analizar
+                </p>
+
+                {errorMsg && (
+                  <div style={{ background: "#FEF2F2", border: "1px solid #FCA5A5", borderRadius: 10, padding: "10px 14px", fontSize: 13, color: "#991B1B", marginBottom: 16 }}>
+                    {errorMsg}
+                  </div>
+                )}
+
+                <button
+                  onClick={handleAnalizarMeta}
+                  disabled={seleccionMeta.length < MIN_IMAGENES}
+                  style={{
+                    width: "100%",
+                    display: "flex",
+                    alignItems: "center",
+                    justifyContent: "center",
+                    gap: 8,
+                    background: seleccionMeta.length < MIN_IMAGENES ? "#eee" : "#534AB7",
+                    color: seleccionMeta.length < MIN_IMAGENES ? "#aaa" : "#fff",
+                    border: "none",
+                    padding: "14px",
+                    borderRadius: 10,
+                    fontSize: 15,
+                    fontWeight: 600,
+                    cursor: seleccionMeta.length < MIN_IMAGENES ? "not-allowed" : "pointer",
+                  }}
+                >
+                  <Sparkles size={17} strokeWidth={2} />
+                  Analizar mis creativos
+                </button>
+              </>
+            )}
+
+            {paso === "web" && (
+              <>
+                <button
+                  onClick={() => setPaso("elegir_fuente")}
+                  style={{ background: "none", border: "none", color: "#7F77DD", fontSize: 13, fontWeight: 600, cursor: "pointer", padding: 0, marginBottom: 20 }}
+                >
+                  ← Elegir otra fuente
+                </button>
+
+                <div style={{ marginBottom: "2rem" }}>
+                  <h1 style={{ fontSize: 24, fontWeight: 700, color: "#1a1a1a", marginBottom: 8, lineHeight: 1.3 }}>
+                    Pega el link de tu sitio web
+                  </h1>
+                  <p style={{ fontSize: 14, color: "#666", lineHeight: 1.5 }}>
+                    El sistema lee tu sitio para sacar el logo, los colores, las tipografías y los textos.
+                  </p>
+                </div>
+
+                <input
+                  value={sitioWebValor}
+                  onChange={(e) => setSitioWebValor(e.target.value)}
+                  placeholder="https://tu-sitio.com"
+                  style={{ width: "100%", padding: "10px 12px", borderRadius: 8, border: "1px solid #e0e0e0", fontSize: 13, boxSizing: "border-box", marginBottom: 20 }}
+                />
+
+                {errorMsg && (
+                  <div style={{ background: "#FEF2F2", border: "1px solid #FCA5A5", borderRadius: 10, padding: "10px 14px", fontSize: 13, color: "#991B1B", marginBottom: 16 }}>
+                    {errorMsg}
+                  </div>
+                )}
+
+                <button
+                  onClick={handleAnalizarWeb}
+                  disabled={!sitioWebValor.trim()}
+                  style={{
+                    width: "100%",
+                    display: "flex",
+                    alignItems: "center",
+                    justifyContent: "center",
+                    gap: 8,
+                    background: !sitioWebValor.trim() ? "#eee" : "#534AB7",
+                    color: !sitioWebValor.trim() ? "#aaa" : "#fff",
+                    border: "none",
+                    padding: "14px",
+                    borderRadius: 10,
+                    fontSize: 15,
+                    fontWeight: 600,
+                    cursor: !sitioWebValor.trim() ? "not-allowed" : "pointer",
+                  }}
+                >
+                  <Sparkles size={17} strokeWidth={2} />
+                  Analizar mi sitio
+                </button>
+              </>
+            )}
           </div>
         </div>
       )}
