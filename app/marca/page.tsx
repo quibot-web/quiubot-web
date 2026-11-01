@@ -521,7 +521,6 @@ export default function MarcaPage() {
   const [tutorialListo, setTutorialListo] = useState(false);
 
   const [paso, setPaso] = useState<PasoAdn>("elegir_fuente");
-  const [esAdmin, setEsAdmin] = useState(false);
 
   const [metaInfo, setMetaInfo] = useState<{ conectado: boolean; disponible: boolean; candidatos: CandidatoAdnMeta[] } | null>(null);
   const [cargandoMeta, setCargandoMeta] = useState(false);
@@ -570,16 +569,6 @@ export default function MarcaPage() {
         }
       })
       .finally(() => setCargandoInicial(false));
-  }, []);
-
-  // Solo para mostrar la opción "Pegar el link de mi sitio web" mientras
-  // n8n no tiene lista esa parte (ver POST /api/marca-adn, que además
-  // bloquea esto del lado del servidor -- esto es solo para la vista).
-  useEffect(() => {
-    fetch("/api/usuario/rol")
-      .then((r) => r.json())
-      .then((data) => setEsAdmin(data?.rol === "admin"))
-      .catch(() => {});
   }, []);
 
   // Para prellenar el link del sitio con el que el cliente ya guardó en
@@ -894,18 +883,13 @@ export default function MarcaPage() {
                     </span>
                   </button>
 
-                  {esAdmin && (
-                    <button
-                      onClick={() => setPaso("web")}
-                      style={{ textAlign: "left", display: "flex", flexDirection: "column", gap: 4, background: "#fff", border: "1.5px solid #7F77DD", borderRadius: 14, padding: "16px 18px", cursor: "pointer" }}
-                    >
-                      <span style={{ fontSize: 15, fontWeight: 600, color: "#1a1a1a" }}>
-                        Pegar el link de mi sitio web{" "}
-                        <span style={{ fontSize: 10, color: "#7F77DD", fontWeight: 700, textTransform: "uppercase" }}>admin</span>
-                      </span>
-                      <span style={{ fontSize: 12.5, color: "#666" }}>Analiza el logo, los colores, las tipografías y los textos de tu sitio.</span>
-                    </button>
-                  )}
+                  <button
+                    onClick={() => setPaso("web")}
+                    style={{ textAlign: "left", display: "flex", flexDirection: "column", gap: 4, background: "#fff", border: "1.5px solid #7F77DD", borderRadius: 14, padding: "16px 18px", cursor: "pointer" }}
+                  >
+                    <span style={{ fontSize: 15, fontWeight: 600, color: "#1a1a1a" }}>Pegar el link de mi sitio web</span>
+                    <span style={{ fontSize: 12.5, color: "#666" }}>Analiza el logo, los colores, las tipografías y los textos de tu sitio.</span>
+                  </button>
                 </div>
               </>
             )}
