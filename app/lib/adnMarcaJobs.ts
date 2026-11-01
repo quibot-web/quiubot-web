@@ -138,6 +138,24 @@ export async function procesarAdnMarca(
         actualizado_en: new Date().toISOString(),
       })
       .eq("id", jobId);
+
+    // n8n (analizar_adn_marca v2) sigue escribiendo directo en marcas
+    // adn_marca/adn_resumen/adn_generado_en -- fuente_adn y
+    // adn_imagenes_urls (text[] real en la columna, no jsonb) quedan de
+    // este lado, con lo que venga en la respuesta. Si esto falla, el
+    // análisis ya quedó "lista" igual -- es solo metadato de procedencia,
+    // no se vuelve a marcar fallido por esto.
+    try {
+      await supabaseAdmin
+        .from("marcas")
+        .update({
+          fuente_adn: typeof data.fuente === "string" ? data.fuente : datos.fuente,
+          adn_imagenes_urls: Array.isArray(data.imagenes_urls) ? data.imagenes_urls : null,
+        })
+        .eq("email", datos.emailBusqueda);
+    } catch (err) {
+      console.error(`[procesarAdnMarca] ${jobId} error guardando fuente_adn/adn_imagenes_urls:`, err);
+    }
   } catch (err) {
     const esAbort = err instanceof Error && err.name === "AbortError";
     console.error(`[procesarAdnMarca] ${jobId}:`, err);
