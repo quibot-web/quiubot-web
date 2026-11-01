@@ -49,25 +49,53 @@ export async function POST(req: NextRequest) {
   }
 
   const emailBusqueda = session.user.email.trim().toLowerCase();
-  const { imagenes_base64 } = await req.json();
-
-  if (!Array.isArray(imagenes_base64) || imagenes_base64.length < MIN_IMAGENES) {
-    return NextResponse.json(
-      { error: `Necesitas subir al menos ${MIN_IMAGENES} creativos para analizar tu ADN de marca.` },
-      { status: 400 }
-    );
-  }
-
-  const imagenesFinal = imagenes_base64.slice(0, MAX_IMAGENES);
+  const body = await req.json();
+  const fuente: "imagenes" | "meta" | "web" = body.fuente === "meta" || body.fuente === "web" ? body.fuente : "imagenes";
 
   const { data: usuario } = await supabaseAdmin
     .from("usuarios")
-    .select("id, openai_key")
+    .select("id, openai_key, rol")
     .eq("email", emailBusqueda)
     .single();
 
   if (!usuario) {
     return NextResponse.json({ error: "Usuario no encontrado" }, { status: 404 });
+  }
+
+  let imagenesFinal: string[] | undefined;
+  let imagenesUrlsFinal: string[] | undefined;
+  let urlSitioFinal: string | undefined;
+
+  if (fuente === "imagenes") {
+    const { imagenes_base64 } = body;
+    if (!Array.isArray(imagenes_base64) || imagenes_base64.length < MIN_IMAGENES) {
+      return NextResponse.json(
+        { error: `Necesitas subir al menos ${MIN_IMAGENES} creativos para analizar tu ADN de marca.` },
+        { status: 400 }
+      );
+    }
+    imagenesFinal = imagenes_base64.slice(0, MAX_IMAGENES);
+  } else if (fuente === "meta") {
+    const { imagenes_urls } = body;
+    if (!Array.isArray(imagenes_urls) || imagenes_urls.length < MIN_IMAGENES) {
+      return NextResponse.json(
+        { error: `Elige al menos ${MIN_IMAGENES} imágenes de tu cuenta de Meta para analizar tu ADN de marca.` },
+        { status: 400 }
+      );
+    }
+    imagenesUrlsFinal = imagenes_urls.slice(0, MAX_IMAGENES);
+  } else {
+    // fuente === "web" -- mientras n8n no tenga lista esta ruta, solo
+    // admins pueden probarla (ver POST /api/usuario/rol en el cliente,
+    // que ya oculta la opción -- esto es el respaldo del servidor).
+    if (usuario.rol !== "admin") {
+      return NextResponse.json({ error: "Esta opción todavía no está disponible." }, { status: 403 });
+    }
+    const url = typeof body.url === "string" ? body.url.trim() : "";
+    if (!url || !/^https?:\/\/.+/i.test(url)) {
+      return NextResponse.json({ error: "Escribe un link válido de tu sitio web." }, { status: 400 });
+    }
+    urlSitioFinal = url;
   }
 
   if (!usuario.openai_key) {
@@ -104,7 +132,10 @@ export async function POST(req: NextRequest) {
     procesarAdnMarca(job.id, {
       emailBusqueda,
       openaiKey: openaiKeyDescifrada,
+      fuente,
       imagenesBase64: imagenesFinal,
+      imagenesUrls: imagenesUrlsFinal,
+      url: urlSitioFinal,
     }).catch(async (err) => {
       console.error("Error no manejado en procesarAdnMarca:", err);
       await supabaseAdmin

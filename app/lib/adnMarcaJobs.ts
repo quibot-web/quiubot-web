@@ -1,5 +1,6 @@
 import "server-only";
 import { supabaseAdmin } from "@/lib/supabase";
+import { descargarImagenesComoBase64 } from "@/app/lib/adnMarcaFuentes";
 
 // Tercer tipo sobre trabajos_ia (los otros dos: "revision_imagen" y
 // "agregar_anuncios"). Sin candado -- a diferencia de agregar_anuncios,
@@ -53,14 +54,49 @@ export async function revisarTimeoutTrabajo(job: TrabajoAdnMarca): Promise<Traba
 // Mismo webhook de siempre (analizar_adn_marca), solo que ahora fuera
 // del ciclo de la petición -- si el cliente cierra la pestaña, el
 // análisis sigue y queda guardado para cuando vuelva.
+//
+// Tres fuentes posibles (ver POST /api/marca-adn): "imagenes" (hoy,
+// imagenesBase64 ya listas), "meta" (imagenesUrls elegidas por el cliente
+// de sus publicaciones/anuncios -- se descargan y convierten a base64
+// AQUÍ, dentro del trabajo en segundo plano, para no meter esa descarga
+// en el ciclo de la petición) y "web" (url de su sitio, sin imágenes --
+// n8n lee el HTML). n8n sigue recibiendo imagenes_base64 en el mismo
+// formato de siempre para "imagenes" y "meta" -- no necesita saber de
+// dónde salieron, solo el campo fuente (y imagenes_urls, para que pueda
+// guardar la procedencia en marcas.adn_imagenes_urls).
 export async function procesarAdnMarca(
   jobId: string,
-  datos: { emailBusqueda: string; openaiKey: string; imagenesBase64: string[] }
+  datos: {
+    emailBusqueda: string;
+    openaiKey: string;
+    fuente: "imagenes" | "meta" | "web";
+    imagenesBase64?: string[];
+    imagenesUrls?: string[];
+    url?: string;
+  }
 ): Promise<void> {
   await supabaseAdmin
     .from("trabajos_ia")
     .update({ estado: "procesando", actualizado_en: new Date().toISOString() })
     .eq("id", jobId);
+
+  let imagenesBase64 = datos.imagenesBase64;
+  if (datos.fuente === "meta" && datos.imagenesUrls) {
+    try {
+      imagenesBase64 = await descargarImagenesComoBase64(datos.imagenesUrls);
+    } catch (err) {
+      console.error(`[procesarAdnMarca] ${jobId} error descargando imágenes de Meta:`, err);
+      await supabaseAdmin
+        .from("trabajos_ia")
+        .update({
+          estado: "fallida",
+          error: "No se pudieron descargar las imágenes elegidas de Meta, intenta de nuevo",
+          actualizado_en: new Date().toISOString(),
+        })
+        .eq("id", jobId);
+      return;
+    }
+  }
 
   const controller = new AbortController();
   const timeoutId = setTimeout(() => controller.abort(), TIMEOUT_N8N_MS);
@@ -72,7 +108,10 @@ export async function procesarAdnMarca(
       body: JSON.stringify({
         email: datos.emailBusqueda,
         openai_key: datos.openaiKey,
-        imagenes_base64: datos.imagenesBase64,
+        fuente: datos.fuente,
+        ...(imagenesBase64 ? { imagenes_base64: imagenesBase64 } : {}),
+        ...(datos.imagenesUrls ? { imagenes_urls: datos.imagenesUrls } : {}),
+        ...(datos.url ? { url: datos.url } : {}),
       }),
       signal: controller.signal,
     });
