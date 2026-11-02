@@ -129,6 +129,46 @@ function esHexValido(v: any): v is string {
   return typeof v === "string" && /^#([0-9a-f]{3}|[0-9a-f]{6})$/i.test(v);
 }
 
+// Contraste WCAG de un hex contra un fondo claro (la espiral siempre
+// vive sobre superficies casi blancas: blanco de la fila resumen, o el
+// lavanda clarísimo del panel abierto) -- un umbral bajo (1.3) alcanza
+// para descartar colores casi invisibles (blanco, beige claro) sin ser
+// tan estricto como el 4.5 que pide WCAG para texto, que no aplica acá
+// (es un trazo decorativo con glow, no texto legible).
+const FONDO_CONTRASTE_ESPIRAL = "#ffffff";
+const UMBRAL_CONTRASTE_ESPIRAL = 1.3;
+
+function hexARgb(hex: string): [number, number, number] {
+  let limpio = hex.replace("#", "");
+  if (limpio.length === 3) limpio = limpio.split("").map((c) => c + c).join("");
+  const num = parseInt(limpio, 16);
+  return [(num >> 16) & 255, (num >> 8) & 255, num & 255];
+}
+
+function luminanciaRelativa(hex: string): number {
+  const [r, g, b] = hexARgb(hex).map((c) => {
+    const s = c / 255;
+    return s <= 0.03928 ? s / 12.92 : Math.pow((s + 0.055) / 1.055, 2.4);
+  });
+  return 0.2126 * r + 0.7152 * g + 0.0722 * b;
+}
+
+function contrasteHex(hex1: string, hex2: string): number {
+  const l1 = luminanciaRelativa(hex1);
+  const l2 = luminanciaRelativa(hex2);
+  const [claro, oscuro] = l1 > l2 ? [l1, l2] : [l2, l1];
+  return (claro + 0.05) / (oscuro + 0.05);
+}
+
+// Primer candidato (en orden de preferencia) con suficiente contraste
+// contra un fondo casi blanco; si ninguno sirve, el respaldo que se le pase.
+function elegirColorConContraste(candidatos: (string | null)[], respaldo: string): string {
+  for (const c of candidatos) {
+    if (esHexValido(c) && contrasteHex(c, FONDO_CONTRASTE_ESPIRAL) >= UMBRAL_CONTRASTE_ESPIRAL) return c;
+  }
+  return respaldo;
+}
+
 // Primera frase de un texto largo (hasta el primer ". "), recortada con
 // "…" si de todos modos queda muy larga -- usado como respaldo de
 // frase_corta cuando el ADN es viejo y no la trae.
@@ -221,12 +261,28 @@ function GlowAmbienteADN() {
 }
 
 // Espiral 2D chica, decorativa, en los colores de marca (con respaldo al
-// morado) -- usada en la fila resumen de un módulo colapsado.
-function MiniEspiral({ colorA, colorB, tamano = 24 }: { colorA: string; colorB: string; tamano?: number }) {
+// morado) -- usada en la fila resumen de un módulo colapsado. "transicion"
+// activa la misma animación morado -> colores de marca que la espiral
+// grande de 7 puntos, para que ambas cambien juntas.
+function MiniEspiral({ colorA, colorB, tamano = 24, transicion = false }: { colorA: string; colorB: string; tamano?: number; transicion?: boolean }) {
   return (
     <svg width={tamano} height={tamano * 1.7} viewBox="0 0 220 440" style={{ flexShrink: 0 }}>
-      <path d="M130,30 Q175,120 130,220 Q85,320 130,410" fill="none" stroke={colorA} strokeWidth={16} opacity={0.9} />
-      <path d="M130,30 Q85,120 130,220 Q175,320 130,410" fill="none" stroke={colorB} strokeWidth={16} opacity={0.9} />
+      <path
+        d="M130,30 Q175,120 130,220 Q85,320 130,410"
+        fill="none"
+        strokeWidth={16}
+        opacity={0.9}
+        className={transicion ? "adn-espiral-transicion" : undefined}
+        style={{ stroke: colorA }}
+      />
+      <path
+        d="M130,30 Q85,120 130,220 Q175,320 130,410"
+        fill="none"
+        strokeWidth={16}
+        opacity={0.9}
+        className={transicion ? "adn-espiral-transicion" : undefined}
+        style={{ stroke: colorB }}
+      />
     </svg>
   );
 }
@@ -614,6 +670,14 @@ export default function MarcaPage() {
   // "nueva" estrategia) -- null mientras no se ha consultado todavía.
   const [tieneCampanasPublicadas, setTieneCampanasPublicadas] = useState<boolean | null>(null);
 
+  // Transición morado -> colores de marca en la espiral, SOLO justo
+  // después de terminar un análisis en esta misma sesión (ver
+  // ejecutarAnalisis y el retomo de un job guardado) -- por defecto en
+  // "true" (ya en colores de marca) para que una carga normal de la
+  // página, con un ADN ya existente, nunca anime nada.
+  const [espiralEnColoresDeMarca, setEspiralEnColoresDeMarca] = useState(true);
+  const [espiralConTransicion, setEspiralConTransicion] = useState(false);
+
   const [paso, setPaso] = useState<"elegir_fuente" | "imagenes" | "meta" | "web">("elegir_fuente");
   // true = mostrar el selector de fuentes aunque ya haya un ADN (botón
   // "Volver a analizar") -- si no hay ADN todavía, el selector se
@@ -731,6 +795,7 @@ export default function MarcaPage() {
           setResumen(data.adn_resumen || "");
           setTieneAdn(true);
           setMostrandoSelectorFuentes(false);
+          dispararTransicionEspiral();
         })
         .catch((e: any) => {
           try {
@@ -813,6 +878,21 @@ export default function MarcaPage() {
     setPreviews((prev) => prev.filter((_, i) => i !== idx));
   }
 
+  // Dispara la transición morado -> colores de marca de la espiral --
+  // se llama justo al terminar un análisis (recién hecho o retomado tras
+  // volver a la página con uno en curso), nunca en una carga normal con
+  // un ADN que ya existía de antes. El primer timeout fuerza un render
+  // en morado antes de pasar a los colores de marca (si no, React
+  // agruparía los dos cambios de estado en uno solo y no habría nada
+  // que transicionar); el segundo apaga la clase de transición para no
+  // dejarla puesta para siempre.
+  const dispararTransicionEspiral = () => {
+    setEspiralEnColoresDeMarca(false);
+    setEspiralConTransicion(true);
+    setTimeout(() => setEspiralEnColoresDeMarca(true), 60);
+    setTimeout(() => setEspiralConTransicion(false), 1800);
+  };
+
   // Compartido entre las tres fuentes -- lo único que cambia entre
   // "imagenes", "meta" y "web" es qué va en el body de POST /api/marca-adn
   // (construirBody corre DESPUÉS de entrar en "analizando", igual que antes
@@ -864,6 +944,7 @@ export default function MarcaPage() {
       setMostrandoSelectorFuentes(false);
       setNodoSeleccionado(null);
       setVerDetalleTodas(false);
+      dispararTransicionEspiral();
     } catch (e: any) {
       try {
         localStorage.removeItem(LLAVE_ADN_JOB);
@@ -953,18 +1034,32 @@ export default function MarcaPage() {
   const tonoEmocional = (adn?.tono_emocional as Record<string, any>) || {};
   const tratamientoVisual = (adn?.tratamiento_visual as Record<string, any>) || {};
 
-  // Los colores de marca solo se usan como muestras en el rasgo
-  // "Colores" -- las espirales (chica y la de 7 puntos) siempre van en
-  // el morado de siempre de Quiubot, nunca en los de la marca.
   const colorPrimarioMarca = esHexValido(paletaColor.color_primario_hex) ? paletaColor.color_primario_hex : null;
   const colorSecundarioMarca = esHexValido(paletaColor.color_secundario_hex) ? paletaColor.color_secundario_hex : null;
+  const primerAcento = Array.isArray(paletaColor.colores_acento_hex) && esHexValido(paletaColor.colores_acento_hex[0])
+    ? paletaColor.colores_acento_hex[0]
+    : null;
+
+  // Las espirales (chica y la de 7 puntos) usan los colores de la marca
+  // -- primario para una hebra, secundario para la otra. Si alguno
+  // tiene muy poco contraste contra un fondo casi blanco (blanco o
+  // beige, por ejemplo), cae al acento o al otro color de la marca
+  // antes de caer al morado de siempre. Mientras se analiza, la espiral
+  // 3D sigue siempre en morado (no cambia con esto).
+  const colorEspiralDeMarcaA = elegirColorConContraste([colorPrimarioMarca, primerAcento, colorSecundarioMarca], COLOR_ACTIVO_DEFECTO);
+  const colorEspiralDeMarcaB = elegirColorConContraste([colorSecundarioMarca, primerAcento, colorPrimarioMarca], COLOR_CLARO_DEFECTO);
+  // Justo después de terminar un análisis, arranca en morado y pasa a
+  // los colores de marca con una transición de 1.5s (ver ejecutarAnalisis
+  // y el efecto de retomo) -- al volver a la página ya aparece directo
+  // en los colores de marca, sin animar nada.
+  const colorEspiralA = espiralEnColoresDeMarca ? colorEspiralDeMarcaA : COLOR_ACTIVO_DEFECTO;
+  const colorEspiralB = espiralEnColoresDeMarca ? colorEspiralDeMarcaB : COLOR_CLARO_DEFECTO;
 
   const sensaciones: string[] = Array.isArray(tonoEmocional.sensaciones_principales) ? tonoEmocional.sensaciones_principales : [];
   const tituloAdn: string = (adn as any)?.titular || (sensaciones.length > 0 ? capitalizarPrimera(sensaciones.slice(0, 2).join(" y ")) : primeraFrase(resumen));
   const fraseCortaAdn: string = (adn as any)?.frase_corta || primeraFrase(resumen);
 
-  const primerAcento = Array.isArray(paletaColor.colores_acento_hex) ? paletaColor.colores_acento_hex[0] : null;
-  const swatchesColores = [colorPrimarioMarca, colorSecundarioMarca, esHexValido(primerAcento) ? primerAcento : null].filter(Boolean) as string[];
+  const swatchesColores = [colorPrimarioMarca, colorSecundarioMarca, primerAcento].filter(Boolean) as string[];
 
   const rasgoTipografia = recortar(tipografiaCat.estilo || "", 46);
   const rasgoSensaciones = sensaciones.length > 0 ? capitalizarPrimera(sensaciones.slice(0, 2).join(", ")) : "";
@@ -1033,7 +1128,7 @@ export default function MarcaPage() {
             resumenVisual={
               modulo1Listo ? (
                 <>
-                  <MiniEspiral colorA={COLOR_ACTIVO_DEFECTO} colorB={COLOR_CLARO_DEFECTO} tamano={18} />
+                  <MiniEspiral colorA={colorEspiralA} colorB={colorEspiralB} tamano={18} transicion={espiralConTransicion} />
                   <span>{recortar(tituloAdn, 64)}</span>
                 </>
               ) : (
@@ -1375,22 +1470,49 @@ export default function MarcaPage() {
                           </feMerge>
                         </filter>
                       </defs>
-                      <path d={trazoHebra(0)} fill="none" stroke={COLOR_ACTIVO_DEFECTO} strokeWidth={2.5} opacity={0.55} filter="url(#glowADN)" />
-                      <path d={trazoHebra(Math.PI)} fill="none" stroke={COLOR_ACTIVO_DEFECTO} strokeWidth={2.5} opacity={0.55} filter="url(#glowADN)" />
+                      <path
+                        d={trazoHebra(0)}
+                        fill="none"
+                        strokeWidth={2.5}
+                        opacity={0.55}
+                        filter="url(#glowADN)"
+                        className={espiralConTransicion ? "adn-espiral-transicion" : undefined}
+                        style={{ stroke: colorEspiralA }}
+                      />
+                      <path
+                        d={trazoHebra(Math.PI)}
+                        fill="none"
+                        strokeWidth={2.5}
+                        opacity={0.55}
+                        filter="url(#glowADN)"
+                        className={espiralConTransicion ? "adn-espiral-transicion" : undefined}
+                        style={{ stroke: colorEspiralA }}
+                      />
                       {nodeYs.map((y, i) => {
                         const xa = xEnY(y, 0);
                         const xb = xEnY(y, Math.PI);
                         const seleccionado = nodoSeleccionado === i;
                         return (
                           <g key={i} filter="url(#glowADN)">
-                            <line x1={xa} y1={y} x2={xb} y2={y} stroke={COLOR_CLARO_DEFECTO} strokeWidth={2.5} opacity={0.6} />
+                            <line
+                              x1={xa} y1={y} x2={xb} y2={y}
+                              strokeWidth={2.5} opacity={0.6}
+                              className={espiralConTransicion ? "adn-espiral-transicion" : undefined}
+                              style={{ stroke: colorEspiralB }}
+                            />
                             <circle
                               cx={xa} cy={y}
                               r={seleccionado ? 13 : 9}
-                              fill={COLOR_ACTIVO_DEFECTO}
                               stroke="#fff"
                               strokeWidth={seleccionado ? 4 : 2.5}
-                              style={{ cursor: "pointer", transition: "all .3s cubic-bezier(.34,1.56,.64,1)" }}
+                              className={espiralConTransicion ? "adn-espiral-transicion" : undefined}
+                              style={{
+                                fill: colorEspiralA,
+                                cursor: "pointer",
+                                transition: espiralConTransicion
+                                  ? "r .3s cubic-bezier(.34,1.56,.64,1), stroke-width .3s cubic-bezier(.34,1.56,.64,1), fill 1.5s ease"
+                                  : "all .3s cubic-bezier(.34,1.56,.64,1)",
+                              }}
                               onClick={() => { setNodoSeleccionado(i); setVerDetalleTodas(false); }}
                             />
                           </g>
@@ -1594,6 +1716,15 @@ export default function MarcaPage() {
            otro (delay escalonado por índice) — da sensación de revisión
            continua sin sugerir que algo quedó incompleto. */
         @keyframes adn-ola { 0%, 100% { opacity: 1; } 50% { opacity: .55; } }
+
+        /* Transición morado -> colores de marca de la espiral, solo
+           justo después de terminar un análisis (ver
+           dispararTransicionEspiral) -- al volver a la página con un
+           ADN que ya existía, esta clase nunca se aplica. */
+        .adn-espiral-transicion { transition: stroke 1.5s ease, fill 1.5s ease; }
+        @media (prefers-reduced-motion: reduce) {
+          .adn-espiral-transicion { transition: none !important; }
+        }
       `}</style>
     </div>
   );
