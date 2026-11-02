@@ -1,6 +1,6 @@
 "use client";
 import { useState, useRef, useEffect } from "react";
-import { Upload, X, Check, Sparkles, Loader2, ChevronDown } from "lucide-react";
+import { Upload, X, Check, Sparkles, Loader2, FileText } from "lucide-react";
 import EscenaParticulasADN3D from "@/app/components/EscenaParticulasADN3D";
 import TutorialVideo from "@/app/components/TutorialVideo";
 import TourGuiado from "@/app/components/TourGuiado";
@@ -170,14 +170,26 @@ function elegirColorConContraste(candidatos: (string | null)[], respaldo: string
 }
 
 // Primera frase de un texto largo (hasta el primer ". "), recortada con
-// "…" si de todos modos queda muy larga -- usado como respaldo de
-// frase_corta cuando el ADN es viejo y no la trae.
+// "…" si de todos modos queda muy larga -- respaldo del TITULAR cuando
+// el ADN es viejo y no trae ni titular ni sensaciones_principales (un
+// titular sí debe quedar corto). Para la frase bajo el titular se usa
+// primeraOracionCompleta, sin recortar.
 function primeraFrase(texto: string, maxChars = 140): string {
   const limpio = (texto || "").trim();
   if (!limpio) return "";
   const punto = limpio.indexOf(". ");
   const candidata = punto > 0 && punto < maxChars ? limpio.slice(0, punto + 1) : limpio;
   return candidata.length > maxChars ? candidata.slice(0, maxChars - 1).trimEnd() + "…" : candidata;
+}
+
+// Primera oración completa (hasta el primer ". "), SIN recortar aunque
+// quede larga -- respaldo de frase_corta cuando el ADN es viejo y no la
+// trae: una frase completa, no un fragmento cortado con "…".
+function primeraOracionCompleta(texto: string): string {
+  const limpio = (texto || "").trim();
+  if (!limpio) return "";
+  const punto = limpio.indexOf(". ");
+  return punto > 0 ? limpio.slice(0, punto + 1) : limpio;
 }
 
 function capitalizarPrimera(s: string): string {
@@ -187,6 +199,18 @@ function capitalizarPrimera(s: string): string {
 function recortar(texto: string, maxChars: number): string {
   const limpio = (texto || "").trim();
   return limpio.length > maxChars ? limpio.slice(0, maxChars - 1).trimEnd() + "…" : limpio;
+}
+
+// Primera parte de un texto (hasta la primera coma), con un tope de
+// palabras -- respaldo de los rasgos cortos (tipografía, fotos) cuando
+// el ADN es viejo y no trae adn_marca.rasgos_cortos. A propósito SIN
+// "…": el pedido es "la primera parte del texto", no un recorte.
+function primeraParteCorta(texto: string, maxPalabras = 4): string {
+  const limpio = (texto || "").trim();
+  if (!limpio) return "";
+  const hastaComa = limpio.split(",")[0].trim();
+  const palabras = hastaComa.split(/\s+/).filter(Boolean);
+  return palabras.slice(0, maxPalabras).join(" ");
 }
 
 // Geometría de la hélice — usada tanto por el canvas de partículas (durante
@@ -596,55 +620,57 @@ function PanelInfoAdicional({
   );
 }
 
-// Cáscara compartida por los 3 módulos: número, estado ("Listo"/"Falta"),
-// resumen visual de una línea, y el panel de abajo (solo uno abierto a
-// la vez, lo decide el padre).
-function ModuloColapsable({
+// Tarjeta de uno de los 3 módulos -- sin panel adentro: las 3 van lado a
+// lado en una fila (ver MarcaPage), y el panel del que esté abierto se
+// pinta UNA vez, debajo de toda la fila, a todo el ancho (no adentro de
+// cada tarjeta) -- así nunca es un acordeón vertical en escritorio.
+function TarjetaModulo({
   numero,
   titulo,
   listo,
-  resumenVisual,
+  imagenResumen,
+  resumenLinea,
+  accionTexto,
   abierto,
-  onToggle,
-  children,
+  onClick,
 }: {
   numero: NumeroModulo;
   titulo: string;
   listo: boolean;
-  resumenVisual: React.ReactNode;
+  imagenResumen: React.ReactNode;
+  resumenLinea: string;
+  accionTexto: string;
   abierto: boolean;
-  onToggle: () => void;
-  children: React.ReactNode;
+  onClick: () => void;
 }) {
   const t = TOKENS_MODULO[numero];
   return (
-    <div style={{ background: "#fff", border: `1.5px solid ${abierto ? t.color : "#e8e8e6"}`, borderRadius: 16, marginBottom: 14, overflow: "hidden", transition: "border-color .15s" }}>
-      <button
-        onClick={onToggle}
-        style={{ display: "flex", alignItems: "center", gap: 14, padding: "16px 18px", width: "100%", textAlign: "left", background: "none", border: "none", cursor: "pointer" }}
-      >
-        <span style={{ width: 34, height: 34, borderRadius: "50%", flexShrink: 0, display: "flex", alignItems: "center", justifyContent: "center", fontWeight: 700, fontSize: 14, background: abierto ? t.color : t.fondo, color: abierto ? "#fff" : t.color }}>
+    <button
+      onClick={onClick}
+      style={{
+        textAlign: "left", background: "#fff", display: "flex", flexDirection: "column", gap: 10,
+        border: `2px solid ${abierto ? t.color : "#e8e8e6"}`, borderRadius: 16, padding: "16px",
+        cursor: "pointer", boxShadow: abierto ? `0 6px 18px -10px ${t.color}` : "none",
+        transition: "border-color .15s, box-shadow .15s",
+      }}
+    >
+      <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between" }}>
+        <span style={{ width: 28, height: 28, borderRadius: "50%", flexShrink: 0, display: "flex", alignItems: "center", justifyContent: "center", fontWeight: 700, fontSize: 12.5, background: abierto ? t.color : t.fondo, color: abierto ? "#fff" : t.color }}>
           {numero}
         </span>
-        <span style={{ flex: 1, minWidth: 0 }}>
-          <span style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 3, flexWrap: "wrap" }}>
-            <b style={{ fontSize: 15, color: "#1a1a1a" }}>{titulo}</b>
-            <span style={{ fontSize: 11, fontWeight: 700, padding: "2px 8px", borderRadius: 99, background: listo ? "#E7F7F1" : "#FEF2F2", color: listo ? "#0B7A5C" : "#991B1B", whiteSpace: "nowrap" }}>
-              {listo ? "Listo" : "Falta"}
-            </span>
-          </span>
-          <span style={{ fontSize: 12.5, color: "#666", display: "flex", alignItems: "center", gap: 8, flexWrap: "wrap" }}>
-            {resumenVisual}
-          </span>
+        <span style={{ fontSize: 10.5, fontWeight: 700, padding: "2px 7px", borderRadius: 99, background: listo ? "#E7F7F1" : "#FEF2F2", color: listo ? "#0B7A5C" : "#991B1B" }}>
+          {listo ? "Listo" : "Falta"}
         </span>
-        <ChevronDown size={18} style={{ color: abierto ? t.color : "#999", transform: abierto ? "rotate(180deg)" : "none", transition: "transform .2s", flexShrink: 0 }} />
-      </button>
-      {abierto && (
-        <div style={{ borderTop: "1px solid #e8e8e6", padding: "20px 18px 22px", background: t.fondo }}>
-          {children}
-        </div>
-      )}
-    </div>
+      </div>
+      <div style={{ height: 56, display: "flex", alignItems: "center", justifyContent: "center" }}>
+        {imagenResumen}
+      </div>
+      <div>
+        <b style={{ fontSize: 14.5, color: "#1a1a1a", display: "block", marginBottom: 3 }}>{titulo}</b>
+        <span style={{ fontSize: 12, color: "#666", display: "block", lineHeight: 1.4 }}>{resumenLinea}</span>
+      </div>
+      <span style={{ fontSize: 12.5, fontWeight: 600, color: t.color }}>{accionTexto} →</span>
+    </button>
   );
 }
 
@@ -1057,16 +1083,20 @@ export default function MarcaPage() {
 
   const sensaciones: string[] = Array.isArray(tonoEmocional.sensaciones_principales) ? tonoEmocional.sensaciones_principales : [];
   const tituloAdn: string = (adn as any)?.titular || (sensaciones.length > 0 ? capitalizarPrimera(sensaciones.slice(0, 2).join(" y ")) : primeraFrase(resumen));
-  const fraseCortaAdn: string = (adn as any)?.frase_corta || primeraFrase(resumen);
+  // frase_corta cuando existe; si no, la primera oración COMPLETA del
+  // resumen (sin recortar con "…", por más larga que quede).
+  const fraseCortaAdn: string = (adn as any)?.frase_corta || primeraOracionCompleta(resumen);
 
   const swatchesColores = [colorPrimarioMarca, colorSecundarioMarca, primerAcento].filter(Boolean) as string[];
 
-  const rasgoTipografia = recortar(tipografiaCat.estilo || "", 46);
-  const rasgoSensaciones = sensaciones.length > 0 ? capitalizarPrimera(sensaciones.slice(0, 2).join(", ")) : "";
-  const rasgoFotos = [tratamientoVisual.nivel_pulido_fotografico, tratamientoVisual.iluminacion]
-    .filter(Boolean)
-    .map((t: string) => recortar(t, 28))
-    .join(" · ");
+  // n8n ya manda adn_marca.rasgos_cortos (tipografia, fotos, sensacion --
+  // 2 a 4 palabras cada uno) -- se usan directo. Para un ADN viejo sin
+  // ese campo, se cae a la primera parte del texto largo (hasta la
+  // primera coma, máximo 4 palabras), nunca a un recorte con "…".
+  const rasgosCortos = (adn?.rasgos_cortos as Record<string, any>) || {};
+  const rasgoTipografia: string = rasgosCortos.tipografia || primeraParteCorta(tipografiaCat.estilo || "");
+  const rasgoSensaciones: string = rasgosCortos.sensacion || (sensaciones.length > 0 ? capitalizarPrimera(sensaciones.slice(0, 2).join(", ")) : "");
+  const rasgoFotos: string = rasgosCortos.fotos || primeraParteCorta(tratamientoVisual.nivel_pulido_fotografico || tratamientoVisual.iluminacion || "");
 
   // --- Módulo 2: Dónde vendes --------------------------------------
   const nombrePaisCobertura = PAISES_COBERTURA.find((p) => p.codigo === paisCobertura)?.nombre || paisCobertura;
@@ -1099,7 +1129,7 @@ export default function MarcaPage() {
       </div>
 
       <div style={{ flex: 1, padding: "2rem 1.5rem 4rem" }}>
-        <div style={{ maxWidth: 760, margin: "0 auto" }}>
+        <div style={{ maxWidth: 920, margin: "0 auto" }}>
           <div style={{ marginBottom: "1.5rem" }}>
             <h1 style={{ fontSize: 24, fontWeight: 700, color: "#1a1a1a", margin: "0 0 10px" }}>Mi marca</h1>
             <div style={{ display: "flex", alignItems: "center", gap: 12 }}>
@@ -1120,24 +1150,66 @@ export default function MarcaPage() {
             </div>
           </div>
 
-          {/* MÓDULO 1: ADN DE MARCA */}
-          <ModuloColapsable
-            numero={1}
-            titulo="ADN de marca"
-            listo={modulo1Listo}
-            resumenVisual={
-              modulo1Listo ? (
-                <>
-                  <MiniEspiral colorA={colorEspiralA} colorB={colorEspiralB} tamano={18} transicion={espiralConTransicion} />
-                  <span>{recortar(tituloAdn, 64)}</span>
-                </>
-              ) : (
-                <span>Elige de dónde sacamos los colores, la tipografía y el tono de tus anuncios.</span>
-              )
-            }
-            abierto={moduloAbierto === 1}
-            onToggle={() => toggleModulo(1)}
-          >
+          {/* Los 3 módulos, lado a lado en escritorio (ver .modulos-fila y
+              su media query más abajo) -- solo se apilan en una columna
+              por debajo de 860px. El panel del que esté abierto se pinta
+              UNA vez, después de esta fila, a todo el ancho -- nunca
+              adentro de una tarjeta, para que nunca sea un acordeón
+              vertical en escritorio. */}
+          <div className="modulos-fila">
+            <TarjetaModulo
+              numero={1}
+              titulo="ADN de marca"
+              listo={modulo1Listo}
+              imagenResumen={
+                modulo1Listo ? (
+                  <MiniEspiral colorA={colorEspiralA} colorB={colorEspiralB} tamano={44} transicion={espiralConTransicion} />
+                ) : (
+                  <Sparkles size={26} color="#ccc" strokeWidth={1.75} />
+                )
+              }
+              resumenLinea={modulo1Listo ? recortar(tituloAdn, 60) : "Elige de dónde sacamos tu ADN."}
+              accionTexto={modulo1Listo ? "Ver mi ADN" : "Completar"}
+              abierto={moduloAbierto === 1}
+              onClick={() => toggleModulo(1)}
+            />
+            <TarjetaModulo
+              numero={2}
+              titulo="Dónde vendes"
+              listo={true}
+              imagenResumen={
+                <div style={{ display: "flex", flexDirection: "column", alignItems: "center", gap: 4 }}>
+                  <BanderaPais codigo={paisCobertura} tamano={22} />
+                  {ciudadesCobertura.length > 0 && (
+                    <span style={{ fontSize: 10.5, color: "#2563EB", fontWeight: 600 }}>
+                      {ciudadesCobertura.length} ciudad{ciudadesCobertura.length !== 1 ? "es" : ""}
+                    </span>
+                  )}
+                </div>
+              }
+              resumenLinea={
+                ciudadesCobertura.length === 0
+                  ? `Todo ${nombrePaisCobertura}`
+                  : ciudadesCobertura.slice(0, 2).map((c) => c.nombre).join(", ") + (ciudadesCobertura.length > 2 ? ` +${ciudadesCobertura.length - 2}` : "")
+              }
+              accionTexto="Editar"
+              abierto={moduloAbierto === 2}
+              onClick={() => toggleModulo(2)}
+            />
+            <TarjetaModulo
+              numero={3}
+              titulo="Lo que deben saber"
+              listo={modulo3Listo}
+              imagenResumen={<FileText size={26} color={modulo3Listo ? "#D97706" : "#ccc"} strokeWidth={1.75} />}
+              resumenLinea={modulo3Listo ? recortar(infoAdicionalValor, 60) : "Envíos, garantías, formas de pago."}
+              accionTexto={modulo3Listo ? "Editar" : "Completar"}
+              abierto={moduloAbierto === 3}
+              onClick={() => toggleModulo(3)}
+            />
+          </div>
+
+          {moduloAbierto === 1 && (
+            <div style={{ background: TOKENS_MODULO[1].fondo, borderTop: `4px solid ${TOKENS_MODULO[1].color}`, borderRadius: "0 0 16px 16px", padding: "20px 18px 22px", marginBottom: 14 }}>
             {analizando ? (
               <div style={{ display: "flex", gap: 32, alignItems: "center", flexWrap: "wrap", justifyContent: "center" }}>
                 <div style={{ flex: "0 1 260px", minWidth: 220, height: 320 }}>
@@ -1626,57 +1698,25 @@ export default function MarcaPage() {
                 </div>
               )
             )}
-          </ModuloColapsable>
+            </div>
+          )}
 
-          {/* MÓDULO 2: DÓNDE VENDES */}
-          <ModuloColapsable
-            numero={2}
-            titulo="Dónde vendes"
-            listo={true}
-            resumenVisual={
-              <>
-                <BanderaPais codigo={paisCobertura} tamano={16} />
-                <span>{nombrePaisCobertura}</span>
-                {ciudadesCobertura.length === 0 ? (
-                  <span>· Todo {nombrePaisCobertura}</span>
-                ) : (
-                  <>
-                    {ciudadesCobertura.slice(0, 3).map((c, i) => (
-                      <span key={i} style={{ background: "#fff", border: "1px solid #BFD3FA", color: "#2563EB", fontSize: 11.5, fontWeight: 600, padding: "2px 8px", borderRadius: 99 }}>
-                        {c.nombre}
-                      </span>
-                    ))}
-                    {ciudadesCobertura.length > 3 && <span>+{ciudadesCobertura.length - 3}</span>}
-                  </>
-                )}
-              </>
-            }
-            abierto={moduloAbierto === 2}
-            onToggle={() => toggleModulo(2)}
-          >
-            <PanelCobertura
-              pais={paisCobertura}
-              ciudades={ciudadesCobertura}
-              onPaisChange={setPaisCobertura}
-              onCiudadesChange={setCiudadesCobertura}
-            />
-          </ModuloColapsable>
+          {moduloAbierto === 2 && (
+            <div style={{ background: TOKENS_MODULO[2].fondo, borderTop: `4px solid ${TOKENS_MODULO[2].color}`, borderRadius: "0 0 16px 16px", padding: "20px 18px 22px", marginBottom: 14 }}>
+              <PanelCobertura
+                pais={paisCobertura}
+                ciudades={ciudadesCobertura}
+                onPaisChange={setPaisCobertura}
+                onCiudadesChange={setCiudadesCobertura}
+              />
+            </div>
+          )}
 
-          {/* MÓDULO 3: LO QUE DEBEN SABER */}
-          <ModuloColapsable
-            numero={3}
-            titulo="Lo que deben saber"
-            listo={modulo3Listo}
-            resumenVisual={
-              <span>
-                {modulo3Listo ? recortar(infoAdicionalValor, 72) : "Envíos, garantías, formas de pago -- lo que distingue tu negocio."}
-              </span>
-            }
-            abierto={moduloAbierto === 3}
-            onToggle={() => toggleModulo(3)}
-          >
-            <PanelInfoAdicional valor={infoAdicionalValor} onChange={setInfoAdicionalValor} />
-          </ModuloColapsable>
+          {moduloAbierto === 3 && (
+            <div style={{ background: TOKENS_MODULO[3].fondo, borderTop: `4px solid ${TOKENS_MODULO[3].color}`, borderRadius: "0 0 16px 16px", padding: "20px 18px 22px", marginBottom: 14 }}>
+              <PanelInfoAdicional valor={infoAdicionalValor} onChange={setInfoAdicionalValor} />
+            </div>
+          )}
 
           {modulo1Listo && modulo3Listo && (
             <div style={{ background: "#F3F2FE", border: "1.5px solid #534AB7", borderRadius: 16, padding: "20px 22px", textAlign: "center", marginTop: 6 }}>
@@ -1724,6 +1764,14 @@ export default function MarcaPage() {
         .adn-espiral-transicion { transition: stroke 1.5s ease, fill 1.5s ease; }
         @media (prefers-reduced-motion: reduce) {
           .adn-espiral-transicion { transition: none !important; }
+        }
+
+        /* Los 3 módulos lado a lado en escritorio -- nunca un acordeón
+           vertical ahí. Solo se apilan en una columna por debajo de
+           860px (celular/tablet angosto). */
+        .modulos-fila { display: grid; grid-template-columns: repeat(3, 1fr); gap: 14px; margin-bottom: 14px; }
+        @media (max-width: 860px) {
+          .modulos-fila { grid-template-columns: 1fr; }
         }
       `}</style>
     </div>
