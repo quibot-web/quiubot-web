@@ -1,6 +1,6 @@
 "use client";
 import { useState, useRef, useEffect } from "react";
-import { Upload, X, Check, Sparkles, Loader2, FileText } from "lucide-react";
+import { Upload, X, Check, Sparkles, Loader2 } from "lucide-react";
 import EscenaParticulasADN3D from "@/app/components/EscenaParticulasADN3D";
 import TutorialVideo from "@/app/components/TutorialVideo";
 import TourGuiado from "@/app/components/TourGuiado";
@@ -145,6 +145,13 @@ function hexARgb(hex: string): [number, number, number] {
   return [(num >> 16) & 255, (num >> 8) & 255, num & 255];
 }
 
+// Para el tinte suave de fondo detrás de la espiral horizontal (con los
+// mismos 2 colores de marca, a baja opacidad).
+function hexConAlpha(hex: string, alpha: number): string {
+  const [r, g, b] = hexARgb(hex);
+  return `rgba(${r}, ${g}, ${b}, ${alpha})`;
+}
+
 function luminanciaRelativa(hex: string): number {
   const [r, g, b] = hexARgb(hex).map((c) => {
     const s = c / 255;
@@ -211,6 +218,54 @@ function primeraParteCorta(texto: string, maxPalabras = 4): string {
   const hastaComa = limpio.split(",")[0].trim();
   const palabras = hastaComa.split(/\s+/).filter(Boolean);
   return palabras.slice(0, maxPalabras).join(" ");
+}
+
+// Chips de "Lo que deben saber" -- info_adicional es texto libre sin
+// estructura (ver app/api/marca/route.ts), así que esto es una
+// heurística de texto, no una lectura de un campo estructurado: separa
+// por coma/punto y coma/punto/salto de línea, descarta fragmentos
+// vacíos o de menos de 3 caracteres, y le pone un emoji por palabra
+// clave a cada uno. Si no sale ningún fragmento (una sola frase larga
+// sin separadores), muestra esa frase completa como un único chip.
+const PALABRAS_CLAVE_EMOJI: { patron: RegExp; emoji: string }[] = [
+  { patron: /env[ií]o|domicilio/i, emoji: "🚚" },
+  { patron: /garant[ií]a/i, emoji: "🛡️" },
+  { patron: /devoluci[oó]n/i, emoji: "🔄" },
+  { patron: /horario|atenci[oó]n/i, emoji: "🕒" },
+  { patron: /pago|contraentrega|tarjeta|efectivo/i, emoji: "💳" },
+  { patron: /distribuidor|exclusiv|autorizad/i, emoji: "⭐" },
+];
+
+function emojiParaFragmento(texto: string): string {
+  const encontrada = PALABRAS_CLAVE_EMOJI.find(({ patron }) => patron.test(texto));
+  return encontrada?.emoji || "📌";
+}
+
+// Recorta en un límite de palabra (nunca a mitad de una) con "…" --
+// a diferencia de recortar(), que puede cortar dentro de una palabra.
+function recortarPalabra(texto: string, maxChars = 22): string {
+  const limpio = texto.trim();
+  if (limpio.length <= maxChars) return limpio;
+  const cortado = limpio.slice(0, maxChars);
+  const ultimoEspacio = cortado.lastIndexOf(" ");
+  const base = ultimoEspacio > 0 ? cortado.slice(0, ultimoEspacio) : cortado;
+  return base.trimEnd() + "…";
+}
+
+function extraerChipsInfoAdicional(texto: string, maxChips = 3): { emoji: string; texto: string }[] {
+  const limpio = (texto || "").trim();
+  if (!limpio) return [];
+
+  const fragmentos = limpio
+    .split(/[,;.\n]+/)
+    .map((f) => f.trim())
+    .filter((f) => f.length >= 3);
+
+  if (fragmentos.length === 0) {
+    return [{ emoji: emojiParaFragmento(limpio), texto: recortarPalabra(limpio) }];
+  }
+
+  return fragmentos.slice(0, maxChips).map((f) => ({ emoji: emojiParaFragmento(f), texto: recortarPalabra(f) }));
 }
 
 // Geometría de la hélice — usada tanto por el canvas de partículas (durante
@@ -284,29 +339,92 @@ function GlowAmbienteADN() {
   );
 }
 
-// Espiral 2D chica, decorativa, en los colores de marca (con respaldo al
-// morado) -- usada en la fila resumen de un módulo colapsado. "transicion"
-// activa la misma animación morado -> colores de marca que la espiral
-// grande de 7 puntos, para que ambas cambien juntas.
-function MiniEspiral({ colorA, colorB, tamano = 24, transicion = false }: { colorA: string; colorB: string; tamano?: number; transicion?: boolean }) {
+// Espiral 2D horizontal, animada, decorativa -- llena el recuadro de
+// 104px de la tarjeta del módulo 1. Misma geometría que la maqueta
+// aprobada (docs/diseno/miniaturas_mi_marca.html): 2 hebras + 14
+// peldaños + 7 puntos, en los colores que le pasen (de marca, o el
+// lila fijo de respaldo cuando no hay ADN). Pinta un cuadro fijo (sin
+// animar) si el usuario prefiere menos movimiento.
+function MiniEspiralHorizontal({ colorA, colorB, fondo }: { colorA: string; colorB: string; fondo?: string }) {
+  const pathARef = useRef<SVGPathElement>(null);
+  const pathBRef = useRef<SVGPathElement>(null);
+  const peldanosRef = useRef<(SVGLineElement | null)[]>([]);
+  const puntosRef = useRef<(SVGCircleElement | null)[]>([]);
+
+  useEffect(() => {
+    const W = 300;
+    const H = 104;
+
+    const y = (x: number, off: number, fase: number) => H / 2 + Math.sin(x / 42 + off + fase) * 30;
+    const trazo = (off: number, fase: number) => {
+      let d = "";
+      for (let x = -4; x <= W + 4; x += 4) {
+        d += (x === -4 ? "M" : "L") + x + " " + y(x, off, fase).toFixed(1);
+      }
+      return d;
+    };
+
+    const pintar = (fase: number) => {
+      pathARef.current?.setAttribute("d", trazo(0, fase));
+      pathBRef.current?.setAttribute("d", trazo(Math.PI, fase));
+      peldanosRef.current.forEach((l, i) => {
+        if (!l) return;
+        const x = 10 + i * 21;
+        l.setAttribute("x1", String(x));
+        l.setAttribute("x2", String(x));
+        l.setAttribute("y1", String(y(x, 0, fase)));
+        l.setAttribute("y2", String(y(x, Math.PI, fase)));
+      });
+      puntosRef.current.forEach((c, i) => {
+        if (!c) return;
+        const x = 24 + i * 42;
+        const off = i % 2 ? Math.PI : 0;
+        c.setAttribute("cx", String(x));
+        c.setAttribute("cy", String(y(x, off, fase)));
+        c.setAttribute("fill", i % 2 ? colorB : colorA);
+      });
+    };
+
+    pintar(0);
+
+    const prefiereMenosMovimiento =
+      typeof window !== "undefined" && window.matchMedia?.("(prefers-reduced-motion: reduce)").matches;
+    if (prefiereMenosMovimiento) return;
+
+    let fase = 0;
+    let rafId: number;
+    const animar = () => {
+      fase += 0.012;
+      pintar(fase);
+      rafId = requestAnimationFrame(animar);
+    };
+    rafId = requestAnimationFrame(animar);
+    return () => cancelAnimationFrame(rafId);
+  }, [colorA, colorB]);
+
   return (
-    <svg width={tamano} height={tamano * 1.7} viewBox="0 0 220 440" style={{ flexShrink: 0 }}>
-      <path
-        d="M130,30 Q175,120 130,220 Q85,320 130,410"
-        fill="none"
-        strokeWidth={16}
-        opacity={0.9}
-        className={transicion ? "adn-espiral-transicion" : undefined}
-        style={{ stroke: colorA }}
-      />
-      <path
-        d="M130,30 Q85,120 130,220 Q175,320 130,410"
-        fill="none"
-        strokeWidth={16}
-        opacity={0.9}
-        className={transicion ? "adn-espiral-transicion" : undefined}
-        style={{ stroke: colorB }}
-      />
+    <svg
+      width="100%"
+      height={104}
+      viewBox="0 0 300 104"
+      preserveAspectRatio="none"
+      style={{ position: "absolute", inset: 0, display: "block", background: fondo }}
+    >
+      {Array.from({ length: 14 }).map((_, i) => (
+        <line
+          key={i}
+          ref={(el) => { peldanosRef.current[i] = el; }}
+          stroke={colorB}
+          strokeWidth={2}
+          strokeLinecap="round"
+          opacity={0.45}
+        />
+      ))}
+      <path ref={pathBRef} fill="none" stroke={colorB} strokeWidth={5} strokeLinecap="round" />
+      <path ref={pathARef} fill="none" stroke={colorA} strokeWidth={5} strokeLinecap="round" />
+      {Array.from({ length: 7 }).map((_, i) => (
+        <circle key={i} ref={(el) => { puntosRef.current[i] = el; }} r={5.5} stroke="#fff" strokeWidth={2} />
+      ))}
     </svg>
   );
 }
@@ -662,7 +780,7 @@ function TarjetaModulo({
           {listo ? "Listo" : "Falta"}
         </span>
       </div>
-      <div style={{ height: 56, display: "flex", alignItems: "center", justifyContent: "center" }}>
+      <div style={{ height: 104, width: "100%", borderRadius: 16, overflow: "hidden", display: "flex", alignItems: "center", justifyContent: "center", position: "relative", background: t.fondo }}>
         {imagenResumen}
       </div>
       <div>
@@ -1163,13 +1281,24 @@ export default function MarcaPage() {
               listo={modulo1Listo}
               imagenResumen={
                 modulo1Listo ? (
-                  <MiniEspiral colorA={colorEspiralA} colorB={colorEspiralB} tamano={44} transicion={espiralConTransicion} />
+                  <>
+                    <MiniEspiralHorizontal
+                      colorA={colorEspiralA}
+                      colorB={colorEspiralB}
+                      fondo={`linear-gradient(135deg, ${hexConAlpha(colorEspiralA, 0.14)}, ${hexConAlpha(colorEspiralB, 0.14)})`}
+                    />
+                    <div style={{ position: "absolute", right: 8, bottom: 8, display: "flex", gap: 3, background: "#fff", borderRadius: 99, padding: "4px 6px", boxShadow: "0 2px 6px rgba(0,0,0,0.12)" }}>
+                      {swatchesColores.slice(0, 3).map((hex, i) => (
+                        <span key={i} style={{ width: 12, height: 12, borderRadius: "50%", background: hex, border: "1px solid rgba(0,0,0,0.08)", display: "block" }} />
+                      ))}
+                    </div>
+                  </>
                 ) : (
-                  <Sparkles size={26} color="#ccc" strokeWidth={1.75} />
+                  <MiniEspiralHorizontal colorA="#B9B3E6" colorB="#D9D5F3" />
                 )
               }
               resumenLinea={modulo1Listo ? recortar(tituloAdn, 60) : "Elige de dónde sacamos tu ADN."}
-              accionTexto={modulo1Listo ? "Ver mi ADN" : "Completar"}
+              accionTexto={modulo1Listo ? "Ver mi ADN" : "Crear mi ADN"}
               abierto={moduloAbierto === 1}
               onClick={() => toggleModulo(1)}
             />
@@ -1178,14 +1307,38 @@ export default function MarcaPage() {
               titulo="Dónde vendes"
               listo={true}
               imagenResumen={
-                <div style={{ display: "flex", flexDirection: "column", alignItems: "center", gap: 4 }}>
-                  <BanderaPais codigo={paisCobertura} tamano={22} />
-                  {ciudadesCobertura.length > 0 && (
-                    <span style={{ fontSize: 10.5, color: "#2563EB", fontWeight: 600 }}>
-                      {ciudadesCobertura.length} ciudad{ciudadesCobertura.length !== 1 ? "es" : ""}
-                    </span>
-                  )}
-                </div>
+                <>
+                  <svg width="100%" height={104} viewBox="0 0 300 104" preserveAspectRatio="none" aria-hidden="true" style={{ position: "absolute", inset: 0, display: "block" }}>
+                    <g stroke="#C9DAF8" strokeWidth={1} fill="none">
+                      <path d="M0 26H300M0 52H300M0 78H300M60 0V104M120 0V104M180 0V104M240 0V104" />
+                    </g>
+                    <path d="M40 80 C90 40 150 90 210 46 S280 30 300 20" stroke="#9DBCF5" strokeWidth={2} strokeDasharray="5 5" fill="none" />
+                  </svg>
+                  <div style={{ position: "relative", display: "flex", flexDirection: "column", alignItems: "center", gap: 7 }}>
+                    <svg width={26} height={32} viewBox="0 0 26 32" aria-hidden="true">
+                      <path d="M13 31C13 31 24 19.5 24 12A11 11 0 0 0 2 12C2 19.5 13 31 13 31Z" fill="#1F6FEB" />
+                      <circle cx={13} cy={12} r={4.5} fill="#fff" />
+                    </svg>
+                    <div style={{ display: "flex", alignItems: "center", gap: 6, background: "#fff", borderRadius: 99, padding: "5px 10px 5px 6px", fontSize: 12.5, fontWeight: 700, boxShadow: "0 2px 8px rgba(31,111,235,0.15)" }}>
+                      <BanderaPais codigo={paisCobertura} tamano={20} />
+                      {ciudadesCobertura.length === 0 ? `Todo ${nombrePaisCobertura}` : nombrePaisCobertura}
+                    </div>
+                    {ciudadesCobertura.length > 0 && (
+                      <div style={{ display: "flex", gap: 5 }}>
+                        {ciudadesCobertura.slice(0, 2).map((c, i) => (
+                          <span key={i} style={{ background: "rgba(255,255,255,0.85)", color: "#2563EB", fontSize: 11.5, fontWeight: 700, borderRadius: 99, padding: "3px 8px" }}>
+                            {c.nombre}
+                          </span>
+                        ))}
+                        {ciudadesCobertura.length > 2 && (
+                          <span style={{ background: "rgba(255,255,255,0.85)", color: "#2563EB", fontSize: 11.5, fontWeight: 700, borderRadius: 99, padding: "3px 8px" }}>
+                            +{ciudadesCobertura.length - 2}
+                          </span>
+                        )}
+                      </div>
+                    )}
+                  </div>
+                </>
               }
               resumenLinea={
                 ciudadesCobertura.length === 0
@@ -1200,7 +1353,25 @@ export default function MarcaPage() {
               numero={3}
               titulo="Lo que deben saber"
               listo={modulo3Listo}
-              imagenResumen={<FileText size={26} color={modulo3Listo ? "#D97706" : "#ccc"} strokeWidth={1.75} />}
+              imagenResumen={
+                modulo3Listo ? (
+                  <div style={{ display: "flex", flexWrap: "wrap", gap: 6, justifyContent: "center", padding: "0 14px" }}>
+                    {extraerChipsInfoAdicional(infoAdicionalValor).map((chip, i) => (
+                      <span key={i} style={{ fontSize: 12.5, fontWeight: 600, borderRadius: 10, padding: "6px 10px", background: "#fff", color: "#8A5A00", boxShadow: "0 2px 6px rgba(199,122,0,0.12)" }}>
+                        {chip.emoji} {chip.texto}
+                      </span>
+                    ))}
+                  </div>
+                ) : (
+                  <div style={{ display: "flex", flexWrap: "wrap", gap: 6, justifyContent: "center", padding: "0 14px" }}>
+                    {["🚚 Envíos", "🛡️ Garantía", "💳 Pagos", "⭐ Diferencial"].map((guia) => (
+                      <span key={guia} style={{ fontSize: 12.5, fontWeight: 600, borderRadius: 10, padding: "6px 10px", background: "transparent", border: "1.5px dashed #E3C88F", color: "#B98A3A" }}>
+                        {guia}
+                      </span>
+                    ))}
+                  </div>
+                )
+              }
               resumenLinea={modulo3Listo ? recortar(infoAdicionalValor, 60) : "Envíos, garantías, formas de pago."}
               accionTexto={modulo3Listo ? "Editar" : "Completar"}
               abierto={moduloAbierto === 3}
