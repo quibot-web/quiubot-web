@@ -868,7 +868,7 @@ export default function MarcaPage() {
                       <span style={{ fontSize: 12.5, color: "#666" }}>
                         {metaInfo.disponible
                           ? `Elige entre tus publicaciones y anuncios más recientes (encontramos ${metaInfo.candidatos.length}).`
-                          : `No encontramos suficientes publicaciones o anuncios con imagen en tu cuenta de Meta (mínimo ${MIN_IMAGENES}). Prueba otra opción.`}
+                          : `Tus anuncios en Meta repiten pocas imágenes distintas (encontramos ${metaInfo.candidatos.length}). Prueba con tu sitio web o sube imágenes.`}
                       </span>
                     </button>
                   )}
