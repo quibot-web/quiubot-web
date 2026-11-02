@@ -610,6 +610,10 @@ export default function MarcaPage() {
   // Módulo 3 -- mismo motivo que el módulo 2.
   const [infoAdicionalValor, setInfoAdicionalValor] = useState("");
 
+  // Solo para elegir el texto del botón del aviso final ("primera" vs
+  // "nueva" estrategia) -- null mientras no se ha consultado todavía.
+  const [tieneCampanasPublicadas, setTieneCampanasPublicadas] = useState<boolean | null>(null);
+
   const [paso, setPaso] = useState<"elegir_fuente" | "imagenes" | "meta" | "web">("elegir_fuente");
   // true = mostrar el selector de fuentes aunque ya haya un ADN (botón
   // "Volver a analizar") -- si no hay ADN todavía, el selector se
@@ -918,6 +922,21 @@ export default function MarcaPage() {
     setVerDetalleTodas(false);
   };
 
+  // Solo se consulta cuando de verdad hace falta (los 3 módulos ya
+  // completos) -- para la mayoría de cargas de la página (todavía
+  // armando la marca) esto ni se pide. Reusa /api/campanas (ya existe,
+  // la misma que lista /campanas) en vez de sumar un endpoint nuevo
+  // solo para esta pregunta de sí/no.
+  const modulo1ListoParaAviso = tieneAdn && !!adn;
+  const modulo3ListoParaAviso = !!infoAdicionalValor.trim();
+  useEffect(() => {
+    if (!modulo1ListoParaAviso || !modulo3ListoParaAviso || tieneCampanasPublicadas !== null) return;
+    fetch("/api/campanas")
+      .then((r) => r.json())
+      .then((data) => setTieneCampanasPublicadas((data.campanas || []).length > 0))
+      .catch(() => setTieneCampanasPublicadas(false));
+  }, [modulo1ListoParaAviso, modulo3ListoParaAviso, tieneCampanasPublicadas]);
+
   if (cargandoInicial) {
     return <CargandoQuiubot mensaje="Cargando tu marca" />;
   }
@@ -934,10 +953,11 @@ export default function MarcaPage() {
   const tonoEmocional = (adn?.tono_emocional as Record<string, any>) || {};
   const tratamientoVisual = (adn?.tratamiento_visual as Record<string, any>) || {};
 
+  // Los colores de marca solo se usan como muestras en el rasgo
+  // "Colores" -- las espirales (chica y la de 7 puntos) siempre van en
+  // el morado de siempre de Quiubot, nunca en los de la marca.
   const colorPrimarioMarca = esHexValido(paletaColor.color_primario_hex) ? paletaColor.color_primario_hex : null;
   const colorSecundarioMarca = esHexValido(paletaColor.color_secundario_hex) ? paletaColor.color_secundario_hex : null;
-  const colorEspiralA = colorPrimarioMarca || COLOR_ACTIVO_DEFECTO;
-  const colorEspiralB = colorSecundarioMarca || COLOR_CLARO_DEFECTO;
 
   const sensaciones: string[] = Array.isArray(tonoEmocional.sensaciones_principales) ? tonoEmocional.sensaciones_principales : [];
   const tituloAdn: string = (adn as any)?.titular || (sensaciones.length > 0 ? capitalizarPrimera(sensaciones.slice(0, 2).join(" y ")) : primeraFrase(resumen));
@@ -1013,7 +1033,7 @@ export default function MarcaPage() {
             resumenVisual={
               modulo1Listo ? (
                 <>
-                  <MiniEspiral colorA={colorEspiralA} colorB={colorEspiralB} tamano={18} />
+                  <MiniEspiral colorA={COLOR_ACTIVO_DEFECTO} colorB={COLOR_CLARO_DEFECTO} tamano={18} />
                   <span>{recortar(tituloAdn, 64)}</span>
                 </>
               ) : (
@@ -1355,19 +1375,19 @@ export default function MarcaPage() {
                           </feMerge>
                         </filter>
                       </defs>
-                      <path d={trazoHebra(0)} fill="none" stroke={colorEspiralA} strokeWidth={2.5} opacity={0.55} filter="url(#glowADN)" />
-                      <path d={trazoHebra(Math.PI)} fill="none" stroke={colorEspiralA} strokeWidth={2.5} opacity={0.55} filter="url(#glowADN)" />
+                      <path d={trazoHebra(0)} fill="none" stroke={COLOR_ACTIVO_DEFECTO} strokeWidth={2.5} opacity={0.55} filter="url(#glowADN)" />
+                      <path d={trazoHebra(Math.PI)} fill="none" stroke={COLOR_ACTIVO_DEFECTO} strokeWidth={2.5} opacity={0.55} filter="url(#glowADN)" />
                       {nodeYs.map((y, i) => {
                         const xa = xEnY(y, 0);
                         const xb = xEnY(y, Math.PI);
                         const seleccionado = nodoSeleccionado === i;
                         return (
                           <g key={i} filter="url(#glowADN)">
-                            <line x1={xa} y1={y} x2={xb} y2={y} stroke={colorEspiralB} strokeWidth={2.5} opacity={0.6} />
+                            <line x1={xa} y1={y} x2={xb} y2={y} stroke={COLOR_CLARO_DEFECTO} strokeWidth={2.5} opacity={0.6} />
                             <circle
                               cx={xa} cy={y}
                               r={seleccionado ? 13 : 9}
-                              fill={colorEspiralA}
+                              fill={COLOR_ACTIVO_DEFECTO}
                               stroke="#fff"
                               strokeWidth={seleccionado ? 4 : 2.5}
                               style={{ cursor: "pointer", transition: "all .3s cubic-bezier(.34,1.56,.64,1)" }}
@@ -1535,6 +1555,21 @@ export default function MarcaPage() {
           >
             <PanelInfoAdicional valor={infoAdicionalValor} onChange={setInfoAdicionalValor} />
           </ModuloColapsable>
+
+          {modulo1Listo && modulo3Listo && (
+            <div style={{ background: "#F3F2FE", border: "1.5px solid #534AB7", borderRadius: 16, padding: "20px 22px", textAlign: "center", marginTop: 6 }}>
+              <p style={{ fontSize: 16, fontWeight: 700, color: "#1a1a1a", margin: "0 0 4px" }}>¡Tu marca está lista!</p>
+              <p style={{ fontSize: 13, color: "#666", margin: "0 0 16px" }}>
+                Con tu ADN, tu cobertura y lo que deben saber tus clientes, ya tenemos todo para armar tus anuncios.
+              </p>
+              <a
+                href="/estrategia"
+                style={{ display: "inline-block", background: "#534AB7", color: "#fff", padding: "12px 24px", borderRadius: 10, fontSize: 14, fontWeight: 600, textDecoration: "none" }}
+              >
+                {tieneCampanasPublicadas ? "Crear una nueva estrategia" : "Crear mi primera estrategia"}
+              </a>
+            </div>
+          )}
         </div>
       </div>
 
