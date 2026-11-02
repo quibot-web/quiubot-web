@@ -28,6 +28,10 @@ export type CandidatoAdnMeta = {
   id: string;
   url: string;
   tipo: "post" | "creativo";
+  // Para "post", la fecha real (ISO) de /posts. Para "creativo", NO es
+  // una fecha -- AdCreative no expone created_time (Graph API lo omite
+  // en silencio, no da error), así que acá va el id del creativo, que
+  // sirve como aproximación de qué tan reciente es (ver ordenarPorClave).
   creado_en: string;
 };
 
@@ -80,8 +84,14 @@ async function obtenerCreativosDePagina(
     for (const creativo of data.data) {
       if (!coincideConPagina(creativo, pageId)) continue;
       const imagenUrl = creativo.image_url || creativo.thumbnail_url;
-      if (!imagenUrl || !creativo.id || !creativo.created_time) continue;
-      candidatos.push({ id: `creativo_${creativo.id}`, url: imagenUrl, tipo: "creativo", creado_en: creativo.created_time });
+      // OJO: antes se exigía creativo.created_time acá -- AdCreative
+      // nunca lo trae (confirmado en vivo: Graph API lo omite para
+      // TODOS los creativos, no es un problema de permisos ni de esta
+      // cuenta puntual), así que esa exigencia descartaba el 100% de
+      // los creativos siempre, sin importar cuántos coincidieran con
+      // la página. Sin esa fecha real, se usa el id como clave de orden.
+      if (!imagenUrl || !creativo.id) continue;
+      candidatos.push({ id: `creativo_${creativo.id}`, url: imagenUrl, tipo: "creativo", creado_en: creativo.id });
     }
 
     url = data?.paging?.next || null;
@@ -106,9 +116,41 @@ async function obtenerPostsDePagina(tokenPagina: string, pageId: string): Promis
     .map((post: any) => ({ id: `post_${post.id}`, url: post.full_picture, tipo: "post" as const, creado_en: post.created_time }));
 }
 
+// Clave de orden "más reciente primero": para post, la fecha real; para
+// creativo, el id (BigInt -- son números de hasta 17-18 dígitos, fuera
+// del rango seguro de Number). No son comparables entre sí en términos
+// absolutos, pero no hace falta: alcanza con que cada lista quede
+// ordenada de más a menos reciente dentro de su propio tipo.
+function claveOrden(candidato: CandidatoAdnMeta): bigint {
+  if (candidato.tipo === "post") {
+    return BigInt(new Date(candidato.creado_en).getTime());
+  }
+  try {
+    return BigInt(candidato.creado_en);
+  } catch {
+    return BigInt(0);
+  }
+}
+
+// La misma imagen de verdad (no el mismo creativo) puede repetirse en
+// varios creativos -- cuentas con anuncios de prueba reutilizan las
+// mismas fotos una y otra vez. La URL cruda no sirve para detectar esto
+// (Meta firma cada descarga con un token distinto por request, hasta
+// para la misma imagen), pero el host+ruta sin query string sí es
+// estable para la misma imagen subida una sola vez a Meta.
+function huellaDeImagen(url: string): string {
+  try {
+    const u = new URL(url);
+    return u.hostname + u.pathname;
+  } catch {
+    return url;
+  }
+}
+
 // Mezcla creativos de la cuenta publicitaria (filtrados por esta página) y
-// publicaciones de la página, más recientes primero, hasta 20 en total --
-// el cliente elige 3 a 5 de ahí (ver POST /api/marca-adn).
+// publicaciones de la página, sin repetir la misma imagen, más recientes
+// primero, hasta 20 en total -- el cliente elige 3 a 5 de ahí (ver POST
+// /api/marca-adn).
 export async function obtenerCandidatosMeta(usuario: {
   metaAccessToken: string;
   metaPageId: string;
@@ -133,10 +175,15 @@ export async function obtenerCandidatosMeta(usuario: {
 
   const vistos = new Set<string>();
   return [...creativos, ...posts]
-    .sort((a, b) => new Date(b.creado_en).getTime() - new Date(a.creado_en).getTime())
+    .sort((a, b) => {
+      const claveA = claveOrden(a);
+      const claveB = claveOrden(b);
+      return claveB > claveA ? 1 : claveB < claveA ? -1 : 0;
+    })
     .filter((candidato) => {
-      if (vistos.has(candidato.id)) return false;
-      vistos.add(candidato.id);
+      const huella = huellaDeImagen(candidato.url);
+      if (vistos.has(huella)) return false;
+      vistos.add(huella);
       return true;
     })
     .slice(0, LIMITE_CANDIDATOS);
