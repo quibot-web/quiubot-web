@@ -48,9 +48,14 @@ export const CODIGO_TELEFONICO: Record<string, string> = {
 // opciones, solo texto -- por eso este es un dropdown construido a mano
 // en vez del <select> que había antes). Las banderas vienen de flagcdn.com
 // en tamaño chico (20x15), con una letra de respaldo si la imagen falla.
+// Bandera real, servida desde nuestro propio dominio -- public/banderas/
+// (copiadas de flag-icons, MIT, ver public/banderas/LICENSE), nunca una
+// imagen externa ni un emoji (en Windows el emoji de bandera se ve como
+// las 2 letras del código, que es justo lo que esto evita). El texto de
+// 2 letras queda solo como respaldo si el archivo no carga.
 export function BanderaPais({ codigo, tamano = 20 }: { codigo: string; tamano?: number }) {
   const [fallo, setFallo] = useState(false);
-  const alto = Math.round((tamano * 15) / 20);
+  const alto = Math.round(tamano * 0.7); // 20x14 -- la proporción real de los SVG copiados
   if (fallo) {
     return (
       <span style={{ width: tamano, height: alto, borderRadius: 3, background: "#e8e8e6", display: "inline-flex", alignItems: "center", justifyContent: "center", fontSize: 8, fontWeight: 700, color: "#999", flexShrink: 0 }}>
@@ -60,7 +65,7 @@ export function BanderaPais({ codigo, tamano = 20 }: { codigo: string; tamano?: 
   }
   return (
     <img
-      src={`https://flagcdn.com/${tamano}x${alto}/${codigo.toLowerCase()}.png`}
+      src={`/banderas/${codigo.toLowerCase()}.svg`}
       alt={codigo}
       width={tamano}
       height={alto}

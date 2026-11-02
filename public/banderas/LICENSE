@@ -1,0 +1,34 @@
+Los archivos .svg de este directorio (co.svg, mx.svg, ar.svg, cl.svg,
+pe.svg, ec.svg, ve.svg, bo.svg, py.svg, uy.svg, pa.svg, cr.svg, gt.svg,
+hn.svg, sv.svg, ni.svg, do.svg, pr.svg, es.svg, us.svg, ca.svg, br.svg,
+gb.svg) vienen del proyecto flag-icons (https://github.com/lipis/flag-icons),
+variante "4x3" (flags/4x3/{codigo}.svg), copiados tal cual el
+2026-11-01 desde el commit ac7e0eb3259e de la rama main. No se agregó
+flag-icons como dependencia de npm -- solo se copiaron estos 23
+archivos puntuales a public/banderas/, servidos desde este mismo
+dominio (ver app/components/SelectorPais.tsx, BanderaPais).
+
+Licencia original (MIT):
+----------------------------------------------------------------------
+
+The MIT License (MIT)
+
+Copyright (c) 2013 Panayiotis Lipiridis
+
+Permission is hereby granted, free of charge, to any person obtaining a copy of
+this software and associated documentation files (the "Software"), to deal in
+the Software without restriction, including without limitation the rights to
+use, copy, modify, merge, publish, distribute, sublicense, and/or sell copies
+of the Software, and to permit persons to whom the Software is furnished to do
+so, subject to the following conditions:
+
+The above copyright notice and this permission notice shall be included in all
+copies or substantial portions of the Software.
+
+THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
+OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
+SOFTWARE.
