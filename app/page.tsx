@@ -519,7 +519,7 @@ export default function Home() {
   };
 
   const cargarAlbum = async () => {
-    const res = await fetch("/api/album");
+    const res = await fetch("/api/album?limit=48");
     const data = await res.json();
     if (data.imagenes) {
       setAlbumItems(data.imagenes);

@@ -1142,9 +1142,9 @@ function PasoSubirFotos({ propuestaId, campanaId, onListo }: { propuestaId: stri
   const [textoContexto, setTextoContexto] = useState("");
 
   useEffect(() => {
-    fetch("/api/album")
+    fetch("/api/album?limit=8")
       .then((r) => r.json())
-      .then((d) => setAlbum((d.imagenes ?? d ?? []).slice(0, 8)))
+      .then((d) => setAlbum(d.imagenes ?? []))
       .catch(() => setAlbum([]));
   }, []);
 
