@@ -22,6 +22,7 @@ type Banner = {
   fecha_fin: string | null;
   planes: string[] | null;
   incluye_prueba: boolean;
+  solo_imagen: boolean;
   activo: boolean;
   orden: number;
 };
@@ -163,6 +164,7 @@ function SeccionBanners() {
   const [fechaFin, setFechaFin] = useState("");
   const [planesSel, setPlanesSel] = useState<string[]>([]);
   const [incluyePrueba, setIncluyePrueba] = useState(false);
+  const [soloImagen, setSoloImagen] = useState(false);
   const [subiendoDesktop, setSubiendoDesktop] = useState(false);
   const [subiendoMobile, setSubiendoMobile] = useState(false);
   const [guardando, setGuardando] = useState(false);
@@ -212,6 +214,7 @@ function SeccionBanners() {
     setFechaFin("");
     setPlanesSel([]);
     setIncluyePrueba(false);
+    setSoloImagen(false);
     setFormAbierto(false);
     setError(null);
   };
@@ -228,6 +231,7 @@ function SeccionBanners() {
     setFechaFin(b.fecha_fin || "");
     setPlanesSel(b.planes || []);
     setIncluyePrueba(b.incluye_prueba);
+    setSoloImagen(b.solo_imagen);
     setFormAbierto(true);
     setError(null);
   };
@@ -252,6 +256,7 @@ function SeccionBanners() {
         fecha_fin: fechaFin || null,
         planes: planesSel.length > 0 ? planesSel : null,
         incluye_prueba: incluyePrueba,
+        solo_imagen: soloImagen,
       };
       const res = editandoId
         ? await fetch(`/api/admin/banners/${editandoId}`, {
@@ -326,38 +331,53 @@ function SeccionBanners() {
         </button>
       ) : (
         <form onSubmit={guardarBanner} style={{ background: "#f9fafb", borderRadius: 14, padding: 20, marginBottom: 24, display: "flex", flexDirection: "column", gap: 12 }}>
+          <label style={{ display: "flex", alignItems: "center", gap: 8, fontSize: 13, fontWeight: 600, color: "#1a1a1a", cursor: "pointer" }}>
+            <input type="checkbox" checked={soloImagen} onChange={(e) => setSoloImagen(e.target.checked)} />
+            Solo imagen (sin texto encima)
+          </label>
+
           <div>
-            <label style={{ fontSize: 12, fontWeight: 600, color: "#666", display: "block", marginBottom: 4 }}>Título</label>
+            <label style={{ fontSize: 12, fontWeight: 600, color: "#666", display: "block", marginBottom: 4 }}>
+              {soloImagen ? "Texto alternativo (para accesibilidad)" : "Título"}
+            </label>
             <input
               type="text"
               value={titulo}
               onChange={(e) => setTitulo(e.target.value)}
-              placeholder="Ej: Nuevo objetivo: Generación de Leads"
+              placeholder={soloImagen ? "Ej: Clase virtual gratis: únete al grupo de WhatsApp" : "Ej: Nuevo objetivo: Generación de Leads"}
               style={{ width: "100%", padding: "9px 12px", borderRadius: 8, border: "1px solid #e0e0e0", fontSize: 13, boxSizing: "border-box" }}
             />
           </div>
-          <div>
-            <label style={{ fontSize: 12, fontWeight: 600, color: "#666", display: "block", marginBottom: 4 }}>Texto corto (opcional)</label>
-            <textarea
-              value={texto}
-              onChange={(e) => setTexto(e.target.value)}
-              rows={2}
-              style={{ width: "100%", padding: "9px 12px", borderRadius: 8, border: "1px solid #e0e0e0", fontSize: 13, boxSizing: "border-box", resize: "vertical", fontFamily: "inherit" }}
-            />
-          </div>
-          <div style={{ display: "flex", gap: 10 }}>
-            <div style={{ flex: 1 }}>
-              <label style={{ fontSize: 12, fontWeight: 600, color: "#666", display: "block", marginBottom: 4 }}>Texto del botón (opcional)</label>
-              <input
-                type="text"
-                value={botonTexto}
-                onChange={(e) => setBotonTexto(e.target.value)}
-                placeholder="Ej: Probar ahora"
-                style={{ width: "100%", padding: "9px 12px", borderRadius: 8, border: "1px solid #e0e0e0", fontSize: 13, boxSizing: "border-box" }}
+
+          {!soloImagen && (
+            <div>
+              <label style={{ fontSize: 12, fontWeight: 600, color: "#666", display: "block", marginBottom: 4 }}>Texto corto (opcional)</label>
+              <textarea
+                value={texto}
+                onChange={(e) => setTexto(e.target.value)}
+                rows={2}
+                style={{ width: "100%", padding: "9px 12px", borderRadius: 8, border: "1px solid #e0e0e0", fontSize: 13, boxSizing: "border-box", resize: "vertical", fontFamily: "inherit" }}
               />
             </div>
+          )}
+
+          <div style={{ display: "flex", gap: 10 }}>
+            {!soloImagen && (
+              <div style={{ flex: 1 }}>
+                <label style={{ fontSize: 12, fontWeight: 600, color: "#666", display: "block", marginBottom: 4 }}>Texto del botón (opcional)</label>
+                <input
+                  type="text"
+                  value={botonTexto}
+                  onChange={(e) => setBotonTexto(e.target.value)}
+                  placeholder="Ej: Probar ahora"
+                  style={{ width: "100%", padding: "9px 12px", borderRadius: 8, border: "1px solid #e0e0e0", fontSize: 13, boxSizing: "border-box" }}
+                />
+              </div>
+            )}
             <div style={{ flex: 1 }}>
-              <label style={{ fontSize: 12, fontWeight: 600, color: "#666", display: "block", marginBottom: 4 }}>Enlace del botón</label>
+              <label style={{ fontSize: 12, fontWeight: 600, color: "#666", display: "block", marginBottom: 4 }}>
+                {soloImagen ? "Enlace (toda la imagen es el enlace)" : "Enlace del botón"}
+              </label>
               <input
                 type="text"
                 value={botonUrl}

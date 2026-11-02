@@ -163,6 +163,67 @@ function CarruselBanners({ banners, visible }: { banners: any[]; visible: boolea
   if (banners.length === 0) return null;
   const b = banners[Math.min(indice, banners.length - 1)];
 
+  // "Solo imagen": la pieza ya trae su propio texto dibujado (un banner
+  // promocional tipo afiche, no una foto con título superpuesto) --
+  // nada de degradado ni caja de texto encima, toda la tarjeta es el
+  // enlace, y el alto se ajusta a la proporción real de la imagen
+  // (aspect-ratio) en vez de minHeight+object-fit:cover, que antes
+  // recortaba los lados porque el alto lo definía el texto superpuesto,
+  // no la imagen. 2520×960 en escritorio, cuadrada por debajo de 860px
+  // (el mismo corte que ya usa el <source> de abajo).
+  if (b.solo_imagen) {
+    return (
+      <a
+        href={b.boton_url || "#"}
+        target="_blank"
+        rel="noopener noreferrer"
+        className="qb-banner-solo-imagen"
+        style={{
+          position: "relative",
+          display: "block",
+          borderRadius: 20,
+          overflow: "hidden",
+          background: "#ece9fb",
+          opacity: visible ? 1 : 0,
+          transform: visible ? "translateY(0)" : "translateY(8px)",
+          transition: "opacity 0.4s ease, transform 0.4s ease",
+        }}
+      >
+        <style>{`
+          .qb-banner-solo-imagen { aspect-ratio: 2520 / 960; }
+          @media (max-width: 860px) { .qb-banner-solo-imagen { aspect-ratio: 1 / 1; } }
+        `}</style>
+        <picture>
+          {b.imagen_mobile_url && (
+            <source media="(max-width: 860px)" srcSet={urlOptimizadaCloudinary(b.imagen_mobile_url, 1000)} />
+          )}
+          <img
+            key={b.id}
+            src={urlOptimizadaCloudinary(b.imagen_desktop_url, 1600)}
+            alt={b.titulo}
+            loading="eager"
+            style={{ position: "absolute", inset: 0, width: "100%", height: "100%", objectFit: "cover", display: "block" }}
+          />
+        </picture>
+        {banners.length > 1 && (
+          <div style={{ position: "absolute", bottom: 14, left: 24, display: "flex", gap: 6, zIndex: 1 }}>
+            {banners.map((_, i) => (
+              <span
+                key={i}
+                style={{
+                  width: i === indice ? 18 : 6,
+                  height: 6,
+                  borderRadius: 4,
+                  background: i === indice ? "#fff" : "rgba(255,255,255,0.4)",
+                }}
+              />
+            ))}
+          </div>
+        )}
+      </a>
+    );
+  }
+
   return (
     <div
       style={{

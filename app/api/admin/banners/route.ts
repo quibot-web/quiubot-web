@@ -47,6 +47,7 @@ export async function POST(req: NextRequest) {
     fecha_fin,
     planes,
     incluye_prueba,
+    solo_imagen,
   } = await req.json();
 
   if (!titulo || typeof titulo !== "string" || !titulo.trim()) {
@@ -75,6 +76,7 @@ export async function POST(req: NextRequest) {
     fecha_fin: fecha_fin || null,
     planes: Array.isArray(planes) && planes.length > 0 ? planes : null,
     incluye_prueba: incluye_prueba === true,
+    solo_imagen: solo_imagen === true,
     orden: (ultimo?.orden ?? -1) + 1,
   });
 

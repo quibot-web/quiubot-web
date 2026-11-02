@@ -18,6 +18,7 @@ const CAMPOS_EDITABLES = [
   "fecha_fin",
   "planes",
   "incluye_prueba",
+  "solo_imagen",
   "activo",
   "orden",
 ] as const;
