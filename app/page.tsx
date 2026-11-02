@@ -9,7 +9,6 @@ import TourGuiado from "@/app/components/TourGuiado";
 import NotificacionIcono from "@/app/components/NotificacionIcono";
 import BadgeDecisiones from "@/app/components/BadgeDecisiones";
 import LogoMarca from "@/app/components/LogoMarca";
-import { urlDescargaCloudinary } from "@/app/lib/cloudinaryUrl";
 import { SelectorPais, CODIGO_TELEFONICO } from "@/app/components/SelectorPais";
 
 // Separa un whatsapp_numero guardado (solo dígitos, ej. "573001318102") en
@@ -248,7 +247,7 @@ function ModalIntegracion({ abierto, onCerrar, children }: { abierto: boolean; o
 export default function Home() {
   const { data: session } = useSession();
   const router = useRouter();
-  const [tab, setTab] = useState<"inicio" | "album" | "integraciones">("inicio");
+  const [tab, setTab] = useState<"inicio" | "integraciones">("inicio");
 
   // "tab" nunca viajó por la URL (era solo estado de React) -- varios
   // lugares del producto ya enlazaban a "/integraciones" como si fuera
@@ -261,13 +260,9 @@ export default function Home() {
     try {
       const params = new URLSearchParams(window.location.search);
       const tabParam = params.get("tab");
-      if (tabParam === "integraciones" || tabParam === "album") setTab(tabParam);
+      if (tabParam === "integraciones") setTab(tabParam);
     } catch {}
   }, []);
-  const [albumItems, setAlbumItems] = useState<{ id: string; url_imagen: string; tipo: string; public_id: string }[]>([]);
-  const [subiendoArchivo, setSubiendoArchivo] = useState(false);
-  const [eliminandoId, setEliminandoId] = useState<string | null>(null);
-  const albumFileRef = useRef<HTMLInputElement>(null);
   const [apiKeyInfo, setApiKeyInfo] = useState<{ hasKey: boolean; preview: string | null } | null>(null);
   const [nuevaApiKey, setNuevaApiKey] = useState("");
   const [cloudinaryInfo, setCloudinaryInfo] = useState<{ hasConfig: boolean; verificado?: boolean; mensaje?: string } | null>(null);
@@ -310,7 +305,6 @@ export default function Home() {
   const [rol, setRol] = useState<string | null>(null);
   const [colapsado, setColapsado] = useState(false);
   const [tutorialListoInicio, setTutorialListoInicio] = useState(false);
-  const [tutorialListoAlbum, setTutorialListoAlbum] = useState(false);
   const [tutorialListoOpenai, setTutorialListoOpenai] = useState(false);
   const [tutorialListoCloudinary, setTutorialListoCloudinary] = useState(false);
   const [tutorialListoMeta, setTutorialListoMeta] = useState(false);
@@ -518,52 +512,6 @@ export default function Home() {
     }
   };
 
-  const cargarAlbum = async () => {
-    const res = await fetch("/api/album?limit=48");
-    const data = await res.json();
-    if (data.imagenes) {
-      setAlbumItems(data.imagenes);
-    }
-  };
-
-  const handleSubirArchivo = async (e: React.ChangeEvent<HTMLInputElement>) => {
-    const file = e.target.files?.[0];
-    if (!file) return;
-    setSubiendoArchivo(true);
-    const formData = new FormData();
-    formData.append("archivo", file);
-    try {
-      const res = await fetch("/api/album/subir", { method: "POST", body: formData });
-      const data = await res.json();
-      if (res.ok) {
-        cargarAlbum();
-      } else {
-        alert(data.error || "Error al subir el archivo");
-      }
-    } catch (err) {
-      alert("No se pudo conectar con el servidor.");
-    } finally {
-      setSubiendoArchivo(false);
-      if (albumFileRef.current) albumFileRef.current.value = "";
-    }
-  };
-
-  const handleEliminarCreativo = async (id: string) => {
-    if (!confirm("¿Eliminar este creativo? Esta acción no se puede deshacer.")) return;
-    setEliminandoId(id);
-    try {
-      const res = await fetch(`/api/album/${id}`, { method: "DELETE" });
-      if (res.ok) {
-        setAlbumItems((prev) => prev.filter((item) => item.id !== id));
-      } else {
-        const data = await res.json();
-        alert(data.error || "No se pudo eliminar el creativo.");
-      }
-    } finally {
-      setEliminandoId(null);
-    }
-  };
-
   const cargarNotificaciones = async () => {
     const res = await fetch("/api/notificaciones");
     const data = await res.json();
@@ -603,7 +551,6 @@ export default function Home() {
     cargarApiKeyInfo();
     cargarCloudinaryInfo();
     cargarDestinoVenta();
-    cargarAlbum();
     cargarNotificaciones();
     cargarMetaInfo();
     cargarRol();
@@ -872,11 +819,11 @@ export default function Home() {
                 <span className="qb-tooltip">Metas</span>
               </a>
 
-              <div onClick={() => setTab("album")} className={`qb-nav-item${tab === "album" ? " activo" : ""}`}>
+              <a href="/album" className="qb-nav-item">
                 <span className="qb-nav-icon"><Icono><rect x="3" y="3" width="18" height="18" rx="2" /><circle cx="8.5" cy="8.5" r="1.4" /><path d="M21 15l-5-5L5 21" /></Icono></span>
-                <span className="qb-nav-label">Álbum Creativos</span>
-                <span className="qb-tooltip">Álbum Creativos</span>
-              </div>
+                <span className="qb-nav-label">Álbum de creativos</span>
+                <span className="qb-tooltip">Álbum de creativos</span>
+              </a>
 
               <div onClick={() => setTab("integraciones")} className={`qb-nav-item${tab === "integraciones" ? " activo" : ""}`}>
                 <span className="qb-nav-icon"><Icono><path d="M9 2v4M15 2v4M6 8h12l-1 6a5 5 0 01-10 0L6 8z" /><path d="M12 18v4" /></Icono></span>
@@ -1018,7 +965,7 @@ export default function Home() {
           }}
         >
           <div style={{ display: "flex", alignItems: "center", gap: 12 }}>
-            <span>{tab === "inicio" ? "Inicio" : tab === "album" ? "Álbum de Creativos" : "Integraciones"}</span>
+            <span>{tab === "inicio" ? "Inicio" : "Integraciones"}</span>
             {tab === "inicio" && <TutorialVideo seccion="inicio" onListo={() => setTutorialListoInicio(true)} />}
             {tab === "inicio" && (
               <TourGuiado
@@ -1030,16 +977,6 @@ export default function Home() {
                   { selector: '[data-tour="sidebar-estrategia"]', titulo: "Genera tu primera campaña", texto: "Cuando estés listo, aquí es donde subes tu producto y Quiubot arma la estrategia completa." },
                   { selector: '[data-tour="sidebar-plan"]', titulo: "Tu plan", texto: "Aquí ves cuánto te queda del plan actual y puedes subir de plan cuando quieras." },
                   { selector: '[data-tour="asistente-flotante"]', titulo: "Tu asistente siempre disponible", texto: "¿Tienes una duda sobre cómo funciona algo? Este ícono abre un chat con IA que conoce Quiubot a fondo y te guía en el momento." },
-                ]}
-              />
-            )}
-            {tab === "album" && <TutorialVideo seccion="album-creativos" onListo={() => setTutorialListoAlbum(true)} />}
-            {tab === "album" && (
-              <TourGuiado
-                seccion="album-creativos"
-                listo={tutorialListoAlbum}
-                pasos={[
-                  { selector: '[data-tour="album-subir"]', titulo: "Sube tus propios creativos", texto: "Aquí puedes subir imágenes o videos que ya tengas — luego los podrás usar directo en cualquier estrategia sin generar de nuevo con IA." },
                 ]}
               />
             )}
@@ -1178,88 +1115,6 @@ export default function Home() {
 
           {tab === "inicio" && <HomeInicio nombreUsuario={session?.user?.name || ""} />}
 
-          {tab === "album" && (
-            <div style={{ maxWidth: "900px", margin: "0 auto", padding: "2rem" }}>
-              <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: "1rem" }}>
-                <h2 style={{ fontSize: 18, fontWeight: 600, margin: 0 }}>Álbum de Creativos</h2>
-                <button
-                  data-tour="album-subir"
-                  onClick={() => albumFileRef.current?.click()}
-                  disabled={subiendoArchivo}
-                  style={{
-                    background: "#534AB7", color: "#fff", border: "none", padding: "10px 16px",
-                    borderRadius: 8, fontSize: 13, fontWeight: 600, cursor: subiendoArchivo ? "not-allowed" : "pointer",
-                  }}
-                >
-                  {subiendoArchivo ? "⏳ Subiendo..." : "⬆️ Subir imagen o video"}
-                </button>
-                <input
-                  ref={albumFileRef}
-                  type="file"
-                  accept="image/*,video/*"
-                  style={{ display: "none" }}
-                  onChange={handleSubirArchivo}
-                />
-              </div>
-              <div style={{ display: "grid", gridTemplateColumns: "repeat(3, 1fr)", gap: 12 }}>
-                {albumItems.length > 0 ? albumItems.map((item) => (
-                  <div key={item.id} style={{ position: "relative" }}>
-                    {item.tipo === "video" ? (
-                      <video src={item.url_imagen} controls style={{ width: "100%", borderRadius: 12, border: "1px solid #e8e8e6", background: "#000" }} />
-                    ) : (
-                      <img src={item.url_imagen} alt="creatividad" style={{ width: "100%", borderRadius: 12, border: "1px solid #e8e8e6", display: "block" }} />
-                    )}
-                    <a
-                      href={urlDescargaCloudinary(item.url_imagen)}
-                      download
-                      title="Descargar"
-                      style={{
-                        position: "absolute",
-                        top: 8,
-                        right: 44,
-                        width: 28,
-                        height: 28,
-                        borderRadius: "50%",
-                        background: "rgba(0,0,0,0.55)",
-                        color: "#fff",
-                        border: "none",
-                        display: "flex",
-                        alignItems: "center",
-                        justifyContent: "center",
-                        fontSize: 13,
-                        textDecoration: "none",
-                      }}
-                    >
-                      ⬇
-                    </a>
-                    <button
-                      onClick={() => handleEliminarCreativo(item.id)}
-                      disabled={eliminandoId === item.id}
-                      title="Eliminar creativo"
-                      style={{
-                        position: "absolute",
-                        top: 8,
-                        right: 8,
-                        width: 28,
-                        height: 28,
-                        borderRadius: "50%",
-                        background: "rgba(0,0,0,0.55)",
-                        color: "#fff",
-                        border: "none",
-                        cursor: eliminandoId === item.id ? "not-allowed" : "pointer",
-                        display: "flex",
-                        alignItems: "center",
-                        justifyContent: "center",
-                        fontSize: 14,
-                      }}
-                    >
-                      {eliminandoId === item.id ? "…" : "✕"}
-                    </button>
-                  </div>
-                )) : <p style={{ fontSize: 14, color: "#666" }}>Aún no tienes imágenes o videos en tu álbum.</p>}
-              </div>
-            </div>
-          )}
 
           {tab === "integraciones" && (
             <>
