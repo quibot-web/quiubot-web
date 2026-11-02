@@ -12,7 +12,11 @@ export async function resolverTokenPagina(accessTokenUsuario: string, pageId: st
       `https://graph.facebook.com/v21.0/me/accounts?fields=id,access_token&access_token=${accessTokenUsuario}`
     );
     const data = await res.json().catch(() => ({}));
-    const pagina = Array.isArray(data?.data) ? data.data.find((p: any) => p?.id === pageId) : null;
+    if (!Array.isArray(data?.data)) {
+      if (data?.error) console.error("Error de Graph API en me/accounts para ADN de marca:", data.error);
+      return null;
+    }
+    const pagina = data.data.find((p: any) => p?.id === pageId);
     return pagina?.access_token || null;
   } catch (err) {
     console.error("Error resolviendo token de página para ADN de marca:", err);
@@ -28,14 +32,30 @@ export type CandidatoAdnMeta = {
 };
 
 const LIMITE_CANDIDATOS = 20;
-const PAGINAS_CREATIVOS_MAX = 3; // hasta 300 creativos revisados -- de sobra para filtrar por page_id
+// Tope de seguridad (no de objetivo) -- se sigue paginando hasta juntar
+// LIMITE_CANDIDATOS coincidencias o quedarse sin páginas, lo que pase
+// primero; esto es solo para no entrar en un loop largo en una cuenta
+// sin ninguna coincidencia. 10 páginas de 100 = 1000 creativos revisados.
+const PAGINAS_CREATIVOS_MAX = 10;
 const ANCHO_MINIATURA_META = 800; // nunca la miniatura de 64px que Meta manda por defecto
 
-// Solo creativos de ESTA página -- la cuenta publicitaria puede ser de una
-// agencia y mezclar varias marcas (object_story_spec.page_id es el filtro,
-// no hay forma de pedírselo ya filtrado a Meta). image_url cuando existe
-// (anuncios de imagen); si no, thumbnail_url pedido grande (sirve también
-// para los anuncios de video, que no tienen image_url).
+// Tres formas de confirmar que un creativo es de ESTA página (la cuenta
+// publicitaria puede ser de una agencia y mezclar varias marcas, y no
+// todos los creativos llenan object_story_spec.page_id -- anuncios
+// Advantage+ o armados desde una publicación existente a veces solo
+// dejan el dato en el id de la publicación o en actor_id):
+// 1) object_story_spec.page_id
+// 2) el prefijo "<page_id>_" de object_story_id o effective_object_story_id
+// 3) actor_id
+function coincideConPagina(creativo: any, pageId: string): boolean {
+  if (creativo?.object_story_spec?.page_id === pageId) return true;
+  const prefijo = `${pageId}_`;
+  if (typeof creativo?.object_story_id === "string" && creativo.object_story_id.startsWith(prefijo)) return true;
+  if (typeof creativo?.effective_object_story_id === "string" && creativo.effective_object_story_id.startsWith(prefijo)) return true;
+  if (creativo?.actor_id === pageId) return true;
+  return false;
+}
+
 async function obtenerCreativosDePagina(
   accessTokenUsuario: string,
   adAccountId: string,
@@ -44,18 +64,21 @@ async function obtenerCreativosDePagina(
   const candidatos: CandidatoAdnMeta[] = [];
   let url: string | null =
     `https://graph.facebook.com/v21.0/${adAccountId}/adcreatives` +
-    `?fields=id,created_time,image_url,thumbnail_url,object_story_spec` +
+    `?fields=id,created_time,image_url,thumbnail_url,object_story_spec,object_story_id,effective_object_story_id,actor_id` +
     `&thumbnail_width=${ANCHO_MINIATURA_META}&thumbnail_height=${ANCHO_MINIATURA_META}` +
     `&limit=100&access_token=${accessTokenUsuario}`;
 
   let paginas = 0;
-  while (url && paginas < PAGINAS_CREATIVOS_MAX) {
+  while (url && paginas < PAGINAS_CREATIVOS_MAX && candidatos.length < LIMITE_CANDIDATOS) {
     const res: Response = await fetch(url);
     const data: any = await res.json().catch(() => ({}));
-    if (!Array.isArray(data?.data)) break;
+    if (!Array.isArray(data?.data)) {
+      if (data?.error) console.error("Error de Graph API en adcreatives para ADN de marca:", data.error);
+      break;
+    }
 
     for (const creativo of data.data) {
-      if (creativo?.object_story_spec?.page_id !== pageId) continue;
+      if (!coincideConPagina(creativo, pageId)) continue;
       const imagenUrl = creativo.image_url || creativo.thumbnail_url;
       if (!imagenUrl || !creativo.id || !creativo.created_time) continue;
       candidatos.push({ id: `creativo_${creativo.id}`, url: imagenUrl, tipo: "creativo", creado_en: creativo.created_time });
@@ -73,7 +96,10 @@ async function obtenerPostsDePagina(tokenPagina: string, pageId: string): Promis
     `https://graph.facebook.com/v21.0/${pageId}/posts?fields=id,full_picture,created_time&limit=25&access_token=${tokenPagina}`
   );
   const data = await res.json().catch(() => ({}));
-  if (!Array.isArray(data?.data)) return [];
+  if (!Array.isArray(data?.data)) {
+    if (data?.error) console.error("Error de Graph API en posts de página para ADN de marca:", data.error);
+    return [];
+  }
 
   return data.data
     .filter((post: any) => post?.full_picture && post?.created_time)
