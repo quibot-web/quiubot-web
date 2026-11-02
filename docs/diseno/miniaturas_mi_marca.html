@@ -1,0 +1,119 @@
+<!doctype html>
+<html lang="es">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Miniaturas de Mi marca</title>
+<style>
+:root{--bg:#F8F8F6;--line:#E9E7EE;--ink:#1B1A22;--muted:#6B6880;--ok:#1E9E6B;--a1:#534AB7;--a1s:#EFEDFB;--a2:#1F6FEB;--a2s:#E8F0FE;--a3:#C77A00;--a3s:#FFF3DC}
+*{box-sizing:border-box}
+body{margin:0;background:var(--bg);color:var(--ink);font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Inter,Roboto,Helvetica,Arial,sans-serif;-webkit-font-smoothing:antialiased}
+.pagina{max-width:1080px;margin:0 auto;padding:28px 16px}
+h1{font-size:20px;margin:0 0 4px}.sub{color:var(--muted);margin:0 0 18px;font-size:14px}
+.fila{display:grid;grid-template-columns:repeat(3,1fr);gap:16px;margin-bottom:26px}
+.card{background:#fff;border:1.5px solid var(--line);border-radius:22px;padding:18px;display:flex;flex-direction:column;gap:12px}
+.card.sel{border-color:var(--c);box-shadow:0 0 0 4px var(--cs)}
+.top{display:flex;align-items:center;gap:8px}
+.num{width:30px;height:30px;border-radius:50%;background:var(--cs);color:var(--c);font-weight:800;display:grid;place-items:center;font-size:14px}
+.card.sel .num{background:var(--c);color:#fff}
+.est{font-size:12px;font-weight:700;border-radius:999px;padding:4px 10px}
+.si{background:#E3F6EC;color:var(--ok)}.no{background:#FFF3DC;color:#A76400}
+.mini{height:104px;border-radius:16px;background:var(--cs);position:relative;overflow:hidden;display:flex;align-items:center;justify-content:center}
+.card h2{margin:0;font-size:18px}.card p{margin:0;color:var(--muted);font-size:14px}
+.acc{font-weight:700;color:var(--c);font-size:14px}
+.c1{--c:var(--a1);--cs:var(--a1s)}.c2{--c:var(--a2);--cs:var(--a2s)}.c3{--c:var(--a3);--cs:var(--a3s)}
+/* 1: ADN */
+.paleta{position:absolute;right:10px;bottom:10px;display:flex;gap:4px;background:#fff;border-radius:999px;padding:4px 6px;box-shadow:0 2px 6px rgba(0,0,0,.08)}
+.paleta i{width:14px;height:14px;border-radius:50%;display:block;border:1px solid rgba(0,0,0,.1)}
+/* 2: Dónde vendes */
+.mapa{position:absolute;inset:0}
+.ubic{position:relative;display:flex;flex-direction:column;align-items:center;gap:8px}
+.chipp{display:flex;align-items:center;gap:6px;background:#fff;border-radius:999px;padding:5px 10px 5px 6px;font-size:13px;font-weight:700;box-shadow:0 2px 8px rgba(31,111,235,.15)}
+.chipp img{width:20px;height:14px;border-radius:3px;object-fit:cover}
+.ciudades{display:flex;gap:5px}
+.ciudades span{background:rgba(255,255,255,.85);color:var(--a2);font-size:11.5px;font-weight:700;border-radius:999px;padding:3px 8px}
+/* 3: Lo que deben saber */
+.notas{display:flex;flex-wrap:wrap;gap:6px;justify-content:center;padding:0 14px}
+.notas span{font-size:12.5px;font-weight:600;border-radius:10px;padding:6px 10px;background:#fff;color:#8A5A00;box-shadow:0 2px 6px rgba(199,122,0,.12)}
+.notas.vacio span{background:transparent;border:1.5px dashed #E3C88F;box-shadow:none;color:#B98A3A}
+.lbl{font-size:12px;color:var(--muted);margin:-6px 0 6px;font-weight:600;letter-spacing:.04em;text-transform:uppercase}
+@media (max-width:860px){.fila{grid-template-columns:1fr}}
+</style>
+</head>
+<body>
+<main class="pagina">
+  <h1>Miniaturas de los 3 módulos</h1>
+  <p class="sub">Arriba, con datos llenos; abajo, cómo se ven cuando falta completar.</p>
+
+  <div class="lbl">Con datos</div>
+  <div class="fila">
+    <div class="card c1 sel">
+      <div class="top"><span class="num">1</span><span class="est si">✓ Listo</span></div>
+      <div class="mini" style="background:linear-gradient(135deg,#FDECF3,#F6E9FB)">
+        <svg class="hx" data-a="#E91E63" data-b="#F48FB1" width="100%" height="104" viewBox="0 0 300 104" preserveAspectRatio="none"></svg>
+        <div class="paleta"><i style="background:#F5F5F5"></i><i style="background:#F48FB1"></i><i style="background:#E91E63"></i></div>
+      </div>
+      <h2>ADN de marca</h2><p>Orden y frescura</p><span class="acc">Ver mi ADN →</span>
+    </div>
+    <div class="card c2">
+      <div class="top"><span class="num">2</span><span class="est si">✓ Listo</span></div>
+      <div class="mini">
+        <svg class="mapa" viewBox="0 0 300 104" preserveAspectRatio="none" aria-hidden="true">
+          <g stroke="#C9DAF8" stroke-width="1" fill="none"><path d="M0 26H300M0 52H300M0 78H300M60 0V104M120 0V104M180 0V104M240 0V104"/></g>
+          <path d="M40 80 C90 40 150 90 210 46 S280 30 300 20" stroke="#9DBCF5" stroke-width="2" stroke-dasharray="5 5" fill="none"/>
+        </svg>
+        <div class="ubic">
+          <svg width="26" height="32" viewBox="0 0 26 32" aria-hidden="true"><path d="M13 31C13 31 24 19.5 24 12A11 11 0 0 0 2 12C2 19.5 13 31 13 31Z" fill="#1F6FEB"/><circle cx="13" cy="12" r="4.5" fill="#fff"/></svg>
+          <div class="chipp"><svg width="20" height="14" viewBox="0 0 4 3" style="border-radius:3px;display:block"><rect width="4" height="1.5" fill="#FCD116"/><rect y="1.5" width="4" height=".75" fill="#003893"/><rect y="2.25" width="4" height=".75" fill="#CE1126"/></svg>Colombia</div>
+          <div class="ciudades"><span>Cali</span><span>Bogotá</span><span>+2</span></div>
+        </div>
+      </div>
+      <h2>Dónde vendes</h2><p>Cali, Bogotá y 2 más</p><span class="acc">Editar →</span>
+    </div>
+    <div class="card c3">
+      <div class="top"><span class="num">3</span><span class="est si">✓ Listo</span></div>
+      <div class="mini"><div class="notas"><span>🚚 Envío nacional</span><span>🛡️ Garantía 6 meses</span><span>💳 Contraentrega</span></div></div>
+      <h2>Lo que deben saber</h2><p>3 datos que usa la IA</p><span class="acc">Editar →</span>
+    </div>
+  </div>
+
+  <div class="lbl">Cuando falta</div>
+  <div class="fila">
+    <div class="card c1">
+      <div class="top"><span class="num">1</span><span class="est no">Falta</span></div>
+      <div class="mini"><svg class="hx" data-a="#B9B3E6" data-b="#D9D5F3" width="100%" height="104" viewBox="0 0 300 104" preserveAspectRatio="none"></svg></div>
+      <h2>ADN de marca</h2><p>Enséñale a Quiubot cómo se ve tu marca</p><span class="acc">Crear mi ADN →</span>
+    </div>
+    <div class="card c2">
+      <div class="top"><span class="num">2</span><span class="est si">✓ Listo</span></div>
+      <div class="mini">
+        <div class="ubic">
+          <svg width="26" height="32" viewBox="0 0 26 32" aria-hidden="true"><path d="M13 31C13 31 24 19.5 24 12A11 11 0 0 0 2 12C2 19.5 13 31 13 31Z" fill="#1F6FEB"/><circle cx="13" cy="12" r="4.5" fill="#fff"/></svg>
+          <div class="chipp"><svg width="20" height="14" viewBox="0 0 4 3" style="border-radius:3px;display:block"><rect width="4" height="1.5" fill="#FCD116"/><rect y="1.5" width="4" height=".75" fill="#003893"/><rect y="2.25" width="4" height=".75" fill="#CE1126"/></svg>Todo Colombia</div>
+        </div>
+      </div>
+      <h2>Dónde vendes</h2><p>Todo el país</p><span class="acc">Editar →</span>
+    </div>
+    <div class="card c3">
+      <div class="top"><span class="num">3</span><span class="est no">Falta</span></div>
+      <div class="mini"><div class="notas vacio"><span>🚚 Envíos</span><span>🛡️ Garantía</span><span>💳 Pagos</span><span>⭐ Diferencial</span></div></div>
+      <h2>Lo que deben saber</h2><p>Envíos, garantías, formas de pago.</p><span class="acc">Completar →</span>
+    </div>
+  </div>
+</main>
+<script>
+var NS='http://www.w3.org/2000/svg';
+document.querySelectorAll('.hx').forEach(function(svg){var A=svg.dataset.a,B=svg.dataset.b,fase=0,W=300,H=104;
+ var pa=document.createElementNS(NS,'path'),pb=document.createElementNS(NS,'path'),rungs=[];
+ for(var i=0;i<14;i++){var l=document.createElementNS(NS,'line');l.setAttribute('stroke-width','2');l.setAttribute('stroke-linecap','round');svg.appendChild(l);rungs.push(l)}
+ [pb,pa].forEach(function(p){p.setAttribute('fill','none');p.setAttribute('stroke-width','5');p.setAttribute('stroke-linecap','round');svg.appendChild(p)});
+ var dots=[];for(var j=0;j<7;j++){var c=document.createElementNS(NS,'circle');c.setAttribute('r','5.5');c.setAttribute('stroke','#fff');c.setAttribute('stroke-width','2');svg.appendChild(c);dots.push(c)}
+ function y(x,off){return H/2+Math.sin(x/42+off+fase)*30}
+ function tr(off){var d='';for(var x=-4;x<=W+4;x+=4)d+=(x===-4?'M':'L')+x+' '+y(x,off).toFixed(1);return d}
+ (function loop(){fase+=0.012;pa.setAttribute('d',tr(0));pb.setAttribute('d',tr(Math.PI));pa.setAttribute('stroke',A);pb.setAttribute('stroke',B);
+  rungs.forEach(function(l,i){var x=10+i*21;l.setAttribute('x1',x);l.setAttribute('x2',x);l.setAttribute('y1',y(x,0));l.setAttribute('y2',y(x,Math.PI));l.setAttribute('stroke',B);l.setAttribute('opacity','.45')});
+  dots.forEach(function(c,i){var x=24+i*42,off=i%2?Math.PI:0;c.setAttribute('cx',x);c.setAttribute('cy',y(x,off));c.setAttribute('fill',i%2?B:A)});
+  requestAnimationFrame(loop)})();});
+</script>
+</body>
+</html>
