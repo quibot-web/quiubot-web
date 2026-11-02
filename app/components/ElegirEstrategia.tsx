@@ -153,11 +153,8 @@ export default function ElegirEstrategia({ estrategias, objetivo, esAdmin, pagin
   const [revisionesPorEstrategia, setRevisionesPorEstrategia] = useState<Record<string, Record<string, RevisionImagen>>>({});
   const [carruselConfigPorEstrategia, setCarruselConfigPorEstrategia] = useState<Record<string, Record<string, CarruselConfig>>>({});
 
-  // Álbum, cacheado una sola vez (no por estrategia -- es el mismo álbum
-  // del cliente sin importar qué estrategia esté mirando). null = todavía
-  // no se pidió; [] = se pidió y está vacío.
-  const [albumItems, setAlbumItems] = useState<ItemAlbum[] | null>(null);
-  const [cargandoAlbum, setCargandoAlbum] = useState(false);
+  // SelectorAlbum ya pide y pagina su propio álbum (ver el componente) --
+  // acá solo se guarda cuál slot está eligiendo, nada del contenido.
   const [albumPickerAbierto, setAlbumPickerAbierto] = useState<{ estrategiaId: string; clave: string } | null>(null);
 
   // Si el cliente cambia de pestaña con el picker de álbum abierto, se
@@ -375,33 +372,17 @@ export default function ElegirEstrategia({ estrategias, objetivo, esAdmin, pagin
     }
   };
 
-  // Mismo /api/album que ya usa el paso "album-selector" (dispararAlbum en
-  // estrategia/page.tsx) -- se pide una sola vez (no por estrategia: es el
-  // mismo álbum del cliente) y se cachea. Imágenes y videos por igual
-  // (SelectorAlbum ya sabe mostrar ambos); elegirImagenDeAlbum es quien
-  // distingue el tipo al armar el CreativoPropio.
-  const asegurarAlbumCargado = async () => {
-    if (albumItems !== null || cargandoAlbum) return;
-    setCargandoAlbum(true);
-    try {
-      const res = await fetch("/api/album");
-      const data = await res.json().catch(() => ({}));
-      setAlbumItems((data.imagenes || []) as ItemAlbum[]);
-    } catch {
-      setAlbumItems([]);
-    } finally {
-      setCargandoAlbum(false);
-    }
-  };
-
   // Para avisar en el picker "Ya usada en <anuncio>" -- recorre los
   // creativos propios de ESTA estrategia (nunca de otra) de origen
   // "album", sin contar el propio anuncio que se está editando (si ya
   // tenía esa misma imagen, no tiene sentido marcarla como "usada en sí
-  // misma").
-  const yaUsadaPorId = useMemo(() => {
+  // misma"). Compara directo por URL (ya la tiene cada creativo propio)
+  // en vez de cruzar contra la lista del álbum -- SelectorAlbum pagina
+  // su propio álbum ahora, así que acá nunca hay una lista completa
+  // contra la que buscar un public_id.
+  const yaUsadaPorUrl = useMemo(() => {
     const mapa: Record<string, string> = {};
-    if (!albumItems || !albumPickerAbierto) return mapa;
+    if (!albumPickerAbierto) return mapa;
     Object.entries(creativosPropios).forEach(([claveUsada, propio]) => {
       if (claveUsada === albumPickerAbierto.clave) return;
       if (propio.origen !== "album") return;
@@ -409,15 +390,14 @@ export default function ElegirEstrategia({ estrategias, objetivo, esAdmin, pagin
       // derivada (urlPortadaVideo), no el mp4 que vive en album_creativos
       // -- hay que comparar contra url_video, que sí es ese mismo mp4.
       const urlParaComparar = propio.tipo === "video" ? propio.url_video : propio.url_imagen;
-      const item = albumItems.find((it) => it.url_imagen === urlParaComparar);
-      if (!item) return;
+      if (!urlParaComparar) return;
       const [ci, ai] = claveUsada.split("-").map(Number);
       const anuncioUsado = seleccionada.conjuntos?.[ci]?.anuncios?.[ai];
       const nombreAnuncio = anuncioUsado?.copy?.titulo || anuncioUsado?.nombre || "otro anuncio";
-      mapa[item.public_id || item.url_imagen] = nombreAnuncio;
+      mapa[urlParaComparar] = nombreAnuncio;
     });
     return mapa;
-  }, [albumItems, creativosPropios, seleccionada, albumPickerAbierto]);
+  }, [creativosPropios, seleccionada, albumPickerAbierto]);
 
   const elegirImagenDeAlbum = (item: ItemAlbum) => {
     if (!albumPickerAbierto) return;
@@ -666,7 +646,6 @@ export default function ElegirEstrategia({ estrategias, objetivo, esAdmin, pagin
                     onClick={() => {
                       setMenuSubirAbierto((prev) => ({ ...prev, [clave]: false }));
                       setAlbumPickerAbierto({ estrategiaId: seleccionada.id, clave });
-                      asegurarAlbumCargado();
                     }}
                     style={{ flex: 1, display: "flex", alignItems: "center", justifyContent: "center", gap: 6, border: "1.5px solid #6C5CE7", color: "#6C5CE7", background: "#fff", borderRadius: 10, minHeight: 38, fontWeight: 700, fontSize: 12.5 }}
                   >
@@ -813,7 +792,6 @@ export default function ElegirEstrategia({ estrategias, objetivo, esAdmin, pagin
                             onClick={() => {
                               if (imagenPropia?.origen === "album") {
                                 setAlbumPickerAbierto({ estrategiaId: seleccionada.id, clave });
-                                asegurarAlbumCargado();
                               } else {
                                 inputsRef.current[clave]?.click();
                               }
@@ -857,49 +835,17 @@ export default function ElegirEstrategia({ estrategias, objetivo, esAdmin, pagin
         </button>
       </div>
 
+      {/* SelectorAlbum ya pagina su propio álbum y muestra su propio
+          estado de "cargando"/"vacío con botón de subir" -- antes esta
+          pantalla pre-cargaba TODO el álbum solo para decidir cuál de
+          esas 3 vistas pintar. */}
       {albumPickerAbierto && albumPickerAbierto.estrategiaId === seleccionada.id && (
-        albumItems === null || cargandoAlbum ? (
-          <div
-            onClick={() => setAlbumPickerAbierto(null)}
-            style={{ position: "fixed", inset: 0, background: "rgba(23,21,43,.6)", zIndex: 2000, display: "flex", alignItems: "center", justifyContent: "center", padding: 24 }}
-          >
-            <div onClick={(e) => e.stopPropagation()} style={{ background: "#fff", borderRadius: 16, padding: "2rem", fontSize: 13, color: "#666" }}>
-              Cargando álbum...
-            </div>
-          </div>
-        ) : albumItems.length === 0 ? (
-          <div
-            onClick={() => setAlbumPickerAbierto(null)}
-            style={{ position: "fixed", inset: 0, background: "rgba(23,21,43,.6)", zIndex: 2000, display: "flex", alignItems: "center", justifyContent: "center", padding: 24 }}
-          >
-            <div
-              onClick={(e) => e.stopPropagation()}
-              style={{ background: "#fff", borderRadius: 16, padding: "2rem", textAlign: "center", display: "flex", flexDirection: "column", gap: 12, alignItems: "center", maxWidth: 320 }}
-            >
-              <p style={{ margin: 0, fontSize: 14, color: "#1a1a1a", fontWeight: 600 }}>Tu álbum está vacío</p>
-              <button
-                type="button"
-                onClick={() => {
-                  const { clave } = albumPickerAbierto;
-                  setAlbumPickerAbierto(null);
-                  cambiarTipo(clave, "subida");
-                  inputsRef.current[clave]?.click();
-                }}
-                style={{ border: "1.5px solid #6C5CE7", color: "#6C5CE7", background: "#fff", borderRadius: 10, minHeight: 38, padding: "0 16px", fontWeight: 700, fontSize: 12.5 }}
-              >
-                Subir foto o video
-              </button>
-            </div>
-          </div>
-        ) : (
-          <SelectorAlbum
-            titulo="Elige una imagen de tu álbum"
-            items={albumItems}
-            yaUsadaPorId={yaUsadaPorId}
-            onElegir={elegirImagenDeAlbum}
-            onCerrar={() => setAlbumPickerAbierto(null)}
-          />
-        )
+        <SelectorAlbum
+          titulo="Elige una imagen de tu álbum"
+          yaUsadaPorUrl={yaUsadaPorUrl}
+          onElegir={elegirImagenDeAlbum}
+          onCerrar={() => setAlbumPickerAbierto(null)}
+        />
       )}
     </div>
   );

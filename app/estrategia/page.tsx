@@ -1264,7 +1264,10 @@ function EstrategiaContent() {
   const [analisisResultado, setAnalisisResultado] = useState<{ score: number; detalle: any[] } | null>(null);
   const [analizandoAlbum, setAnalizandoAlbum] = useState(false);
 
-  const [albumItems, setAlbumItems] = useState<{ url_imagen: string; tipo: string; public_id: string }[]>([]);
+  // SelectorAlbum ya pide y pagina su propio álbum -- esto solo responde
+  // "¿hay al menos una pieza?" (ver dispararAlbum, limit=1) para decidir
+  // si se muestra la grilla de asignación o el mensaje de álbum vacío.
+  const [albumTieneAlgo, setAlbumTieneAlgo] = useState(false);
   const [cargandoAlbum, setCargandoAlbum] = useState(false);
   // Un "hueco" por cada anuncio ASIGNADO A ÁLBUM (con su copy real:
   // título, texto, cta) -- el usuario no elige libremente cuántos
@@ -2712,9 +2715,9 @@ function EstrategiaContent() {
     setAsignaciones(new Array(angulos.length).fill(null));
 
     try {
-      const res = await fetch("/api/album");
+      const res = await fetch("/api/album?limit=1");
       const data = await res.json();
-      setAlbumItems(data.imagenes ?? []);
+      setAlbumTieneAlgo((data.imagenes ?? []).length > 0);
     } catch (e) {
       setErrorMsg("No se pudo cargar tu álbum.");
     } finally {
@@ -3760,12 +3763,12 @@ function EstrategiaContent() {
             </p>
 
             {cargandoAlbum && <p style={{ color: "#666", fontSize: 13 }}>Cargando álbum...</p>}
-            {!cargandoAlbum && albumItems.length === 0 && (
+            {!cargandoAlbum && !albumTieneAlgo && (
               <p style={{ color: "#666", fontSize: 13 }}>
                 Aún no tienes imágenes ni videos en tu álbum. Sube contenido desde la sección "Álbum Creativos" en el panel principal.
               </p>
             )}
-            {!cargandoAlbum && albumItems.length > 0 && (
+            {!cargandoAlbum && albumTieneAlgo && (
               <>
                 <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(260px, 1fr))", gap: 16, marginBottom: 20 }}>
                   {angulosRecomendados.map((ang, idx) => {
@@ -3840,7 +3843,6 @@ function EstrategiaContent() {
             {slotEligiendo !== null && (
               <SelectorAlbum
                 titulo={`Elige la imagen para "${angulosRecomendados[slotEligiendo]?.titulo}"`}
-                items={albumItems}
                 onElegir={elegirImagenParaSlot}
                 onCerrar={cerrarPicker}
               />
