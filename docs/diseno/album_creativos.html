@@ -1,0 +1,132 @@
+<!doctype html>
+<html lang="es">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Álbum de creativos</title>
+<style>
+:root{--bg:#F8F8F6;--card:#fff;--line:#E9E7EE;--ink:#1B1A22;--muted:#6B6880;--brand:#5546B8;--bs:#EFEDFB;--ok:#1E9E6B}
+*{box-sizing:border-box}
+body{margin:0;background:var(--bg);color:var(--ink);font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Inter,Roboto,Helvetica,Arial,sans-serif;-webkit-font-smoothing:antialiased}
+.pagina{max-width:1180px;margin:0 auto;padding:26px 16px 60px}
+.cab{display:flex;justify-content:space-between;align-items:center;gap:12px;flex-wrap:wrap}
+h1{margin:0;font-size:22px}.cab small{color:var(--muted);font-size:14px;margin-left:8px;font-weight:500}
+.btn{border:0;border-radius:12px;padding:10px 16px;font:inherit;font-weight:700;font-size:14px;cursor:pointer}
+.prim{background:var(--brand);color:#fff}.sec{background:#fff;border:1.5px solid var(--line);color:var(--ink)}
+.barra{position:sticky;top:0;z-index:5;background:var(--bg);padding:14px 0 10px;display:flex;gap:10px;flex-wrap:wrap;align-items:center}
+.buscar{flex:1 1 260px;display:flex;align-items:center;gap:8px;background:#fff;border:1.5px solid var(--line);border-radius:12px;padding:9px 12px;color:var(--muted);font-size:14px}
+.buscar input{border:0;outline:0;font:inherit;flex:1;background:none;color:var(--ink)}
+.chips{display:flex;gap:6px;flex-wrap:wrap}
+.chip{border:1.5px solid var(--line);background:#fff;border-radius:999px;padding:7px 12px;font:inherit;font-size:13.5px;font-weight:600;color:var(--muted);cursor:pointer}
+.chip.on{border-color:var(--brand);background:var(--bs);color:var(--brand)}
+h2{font-size:15px;margin:18px 0 10px;display:flex;align-items:center;gap:8px}
+h2 span{color:var(--muted);font-weight:500;font-size:13px}
+.colecciones{display:flex;gap:14px;overflow-x:auto;padding-bottom:6px;scrollbar-width:none}
+.col{flex:0 0 200px;background:#fff;border:1.5px solid var(--line);border-radius:18px;padding:10px;cursor:pointer}
+.col:hover{border-color:#C9C3EE}
+.pila{position:relative;height:96px;margin-bottom:8px}
+.pila i{position:absolute;width:62%;height:88px;border-radius:12px;border:3px solid #fff;box-shadow:0 4px 10px rgba(0,0,0,.12)}
+.pila i:nth-child(1){left:0;top:6px;transform:rotate(-6deg)}
+.pila i:nth-child(2){left:19%;top:2px;z-index:1}
+.pila i:nth-child(3){right:0;top:6px;transform:rotate(6deg);z-index:2}
+.col b{font-size:14px;display:block}.col small{color:var(--muted);font-size:12.5px}
+.ia{display:inline-block;font-size:10.5px;font-weight:800;color:var(--brand);background:var(--bs);border-radius:6px;padding:2px 6px;margin-left:4px;vertical-align:middle}
+.grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(168px,1fr));gap:12px}
+.cre{position:relative;border-radius:16px;overflow:hidden;aspect-ratio:4/5;cursor:pointer;background:#ddd;outline:3px solid transparent;transition:transform .15s,outline-color .15s}
+.cre:hover{transform:translateY(-2px)}
+.cre.sel{outline-color:var(--brand)}
+.cre .media{position:absolute;inset:0}
+.cre .arriba{position:absolute;top:8px;left:8px;right:8px;display:flex;justify-content:space-between}
+.badge{font-size:11px;font-weight:800;border-radius:999px;padding:3px 8px;background:rgba(255,255,255,.92);color:var(--ink)}
+.top{background:#FFE9A8;color:#7A5200}
+.check{width:22px;height:22px;border-radius:50%;border:2px solid #fff;background:rgba(0,0,0,.25);opacity:0;transition:opacity .15s}
+.cre:hover .check,.modo-sel .check{opacity:1}.cre.sel .check{background:var(--brand);opacity:1}
+.cre .abajo{position:absolute;left:0;right:0;bottom:0;padding:26px 10px 9px;background:linear-gradient(transparent,rgba(0,0,0,.55));color:#fff;font-size:12px;font-weight:600;display:flex;justify-content:space-between;align-items:end}
+.play{position:absolute;inset:0;display:grid;place-items:center;pointer-events:none}
+.play span{width:40px;height:40px;border-radius:50%;background:rgba(255,255,255,.9);display:grid;place-items:center;font-size:14px}
+.skel{border-radius:16px;aspect-ratio:4/5;background:linear-gradient(90deg,#ECEAF2 25%,#F6F5FA 50%,#ECEAF2 75%);background-size:200% 100%;animation:sh 1.2s infinite}
+@keyframes sh{to{background-position:-200% 0}}
+.mas{text-align:center;color:var(--muted);font-size:13px;margin:16px 0}
+.flotante{position:fixed;left:50%;bottom:18px;transform:translateX(-50%) translateY(120px);background:var(--ink);color:#fff;border-radius:16px;padding:10px 12px 10px 18px;display:flex;gap:10px;align-items:center;font-size:14px;font-weight:600;box-shadow:0 12px 30px rgba(0,0,0,.25);transition:transform .25s,opacity .2s;z-index:9;opacity:0;visibility:hidden}
+.flotante.on{transform:translateX(-50%) translateY(0);opacity:1;visibility:visible}
+.flotante .btn{padding:8px 12px}
+.panel{position:fixed;top:0;right:0;bottom:0;width:min(420px,100%);background:#fff;box-shadow:-12px 0 30px rgba(0,0,0,.15);transform:translateX(105%);transition:transform .25s;z-index:10;display:flex;flex-direction:column}
+.panel.on{transform:none}
+.panel .vista{height:46%;position:relative}
+.panel .cuerpo{padding:18px;overflow:auto;display:flex;flex-direction:column;gap:12px}
+.cerrar{position:absolute;top:12px;right:12px;width:34px;height:34px;border-radius:50%;border:0;background:rgba(255,255,255,.92);font-size:18px;cursor:pointer}
+.kv{display:grid;grid-template-columns:1fr 1fr 1fr;gap:8px}
+.kv div{background:var(--bg);border-radius:12px;padding:10px}.kv small{color:var(--muted);font-size:11.5px;display:block}.kv b{font-size:16px}
+.etq{display:flex;gap:6px;flex-wrap:wrap}.etq span{background:var(--bs);color:var(--brand);font-size:12px;font-weight:700;border-radius:999px;padding:4px 9px}
+.cuerpo p{margin:0;color:var(--muted);font-size:14px;line-height:1.5}
+.nota{margin-top:30px;background:#fff;border:1px solid var(--line);border-radius:14px;padding:14px 16px;color:var(--muted);font-size:13.5px;line-height:1.55}
+.nota b{color:var(--ink)}
+@media (max-width:520px){.grid{grid-template-columns:repeat(2,1fr);gap:8px}.col{flex-basis:160px}}
+</style>
+</head>
+<body>
+<main class="pagina" id="pag">
+  <div class="cab">
+    <h1>Álbum de creativos <small>86 piezas</small></h1>
+    <div style="display:flex;gap:8px"><button class="btn sec" id="modo">Seleccionar</button><button class="btn prim">＋ Subir</button></div>
+  </div>
+
+  <div class="barra">
+    <label class="buscar">🔍 <input placeholder="Busca: “promo”, “producto en mano”, “video corto”…"></label>
+    <div class="chips" id="chips">
+      <button class="chip on" data-f="todos">Todos</button>
+      <button class="chip" data-f="img">Imágenes</button>
+      <button class="chip" data-f="vid">Videos</button>
+      <button class="chip" data-f="top">⭐ Los que más venden</button>
+      <button class="chip" data-f="nuevo">Sin usar</button>
+    </div>
+  </div>
+
+  <h2>Colecciones <span class="ia">Armadas por IA</span> <span>según lo que hay en cada pieza</span></h2>
+  <div class="colecciones" id="cols"></div>
+
+  <h2>Recientes <span>· los más nuevos primero</span></h2>
+  <div class="grid" id="grid"></div>
+  <div class="mas" id="mas">Cargando más…</div>
+
+  <p class="nota"><b>Por qué carga rápido:</b> trae 24 piezas a la vez y carga las siguientes al bajar (scroll infinito). Las fotos se piden en miniatura (400px, formato liviano) y los videos muestran solo su portada; se reproducen al pasar el mouse o al abrirlos. <b>Lo nuevo para el usuario:</b> colecciones que arma la IA con el análisis que ya existe (producto en mano, testimonios, promos…), filtros rápidos, búsqueda en lenguaje normal, un panel lateral con el detalle sin salir de la página y selección múltiple para crear campaña o borrar en un clic.</p>
+</main>
+
+<div class="flotante" id="flot"><span id="nsel">0 seleccionados</span><button class="btn prim">Usar en campaña</button><button class="btn sec">Borrar</button></div>
+
+<aside class="panel" id="panel">
+  <div class="vista" id="pv"><button class="cerrar" id="cerrar">×</button></div>
+  <div class="cuerpo">
+    <div style="display:flex;justify-content:space-between;align-items:center"><b id="pt" style="font-size:18px">Creativo</b><span class="badge top">⭐ Top ventas</span></div>
+    <div class="kv"><div><small>Usado en</small><b>2 campañas</b></div><div><small>Clics</small><b>1.240</b></div><div><small>Mensajes</small><b>38</b></div></div>
+    <div><small style="color:var(--muted);font-size:12px;font-weight:700">LO QUE VE LA IA</small>
+      <div class="etq" style="margin-top:6px"><span>Producto en mano</span><span>Fondo claro</span><span>Texto corto</span><span>Rosado</span></div></div>
+    <p>Foto con buena luz, el producto se ve claro y ocupa el centro. Funciona bien para ventas por WhatsApp.</p>
+    <div style="display:flex;gap:8px;margin-top:auto"><button class="btn prim" style="flex:1">Usar en campaña</button><button class="btn sec">Descargar</button></div>
+  </div>
+</aside>
+
+<script>
+var paletas=[["#F8BBD0","#E91E63"],["#B3E5FC","#0288D1"],["#FFE0B2","#F57C00"],["#C8E6C9","#388E3C"],["#D1C4E9","#5E35B1"],["#FFCDD2","#C62828"],["#F0F4C3","#AFB42B"],["#B2DFDB","#00796B"]];
+function fondo(i){var p=paletas[i%paletas.length];return "linear-gradient("+(120+i*23)%360+"deg,"+p[0]+","+p[1]+")"}
+var cols=[["Producto en mano",18],["Testimonios",7],["Promos y descuentos",12],["Videos cortos",9],["Fondo blanco",14]];
+document.getElementById("cols").innerHTML=cols.map(function(c,i){return '<div class="col"><div class="pila"><i style="background:'+fondo(i*3)+'"></i><i style="background:'+fondo(i*3+1)+'"></i><i style="background:'+fondo(i*3+2)+'"></i></div><b>'+c[0]+'</b><small>'+c[1]+' piezas</small></div>'}).join("");
+var grid=document.getElementById("grid"),n=0,modoSel=false,sel=0;
+function pieza(i){var vid=i%5===2,top=i%7===0,nuevo=i%4===3;
+ return '<div class="cre" data-i="'+i+'"><div class="media" style="background:'+fondo(i)+'"></div>'+(vid?'<div class="play"><span>▶</span></div>':'')+
+ '<div class="arriba"><span class="badge '+(top?'top':'')+'">'+(top?'⭐ Top':vid?'Video · 0:15':nuevo?'Nuevo':'Imagen')+'</span><span class="check"></span></div>'+
+ '<div class="abajo"><span>'+(nuevo?'Sin usar':'En '+(1+i%3)+(i%3?' campañas':' campaña'))+'</span><span>'+(10+i%20)+' oct</span></div></div>'}
+function cargar(){var h="";for(var k=0;k<12;k++)h+=pieza(n++);grid.insertAdjacentHTML("beforeend",h)}
+cargar();cargar();
+// skeletons al final
+grid.insertAdjacentHTML("beforeend",'<div class="skel"></div><div class="skel"></div><div class="skel"></div><div class="skel"></div>');
+grid.addEventListener("click",function(e){var c=e.target.closest(".cre");if(!c)return;
+ if(modoSel||e.target.classList.contains("check")){c.classList.toggle("sel");sel=grid.querySelectorAll(".cre.sel").length;
+  document.getElementById("nsel").textContent=sel+(sel===1?" seleccionado":" seleccionados");document.getElementById("flot").classList.toggle("on",sel>0);return}
+ document.getElementById("pv").style.background=fondo(+c.dataset.i);document.getElementById("pt").textContent="Creativo #"+(+c.dataset.i+1);document.getElementById("panel").classList.add("on")});
+document.getElementById("cerrar").onclick=function(){document.getElementById("panel").classList.remove("on")};
+document.getElementById("modo").onclick=function(){modoSel=!modoSel;document.getElementById("pag").classList.toggle("modo-sel",modoSel);this.textContent=modoSel?"Listo":"Seleccionar"};
+document.getElementById("chips").addEventListener("click",function(e){var b=e.target.closest(".chip");if(!b)return;document.querySelectorAll(".chip").forEach(function(x){x.classList.remove("on")});b.classList.add("on")});
+</script>
+</body>
+</html>
