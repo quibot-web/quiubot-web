@@ -1001,6 +1001,10 @@ export default function MarcaPage() {
                   </p>
                 </div>
 
+                <div style={{ background: "#FFF8E6", border: "1px solid #F3D99A", borderRadius: 10, padding: "10px 14px", fontSize: 13, color: "#8A6416", marginBottom: 16 }}>
+                  Elige solo piezas de tu marca. Si ves anuncios de otras marcas, no los selecciones.
+                </div>
+
                 <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(130px, 1fr))", gap: 12, marginBottom: 20 }}>
                   {(metaInfo?.candidatos || []).map((candidato) => {
                     const seleccionado = seleccionMeta.includes(candidato.id);
