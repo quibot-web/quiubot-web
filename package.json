@@ -7,7 +7,8 @@
     "build": "next build",
     "start": "next start",
     "lint": "eslint",
-    "video:studio": "remotion studio video/Root.tsx"
+    "video:studio": "remotion studio video/Root.tsx",
+    "video:verificar": "tsx video/fixtures/verificar.ts"
   },
   "dependencies": {
     "@remotion/google-fonts": "4.0.540",
@@ -38,6 +39,7 @@
     "eslint": "^9",
     "eslint-config-next": "16.2.9",
     "tailwindcss": "^4",
+    "tsx": "^4.23.15",
     "typescript": "^5"
   }
 }

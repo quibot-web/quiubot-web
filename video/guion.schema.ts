@@ -23,7 +23,10 @@ export type ObjetivoVideo = (typeof OBJETIVOS_VIDEO)[number];
 export const ACCIONES_CTA = ["whatsapp", "web", "formulario", "seguir", "suave"] as const;
 export type AccionCta = (typeof ACCIONES_CTA)[number];
 
-const Bloque = z.enum(["gancho", "problema", "producto", "beneficio", "valor", "oferta", "objecion", "marca", "cta"]);
+export const BLOQUES = ["gancho", "problema", "producto", "beneficio", "valor", "oferta", "objecion", "marca", "cta"] as const;
+export type BloqueGuion = (typeof BLOQUES)[number];
+
+const Bloque = z.enum(BLOQUES);
 
 const Subtitulo = z.object({
   texto: z.string().min(1).max(80),
