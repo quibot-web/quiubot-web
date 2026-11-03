@@ -1,6 +1,7 @@
 import { auth } from "@/auth";
 import { NextResponse } from "next/server";
 import { supabaseAdmin } from "@/lib/supabase";
+import { esErrorTokenMetaVencido, MENSAJE_META_TOKEN_VENCIDO } from "@/app/lib/metaErrors";
 
 // Trae la lista REAL de cuentas publicitarias y paginas de Meta del
 // usuario -- no guarda nada, solo consulta al vuelo para que el usuario
@@ -31,6 +32,9 @@ export async function GET() {
     const cuentasData = await cuentasRes.json();
     const paginasData = await paginasRes.json();
 
+    if (esErrorTokenMetaVencido(cuentasData.error) || esErrorTokenMetaVencido(paginasData.error)) {
+      return NextResponse.json({ error: MENSAJE_META_TOKEN_VENCIDO }, { status: 400 });
+    }
     if (cuentasData.error || paginasData.error) {
       console.error("Error trayendo cuentas/paginas de Meta:", cuentasData.error, paginasData.error);
       return NextResponse.json({ error: "No se pudieron cargar tus cuentas de Meta" }, { status: 502 });

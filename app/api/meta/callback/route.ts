@@ -1,6 +1,16 @@
+import { auth } from "@/auth";
+import { timingSafeEqual } from "crypto";
 import { NextRequest, NextResponse } from "next/server";
 import { supabaseAdmin } from "@/lib/supabase";
 import { registrarError } from "@/lib/registrarError";
+import { COOKIE_STATE_META } from "@/app/lib/metaErrors";
+
+function compararSeguro(a: string, b: string): boolean {
+  const bufA = Buffer.from(a);
+  const bufB = Buffer.from(b);
+  if (bufA.length !== bufB.length) return false;
+  return timingSafeEqual(bufA, bufB);
+}
 
 // Senal de riesgo mas fuerte de las tres: si una misma cuenta publicitaria
 // de Meta (un negocio real) ya esta conectada a OTRO usuario de Quiubot,
@@ -11,6 +21,14 @@ import { registrarError } from "@/lib/registrarError";
 // senales (ver /api/registro-riesgo).
 const RIESGO_META_REPETIDA = 6;
 
+// El nonce de /api/meta/conectar es de un solo uso -- se borra en TODAS las
+// salidas de este handler (exito o rechazo), nunca sobrevive a un intento.
+function redirigirLimpiandoCookie(url: string): NextResponse {
+  const res = NextResponse.redirect(url);
+  res.cookies.delete({ name: COOKIE_STATE_META, path: "/api/meta" });
+  return res;
+}
+
 export async function GET(req: NextRequest) {
   const { searchParams } = new URL(req.url);
   const code = searchParams.get("code");
@@ -20,10 +38,25 @@ export async function GET(req: NextRequest) {
   const baseUrl = process.env.NEXTAUTH_URL || "http://localhost:3000";
 
   if (errorParam || !code || !state) {
-    return NextResponse.redirect(`${baseUrl}/?meta_error=1`);
+    return redirigirLimpiandoCookie(`${baseUrl}/?meta_error=1`);
   }
 
-  const email = decodeURIComponent(state);
+  // El "state" ya no trae el correo en texto plano -- es solo un nonce que
+  // debe coincidir EXACTO con el que /api/meta/conectar guardo en una
+  // cookie httpOnly al iniciar el flujo. Si no coincide, o no hay sesion
+  // activa, se rechaza sin tocar la base de datos (antes bastaba con
+  // armar cualquier "state" con el correo de otra persona).
+  const cookieState = req.cookies.get(COOKIE_STATE_META)?.value;
+  if (!cookieState || !compararSeguro(state, cookieState)) {
+    return redirigirLimpiandoCookie(`${baseUrl}/?meta_error=1`);
+  }
+
+  const session = await auth();
+  if (!session?.user?.email) {
+    return redirigirLimpiandoCookie(`${baseUrl}/?meta_error=1`);
+  }
+  const email = session.user.email.trim().toLowerCase();
+
   const appId = process.env.META_APP_ID;
   const appSecret = process.env.META_APP_SECRET;
   const redirectUri = process.env.META_REDIRECT_URI;
@@ -50,7 +83,7 @@ export async function GET(req: NextRequest) {
         detalleTecnico: JSON.stringify(tokenData),
       });
 
-      return NextResponse.redirect(`${baseUrl}/?meta_error=1`);
+      return redirigirLimpiandoCookie(`${baseUrl}/?meta_error=1`);
     }
 
     // 2. Cambiar el token corto por uno de larga duración (60 dias)
@@ -121,7 +154,11 @@ export async function GET(req: NextRequest) {
     }
 
     // 4. Guardar todo en Supabase (esto sigue pasando siempre — nunca se
-    // le rompe la conexion de Meta a nadie, solo se apaga el trial si aplicaba)
+    // le rompe la conexion de Meta a nadie, solo se apaga el trial si aplicaba).
+    // meta_token_vencera_avisado vuelve a false: el token es nuevo, asi que
+    // el aviso de "por vencer" (ver /api/cron/avisar-meta-por-vencer) debe
+    // poder volver a dispararse para ESTE vencimiento, no quedar apagado
+    // para siempre por un aviso de la conexion anterior.
     const { error } = await supabaseAdmin
       .from("usuarios")
       .update({
@@ -132,6 +169,7 @@ export async function GET(req: NextRequest) {
         meta_user_name: meData.name || null,
         meta_page_id: primeraPagina ? primeraPagina.id : null,
         meta_page_name: primeraPagina ? primeraPagina.name : null,
+        meta_token_vencera_avisado: false,
       })
       .eq("email", email);
 
@@ -146,10 +184,10 @@ export async function GET(req: NextRequest) {
         detalleTecnico: JSON.stringify(error),
       });
 
-      return NextResponse.redirect(`${baseUrl}/?meta_error=1`);
+      return redirigirLimpiandoCookie(`${baseUrl}/?meta_error=1`);
     }
 
-    return NextResponse.redirect(`${baseUrl}/?meta_conectado=1`);
+    return redirigirLimpiandoCookie(`${baseUrl}/?meta_conectado=1`);
   } catch (err) {
     console.error("Error en callback de Meta:", err);
 
@@ -161,6 +199,6 @@ export async function GET(req: NextRequest) {
       detalleTecnico: String(err),
     });
 
-    return NextResponse.redirect(`${baseUrl}/?meta_error=1`);
+    return redirigirLimpiandoCookie(`${baseUrl}/?meta_error=1`);
   }
 }

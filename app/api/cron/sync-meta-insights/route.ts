@@ -3,6 +3,7 @@ import { timingSafeEqual } from "crypto";
 import { supabaseAdmin } from "@/lib/supabase";
 import { registrarError } from "@/lib/registrarError";
 import { hoyBogota, ayerBogota } from "@/app/lib/fechaBogota";
+import { MENSAJE_META_TOKEN_VENCIDO } from "@/app/lib/metaErrors";
 
 function compararSeguro(a: string, b: string): boolean {
   const bufA = Buffer.from(a);
@@ -238,6 +239,30 @@ export async function POST(req: NextRequest) {
             errorMensaje: "El token de acceso a Meta ya no es válido — el usuario necesita reconectar su cuenta en Integraciones.",
             detalleTecnico: JSON.stringify(insightsData.error || statusData.error),
           });
+
+          // Aviso reactivo al usuario -- a diferencia de
+          // avisar-meta-por-vencer (que avisa ANTES de que venza, por
+          // fecha), este dispara cuando Meta ya rechazó una llamada real.
+          // Se evita duplicar: si ya hay un aviso de este tipo sin leer,
+          // no se crea otro en cada corrida del cron.
+          const { data: avisoExistente } = await supabaseAdmin
+            .from("notificaciones")
+            .select("id")
+            .eq("user_id", usuario.id)
+            .eq("tipo", "meta_token_vencido")
+            .eq("estado", "pendiente")
+            .maybeSingle();
+
+          if (!avisoExistente) {
+            await supabaseAdmin.from("notificaciones").insert({
+              user_id: usuario.id,
+              tipo: "meta_token_vencido",
+              titulo: "Tu conexión con Meta venció",
+              mensaje: MENSAJE_META_TOKEN_VENCIDO,
+              estado: "pendiente",
+            });
+          }
+
           campanasConError++;
           continue;
         }

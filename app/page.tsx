@@ -286,7 +286,7 @@ export default function Home() {
   const [campanaShaking, setCampanaShaking] = useState(false);
   const conteoPendientesPrevio = useRef<number | null>(null);
 
-  const [metaInfo, setMetaInfo] = useState<{ conectado: boolean; nombre: string | null; cuentaPublicitaria: string | null; cuentaPublicitariaNombre: string | null; pagina: string | null; paginaId: string | null; pixelId: string | null; pixelNombre: string | null } | null>(null);
+  const [metaInfo, setMetaInfo] = useState<{ conectado: boolean; tokenVencido: boolean; nombre: string | null; cuentaPublicitaria: string | null; cuentaPublicitariaNombre: string | null; pagina: string | null; paginaId: string | null; pixelId: string | null; pixelNombre: string | null } | null>(null);
   const [cuentasPublicitarias, setCuentasPublicitarias] = useState<{ id: string; nombre: string; businessId: string | null }[]>([]);
   const [paginasDisponibles, setPaginasDisponibles] = useState<{ id: string; nombre: string }[]>([]);
   const [cargandoCuentas, setCargandoCuentas] = useState(false);
@@ -1189,8 +1189,8 @@ export default function Home() {
                   }
                   nombre="Meta Ads"
                   descripcionCorta="Publica campañas en Facebook e Instagram."
-                  tono={metaInfo?.conectado ? "verde" : "gris"}
-                  textoBadge={metaInfo?.conectado ? "Conectado" : "No conectado"}
+                  tono={metaInfo?.conectado ? "verde" : metaInfo?.tokenVencido ? "rojo" : "gris"}
+                  textoBadge={metaInfo?.conectado ? "Conectado" : metaInfo?.tokenVencido ? "Venció" : "No conectado"}
                 >
                   <button
                     onClick={() => setModalAbierto("meta")}
@@ -1201,7 +1201,7 @@ export default function Home() {
                       border: metaInfo?.conectado ? "1px solid #534AB7" : "none",
                     }}
                   >
-                    {metaInfo?.conectado ? "Ver detalles" : "Conectar"}
+                    {metaInfo?.conectado ? "Ver detalles" : metaInfo?.tokenVencido ? "Reconectar" : "Conectar"}
                   </button>
                 </TarjetaIntegracion>
               </div>
@@ -1409,8 +1409,10 @@ export default function Home() {
                   nombre="Meta Ads"
                   descripcion="Publica tus campañas directo en Facebook e Instagram."
                   conectado={!!metaInfo?.conectado}
+                  advertencia={!!metaInfo?.tokenVencido}
                   textoConectado="Conectado"
                   textoNoConectado="No conectado"
+                  textoAdvertencia="Venció"
                   urlExterna="https://business.facebook.com/adsmanager"
                   textoUrlExterna="Ir a Meta Business"
                   extra={
@@ -1599,8 +1601,10 @@ export default function Home() {
                   </div>
                 ) : (
                   <div>
-                    <p style={{ fontSize: 13, color: "#666", marginBottom: 12 }}>
-                      Conecta tu cuenta publicitaria de Meta para poder publicar campañas directamente desde Quiubot.
+                    <p style={{ fontSize: 13, color: metaInfo?.tokenVencido ? "#DC2626" : "#666", marginBottom: 12 }}>
+                      {metaInfo?.tokenVencido
+                        ? "Tu conexión con Meta venció. Reconéctala para seguir publicando."
+                        : "Conecta tu cuenta publicitaria de Meta para poder publicar campañas directamente desde Quiubot."}
                     </p>
 
                     <div style={{ display: "flex", justifyContent: "flex-end", alignItems: "center", gap: 6, marginBottom: 8 }}>
@@ -1617,7 +1621,7 @@ export default function Home() {
                     <a  data-tour="meta-conectar" href="/api/meta/conectar"
                       style={{ display: "block", textAlign: "center", width: "100%", padding: "10px", borderRadius: "8px", background: "#534AB7", color: "#fff", fontWeight: 600, textDecoration: "none", boxSizing: "border-box" }}
                     >
-                      Conectar con Meta
+                      {metaInfo?.tokenVencido ? "Reconectar Meta" : "Conectar con Meta"}
                     </a>
                   </div>
                 )}

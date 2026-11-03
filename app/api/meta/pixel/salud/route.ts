@@ -1,6 +1,7 @@
 import { auth } from "@/auth";
 import { NextResponse } from "next/server";
 import { supabaseAdmin } from "@/lib/supabase";
+import { esErrorTokenMetaVencido } from "@/app/lib/metaErrors";
 
 // Mismo criterio de prioridad que sync-meta-insights (nunca sumar los
 // dos -- omni_purchase puede ya incluir lo que purchase cuenta solo).
@@ -40,12 +41,19 @@ export async function GET() {
     return NextResponse.json(vacia);
   }
 
+  // Si el token de Meta ya venció (code 190), ninguna de las llamadas de
+  // abajo trae nada real -- sin este chequeo, el "conectado: true" fijo
+  // del final del handler mentiría (mostraría el pixel como sano, con
+  // compras en cero, en vez de reportar que la conexión está muerta).
+  let tokenVencido = false;
+
   let ultimo_disparo: string | null = null;
   try {
     const resPixel = await fetch(
       `https://graph.facebook.com/v21.0/${usuario.meta_pixel_id}?fields=last_fired_time&access_token=${usuario.meta_access_token}`
     );
     const dataPixel = await resPixel.json();
+    if (esErrorTokenMetaVencido(dataPixel.error)) tokenVencido = true;
     ultimo_disparo = typeof dataPixel.last_fired_time === "string" ? dataPixel.last_fired_time : null;
   } catch {
     // sin último disparo esta vez no es crítico, sigue con lo demás
@@ -61,6 +69,7 @@ export async function GET() {
     for (let pagina = 0; url && pagina < MAX_PAGINAS_STATS; pagina++) {
       const res: Response = await fetch(url);
       const data: any = await res.json();
+      if (esErrorTokenMetaVencido(data.error)) tokenVencido = true;
       if (data.error) break;
       statsOk = true;
       for (const horaria of data.data || []) {
@@ -83,6 +92,7 @@ export async function GET() {
           `?fields=actions,action_values&date_preset=last_7d&access_token=${usuario.meta_access_token}`
       );
       const dataInsights = await resInsights.json();
+      if (esErrorTokenMetaVencido(dataInsights.error)) tokenVencido = true;
       const fila = dataInsights.data?.[0];
       if (fila) {
         compraAtribuidaAAnuncios = ACCIONES_COMPRA.map((t) => fila.actions?.find((a: any) => a.action_type === t)).find(Boolean);
@@ -111,6 +121,11 @@ export async function GET() {
     compras_con_valor = !!valorCompraAtribuida && (parseFloat(valorCompraAtribuida.value) || 0) > 0;
   } else {
     compras_con_valor = null;
+  }
+
+  if (tokenVencido) {
+    const vencida: RespuestaSalud = { conectado: false, ultimo_disparo: null, compras_7d: 0, compras_con_valor: false };
+    return NextResponse.json(vencida);
   }
 
   const respuesta: RespuestaSalud = { conectado: true, ultimo_disparo, compras_7d, compras_con_valor };

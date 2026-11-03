@@ -1,6 +1,7 @@
 import { auth } from "@/auth";
 import { NextResponse } from "next/server";
 import { supabaseAdmin } from "@/lib/supabase";
+import { esErrorTokenMetaVencido, MENSAJE_META_TOKEN_VENCIDO } from "@/app/lib/metaErrors";
 
 // Trae la lista REAL de pixeles de la cuenta publicitaria ya conectada del
 // usuario -- no se guarda nada aqui, solo se consulta a Meta al vuelo para
@@ -27,6 +28,9 @@ export async function GET() {
     );
     const data = await res.json();
 
+    if (esErrorTokenMetaVencido(data.error)) {
+      return NextResponse.json({ error: MENSAJE_META_TOKEN_VENCIDO }, { status: 400 });
+    }
     if (data.error) {
       console.error("Error trayendo pixeles de Meta:", data.error);
       return NextResponse.json({ error: "No se pudieron cargar los pixeles de tu cuenta de Meta" }, { status: 502 });

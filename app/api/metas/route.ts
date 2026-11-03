@@ -4,6 +4,7 @@ import { supabaseAdmin } from "@/lib/supabase";
 import { calcularAvanceMeta, cerrarMetasVencidas, type TipoMeta } from "@/app/lib/metas";
 import { hoyBogota } from "@/app/lib/fechaBogota";
 import { tieneAutopiloto } from "@/app/lib/planesConfig";
+import { esErrorTokenMetaVencido, MENSAJE_META_TOKEN_VENCIDO } from "@/app/lib/metaErrors";
 
 const TIPOS_VALIDOS: TipoMeta[] = ["conversaciones_whatsapp", "leads", "ventas_web", "visitas_web", "seguidores_facebook", "seguidores_instagram"];
 const DIAS_MINIMOS = 14;
@@ -144,6 +145,9 @@ export async function POST(req: NextRequest) {
         `https://graph.facebook.com/v21.0/${usuario.meta_page_id}?fields=instagram_business_account{followers_count}&access_token=${usuario.meta_access_token}`
       );
       const data = await res.json();
+      if (esErrorTokenMetaVencido(data.error)) {
+        return NextResponse.json({ error: MENSAJE_META_TOKEN_VENCIDO }, { status: 400 });
+      }
       const followers = data.instagram_business_account?.followers_count;
       if (typeof followers !== "number") {
         return NextResponse.json(

@@ -3,6 +3,7 @@ import { randomUUID } from "crypto";
 import { Agent } from "undici";
 import { supabaseAdmin } from "@/lib/supabase";
 import { registrarError } from "@/lib/registrarError";
+import { MENSAJE_META_TOKEN_VENCIDO, ACCION_RECONECTAR_META } from "@/app/lib/metaErrors";
 
 // Tercer tipo que usa trabajos_ia (los otros dos son "revision_imagen" y
 // "agregar_anuncios"/"adn_marca", ver app/lib/revisionImagenJobs.ts y
@@ -245,6 +246,17 @@ export async function procesarPublicarEstrategia(
         // de invitar a reintentar sin más (ver comentario de
         // MENSAJE_SIN_CONFIRMAR). El texto crudo queda en detalleTecnico.
         mensajeFinal = amigable?.mensaje || detalle.mensajeMeta || MENSAJE_SIN_CONFIRMAR;
+      }
+
+      // Token de Meta vencido/revocado (code 190 de OAuthException) manda
+      // siempre el mismo mensaje de reconexión, sin importar en qué paso o
+      // formato llegó el error -- es el único caso donde "reintenta" no
+      // sirve de nada hasta que el usuario vuelva a conectar su cuenta.
+      if (/"code"\s*:\s*190\b/.test(text)) {
+        tituloAmigable = "Tu conexión con Meta venció";
+        accionTexto = ACCION_RECONECTAR_META.texto;
+        accionUrl = ACCION_RECONECTAR_META.url;
+        mensajeFinal = MENSAJE_META_TOKEN_VENCIDO;
       }
 
       const accionTextoFinal = accionTexto ?? ACCION_ADS_MANAGER.texto;

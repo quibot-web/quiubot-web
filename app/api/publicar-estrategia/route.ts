@@ -2,6 +2,7 @@ import { auth } from "@/auth";
 import { after, NextRequest, NextResponse } from "next/server";
 import { supabaseAdmin } from "@/lib/supabase";
 import { procesarPublicarEstrategia, TIPO_TRABAJO, MENSAJE_SIN_CONFIRMAR } from "@/app/lib/publicarEstrategiaJobs";
+import { esErrorTokenMetaVencido, MENSAJE_META_TOKEN_VENCIDO } from "@/app/lib/metaErrors";
 
 // Dispara publicar_estrategia en segundo plano (trabajos_ia, ver
 // app/lib/publicarEstrategiaJobs.ts) en vez de esperar la respuesta de
@@ -56,6 +57,9 @@ export async function POST(req: NextRequest) {
         `https://graph.facebook.com/v21.0/${usuario.meta_page_id}?fields=instagram_business_account{id,username}&access_token=${usuario.meta_access_token}`
       );
       const igData = await igRes.json();
+      if (esErrorTokenMetaVencido(igData.error)) {
+        return NextResponse.json({ error: MENSAJE_META_TOKEN_VENCIDO }, { status: 400 });
+      }
       const ig = igData.instagram_business_account;
       if (!ig?.id || !ig?.username) {
         return NextResponse.json({ error: MENSAJE_INSTAGRAM_NO_CONECTADO }, { status: 400 });

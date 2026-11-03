@@ -14,10 +14,17 @@ export async function GET() {
     .eq("email", session.user.email.trim().toLowerCase())
     .single();
 
-  const conectado = !!(data && data.meta_ad_account_id);
+  // Antes "conectado" solo miraba si habia una cuenta publicitaria
+  // guardada, sin importar si el token seguia vivo -- un token vencido
+  // (meta_token_expira en el pasado) seguia mostrando "Conectado" aunque
+  // Meta ya rechazara cualquier llamada real. tokenVencido distingue ese
+  // caso de "nunca se conecto" para que la UI muestre el mensaje correcto.
+  const tokenVencido = !!(data?.meta_token_expira && new Date(data.meta_token_expira) <= new Date());
+  const conectado = !!(data && data.meta_ad_account_id) && !tokenVencido;
 
   return NextResponse.json({
     conectado,
+    tokenVencido,
     nombre: data ? data.meta_user_name : null,
     cuentaPublicitaria: data ? data.meta_ad_account_id : null,
     cuentaPublicitariaNombre: data ? data.meta_ad_account_nombre : null,
