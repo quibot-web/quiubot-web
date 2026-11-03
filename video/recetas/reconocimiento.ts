@@ -14,5 +14,7 @@ export const recetaReconocimiento: RecetaObjetivo = {
     "\"Dato que no sabías...\" que se resuelve en el bloque de valor -- usa lista_numerada ahí para poder cerrar el bucle en \"contador\" (1/3, 2/3, 3/3).",
   indicadorBucle: "contador",
   accionCta: "suave",
+  textoCtaSugerido: "Conócenos",
+  requiereUsuarioEnCta: false,
   requiereRevelacionMarca: true,
 };

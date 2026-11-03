@@ -13,5 +13,7 @@ export const recetaRetargeting: RecetaObjetivo = {
   bucleTipico: "La objeción que se tacha y se resuelve -- el bucle se cierra en la escena objecion_respuesta.",
   indicadorBucle: "espera_final",
   accionCta: "web",
+  textoCtaSugerido: "Míralo aquí",
+  requiereUsuarioEnCta: false,
   permiteObjecionRespuesta: true,
 };

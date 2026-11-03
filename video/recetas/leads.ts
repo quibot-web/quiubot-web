@@ -12,4 +12,6 @@ export const recetaLeads: RecetaObjetivo = {
   bucleTipico: "Promesa (\"te digo cuánto cuesta...\") que se cumple al llenar el formulario -- el bucle se cierra en el cta.",
   indicadorBucle: "espera_final",
   accionCta: "formulario",
+  textoCtaSugerido: "Pide tu cotización gratis",
+  requiereUsuarioEnCta: false,
 };

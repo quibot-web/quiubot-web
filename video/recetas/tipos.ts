@@ -11,6 +11,13 @@ export interface RecetaObjetivo {
   bucleTipico: string;
   indicadorBucle: "contador" | "espera_final" | "ninguno";
   accionCta: AccionCta;
+  // Texto de botón sugerido para el prompt de la IA -- dos recetas pueden
+  // compartir objeto (seguidores.ts, traficoYVisitasWeb.ts) pero el texto
+  // del CTA sigue siendo específico por id real (ver anexo_reglas_copy_y_cta.md).
+  textoCtaSugerido: string;
+  // true solo para seguidores_instagram: su botón real (VIEW_INSTAGRAM_PROFILE)
+  // va con @usuario; seguidores_facebook (LIKE_PAGE) nunca lo lleva.
+  requiereUsuarioEnCta: boolean;
   requiereRevelacionMarca?: boolean;
   permiteObjecionRespuesta?: boolean;
 }
@@ -54,6 +61,15 @@ export function validarContraReceta(guion: Guion, receta: RecetaObjetivo, huboMe
   const ultimaEscena = guion.escenas[guion.escenas.length - 1];
   if (ultimaEscena.tipo === "cta" && ultimaEscena.params.accion !== receta.accionCta) {
     errores.push(`El CTA debe ser "${receta.accionCta}" para este objetivo, no "${ultimaEscena.params.accion}".`);
+  }
+  if (ultimaEscena.tipo === "cta") {
+    const tieneUsuario = !!ultimaEscena.params.usuario;
+    if (receta.requiereUsuarioEnCta && !tieneUsuario) {
+      errores.push(`El CTA de "${receta.objetivoId}" debe incluir el @usuario (su botón real necesita a qué cuenta apunta).`);
+    }
+    if (!receta.requiereUsuarioEnCta && tieneUsuario) {
+      errores.push(`El CTA de "${receta.objetivoId}" no debe incluir @usuario (su botón real no apunta a un perfil).`);
+    }
   }
 
   if (receta.requiereRevelacionMarca && !guion.escenas.some((e) => e.tipo === "revelacion_marca")) {

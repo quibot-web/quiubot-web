@@ -11,4 +11,6 @@ export const recetaVentaDirectaWhatsapp: RecetaObjetivo = {
   bucleTipico: "\"Mira cómo quedó...\" -- el bucle se cierra en la escena del producto (el resultado que resuelve el problema del gancho).",
   indicadorBucle: "espera_final",
   accionCta: "whatsapp",
+  textoCtaSugerido: "Escríbenos por WhatsApp",
+  requiereUsuarioEnCta: false,
 };

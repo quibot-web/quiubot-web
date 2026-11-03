@@ -15,6 +15,8 @@ function construirReceta(objetivoId: "trafico_mensajes" | "visitas_web"): Receta
       "\"La 3ª está en la web\" -- el bucle NO se cierra dentro del video a propósito, se cierra yendo al sitio (cierra_en es la escena de cta).",
     indicadorBucle: "espera_final",
     accionCta: "web",
+    textoCtaSugerido: "Mira todo aquí",
+    requiereUsuarioEnCta: false,
   };
 }
 

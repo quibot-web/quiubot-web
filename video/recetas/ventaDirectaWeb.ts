@@ -11,4 +11,6 @@ export const recetaVentaDirectaWeb: RecetaObjetivo = {
   bucleTipico: "\"Hasta agotar...\" u oferta que se revela al final -- el bucle se cierra en la escena de oferta_precio.",
   indicadorBucle: "espera_final",
   accionCta: "web",
+  textoCtaSugerido: "Compra aquí",
+  requiereUsuarioEnCta: false,
 };
