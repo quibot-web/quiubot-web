@@ -7,7 +7,7 @@ export const fixtureBucleContador = GuionSchema.parse({
   formato: "9x16",
   fps: 30,
   objetivo: "seguidores_instagram",
-  duracion_objetivo_s: 16,
+  duracion_objetivo_s: 15,
   bucle: {
     texto: "3 trucos para que tu café dure más",
     abre_en: "e1",
@@ -36,7 +36,7 @@ export const fixtureBucleContador = GuionSchema.parse({
       id: "e2",
       bloque: "valor",
       tipo: "lista_numerada",
-      duracion_s: 6,
+      duracion_s: 5,
       subtitulo: { texto: "Guárdalo bien, lejos de la luz y muélelo justo antes", palabra_clave: "lejos" },
       params: {
         titulo: "3 trucos para que dure más",
