@@ -5,21 +5,27 @@ import type { PropsEscena } from "./tipos";
 import type { TemaGuion } from "../tema";
 
 const COLOR_WHATSAPP = "#25D366";
-const ANCHO_BOTON = "66%";
+// 80% del ancho de la zona segura (88% del cuadro completo), no del
+// cuadro completo -- el máximo al que puede CRECER el botón.
+const ANCHO_MAX_PX = 1080 * 0.88 * 0.8;
+const ANCHO_MAX_PORCENTAJE = `${((ANCHO_MAX_PX / 1080) * 100).toFixed(1)}%`;
+const PADDING_HORIZONTAL_PX = 56;
+const FUENTE_IDEAL = 56;
+const FUENTE_MINIMA = 44;
 
-// Estimación de cuánto espacio ocupa el texto del botón para que quepa
-// en una sola línea dentro del 66% del ancho -- Remotion no tiene
-// medición real de texto a mano sin sumar @remotion/layout-utils, así
-// que esto es una aproximación por cantidad de caracteres (probada
-// contra los textos reales de las recetas). "Escríbenos por WhatsApp" y
-// "Pide tu cotización gratis" son los más largos y los que antes se
-// partían en dos líneas.
-function tamanoBotonAutoAjustado(texto: string): number {
-  const ANCHO_UTIL_PX = 620;
-  // 0.68: primer intento con 0.56 cortaba "Pide tu cotización gratis"
-  // en una sola línea (el estimado quedaba más ancho que el real).
-  const estimado = Math.floor(ANCHO_UTIL_PX / (texto.length * 0.68));
-  return Math.max(30, Math.min(58, estimado));
+// El botón CRECE primero (hasta el 80% de la zona segura) con letra
+// ideal de 56px; solo si el texto no cabe ahí se baja la letra, nunca
+// por debajo de 44px -- Remotion no mide texto real sin sumar
+// @remotion/layout-utils, así que esto es una aproximación por cantidad
+// de caracteres (0.68 probado contra "Escríbenos por WhatsApp" y "Pide
+// tu cotización gratis", los textos reales más largos de las recetas).
+function calcularBoton(texto: string): { fontSize: number; anchoMaximo: boolean } {
+  const anchoAFuenteIdeal = texto.length * FUENTE_IDEAL * 0.68 + PADDING_HORIZONTAL_PX;
+  if (anchoAFuenteIdeal <= ANCHO_MAX_PX) {
+    return { fontSize: FUENTE_IDEAL, anchoMaximo: false };
+  }
+  const fontSize = Math.max(FUENTE_MINIMA, Math.floor((ANCHO_MAX_PX - PADDING_HORIZONTAL_PX) / (texto.length * 0.68)));
+  return { fontSize, anchoMaximo: true };
 }
 
 // El botón NUNCA usa el secundario de la marca como relleno: si el
@@ -31,15 +37,18 @@ function tamanoBotonAutoAjustado(texto: string): number {
 function BotonGrande({ texto, tema, progreso }: { texto: string; tema: TemaGuion; progreso: number }) {
   const colorBoton = colorTextoSobre(tema.color_primario);
   const colorTexto = colorTextoSobre(colorBoton);
+  const { fontSize, anchoMaximo } = calcularBoton(texto);
   return (
     <div
       style={{
-        width: ANCHO_BOTON,
+        width: anchoMaximo ? ANCHO_MAX_PORCENTAJE : "fit-content",
+        minWidth: "50%",
+        maxWidth: ANCHO_MAX_PORCENTAJE,
         background: colorBoton,
         color: colorTexto,
         borderRadius: 999,
-        padding: "26px 18px",
-        fontSize: tamanoBotonAutoAjustado(texto),
+        padding: `26px ${PADDING_HORIZONTAL_PX / 2}px`,
+        fontSize,
         fontWeight: 800,
         textAlign: "center",
         whiteSpace: "nowrap",
@@ -126,7 +135,10 @@ function CtaWeb({ escena, tema }: PropsEscena<"cta">) {
 
   return (
     <AbsoluteFill style={{ justifyContent: "center", alignItems: "center", padding: "0 8%" }}>
-      <div style={{ position: "relative", width: ANCHO_BOTON }}>
+      {/* display:inline-block para que el contenedor se ajuste al ancho
+          real del botón (que ahora varía con el texto), y el cursor se
+          ancle a su esquina de verdad. */}
+      <div style={{ position: "relative", display: "inline-block" }}>
         <BotonGrande texto={texto_boton} tema={tema} progreso={progresoBoton} />
         <CursorClic frame={frame} fps={fps} duracionCuadros={duracionCuadros} />
       </div>
@@ -180,7 +192,7 @@ function CtaFormulario({ escena, tema }: PropsEscena<"cta">) {
         <CampoFormulario etiqueta="Nombre" frame={frame} fps={fps} inicio={0} tema={tema} />
         <CampoFormulario etiqueta="WhatsApp" frame={frame} fps={fps} inicio={fps * 0.5} tema={tema} />
       </div>
-      <div style={{ position: "relative", width: ANCHO_BOTON }}>
+      <div style={{ position: "relative", display: "inline-block" }}>
         <BotonGrande texto={texto_boton} tema={tema} progreso={progresoBoton} />
         {frame >= cuadroBoton && <CursorClic frame={frame - cuadroBoton} fps={fps} duracionCuadros={duracionCuadros - cuadroBoton} />}
       </div>
@@ -260,16 +272,16 @@ function CtaSuave({ escena, tema }: PropsEscena<"cta">) {
   return (
     <AbsoluteFill style={{ justifyContent: "center", alignItems: "center", padding: "0 8%" }}>
       {tema.logo_url ? (
-        <Img src={tema.logo_url} style={{ width: 220, height: 220, objectFit: "contain", marginBottom: 30, opacity: progreso }} />
+        <Img src={tema.logo_url} style={{ width: 72, height: 72, objectFit: "contain", marginBottom: 24, opacity: progreso }} />
       ) : (
         tema.nombre_marca && (
-          <div style={{ fontSize: 56, fontWeight: 800, color: colorTexto, marginBottom: 20, opacity: progreso }}>{tema.nombre_marca}</div>
+          <div style={{ fontSize: 60, fontWeight: 800, color: colorTexto, marginBottom: 24, opacity: progreso }}>{tema.nombre_marca}</div>
         )
       )}
       {subtexto && (
         <div
           style={{
-            fontSize: 92,
+            fontSize: 104,
             fontWeight: 800,
             color: colorTexto,
             textAlign: "center",
@@ -281,7 +293,7 @@ function CtaSuave({ escena, tema }: PropsEscena<"cta">) {
           {subtexto}
         </div>
       )}
-      <div style={{ fontSize: 34, color: colorTexto, marginTop: 24, opacity: progreso * 0.8, fontWeight: 600 }}>{texto_boton}</div>
+      <div style={{ fontSize: 40, color: colorTexto, marginTop: 24, opacity: progreso * 0.8, fontWeight: 600 }}>{texto_boton}</div>
     </AbsoluteFill>
   );
 }

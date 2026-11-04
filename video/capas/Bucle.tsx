@@ -34,6 +34,11 @@ export function CapaBucle({ guion }: { guion: Guion }) {
   let contenido: string;
   if (bucle.indicador === "espera_final") {
     contenido = "👀 espera al final";
+  } else if (frame < inicioEscenaCierre) {
+    // Antes de llegar a la lista que cuenta, el chip muestra la
+    // promesa en sí ("👀 3 trucos para que tu café dure más"), no un
+    // "0/3" que todavía no significa nada.
+    contenido = `👀 ${bucle.texto}`;
   } else {
     // El zod ya exige que la escena de cierre sea lista_numerada cuando
     // indicador es "contador" (ver guion.schema.ts), así que siempre
@@ -59,6 +64,7 @@ export function CapaBucle({ guion }: { guion: Guion }) {
           padding: "10px 26px",
           fontSize: 40,
           fontWeight: 800,
+          maxWidth: "80%",
         }}
       >
         {contenido}

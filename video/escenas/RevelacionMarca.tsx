@@ -19,7 +19,7 @@ export function RevelacionMarca({ escena, tema }: PropsEscena<"revelacion_marca"
         )}
         <div
           style={{
-            fontSize: 72,
+            fontSize: 92,
             fontWeight: 800,
             color: colorTexto,
             opacity: progreso,
