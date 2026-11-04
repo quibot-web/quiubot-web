@@ -17,8 +17,6 @@ export const fixtureBucleContador = GuionSchema.parse({
   tema: {
     color_primario: "#C8893F",
     color_secundario: "#D8B48C",
-    color_fondo: "#0D0A22",
-    color_texto: "#FFFFFF",
     fuente: "elegante",
     logo_url: null,
   },
@@ -29,7 +27,6 @@ export const fixtureBucleContador = GuionSchema.parse({
       bloque: "gancho",
       tipo: "gancho_texto",
       duracion_s: 2,
-      subtitulo: { texto: "3 trucos para que tu café dure más", palabra_clave: "trucos" },
       params: { texto: "3 trucos para que tu café dure más", palabra_clave: "trucos" },
     },
     {
@@ -37,7 +34,6 @@ export const fixtureBucleContador = GuionSchema.parse({
       bloque: "valor",
       tipo: "lista_numerada",
       duracion_s: 5,
-      subtitulo: { texto: "Guárdalo bien, lejos de la luz y muélelo justo antes", palabra_clave: "lejos" },
       params: {
         titulo: "3 trucos para que dure más",
         items: ["Guárdalo en frasco hermético", "Lejos de la luz y el calor", "Muélelo justo antes de usar"],
@@ -48,7 +44,6 @@ export const fixtureBucleContador = GuionSchema.parse({
       bloque: "objecion",
       tipo: "objecion_respuesta",
       duracion_s: 3,
-      subtitulo: { texto: "¿Y si no me queda bien? Cambio gratis en 30 días", palabra_clave: "gratis" },
       params: { objecion: "¿Y si no me gusta?", respuesta: "Cambio gratis en 30 días" },
     },
     {
@@ -56,7 +51,6 @@ export const fixtureBucleContador = GuionSchema.parse({
       bloque: "marca",
       tipo: "revelacion_marca",
       duracion_s: 2.3,
-      subtitulo: { texto: "Café que se disfruta de verdad", palabra_clave: "disfruta" },
       params: { frase: "Café que se disfruta de verdad", mostrar_logo: true },
     },
     {
@@ -64,7 +58,6 @@ export const fixtureBucleContador = GuionSchema.parse({
       bloque: "cta",
       tipo: "cta",
       duracion_s: 2.5,
-      subtitulo: { texto: "Síguenos para más tips cada semana", palabra_clave: "Síguenos" },
       params: { accion: "seguir", texto_boton: "Síguenos", usuario: "@miempresacafe", subtexto: "Más tips cada semana" },
     },
   ],

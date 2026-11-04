@@ -11,8 +11,6 @@ export const fixtureVentaDirectaWeb = GuionSchema.parse({
   tema: {
     color_primario: "#66BB6A",
     color_secundario: "#81C784",
-    color_fondo: "#0D0A22",
-    color_texto: "#FFFFFF",
     fuente: "moderna",
     logo_url: null,
   },
@@ -23,8 +21,7 @@ export const fixtureVentaDirectaWeb = GuionSchema.parse({
       bloque: "gancho",
       tipo: "gancho_texto",
       duracion_s: 2,
-      subtitulo: { texto: "La colección que se agota rápido", palabra_clave: "agota" },
-      params: { texto: "La colección que se agota rápido", palabra_clave: "agota", sticker: "-20%" },
+      params: { texto: "La colección que se agota rápido", palabra_clave: "agota", sticker: "-20%", media_id: "demo-1" },
     },
     {
       id: "e2",
@@ -39,7 +36,6 @@ export const fixtureVentaDirectaWeb = GuionSchema.parse({
       bloque: "beneficio",
       tipo: "beneficios_lista",
       duracion_s: 2.5,
-      subtitulo: { texto: "Cuero real, envío gratis a todo el país", palabra_clave: "gratis" },
       params: { items: ["Cuero 100% real", "Envío gratis a todo el país"] },
     },
     {
@@ -47,7 +43,6 @@ export const fixtureVentaDirectaWeb = GuionSchema.parse({
       bloque: "oferta",
       tipo: "oferta_precio",
       duracion_s: 2.5,
-      subtitulo: { texto: "Hoy a $189.900, antes $239.900", palabra_clave: "189.900" },
       params: { precio: "$189.900", precio_antes: "$239.900", nota: "Hasta agotar existencias" },
     },
     {
@@ -55,7 +50,6 @@ export const fixtureVentaDirectaWeb = GuionSchema.parse({
       bloque: "cta",
       tipo: "cta",
       duracion_s: 2.5,
-      subtitulo: { texto: "Compra aquí antes de que se agote", palabra_clave: "Compra" },
       params: { accion: "web", texto_boton: "Compra aquí" },
     },
   ],

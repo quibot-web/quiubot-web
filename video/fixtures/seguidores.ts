@@ -10,10 +10,8 @@ export const fixtureSeguidoresInstagram = GuionSchema.parse({
   duracion_objetivo_s: 9,
   bucle: { texto: "Parte 1 de 3 trucos de edición", abre_en: "e1", cierra_en: "e2", indicador: "contador" },
   tema: {
-    color_primario: "#EC407A",
-    color_secundario: "#F06292",
-    color_fondo: "#0D0A22",
-    color_texto: "#FFFFFF",
+    color_primario: "#FCE4EC",
+    color_secundario: "#AD1457",
     fuente: "amigable",
     logo_url: null,
   },
@@ -24,7 +22,6 @@ export const fixtureSeguidoresInstagram = GuionSchema.parse({
       bloque: "gancho",
       tipo: "gancho_texto",
       duracion_s: 2,
-      subtitulo: { texto: "3 trucos de edición que no conocías", palabra_clave: "trucos" },
       params: { texto: "3 trucos de edición que no conocías", palabra_clave: "trucos" },
     },
     {
@@ -32,7 +29,6 @@ export const fixtureSeguidoresInstagram = GuionSchema.parse({
       bloque: "valor",
       tipo: "lista_numerada",
       duracion_s: 5,
-      subtitulo: { texto: "Luz natural, encuadre y el tercero en la parte 2", palabra_clave: "encuadre" },
       params: { titulo: "3 trucos de edición", items: ["Usa luz natural", "Cuida el encuadre", "El tercero, síguenos"] },
     },
     {
@@ -40,7 +36,6 @@ export const fixtureSeguidoresInstagram = GuionSchema.parse({
       bloque: "cta",
       tipo: "cta",
       duracion_s: 2.5,
-      subtitulo: { texto: "Síguenos para la parte 2", palabra_clave: "Síguenos" },
       params: { accion: "seguir", texto_boton: "Síguenos", usuario: "@miempresa", subtexto: "Más tips cada semana" },
     },
   ],

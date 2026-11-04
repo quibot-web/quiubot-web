@@ -1,4 +1,6 @@
 import { AbsoluteFill, interpolate, spring, useCurrentFrame, useVideoConfig } from "remotion";
+import { colorTextoSobre } from "../tema";
+import { FondoMarca } from "../capas/FondoMarca";
 import type { PropsEscena } from "./tipos";
 
 export function ListaNumerada({ escena, tema }: PropsEscena<"lista_numerada">) {
@@ -7,48 +9,64 @@ export function ListaNumerada({ escena, tema }: PropsEscena<"lista_numerada">) {
   const { titulo, items } = escena.params;
   const cuadrosPorItem = Math.max(8, Math.floor((escena.duracion_s * fps) / items.length));
   const indiceActivo = Math.min(items.length - 1, Math.floor(frame / cuadrosPorItem));
+  const colorTexto = colorTextoSobre(tema.color_primario);
+  const colorNumero = colorTextoSobre(tema.color_secundario);
 
   return (
-    <AbsoluteFill style={{ justifyContent: "center", padding: "0 10%" }}>
-      <div style={{ fontSize: 40, fontWeight: 700, color: tema.color_texto, marginBottom: 12 }}>{titulo}</div>
-      <div style={{ alignSelf: "flex-end", color: tema.color_primario, fontWeight: 800, fontSize: 26, marginBottom: 20 }}>
-        {indiceActivo + 1}/{items.length}
-      </div>
-      {items.map((item, i) => {
-        const progreso = spring({ frame: frame - i * cuadrosPorItem, fps, config: { damping: 14 } });
-        return (
-          <div
-            key={i}
-            style={{
-              display: "flex",
-              alignItems: "center",
-              gap: 16,
-              opacity: progreso,
-              transform: `scale(${interpolate(progreso, [0, 1], [0.85, 1])})`,
-              marginBottom: 18,
-            }}
-          >
+    <AbsoluteFill>
+      <FondoMarca tema={tema} tono="marca" />
+      <AbsoluteFill style={{ justifyContent: "center", padding: "0 8%" }}>
+        <div style={{ fontSize: 54, fontWeight: 800, color: colorTexto, marginBottom: 16 }}>{titulo}</div>
+        <div
+          style={{
+            alignSelf: "flex-start",
+            background: "rgba(0,0,0,0.25)",
+            color: colorTexto,
+            fontWeight: 800,
+            fontSize: 38,
+            padding: "6px 20px",
+            borderRadius: 999,
+            marginBottom: 26,
+          }}
+        >
+          {indiceActivo + 1}/{items.length}
+        </div>
+        {items.map((item, i) => {
+          const progreso = spring({ frame: frame - i * cuadrosPorItem, fps, config: { damping: 14 } });
+          return (
             <div
+              key={i}
               style={{
-                width: 44,
-                height: 44,
-                borderRadius: "50%",
-                background: tema.color_primario,
-                color: tema.color_texto,
                 display: "flex",
                 alignItems: "center",
-                justifyContent: "center",
-                fontWeight: 800,
-                fontSize: 22,
-                flexShrink: 0,
+                gap: 20,
+                opacity: progreso,
+                transform: `scale(${interpolate(progreso, [0, 1], [0.85, 1])})`,
+                marginBottom: 22,
               }}
             >
-              {i + 1}
+              <div
+                style={{
+                  width: 60,
+                  height: 60,
+                  borderRadius: "50%",
+                  background: tema.color_secundario,
+                  color: colorNumero,
+                  display: "flex",
+                  alignItems: "center",
+                  justifyContent: "center",
+                  fontWeight: 800,
+                  fontSize: 30,
+                  flexShrink: 0,
+                }}
+              >
+                {i + 1}
+              </div>
+              <span style={{ color: colorTexto, fontSize: 42, fontWeight: 600 }}>{item}</span>
             </div>
-            <span style={{ color: tema.color_texto, fontSize: 32 }}>{item}</span>
-          </div>
-        );
-      })}
+          );
+        })}
+      </AbsoluteFill>
     </AbsoluteFill>
   );
 }

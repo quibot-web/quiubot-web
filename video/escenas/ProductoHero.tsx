@@ -1,4 +1,5 @@
 import { AbsoluteFill, Img, OffthreadVideo, interpolate, useCurrentFrame, useVideoConfig } from "remotion";
+import { FondoMarca } from "../capas/FondoMarca";
 import type { PropsEscena } from "./tipos";
 
 export function ProductoHero({ escena, tema, medios }: PropsEscena<"producto_hero">) {
@@ -16,7 +17,7 @@ export function ProductoHero({ escena, tema, medios }: PropsEscena<"producto_her
   });
 
   return (
-    <AbsoluteFill style={{ backgroundColor: tema.color_fondo }}>
+    <AbsoluteFill>
       {media ? (
         media.tipo === "video" ? (
           <OffthreadVideo
@@ -31,27 +32,36 @@ export function ProductoHero({ escena, tema, medios }: PropsEscena<"producto_her
           />
         )
       ) : (
-        // Nunca queda un hueco si falta la pieza: fondo de marca con forma.
-        <AbsoluteFill
-          style={{ background: `radial-gradient(circle at 30% 30%, ${tema.color_secundario}, ${tema.color_fondo})` }}
-        />
+        // Nunca queda un hueco si falta la pieza: fondo de marca.
+        <FondoMarca tema={tema} tono="marca" />
       )}
-      <AbsoluteFill style={{ justifyContent: "flex-end", padding: "0 8% 20%" }}>
+      <AbsoluteFill style={{ background: "linear-gradient(to bottom, rgba(0,0,0,0) 45%, rgba(0,0,0,0.78) 100%)" }} />
+
+      <AbsoluteFill style={{ justifyContent: "flex-end", padding: "0 8% 24%" }}>
         <div
           style={{
             display: "inline-flex",
             alignItems: "center",
-            gap: 10,
-            background: "rgba(0,0,0,0.45)",
-            borderRadius: 16,
-            padding: "14px 20px",
+            gap: 12,
+            background: "rgba(0,0,0,0.5)",
+            borderRadius: 18,
+            padding: "16px 24px",
             alignSelf: "flex-start",
           }}
         >
-          <span style={{ color: tema.color_primario, fontSize: 30 }}>✓</span>
-          <span style={{ color: "#fff", fontSize: 32, fontWeight: 700 }}>{nombre}</span>
+          <span style={{ color: tema.color_primario, fontSize: 36 }}>✓</span>
+          <span style={{ color: "#fff", fontSize: 40, fontWeight: 700 }}>{nombre}</span>
         </div>
-        {etiqueta && <div style={{ color: "#fff", fontSize: 22, marginTop: 8 }}>{etiqueta}</div>}
+        {etiqueta && <div style={{ color: "#fff", fontSize: 26, marginTop: 10 }}>{etiqueta}</div>}
+
+        {/* Única escena que muestra subtítulo (sección "sin subtítulo
+            duplicado"): cuando el producto ocupa toda la pantalla, no
+            hay ningún otro texto que lo reemplace. */}
+        {escena.subtitulo && (
+          <div style={{ color: "#fff", fontSize: 32, fontWeight: 600, marginTop: 18, textShadow: "0 2px 8px rgba(0,0,0,0.6)" }}>
+            {escena.subtitulo.texto}
+          </div>
+        )}
       </AbsoluteFill>
     </AbsoluteFill>
   );

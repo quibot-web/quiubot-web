@@ -13,4 +13,5 @@ export const recetaVentaDirectaWhatsapp: RecetaObjetivo = {
   accionCta: "whatsapp",
   textoCtaSugerido: "Escríbenos por WhatsApp",
   requiereUsuarioEnCta: false,
+  ganchoUsaProductoDeFondo: true,
 };

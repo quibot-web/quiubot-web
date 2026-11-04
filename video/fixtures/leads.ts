@@ -9,10 +9,8 @@ export const fixtureLeads = GuionSchema.parse({
   duracion_objetivo_s: 14,
   bucle: { texto: "Te digo cuánto cuesta tu proyecto", abre_en: "e1", cierra_en: "e5", indicador: "espera_final" },
   tema: {
-    color_primario: "#42A5F5",
-    color_secundario: "#64B5F6",
-    color_fondo: "#0D0A22",
-    color_texto: "#FFFFFF",
+    color_primario: "#BBDEFB",
+    color_secundario: "#1565C0",
     fuente: "moderna",
     logo_url: null,
   },
@@ -23,7 +21,6 @@ export const fixtureLeads = GuionSchema.parse({
       bloque: "gancho",
       tipo: "gancho_texto",
       duracion_s: 2,
-      subtitulo: { texto: "¿No sabes cuánto cuesta tu reforma?", palabra_clave: "cuánto" },
       params: { texto: "¿No sabes cuánto cuesta tu reforma?", palabra_clave: "cuánto" },
     },
     {
@@ -31,7 +28,6 @@ export const fixtureLeads = GuionSchema.parse({
       bloque: "problema",
       tipo: "problema_dato",
       duracion_s: 2.5,
-      subtitulo: { texto: "Pedir cotizaciones por separado toma días", palabra_clave: "días" },
       params: { variante: "pregunta", pregunta: "¿Cansado de esperar cotizaciones?" },
     },
     {
@@ -39,7 +35,6 @@ export const fixtureLeads = GuionSchema.parse({
       bloque: "valor",
       tipo: "lista_numerada",
       duracion_s: 5,
-      subtitulo: { texto: "Te asesoramos, medimos y cotizamos gratis", palabra_clave: "gratis" },
       params: { titulo: "Así te cotizamos", items: ["Nos cuentas qué necesitas", "Medimos en sitio", "Te cotizamos gratis"] },
     },
     {
@@ -47,7 +42,6 @@ export const fixtureLeads = GuionSchema.parse({
       bloque: "beneficio",
       tipo: "beneficios_lista",
       duracion_s: 2.5,
-      subtitulo: { texto: "Sin compromiso y por WhatsApp", palabra_clave: "compromiso" },
       params: { items: ["Sin compromiso", "Respuesta el mismo día"] },
     },
     {
@@ -55,7 +49,6 @@ export const fixtureLeads = GuionSchema.parse({
       bloque: "cta",
       tipo: "cta",
       duracion_s: 2.5,
-      subtitulo: { texto: "Pide tu cotización gratis hoy", palabra_clave: "gratis" },
       params: { accion: "formulario", texto_boton: "Pide tu cotización gratis" },
     },
   ],

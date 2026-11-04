@@ -13,4 +13,5 @@ export const recetaVentaDirectaWeb: RecetaObjetivo = {
   accionCta: "web",
   textoCtaSugerido: "Compra aquí",
   requiereUsuarioEnCta: false,
+  ganchoUsaProductoDeFondo: true,
 };

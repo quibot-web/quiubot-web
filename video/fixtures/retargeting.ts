@@ -11,8 +11,6 @@ export const fixtureRetargeting = GuionSchema.parse({
   tema: {
     color_primario: "#26A69A",
     color_secundario: "#4DB6AC",
-    color_fondo: "#0D0A22",
-    color_texto: "#FFFFFF",
     fuente: "moderna",
     logo_url: null,
   },
@@ -23,15 +21,13 @@ export const fixtureRetargeting = GuionSchema.parse({
       bloque: "gancho",
       tipo: "gancho_texto",
       duracion_s: 2,
-      subtitulo: { texto: "¿Todavía lo estás pensando?", palabra_clave: "pensando" },
-      params: { texto: "¿Todavía lo estás pensando?", palabra_clave: "pensando" },
+      params: { texto: "¿Todavía lo estás pensando?", palabra_clave: "pensando", media_id: "demo-1" },
     },
     {
       id: "e2",
       bloque: "objecion",
       tipo: "objecion_respuesta",
       duracion_s: 3,
-      subtitulo: { texto: "¿Y si no me queda? Cambio gratis en 30 días", palabra_clave: "gratis" },
       params: { objecion: "¿Y si no me queda?", respuesta: "Cambio gratis en 30 días" },
     },
     {
@@ -47,7 +43,6 @@ export const fixtureRetargeting = GuionSchema.parse({
       bloque: "oferta",
       tipo: "oferta_precio",
       duracion_s: 2.5,
-      subtitulo: { texto: "Hoy con envío gratis", palabra_clave: "gratis" },
       params: { precio: "$149.900", nota: "Envío gratis hoy" },
     },
     {
@@ -55,7 +50,6 @@ export const fixtureRetargeting = GuionSchema.parse({
       bloque: "cta",
       tipo: "cta",
       duracion_s: 2.5,
-      subtitulo: { texto: "Míralo aquí", palabra_clave: "Míralo" },
       params: { accion: "web", texto_boton: "Míralo aquí" },
     },
   ],

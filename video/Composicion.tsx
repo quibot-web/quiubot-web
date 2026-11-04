@@ -4,7 +4,6 @@ import { familiaDeFuente } from "./fuentes";
 import { renderizarEscena } from "./escenas";
 import type { MediosResueltos } from "./escenas/tipos";
 import { CapaLogo } from "./capas/Logo";
-import { CapaSubtitulos } from "./capas/Subtitulos";
 import { CapaBucle } from "./capas/Bucle";
 import { CapaMusica } from "./capas/Musica";
 import { ZonaSegura } from "./capas/ZonaSegura";
@@ -18,13 +17,14 @@ export type PropsComposicion = {
 
 // Compuesta exactamente igual en el @remotion/player del navegador y en
 // el worker de render (Fase 1b) -- lo que se ve en la vista previa es lo
-// que sale en el mp4.
+// que sale en el mp4. Sin color de fondo fijo aquí: cada escena pinta el
+// suyo (FondoMarca, la foto/video real, o el degradado de alerta).
 export function Composicion({ guion, medios, pistaUrl, mostrarZonaSegura }: PropsComposicion) {
   const { escenas, tema, fps } = guion;
   const familia = familiaDeFuente(tema.fuente);
 
   return (
-    <AbsoluteFill style={{ backgroundColor: tema.color_fondo, fontFamily: familia, color: tema.color_texto }}>
+    <AbsoluteFill style={{ fontFamily: familia }}>
       <Series>
         {escenas.map((escena) => (
           <Series.Sequence key={escena.id} durationInFrames={Math.round(escena.duracion_s * fps)}>
@@ -34,7 +34,6 @@ export function Composicion({ guion, medios, pistaUrl, mostrarZonaSegura }: Prop
       </Series>
 
       <CapaLogo tema={tema} />
-      <CapaSubtitulos escenas={escenas} fps={fps} tema={tema} />
       <CapaBucle guion={guion} />
       {pistaUrl && <CapaMusica url={pistaUrl} volumen={guion.musica.volumen} />}
       {mostrarZonaSegura && <ZonaSegura />}

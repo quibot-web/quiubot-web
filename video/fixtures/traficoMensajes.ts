@@ -10,10 +10,8 @@ export const fixtureTraficoMensajes = GuionSchema.parse({
   duracion_objetivo_s: 9,
   bucle: { texto: "La 3ª está en la web", abre_en: "e1", cierra_en: "e3", indicador: "espera_final" },
   tema: {
-    color_primario: "#BA68C8",
-    color_secundario: "#CE93D8",
-    color_fondo: "#0D0A22",
-    color_texto: "#FFFFFF",
+    color_primario: "#F3E5F5",
+    color_secundario: "#6A1B9A",
     fuente: "moderna",
     logo_url: null,
   },
@@ -24,7 +22,6 @@ export const fixtureTraficoMensajes = GuionSchema.parse({
       bloque: "gancho",
       tipo: "gancho_texto",
       duracion_s: 2,
-      subtitulo: { texto: "3 errores que arruinan tu jardín", palabra_clave: "errores" },
       params: { texto: "3 errores que arruinan tu jardín", palabra_clave: "errores" },
     },
     {
@@ -32,7 +29,6 @@ export const fixtureTraficoMensajes = GuionSchema.parse({
       bloque: "valor",
       tipo: "lista_numerada",
       duracion_s: 5,
-      subtitulo: { texto: "Regar de más, poca luz, y el tercero te sorprende", palabra_clave: "sorprende" },
       params: { titulo: "3 errores comunes", items: ["Regar de más", "Poca luz solar", "El tercero, en la web"] },
     },
     {
@@ -40,7 +36,6 @@ export const fixtureTraficoMensajes = GuionSchema.parse({
       bloque: "cta",
       tipo: "cta",
       duracion_s: 2.5,
-      subtitulo: { texto: "Mira todo aquí", palabra_clave: "Mira" },
       params: { accion: "web", texto_boton: "Mira todo aquí" },
     },
   ],

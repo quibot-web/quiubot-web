@@ -39,6 +39,11 @@ const ParamsGanchoTexto = z.object({
   texto: z.string().min(1).max(60),
   palabra_clave: z.string().min(1).max(30),
   sticker: z.string().max(14).optional(),
+  // Solo en recetas de venta (venta_directa_whatsapp, venta_directa_web,
+  // retargeting) cuando el admin eligió pieza del álbum: el gancho usa
+  // esa foto o video como fondo, con degradado oscuro abajo y el texto
+  // encima -- "gancho = portada" (sección "Gancho con producto").
+  media_id: z.string().min(1).optional(),
 });
 
 // La fila "problema_dato" acepta una variante "pregunta" (una pregunta
@@ -120,7 +125,10 @@ const EscenaBase = {
   id: z.string().min(1),
   bloque: Bloque,
   duracion_s: z.number().min(1.5).max(5),
-  subtitulo: Subtitulo,
+  // Sin voz en la Fase 1, pero SOLO producto_hero muestra subtítulo: las
+  // demás escenas ya tienen su propio texto grande en pantalla, uno
+  // duplicado encima se siente repetido ("sin subtítulo duplicado").
+  subtitulo: Subtitulo.optional(),
 };
 
 export const EscenaSchema = z.discriminatedUnion("tipo", [
@@ -139,11 +147,14 @@ export type Escena = z.infer<typeof EscenaSchema>;
 
 const HEX_COLOR = /^#[0-9a-fA-F]{6}$/;
 
+// Sin color_fondo/color_texto: cada escena pinta su propio fondo (marca,
+// alerta, o la foto/video real) y elige su color de texto en caliente
+// con colorTextoSobre() (video/tema.ts) contra lo que de verdad hay
+// detrás -- un solo color de texto fijo no podía funcionar sobre fondos
+// que cambian de escena a escena.
 const Tema = z.object({
   color_primario: z.string().regex(HEX_COLOR),
   color_secundario: z.string().regex(HEX_COLOR),
-  color_fondo: z.string().regex(HEX_COLOR),
-  color_texto: z.string().regex(HEX_COLOR),
   fuente: z.enum(["impacto", "moderna", "elegante", "amigable"]),
   logo_url: z.url().nullable(),
 });

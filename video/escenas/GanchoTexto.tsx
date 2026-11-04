@@ -1,56 +1,92 @@
-import { AbsoluteFill, interpolate, spring, useCurrentFrame, useVideoConfig } from "remotion";
+import { AbsoluteFill, Img, OffthreadVideo, interpolate, spring, useCurrentFrame, useVideoConfig } from "remotion";
+import { colorTextoSobre } from "../tema";
+import { FondoMarca } from "../capas/FondoMarca";
 import type { PropsEscena } from "./tipos";
 
-export function GanchoTexto({ escena, tema }: PropsEscena<"gancho_texto">) {
+const BLANCO = "#FFFFFF";
+// Todas las palabras tienen que haber entrado antes de 0.6s -- el cuadro
+// del segundo 1 es la portada del video en el álbum, tiene que verse el
+// titular completo y quieto ahí. 0.5s dentro de ese límite da margen.
+const SEGUNDOS_LIMITE_ENTRADA = 0.5;
+
+export function GanchoTexto({ escena, tema, medios }: PropsEscena<"gancho_texto">) {
   const frame = useCurrentFrame();
   const { fps } = useVideoConfig();
-  const { texto, palabra_clave, sticker } = escena.params;
+  const { texto, palabra_clave, sticker, media_id } = escena.params;
+  const media = media_id ? medios[media_id] : undefined;
 
   const palabras = texto.split(" ");
-  // Todas las palabras entran en la primera mitad de la escena -- la
-  // segunda mitad queda con el titular completo en pantalla, legible.
-  const cuadrosPorPalabra = Math.max(3, Math.floor((escena.duracion_s * fps * 0.5) / palabras.length));
+  const cuadrosPorPalabra = Math.max(2, Math.floor((fps * SEGUNDOS_LIMITE_ENTRADA) / palabras.length));
+
+  const colorFondoEfectivo = media ? "#000000" : tema.color_primario;
+  const colorTextoBase = media ? BLANCO : colorTextoSobre(colorFondoEfectivo);
+  const colorChip = media ? tema.color_primario : tema.color_secundario;
+  const colorTextoChip = colorTextoSobre(colorChip);
 
   return (
-    <AbsoluteFill style={{ justifyContent: "center", alignItems: "center", padding: "0 8%" }}>
+    <AbsoluteFill>
+      {media ? (
+        <AbsoluteFill>
+          {media.tipo === "video" ? (
+            <OffthreadVideo src={media.url} muted style={{ width: "100%", height: "100%", objectFit: "cover" }} />
+          ) : (
+            <Img src={media.url} style={{ width: "100%", height: "100%", objectFit: "cover" }} />
+          )}
+          <AbsoluteFill style={{ background: "linear-gradient(to bottom, rgba(0,0,0,0) 35%, rgba(0,0,0,0.85) 100%)" }} />
+        </AbsoluteFill>
+      ) : (
+        <FondoMarca tema={tema} tono="marca" />
+      )}
+
       {sticker && (
         <div
           style={{
             position: "absolute",
-            top: "16%",
-            left: "8%",
-            background: tema.color_primario,
-            color: tema.color_texto,
-            padding: "8px 18px",
+            top: "26%",
+            right: "8%",
+            background: colorChip,
+            color: colorTextoChip,
+            padding: "10px 22px",
             borderRadius: 999,
-            fontWeight: 700,
-            fontSize: 28,
+            fontWeight: 800,
+            fontSize: 40,
             transform: `scale(${spring({ frame, fps, config: { damping: 10 } })})`,
           }}
         >
           {sticker}
         </div>
       )}
-      <div style={{ display: "flex", flexWrap: "wrap", justifyContent: "center", gap: "0 14px", rowGap: 6 }}>
-        {palabras.map((palabra, i) => {
-          const progreso = spring({ frame: frame - i * cuadrosPorPalabra, fps, config: { damping: 12 } });
-          const esClave = palabra.toLowerCase().includes(palabra_clave.toLowerCase());
-          return (
-            <span
-              key={i}
-              style={{
-                opacity: progreso,
-                transform: `translateY(${interpolate(progreso, [0, 1], [40, 0])}px)`,
-                fontSize: 72,
-                fontWeight: 800,
-                lineHeight: 1.1,
-                color: esClave ? tema.color_primario : tema.color_texto,
-              }}
-            >
-              {palabra}
-            </span>
-          );
-        })}
+
+      {/* position:absolute con "bottom" (no padding dentro de un flex de
+          toda la pantalla): así el bloque de texto crece hacia ARRIBA
+          desde justo encima del 35% inferior inseguro, sin importar
+          cuántas líneas ocupe un titular largo. */}
+      <div style={{ position: "absolute", left: "8%", right: "8%", bottom: "36%" }}>
+        <div style={{ display: "flex", flexWrap: "wrap", alignItems: "baseline", gap: "0 16px", rowGap: 4, maxWidth: "100%" }}>
+          {palabras.map((palabra, i) => {
+            const progreso = spring({ frame: frame - i * cuadrosPorPalabra, fps, config: { damping: 14 } });
+            const esClave = palabra.toLowerCase().includes(palabra_clave.toLowerCase());
+            return (
+              <span
+                key={i}
+                style={{
+                  opacity: progreso,
+                  transform: `translateY(${interpolate(progreso, [0, 1], [30, 0])}px)`,
+                  fontSize: 136,
+                  fontWeight: 800,
+                  lineHeight: 1.04,
+                  color: esClave ? colorTextoChip : colorTextoBase,
+                  background: esClave ? colorChip : "transparent",
+                  padding: esClave ? "4px 14px" : 0,
+                  borderRadius: esClave ? 12 : 0,
+                  textShadow: media && !esClave ? "0 4px 16px rgba(0,0,0,0.5)" : undefined,
+                }}
+              >
+                {palabra}
+              </span>
+            );
+          })}
+        </div>
       </div>
     </AbsoluteFill>
   );

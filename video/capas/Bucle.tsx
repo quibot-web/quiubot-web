@@ -42,12 +42,12 @@ export function CapaBucle({ guion }: { guion: Guion }) {
           position: "absolute",
           top: "16%",
           left: "8%",
-          background: "rgba(0,0,0,0.5)",
-          color: "#fff",
+          background: "#111111",
+          color: "#FFD43B",
           borderRadius: 999,
-          padding: "6px 16px",
-          fontSize: 22,
-          fontWeight: 700,
+          padding: "10px 26px",
+          fontSize: 40,
+          fontWeight: 800,
         }}
       >
         {contenido}

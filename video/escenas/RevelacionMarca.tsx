@@ -1,4 +1,6 @@
 import { AbsoluteFill, Img, interpolate, spring, useCurrentFrame, useVideoConfig } from "remotion";
+import { colorTextoSobre } from "../tema";
+import { FondoMarca } from "../capas/FondoMarca";
 import type { PropsEscena } from "./tipos";
 
 export function RevelacionMarca({ escena, tema }: PropsEscena<"revelacion_marca">) {
@@ -6,31 +8,28 @@ export function RevelacionMarca({ escena, tema }: PropsEscena<"revelacion_marca"
   const { fps } = useVideoConfig();
   const { frase, mostrar_logo } = escena.params;
   const progreso = spring({ frame, fps, config: { damping: 12 } });
+  const colorTexto = colorTextoSobre(tema.color_primario);
 
   return (
-    <AbsoluteFill
-      style={{
-        justifyContent: "center",
-        alignItems: "center",
-        background: `radial-gradient(circle at 50% 40%, ${tema.color_secundario}33, transparent 60%)`,
-      }}
-    >
-      {mostrar_logo && tema.logo_url && (
-        <Img src={tema.logo_url} style={{ width: 140, height: 140, objectFit: "contain", opacity: progreso, marginBottom: 20 }} />
-      )}
-      <div
-        style={{
-          fontSize: 48,
-          fontWeight: 800,
-          color: tema.color_primario,
-          textAlign: "center",
-          opacity: progreso,
-          transform: `translateY(${interpolate(progreso, [0, 1], [20, 0])}px)`,
-          padding: "0 10%",
-        }}
-      >
-        {frase}
-      </div>
+    <AbsoluteFill>
+      <FondoMarca tema={tema} tono="marca" />
+      <AbsoluteFill style={{ justifyContent: "center", padding: "0 8%" }}>
+        {mostrar_logo && tema.logo_url && (
+          <Img src={tema.logo_url} style={{ width: 160, height: 160, objectFit: "contain", opacity: progreso, marginBottom: 26 }} />
+        )}
+        <div
+          style={{
+            fontSize: 72,
+            fontWeight: 800,
+            color: colorTexto,
+            opacity: progreso,
+            transform: `translateY(${interpolate(progreso, [0, 1], [20, 0])}px)`,
+            lineHeight: 1.08,
+          }}
+        >
+          {frase}
+        </div>
+      </AbsoluteFill>
     </AbsoluteFill>
   );
 }

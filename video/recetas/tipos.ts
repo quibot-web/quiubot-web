@@ -20,6 +20,10 @@ export interface RecetaObjetivo {
   requiereUsuarioEnCta: boolean;
   requiereRevelacionMarca?: boolean;
   permiteObjecionRespuesta?: boolean;
+  // true en venta_directa_whatsapp, venta_directa_web y retargeting: si
+  // el admin eligió pieza del álbum, el gancho la usa de fondo (es la
+  // "portada" del video) en vez del fondo de marca por defecto.
+  ganchoUsaProductoDeFondo?: boolean;
 }
 
 // ¿Los bloques usados en el guion respetan el orden de la receta? Se

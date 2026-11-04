@@ -16,4 +16,5 @@ export const recetaRetargeting: RecetaObjetivo = {
   textoCtaSugerido: "Míralo aquí",
   requiereUsuarioEnCta: false,
   permiteObjecionRespuesta: true,
+  ganchoUsaProductoDeFondo: true,
 };
