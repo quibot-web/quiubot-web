@@ -794,6 +794,13 @@ export const TASA_CIERRE_POR_CATEGORIA: Record<CategoriaTasaCierre, number> = {
 export type RangoResultados = {
   cantidadMin: number;
   cantidadMax: number;
+  // El punto medio real (presupuesto / costoReferencia.valorCop, sin la
+  // banda) -- es el número que de verdad se guarda como cantidad_objetivo
+  // al crear la meta (ver app/api/metas/conversacion/route.ts). cantidadMin/
+  // cantidadMax son solo para mostrarle al cliente un rango honesto antes
+  // de que decida; la meta en sí siempre se crea con un número concreto,
+  // igual que ya hace app/metas/crear/page.tsx hoy (costo_objetivo_cop).
+  cantidadPuntoMedio: number;
   costoPorResultado: number;
   fuente: FuenteCostoReferencia;
   // Solo viene si se pasó tasaCierre -- en ventas_web la cantidad YA es
@@ -821,7 +828,7 @@ const BANDA_INCERTIDUMBRE_POR_FUENTE: Record<FuenteCostoReferencia, number> = {
 // lugar que necesite la misma cuenta.
 export function calcularRangoResultados(presupuestoCop: number, costoReferencia: CostoReferencia, tasaCierre?: number): RangoResultados {
   if (costoReferencia.valorCop <= 0 || presupuestoCop <= 0) {
-    return { cantidadMin: 0, cantidadMax: 0, costoPorResultado: costoReferencia.valorCop, fuente: costoReferencia.fuente, ventasEstimadas: null };
+    return { cantidadMin: 0, cantidadMax: 0, cantidadPuntoMedio: 0, costoPorResultado: costoReferencia.valorCop, fuente: costoReferencia.fuente, ventasEstimadas: null };
   }
 
   const banda = BANDA_INCERTIDUMBRE_POR_FUENTE[costoReferencia.fuente];
@@ -833,13 +840,14 @@ export function calcularRangoResultados(presupuestoCop: number, costoReferencia:
   // conservador).
   const cantidadMax = Math.round(presupuestoCop / costoOptimista);
   const cantidadMin = Math.round(presupuestoCop / costoPesimista);
+  const cantidadPuntoMedio = Math.round(presupuestoCop / costoReferencia.valorCop);
 
   const ventasEstimadas =
     tasaCierre !== undefined
       ? { min: Math.round(cantidadMin * tasaCierre), max: Math.round(cantidadMax * tasaCierre) }
       : null;
 
-  return { cantidadMin, cantidadMax, costoPorResultado: costoReferencia.valorCop, fuente: costoReferencia.fuente, ventasEstimadas };
+  return { cantidadMin, cantidadMax, cantidadPuntoMedio, costoPorResultado: costoReferencia.valorCop, fuente: costoReferencia.fuente, ventasEstimadas };
 }
 
 export type RequisitoFaltante = {
