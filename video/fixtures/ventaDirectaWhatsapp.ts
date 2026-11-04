@@ -9,7 +9,7 @@ export const fixtureVentaDirectaWhatsapp = GuionSchema.parse({
   duracion_objetivo_s: 15,
   bucle: { texto: "Mira cómo quedó la soldadura", abre_en: "e1", cierra_en: "e3", indicador: "espera_final" },
   tema: {
-    color_primario: "#E91E63",
+    color_primario: "#FF4081",
     color_secundario: "#F48FB1",
     color_fondo: "#0D0A22",
     color_texto: "#FFFFFF",

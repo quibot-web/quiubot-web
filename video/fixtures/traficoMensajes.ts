@@ -10,7 +10,7 @@ export const fixtureTraficoMensajes = GuionSchema.parse({
   duracion_objetivo_s: 9,
   bucle: { texto: "La 3ª está en la web", abre_en: "e1", cierra_en: "e3", indicador: "espera_final" },
   tema: {
-    color_primario: "#6A1B9A",
+    color_primario: "#BA68C8",
     color_secundario: "#CE93D8",
     color_fondo: "#0D0A22",
     color_texto: "#FFFFFF",

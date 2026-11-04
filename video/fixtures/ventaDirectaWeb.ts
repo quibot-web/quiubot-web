@@ -9,7 +9,7 @@ export const fixtureVentaDirectaWeb = GuionSchema.parse({
   duracion_objetivo_s: 13,
   bucle: { texto: "Hasta agotar existencias", abre_en: "e1", cierra_en: "e4", indicador: "espera_final" },
   tema: {
-    color_primario: "#2E7D32",
+    color_primario: "#66BB6A",
     color_secundario: "#81C784",
     color_fondo: "#0D0A22",
     color_texto: "#FFFFFF",

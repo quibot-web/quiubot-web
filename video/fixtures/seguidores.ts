@@ -10,7 +10,7 @@ export const fixtureSeguidoresInstagram = GuionSchema.parse({
   duracion_objetivo_s: 9,
   bucle: { texto: "Parte 1 de 3 trucos de edición", abre_en: "e1", cierra_en: "e2", indicador: "contador" },
   tema: {
-    color_primario: "#C2185B",
+    color_primario: "#EC407A",
     color_secundario: "#F06292",
     color_fondo: "#0D0A22",
     color_texto: "#FFFFFF",

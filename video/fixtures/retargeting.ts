@@ -9,7 +9,7 @@ export const fixtureRetargeting = GuionSchema.parse({
   duracion_objetivo_s: 13,
   bucle: { texto: "¿Todavía lo estás pensando?", abre_en: "e1", cierra_en: "e2", indicador: "espera_final" },
   tema: {
-    color_primario: "#00796B",
+    color_primario: "#26A69A",
     color_secundario: "#4DB6AC",
     color_fondo: "#0D0A22",
     color_texto: "#FFFFFF",

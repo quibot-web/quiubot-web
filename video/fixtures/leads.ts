@@ -9,7 +9,7 @@ export const fixtureLeads = GuionSchema.parse({
   duracion_objetivo_s: 14,
   bucle: { texto: "Te digo cuánto cuesta tu proyecto", abre_en: "e1", cierra_en: "e5", indicador: "espera_final" },
   tema: {
-    color_primario: "#1565C0",
+    color_primario: "#42A5F5",
     color_secundario: "#64B5F6",
     color_fondo: "#0D0A22",
     color_texto: "#FFFFFF",

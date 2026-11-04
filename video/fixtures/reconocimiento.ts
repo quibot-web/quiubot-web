@@ -11,7 +11,7 @@ export const fixtureReconocimiento = GuionSchema.parse({
   duracion_objetivo_s: 12,
   bucle: { texto: "3 trucos para que tu café dure más", abre_en: "e1", cierra_en: "e2", indicador: "contador" },
   tema: {
-    color_primario: "#8E5B3D",
+    color_primario: "#C8893F",
     color_secundario: "#D8B48C",
     color_fondo: "#0D0A22",
     color_texto: "#FFFFFF",

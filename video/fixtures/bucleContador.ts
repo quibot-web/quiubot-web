@@ -15,7 +15,7 @@ export const fixtureBucleContador = GuionSchema.parse({
     indicador: "contador",
   },
   tema: {
-    color_primario: "#8E5B3D",
+    color_primario: "#C8893F",
     color_secundario: "#D8B48C",
     color_fondo: "#0D0A22",
     color_texto: "#FFFFFF",
