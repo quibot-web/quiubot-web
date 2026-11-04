@@ -15,6 +15,13 @@ export type PropsComposicion = {
   mostrarZonaSegura?: boolean;
 };
 
+// Compartida por Root.tsx (Remotion Studio) y por el <Player> de
+// /video/nuevo -- la misma cuenta en los dos lugares, para que la
+// duración de la vista previa en el navegador coincida siempre.
+export function duracionEnCuadros(guion: Guion): number {
+  return Math.round(guion.escenas.reduce((acc, e) => acc + e.duracion_s, 0) * guion.fps);
+}
+
 // Compuesta exactamente igual en el @remotion/player del navegador y en
 // el worker de render (Fase 1b) -- lo que se ve en la vista previa es lo
 // que sale en el mp4. Sin color de fondo fijo aquí: cada escena pinta el

@@ -1,5 +1,5 @@
 import { Composition, registerRoot } from "remotion";
-import { Composicion, type PropsComposicion } from "./Composicion";
+import { Composicion, duracionEnCuadros, type PropsComposicion } from "./Composicion";
 import type { Guion } from "./guion.schema";
 import { fixtureCompleta } from "./fixtures/completa";
 import { fixtureBucleContador } from "./fixtures/bucleContador";
@@ -10,10 +10,6 @@ import { fixtureTraficoMensajes } from "./fixtures/traficoMensajes";
 import { fixtureReconocimiento } from "./fixtures/reconocimiento";
 import { fixtureSeguidoresInstagram } from "./fixtures/seguidores";
 import { fixtureRetargeting } from "./fixtures/retargeting";
-
-function duracionEnCuadros(guion: Guion): number {
-  return Math.round(guion.escenas.reduce((acc, e) => acc + e.duracion_s, 0) * guion.fps);
-}
 
 // Placeholder para "demo-1" (data URI, sin archivos nuevos en public/):
 // solo para ver en Studio cómo se comporta producto_hero y el gancho con

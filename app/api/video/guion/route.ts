@@ -223,25 +223,29 @@ export async function POST(req: NextRequest) {
     adnFraseCorta: adnMarca?.frase_corta?.trim() || null,
   };
 
+  // Un intento por llamada a la IA: guarda el JSON crudo que devolvió y
+  // los motivos del rechazo (si los hubo), aunque el guion termine
+  // aceptado -- es admin-only y la Fase 1a prueba la IA por primera vez
+  // en /video, así que el panel de debug necesita ver TODOS los
+  // intentos, no solo el que falló, para poder ajustar el prompt sin
+  // abrir logs.
+  interface Intento {
+    errores: string[];
+    crudo: unknown;
+  }
+  const intentosRegistrados: Intento[] = [];
+
   async function intentar(erroresPrevios?: string[]): Promise<{ ok: true; guion: Guion } | { ok: false; errores: string[] }> {
     const prompt = construirPromptGuion(entrada, erroresPrevios);
-
-    let contenido: string;
-    try {
-      contenido = await llamarOpenAI(apiKeyUsuario, prompt);
-    } catch (err) {
-      // Un fallo de red/tiempo de espera con OpenAI no es "el guion no
-      // pasó la validación" -- no tiene sentido reintentar con el mismo
-      // prompt si el modelo ni siquiera respondió. Se propaga para que
-      // el handler lo trate como error duro, sin segundo intento.
-      throw err;
-    }
+    const contenido = await llamarOpenAI(apiKeyUsuario, prompt);
 
     let crudo: unknown;
     try {
       crudo = JSON.parse(contenido);
     } catch {
-      return { ok: false, errores: ["La respuesta no fue un JSON válido."] };
+      const errores = ["La respuesta no fue un JSON válido."];
+      intentosRegistrados.push({ errores, crudo: contenido });
+      return { ok: false, errores };
     }
 
     const candidato = {
@@ -259,6 +263,7 @@ export async function POST(req: NextRequest) {
     const resultado = GuionSchema.safeParse(candidato);
     if (!resultado.success) {
       const errores = resultado.error.issues.map((issue) => `${issue.path.join(".")}: ${issue.message}`);
+      intentosRegistrados.push({ errores, crudo });
       return { ok: false, errores };
     }
 
@@ -271,6 +276,7 @@ export async function POST(req: NextRequest) {
     const erroresCopy = detectarFrasesDescargo(recopilarTextosEscenas(resultado.data.escenas)).map((m) => `copy tímido: ${m}`);
 
     const erroresTotales = [...erroresReceta, ...erroresMedia, ...erroresCopy];
+    intentosRegistrados.push({ errores: erroresTotales, crudo });
     if (erroresTotales.length > 0) {
       return { ok: false, errores: erroresTotales };
     }
@@ -278,6 +284,7 @@ export async function POST(req: NextRequest) {
     return { ok: true, guion: resultado.data };
   }
 
+  const inicio = Date.now();
   try {
     let resultado = await intentar();
     let intentos = 1;
@@ -286,6 +293,8 @@ export async function POST(req: NextRequest) {
       resultado = await intentar(resultado.errores);
       intentos += 1;
     }
+
+    const duracionMs = Date.now() - inicio;
 
     if (!resultado.ok) {
       registrarError({
@@ -298,13 +307,27 @@ export async function POST(req: NextRequest) {
         objetivoId,
       });
       return NextResponse.json(
-        { error: "No se pudo generar un guion válido para este objetivo. Intenta de nuevo o ajusta el brief." },
+        {
+          error: "No se pudo generar un guion válido para este objetivo. Revisa los intentos o ajusta el brief.",
+          intentos: intentosRegistrados,
+          duracion_ms: duracionMs,
+        },
         { status: 502 }
       );
     }
 
-    return NextResponse.json({ guion: resultado.guion, medios, pista_url: pistaUrl });
+    return NextResponse.json({
+      guion: resultado.guion,
+      medios,
+      pista_url: pistaUrl,
+      intentos: intentosRegistrados,
+      duracion_ms: duracionMs,
+    });
   } catch (err) {
+    // Un fallo de red/tiempo de espera con OpenAI no es "el guion no
+    // pasó la validación" -- intentar() lo deja propagarse en vez de
+    // reintentar con el mismo prompt, porque el modelo ni respondió.
+    const duracionMs = Date.now() - inicio;
     console.error("Error generando guion de video:", err);
     registrarError({
       origen: "video_guion",
@@ -315,6 +338,13 @@ export async function POST(req: NextRequest) {
       detalleTecnico: String(err),
       objetivoId,
     });
-    return NextResponse.json({ error: "No se pudo generar el guion en este momento. Intenta de nuevo." }, { status: 503 });
+    return NextResponse.json(
+      {
+        error: "No se pudo generar el guion en este momento. Intenta de nuevo.",
+        intentos: intentosRegistrados,
+        duracion_ms: duracionMs,
+      },
+      { status: 503 }
+    );
   }
 }

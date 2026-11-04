@@ -2749,7 +2749,10 @@ function EstrategiaContent() {
       localStorage.setItem("quiubot_tipos_por_anuncio", JSON.stringify(tiposPorAnuncio));
       localStorage.setItem("quiubot_creativos_por_clave", JSON.stringify(acumuladoInicial));
     } catch {}
-    router.push("/video?returnTo=estrategia");
+    // /video (sin más ruta) ahora es el flujo nuevo con código (Fase 1a,
+    // admin-only, sin wizard de /estrategia todavía) -- el flujo de Kling
+    // con el que sí integra este wizard se movió a /video/kling.
+    router.push("/video/kling?returnTo=estrategia");
   };
 
   const abrirPickerParaSlot = (idx: number) => setSlotEligiendo(idx);

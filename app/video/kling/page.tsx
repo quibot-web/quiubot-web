@@ -1,0 +1,970 @@
+"use client";
+import { useEffect, useRef, useState, Suspense } from "react";
+import { useRouter, useSearchParams } from "next/navigation";
+import { Dna, Zap, Clock } from "lucide-react";
+import CargandoQuiubot from "@/app/components/CargandoQuiubot";
+import { OBJETIVOS_INFO } from "@/app/lib/objetivosInfo";
+import { urlDescargaCloudinary } from "@/app/lib/cloudinaryUrl";
+
+const MIN_IMAGENES = 1;
+const MAX_IMAGENES = 3;
+const LIMITE_REGENERACIONES = 2;
+
+// Convierte un data URI ("data:image/jpeg;base64,...") a Blob decodificando
+// el base64 a mano (Uint8Array), sin pasar por fetch(dataUri) -- eso
+// generaba un aviso de CSP (Report-Only por ahora, pero frágil si algún
+// día deja de serlo).
+function base64ToBlob(dataUri: string): Blob {
+  const [meta, contenidoBase64] = dataUri.split(",");
+  const mimeMatch = meta.match(/data:(.*);base64/);
+  const mime = mimeMatch ? mimeMatch[1] : "image/jpeg";
+  const binario = atob(contenidoBase64);
+  const bytes = new Uint8Array(binario.length);
+  for (let i = 0; i < binario.length; i++) {
+    bytes[i] = binario.charCodeAt(i);
+  }
+  return new Blob([bytes], { type: mime });
+}
+
+type Segmento = {
+  orden: number;
+  job_id: string;
+  duracion: number;
+  public_id: string;
+  url_video: string;
+  plantilla_id: string;
+  tipo_segmento: string;
+  imagen_url?: string;
+};
+
+type EstadoVideoJob = {
+  ok: boolean;
+  estado: string;
+  segmentos: Segmento[];
+  total_segmentos: number | null;
+  video_final_url: string | null;
+  texto_cta: string | null;
+  regeneraciones_usadas: number;
+  error_mensaje: string | null;
+  error?: string;
+};
+
+const ESTADOS_TERMINALES_GENERACION = ["revision_pendiente", "error"];
+const ESTADOS_TERMINALES_UNION = ["listo", "error"];
+
+// Consulta /api/video-jobs/[id] cada 5s hasta que el estado llegue a
+// alguno de los "estadosFinales" pedidos. Se usa tanto para esperar los
+// 4 fragmentos, como para esperar una regeneracion puntual, como para
+// esperar la union final -- mismo patron que pollJobHasta en estrategia,
+// adaptado a los varios estados intermedios de video_jobs.
+async function pollVideoJobHasta(
+  jobId: string,
+  estadosFinales: string[],
+  onProgress?: (data: EstadoVideoJob) => void,
+  maxMs = 25 * 60 * 1000
+): Promise<EstadoVideoJob> {
+  const inicio = Date.now();
+  while (Date.now() - inicio < maxMs) {
+    const res = await fetch(`/api/video-jobs/${jobId}`);
+    const data = await res.json().catch(() => ({ ok: false }));
+    if (!data.ok) throw new Error(data.error || "No se pudo consultar el estado del video.");
+    onProgress?.(data);
+    if (estadosFinales.includes(data.estado)) return data;
+    await new Promise((resolve) => setTimeout(resolve, 5000));
+  }
+  throw new Error("Está tardando más de lo esperado. Intenta de nuevo en unos minutos.");
+}
+
+const TIPO_LABEL: Record<string, string> = {
+  hook: "Hook (0-5s)",
+  contenido: "Contenido",
+  cierre: "Cierre / CTA",
+};
+
+// Player grande compartido entre la pantalla de revisión (muestra el
+// fragmento seleccionado en el filmstrip) y la de resultado final
+// (muestra el video ya unido) -- mismo componente, dos usos.
+function VideoPlayerGrande({
+  src,
+  videoRef,
+  onTimeUpdate,
+}: {
+  src: string;
+  videoRef?: React.RefObject<HTMLVideoElement | null>;
+  onTimeUpdate?: () => void;
+}) {
+  return (
+    <video
+      key={src}
+      ref={videoRef}
+      src={src}
+      controls
+      onTimeUpdate={onTimeUpdate}
+      style={{ width: "100%", maxHeight: 480, borderRadius: 10, background: "#000", display: "block" }}
+    />
+  );
+}
+
+// 4 etapas simuladas -- no hay progreso real disponible del lado del
+// backend (video_jobs.segmentos solo se escribe TODO junto al final, no
+// fragmento por fragmento), así que esto avanza por tiempo transcurrido,
+// no por datos reales. Es honesto igual: nunca dice "listo" antes de
+// tiempo, solo da sensación de trabajo activo mientras se espera.
+const ETAPAS_GENERACION = [
+  { titulo: "Generando el hook", detalle: "Los primeros 5 segundos — el gancho que detiene el scroll." },
+  { titulo: "Creando el primer fragmento de contenido", detalle: "Tu producto en acción." },
+  { titulo: "Creando el segundo fragmento de contenido", detalle: "Otro ángulo de tu producto." },
+  { titulo: "Armando el cierre", detalle: "El fragmento final, con tu llamado a la acción." },
+];
+const DURACION_ESTIMADA_SEG = 16 * 60;
+
+// Reemplaza el spinner de pantalla completa que antes atrapaba al usuario
+// ~17 minutos: esto vive en una card normal (no minHeight:100vh), deja el
+// resto de la página (el "← Volver" de arriba) visible, y explícitamente
+// invita a salir en vez de sugerir que hay que quedarse mirando.
+// Núcleo con "órbita" -- un aro visible con 2 puntos girando en sentidos
+// opuestos (arrancan en polos opuestos del mismo aro) alrededor de un
+// ícono de rayo fijo en el centro -- transmite "IA procesando" en vez de
+// un spinner de carga genérico. size configurable: chico para usos
+// inline, grande para la pantalla de espera (protagonista, no un ícono
+// más al lado de texto).
+function NucleoOrbitas({ size = 48 }: { size?: number }) {
+  const grosorAro = Math.max(1.5, Math.round(size / 70));
+  const tamanoIcono = Math.round(size * 0.36);
+  const dot = Math.max(6, Math.round(size / 16));
+  return (
+    <div style={{ position: "relative", width: size, height: size, flexShrink: 0, margin: "0 auto" }}>
+      <div style={{ position: "absolute", inset: 0, borderRadius: "50%", border: `${grosorAro}px solid #ECE9F7` }} />
+      <div style={{ position: "absolute", inset: 0, display: "flex", alignItems: "center", justifyContent: "center" }}>
+        <Zap size={tamanoIcono} color="var(--qb-purple)" strokeWidth={2} fill="var(--qb-purple)" aria-hidden="true" />
+      </div>
+      <div className="nucleo-orbita-ext" style={{ position: "absolute", inset: 0 }}>
+        <span style={{ position: "absolute", top: -dot / 2, left: "50%", width: dot, height: dot, marginLeft: -dot / 2, borderRadius: "50%", background: "var(--qb-purple)" }} />
+      </div>
+      <div className="nucleo-orbita-int" style={{ position: "absolute", inset: 0 }}>
+        <span style={{ position: "absolute", bottom: -dot / 2, left: "50%", width: dot * 0.8, height: dot * 0.8, marginLeft: -(dot * 0.8) / 2, borderRadius: "50%", background: "#7F77DD" }} />
+      </div>
+      <style>{`
+        .nucleo-orbita-ext { animation: orbitaCW 1.6s linear infinite; }
+        .nucleo-orbita-int { animation: orbitaCCW 1.6s linear infinite; }
+        @keyframes orbitaCW { to { transform: rotate(360deg); } }
+        @keyframes orbitaCCW { to { transform: rotate(-360deg); } }
+        @media (prefers-reduced-motion: reduce) {
+          .nucleo-orbita-ext, .nucleo-orbita-int { animation: none !important; }
+        }
+      `}</style>
+    </div>
+  );
+}
+
+function EsperaGeneracionVideo() {
+  const [segundos, setSegundos] = useState(0);
+
+  useEffect(() => {
+    const intervalo = setInterval(() => setSegundos((s) => s + 1), 1000);
+    return () => clearInterval(intervalo);
+  }, []);
+
+  const etapaActiva = Math.min(
+    ETAPAS_GENERACION.length - 1,
+    Math.floor(segundos / (DURACION_ESTIMADA_SEG / ETAPAS_GENERACION.length))
+  );
+  // Barra continua unica -- reemplaza el checklist de 4 pasos (se sentía
+  // como una lista de tareas, no como "un editor de video trabajando").
+  const progresoContinuo = Math.min(100, (segundos / DURACION_ESTIMADA_SEG) * 100);
+
+  return (
+    <div style={{ textAlign: "center", padding: "0.5rem 0" }}>
+      <div style={{ marginBottom: 24 }}>
+        <NucleoOrbitas size={140} />
+      </div>
+
+      <p style={{ fontSize: 17, fontWeight: 700, color: "#1a1a1a", margin: "0 0 4px" }}>
+        {ETAPAS_GENERACION[etapaActiva].titulo}...
+      </p>
+      <p style={{ fontSize: 13, color: "#999", margin: "0 0 24px" }}>
+        {ETAPAS_GENERACION[etapaActiva].detalle}
+      </p>
+
+      <div style={{ maxWidth: 320, margin: "0 auto 28px", height: 6, borderRadius: 3, background: "#ECE9F7", overflow: "hidden" }}>
+        <div
+          style={{
+            height: "100%", borderRadius: 3, background: "var(--qb-purple)",
+            width: `${progresoContinuo}%`, transition: "width 1s linear",
+          }}
+        />
+      </div>
+
+      {/* La salida es EL siguiente paso, no una opción secundaria --
+          botón sólido y primero en jerarquía visual, no un link discreto
+          después de un cuadro de aviso. */}
+      <a
+        href="/"
+        style={{ display: "block", maxWidth: 360, margin: "0 auto 10px", textAlign: "center", background: "var(--qb-purple)", color: "#fff", padding: "14px", borderRadius: 10, fontSize: 15, fontWeight: 700, textDecoration: "none" }}
+      >
+        Salir — te avisamos cuando esté listo →
+      </a>
+      <p style={{ fontSize: 12, color: "#999", margin: 0, maxWidth: 360, marginLeft: "auto", marginRight: "auto" }}>
+        Esto tarda unos 15-20 minutos. No hace falta que te quedes mirando esta pantalla.
+      </p>
+    </div>
+  );
+}
+
+function VideoContent() {
+  const searchParams = useSearchParams();
+  const router = useRouter();
+
+  const [paso, setPaso] = useState<"form" | "generando" | "revision" | "uniendo" | "listo" | "error">("form");
+  const [imagenesUrls, setImagenesUrls] = useState<string[]>([]);
+  const [subiendoImagen, setSubiendoImagen] = useState(false);
+  const [argumentacion, setArgumentacion] = useState("");
+  const [textoCta, setTextoCta] = useState("");
+  // Id de OBJETIVOS_INFO (mismos valores exactos que el paso 3 del
+  // wizard). En modo wizard llega precargado desde
+  // quiubot_video_objetivo (el usuario ya lo eligió allá); en uso
+  // standalone lo elige acá con el dropdown de más abajo.
+  const [objetivo, setObjetivo] = useState("");
+  const [jobId, setJobId] = useState<string | null>(null);
+  // true si se llegó con ?returnTo=estrategia -- controla el formulario
+  // (fotos read-only, sin campo de CTA). La decisión de a dónde volver al
+  // terminar la unión NO depende de este estado sino de una clave en
+  // localStorage (ver el efecto de precarga abajo), para que sobreviva
+  // aunque el usuario cierre la pestaña y retome por notificación (?job=),
+  // que no trae el ?returnTo= en la URL.
+  const [modoWizard, setModoWizard] = useState(false);
+  const [precargandoFotos, setPrecargandoFotos] = useState(false);
+  // Mismo gate que /estrategia (estrategia/page.tsx:1362-1396) -- /video es
+  // standalone y no pasa por ese chequeo, así que alguien podría llegar
+  // acá con un link viejo/guardado sin nunca haber sintetizado su ADN.
+  // Aunque venga con ?returnTo=estrategia (donde ya se pasó ese gate en
+  // el wizard), se revisa igual del lado de /video, por si acaso.
+  const [tieneAdn, setTieneAdn] = useState<boolean | null>(null);
+  // Video es admin-only por ahora (ver plan "Video como Próximamente") --
+  // el bloqueo real está en el servidor (/api/generar-video responde 403),
+  // esto es solo para no mostrarle el formulario completo a quien de
+  // todas formas no puede usarlo.
+  const [esAdmin, setEsAdmin] = useState<boolean | null>(null);
+  const [segmentos, setSegmentos] = useState<Segmento[]>([]);
+  const [regeneracionesUsadas, setRegeneracionesUsadas] = useState(0);
+  const [videoFinalUrl, setVideoFinalUrl] = useState<string | null>(null);
+  const [errorMsg, setErrorMsg] = useState<string | null>(null);
+  const [regenerandoOrden, setRegenerandoOrden] = useState<number | null>(null);
+  const [segmentoSeleccionado, setSegmentoSeleccionado] = useState(0);
+  const [progreso, setProgreso] = useState(0);
+  const fileInputRef = useRef<HTMLInputElement | null>(null);
+  const videoRef = useRef<HTMLVideoElement | null>(null);
+
+  useEffect(() => {
+    fetch("/api/marca-adn")
+      .then((r) => r.json())
+      .then((data) => setTieneAdn(!!data.tieneAdn))
+      .catch(() => setTieneAdn(false));
+  }, []);
+
+  useEffect(() => {
+    fetch("/api/usuario/rol")
+      .then((r) => r.json())
+      .then((data) => setEsAdmin(data.rol === "admin"))
+      .catch(() => setEsAdmin(false));
+  }, []);
+
+  // Si el usuario llega desde una notificación (?job=<id>), retoma el
+  // estado real del job en vez de arrancar el formulario desde cero.
+  useEffect(() => {
+    const jid = searchParams.get("job");
+    if (!jid) return;
+    setJobId(jid);
+
+    (async () => {
+      try {
+        const res = await fetch(`/api/video-jobs/${jid}`);
+        const data: EstadoVideoJob = await res.json();
+        if (!data.ok) {
+          setErrorMsg(data.error || "No se pudo recuperar este video.");
+          setPaso("error");
+          return;
+        }
+        if (data.estado === "generando_fragmentos") {
+          setPaso("generando");
+          const listo = await pollVideoJobHasta(jid, ESTADOS_TERMINALES_GENERACION);
+          if (listo.estado === "error") {
+            setErrorMsg(listo.error_mensaje || "No se pudo generar el video.");
+            setPaso("error");
+          } else {
+            setSegmentos(listo.segmentos.sort((a, b) => a.orden - b.orden));
+            setRegeneracionesUsadas(listo.regeneraciones_usadas);
+            setTextoCta(listo.texto_cta || "");
+            setPaso("revision");
+          }
+        } else if (data.estado === "revision_pendiente" || data.estado === "regenerando_fragmento") {
+          setSegmentos(data.segmentos.sort((a, b) => a.orden - b.orden));
+          setRegeneracionesUsadas(data.regeneraciones_usadas);
+          setTextoCta(data.texto_cta || "");
+          setPaso("revision");
+        } else if (data.estado === "uniendo") {
+          setPaso("uniendo");
+          const listo = await pollVideoJobHasta(jid, ESTADOS_TERMINALES_UNION);
+          if (listo.estado === "error") {
+            setErrorMsg(listo.error_mensaje || "No se pudo unir el video.");
+            setPaso("error");
+          } else {
+            setVideoFinalUrl(listo.video_final_url);
+            setPaso("listo");
+          }
+        } else if (data.estado === "listo") {
+          setVideoFinalUrl(data.video_final_url);
+          setPaso("listo");
+        } else if (data.estado === "error") {
+          setErrorMsg(data.error_mensaje || "No se pudo generar el video.");
+          setPaso("error");
+        }
+      } catch (e: any) {
+        setErrorMsg(e?.message || "No se pudo recuperar este video.");
+        setPaso("error");
+      }
+    })();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
+  // Si se llega desde el wizard de estrategia (?returnTo=estrategia), no
+  // se repiten las fotos ni la descripción (paso 2 del wizard) ni se pide
+  // el CTA a mano -- se leen 3 claves de localStorage que el wizard ya
+  // mantiene al día por su cuenta (nada de esto duplica estado nuevo):
+  // quiubot_imagenes_producto_base64, quiubot_descripcion_visual_producto,
+  // quiubot_estrategia_seleccionada (de ahí sale el CTA del primer anuncio
+  // recomendado, mismo campo que ya reusa el flujo de álbum). El CTA sigue
+  // editable más adelante en la pantalla de revisión, solo se oculta el
+  // campo inicial del formulario.
+  useEffect(() => {
+    if (searchParams.get("job")) return; // ese flujo (arriba) tiene prioridad
+    if (searchParams.get("returnTo") !== "estrategia") return;
+
+    setModoWizard(true);
+    try {
+      localStorage.setItem("quiubot_video_return_to", "estrategia");
+    } catch {}
+
+    const descGuardada = localStorage.getItem("quiubot_descripcion_visual_producto");
+    if (descGuardada) setArgumentacion(descGuardada);
+
+    // Objetivo elegido en el paso 3 del wizard -- se usa tal cual, sin
+    // mostrar el selector standalone (ese es solo para cuando no hay
+    // wizard de por medio).
+    const objetivoGuardado = localStorage.getItem("quiubot_video_objetivo");
+    if (objetivoGuardado) setObjetivo(objetivoGuardado);
+
+    // El CTA precargado es del anuncio ESPECÍFICO que el usuario asignó a
+    // video en el paso de asignación (quiubot_video_anuncio_ref, "ci-ai")
+    // -- no siempre conjuntos[0].anuncios[0]. Si por algún motivo esa
+    // referencia no está (ej. link viejo de antes de esta funcionalidad),
+    // cae al primer anuncio como respaldo defensivo.
+    const estrategiaGuardada = localStorage.getItem("quiubot_estrategia_seleccionada");
+    if (estrategiaGuardada) {
+      try {
+        const estrategia = JSON.parse(estrategiaGuardada);
+        const anuncioRef = localStorage.getItem("quiubot_video_anuncio_ref");
+        let anuncioAsignado: any = null;
+        if (anuncioRef) {
+          const [ci, ai] = anuncioRef.split("-").map((n) => parseInt(n, 10));
+          anuncioAsignado = estrategia?.conjuntos?.[ci]?.anuncios?.[ai] || null;
+        }
+        const ctaResuelto = anuncioAsignado?.copy?.cta || estrategia?.conjuntos?.[0]?.anuncios?.[0]?.copy?.cta || "Comprar ahora";
+        setTextoCta(ctaResuelto);
+      } catch {}
+    }
+
+    const imgsGuardadas = localStorage.getItem("quiubot_imagenes_producto_base64");
+    if (!imgsGuardadas) return;
+
+    (async () => {
+      setPrecargandoFotos(true);
+      try {
+        const base64s: string[] = JSON.parse(imgsGuardadas);
+        const urls: string[] = [];
+        const errores: string[] = [];
+        for (const b64 of base64s.slice(0, MAX_IMAGENES)) {
+          const blob = base64ToBlob(b64);
+          const formData = new FormData();
+          formData.append("archivo", blob, "foto.jpg");
+          const res = await fetch("/api/album/subir", { method: "POST", body: formData });
+          const data = await res.json().catch(() => ({}));
+          if (res.ok && data.url) {
+            urls.push(data.url);
+          } else {
+            errores.push(data.error || `Error ${res.status}`);
+          }
+        }
+        setImagenesUrls(urls);
+        if (urls.length === 0) {
+          setErrorMsg(`No se pudieron preparar las fotos que subiste en el wizard: ${errores[0] || "error desconocido"}`);
+        }
+      } catch (e: any) {
+        setErrorMsg(`No se pudieron preparar las fotos que subiste en el wizard: ${e?.message || "error desconocido"}`);
+      } finally {
+        setPrecargandoFotos(false);
+      }
+    })();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
+  const handleSubirImagenes = async (files: FileList | null) => {
+    if (!files || files.length === 0) return;
+    const disponibles = MAX_IMAGENES - imagenesUrls.length;
+    if (disponibles <= 0) return;
+
+    setSubiendoImagen(true);
+    setErrorMsg(null);
+    try {
+      const nuevas: string[] = [];
+      for (const archivo of Array.from(files).slice(0, disponibles)) {
+        const formData = new FormData();
+        formData.append("archivo", archivo);
+        const res = await fetch("/api/album/subir", { method: "POST", body: formData });
+        const data = await res.json().catch(() => ({}));
+        if (!res.ok || !data.url) {
+          setErrorMsg(data.error || "No se pudo subir una de las imágenes.");
+          continue;
+        }
+        nuevas.push(data.url);
+      }
+      setImagenesUrls((prev) => [...prev, ...nuevas]);
+    } finally {
+      setSubiendoImagen(false);
+      if (fileInputRef.current) fileInputRef.current.value = "";
+    }
+  };
+
+  const handleQuitarImagen = (idx: number) => {
+    setImagenesUrls((prev) => prev.filter((_, i) => i !== idx));
+  };
+
+  const handleGenerar = async () => {
+    if (imagenesUrls.length < MIN_IMAGENES) return;
+    if (!modoWizard && !objetivo) return; // standalone: el dropdown es obligatorio, el botón ya queda deshabilitado
+    setErrorMsg(null);
+    setPaso("generando");
+    try {
+      const res = await fetch("/api/generar-video", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          imagenes_producto_urls: imagenesUrls,
+          argumentacion,
+          texto_cta: textoCta,
+          objetivo,
+        }),
+      });
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok || !data.job_id) {
+        setErrorMsg(data.error || "No se pudo iniciar la generación del video.");
+        setPaso("form");
+        return;
+      }
+      setJobId(data.job_id);
+      // En modo wizard, /estrategia necesita este job_id para poder
+      // consultar el estado real (GET /api/video-jobs/[id]) si el usuario
+      // vuelve ahí manualmente en vez de por el link de retorno o la
+      // notificación -- sin esto no tiene forma de saber que hay un video
+      // en curso ni en qué estado quedó.
+      if (modoWizard) {
+        try {
+          localStorage.setItem("quiubot_video_job_activo", data.job_id);
+        } catch {}
+      }
+      const listo = await pollVideoJobHasta(data.job_id, ESTADOS_TERMINALES_GENERACION);
+      if (listo.estado === "error") {
+        setErrorMsg(listo.error_mensaje || "No se pudo generar el video.");
+        setPaso("error");
+        return;
+      }
+      setSegmentos(listo.segmentos.sort((a, b) => a.orden - b.orden));
+      setRegeneracionesUsadas(listo.regeneraciones_usadas);
+      setTextoCta(listo.texto_cta || textoCta);
+      setPaso("revision");
+    } catch (e: any) {
+      setErrorMsg(e?.message || "No se pudo conectar con el servidor.");
+      setPaso("form");
+    }
+  };
+
+  const handleRegenerarFragmento = async (orden: number) => {
+    if (!jobId || regeneracionesUsadas >= LIMITE_REGENERACIONES) return;
+    setRegenerandoOrden(orden);
+    setErrorMsg(null);
+    try {
+      const res = await fetch("/api/regenerar-fragmento", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ job_id: jobId, orden }),
+      });
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok || data.ok === false) {
+        setErrorMsg(data.error || "No se pudo regenerar este fragmento.");
+        return;
+      }
+      const listo = await pollVideoJobHasta(jobId, ["revision_pendiente", "error"]);
+      if (listo.estado === "error") {
+        setErrorMsg(listo.error_mensaje || "No se pudo regenerar este fragmento.");
+        return;
+      }
+      setSegmentos(listo.segmentos.sort((a, b) => a.orden - b.orden));
+      setRegeneracionesUsadas(listo.regeneraciones_usadas);
+    } catch (e: any) {
+      setErrorMsg(e?.message || "No se pudo conectar con el servidor.");
+    } finally {
+      setRegenerandoOrden(null);
+    }
+  };
+
+  const handleSeleccionarFragmento = (orden: number) => {
+    setSegmentoSeleccionado(orden);
+    setProgreso(0);
+  };
+
+  const handleTimeUpdate = () => {
+    const v = videoRef.current;
+    if (!v || !v.duration) return;
+    setProgreso((v.currentTime / v.duration) * 100);
+  };
+
+  const handleConfirmarUnion = async () => {
+    if (!jobId) return;
+    setErrorMsg(null);
+    setPaso("uniendo");
+    try {
+      const res = await fetch("/api/confirmar-union-video", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        // texto_cta ya no se manda -- n8n decide el CTA final con
+        // guion.texto_cierre o el fallback por objetivo, no con lo que
+        // haya en este campo (que ya no existe en esta pantalla).
+        body: JSON.stringify({ job_id: jobId }),
+      });
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok || data.ok === false) {
+        setErrorMsg(data.error || "No se pudo confirmar la unión del video.");
+        setPaso("revision");
+        return;
+      }
+      const listo = await pollVideoJobHasta(jobId, ESTADOS_TERMINALES_UNION);
+      if (listo.estado === "error") {
+        setErrorMsg(listo.error_mensaje || "No se pudo unir el video.");
+        setPaso("error");
+        return;
+      }
+      setVideoFinalUrl(listo.video_final_url);
+
+      // Si se vino del wizard de estrategia (aunque haya sido por
+      // notificación, sin ?returnTo= en esta URL puntual), se vuelve
+      // directo al paso 6 con el video ya armado, en vez de mostrar la
+      // pantalla de resultado standalone. anuncioRef viaja en la URL de
+      // retorno (más robusto que depender solo de que la clave de
+      // localStorage siga ahí) para que /estrategia sepa a qué anuncio
+      // puntual corresponde este video.
+      let vuelveAEstrategia = false;
+      let anuncioRef: string | null = null;
+      try {
+        vuelveAEstrategia = localStorage.getItem("quiubot_video_return_to") === "estrategia";
+        anuncioRef = localStorage.getItem("quiubot_video_anuncio_ref");
+      } catch {}
+      if (vuelveAEstrategia) {
+        try {
+          localStorage.removeItem("quiubot_video_return_to");
+        } catch {}
+        router.push(`/estrategia?step=6&videoJobId=${jobId}${anuncioRef ? `&anuncioRef=${anuncioRef}` : ""}`);
+        return;
+      }
+
+      setPaso("listo");
+    } catch (e: any) {
+      setErrorMsg(e?.message || "No se pudo conectar con el servidor.");
+      setPaso("revision");
+    }
+  };
+
+  const handleEmpezarDeNuevo = () => {
+    setPaso("form");
+    // En modo wizard las fotos/descripción/CTA vienen precargadas y no hay
+    // forma de volver a cargarlas desde este botón (no hay uploader) -- se
+    // conservan tal cual para poder reintentar sin perderlas.
+    if (!modoWizard) {
+      setImagenesUrls([]);
+      setArgumentacion("");
+      setTextoCta("");
+    }
+    setJobId(null);
+    try {
+      localStorage.removeItem("quiubot_video_job_activo");
+    } catch {}
+    setSegmentos([]);
+    setRegeneracionesUsadas(0);
+    setVideoFinalUrl(null);
+    setErrorMsg(null);
+    setSegmentoSeleccionado(0);
+    setProgreso(0);
+  };
+
+  // Video es admin-only por ahora -- se revisa antes que el ADN de marca,
+  // para que un no-admin vea "Próximamente" directo en vez del paso
+  // intermedio de "sintetiza tu ADN" que de todas formas no le serviría.
+  if (esAdmin === null) {
+    return <CargandoQuiubot mensaje="Verificando tu acceso" />;
+  }
+
+  if (esAdmin === false) {
+    return (
+      <div style={{ minHeight: "100vh", background: "#f9f9f8", fontFamily: "system-ui, sans-serif", display: "flex", alignItems: "center", justifyContent: "center", padding: "2rem" }}>
+        <div style={{ maxWidth: 480, width: "100%", background: "#fff", borderRadius: 20, border: "1px solid #e8e8e6", padding: "2.5rem 2rem", textAlign: "center", boxShadow: "0 8px 30px rgba(0,0,0,0.06)" }}>
+          <div style={{ width: 64, height: 64, borderRadius: "50%", background: "#F3F2FE", display: "flex", alignItems: "center", justifyContent: "center", margin: "0 auto 1.25rem" }}>
+            <Clock size={28} color="#534AB7" strokeWidth={2} aria-hidden="true" />
+          </div>
+          <h1 style={{ fontSize: 20, fontWeight: 700, color: "#1a1a1a", margin: "0 0 10px" }}>
+            Video con IA — Próximamente
+          </h1>
+          <p style={{ fontSize: 14, color: "#666", lineHeight: 1.6, margin: "0 0 24px" }}>
+            Todavía estamos puliendo la generación de video con IA. Muy pronto la abrimos para todos — por ahora
+            puedes seguir generando tus creativos con imagen o álbum.
+          </p>
+          <button
+            onClick={() => router.push("/")}
+            style={{ display: "block", width: "100%", padding: "13px", borderRadius: 10, background: "#534AB7", color: "#fff", fontSize: 14, fontWeight: 700, border: "none", cursor: "pointer" }}
+          >
+            Volver al panel principal
+          </button>
+        </div>
+      </div>
+    );
+  }
+
+  // Mismo gate que estrategia/page.tsx:1362-1396 -- mientras se confirma
+  // si tiene ADN de marca, no mostramos ni el formulario ni el bloqueo
+  // (evita el parpadeo de "bloqueado" a alguien que sí puede usarlo).
+  if (tieneAdn === null) {
+    return <CargandoQuiubot mensaje="Verificando tu marca" />;
+  }
+
+  if (tieneAdn === false) {
+    return (
+      <div style={{ minHeight: "100vh", background: "#f9f9f8", fontFamily: "system-ui, sans-serif", display: "flex", alignItems: "center", justifyContent: "center", padding: "2rem" }}>
+        <div style={{ maxWidth: 480, width: "100%", background: "#fff", borderRadius: 20, border: "1px solid #e8e8e6", padding: "2.5rem 2rem", textAlign: "center", boxShadow: "0 8px 30px rgba(0,0,0,0.06)" }}>
+          <div style={{ width: 64, height: 64, borderRadius: "50%", background: "#F3F2FE", display: "flex", alignItems: "center", justifyContent: "center", margin: "0 auto 1.25rem" }}>
+            <Dna size={28} color="#534AB7" strokeWidth={2} aria-hidden="true" />
+          </div>
+          <h1 style={{ fontSize: 20, fontWeight: 700, color: "#1a1a1a", margin: "0 0 10px" }}>
+            Primero, sintetiza el ADN de tu marca
+          </h1>
+          <p style={{ fontSize: 14, color: "#666", lineHeight: 1.6, margin: "0 0 24px" }}>
+            El Motor de Estrategia usa tu ADN de marca (paleta, tipografía, tono, estilo visual) para que cada
+            campaña y cada creativo se sientan hechos por ti — no genéricos. Es un paso único de unos minutos, y
+            después queda listo para siempre.
+          </p>
+          <a
+            href="/marca"
+            style={{ display: "block", width: "100%", padding: "13px", borderRadius: 10, background: "#534AB7", color: "#fff", fontSize: 14, fontWeight: 700, textDecoration: "none", boxSizing: "border-box" }}
+          >
+            Sintetizar mi ADN de marca
+          </a>
+          <button
+            onClick={() => router.push("/")}
+            style={{ display: "block", width: "100%", padding: "12px", borderRadius: 10, border: "1px solid #e8e8e6", background: "#fff", color: "#666", fontSize: 13, fontWeight: 600, marginTop: 10, cursor: "pointer" }}
+          >
+            Volver al panel principal
+          </button>
+        </div>
+      </div>
+    );
+  }
+
+  const pageStyle: React.CSSProperties = {
+    minHeight: "100vh",
+    background: "#f9f9f8",
+    fontFamily: "system-ui, sans-serif",
+    padding: "2rem",
+  };
+  const containerStyle: React.CSSProperties = { maxWidth: 860, margin: "0 auto" };
+  const cardStyle: React.CSSProperties = {
+    background: "#fff",
+    border: "1px solid #e8e8e6",
+    borderRadius: 16,
+    padding: "1.75rem",
+  };
+
+  return (
+    <div style={pageStyle}>
+      <div style={containerStyle}>
+        <div style={{ marginBottom: "1.5rem" }}>
+          <a href="/" style={{ color: "#7F77DD", textDecoration: "none", fontSize: 14 }}>← Volver</a>
+        </div>
+
+        <h1 style={{ fontSize: 22, fontWeight: 700, marginBottom: 4, color: "#1a1a1a" }}>Video con IA</h1>
+        <p style={{ fontSize: 13, color: "#999", marginBottom: "1.5rem" }}>
+          Sube las fotos de tu producto y genera un video de 4 fragmentos (hook, contenido, cierre) listo para Meta Ads.
+        </p>
+
+        {errorMsg && (
+          <div style={{ background: "#fef2f2", border: "1px solid #fecaca", color: "#b91c1c", borderRadius: 10, padding: "10px 14px", fontSize: 13, marginBottom: 16 }}>
+            {errorMsg}
+          </div>
+        )}
+
+        {paso === "form" && (
+          <div style={cardStyle}>
+            {modoWizard ? (
+              <>
+                <p style={{ fontSize: 14, fontWeight: 600, marginBottom: 10, color: "#1a1a1a" }}>Fotos de tu producto</p>
+                <p style={{ fontSize: 11.5, color: "#999", marginTop: -6, marginBottom: 10 }}>
+                  Las mismas que subiste en el paso 2 del wizard.
+                </p>
+                <div style={{ display: "flex", gap: 10, flexWrap: "wrap", marginBottom: 20 }}>
+                  {precargandoFotos && <p style={{ fontSize: 12.5, color: "#999" }}>Preparando tus fotos...</p>}
+                  {!precargandoFotos &&
+                    imagenesUrls.map((url) => (
+                      <img key={url} src={url} alt="" style={{ width: 96, height: 96, objectFit: "cover", borderRadius: 10, border: "1px solid #e0e0e0" }} />
+                    ))}
+                </div>
+              </>
+            ) : (
+              <>
+                <p style={{ fontSize: 14, fontWeight: 600, marginBottom: 10, color: "#1a1a1a" }}>1. Fotos de tu producto (1 a 3)</p>
+                <div style={{ display: "flex", gap: 10, flexWrap: "wrap", marginBottom: 12 }}>
+                  {imagenesUrls.map((url, idx) => (
+                    <div key={url} style={{ position: "relative", width: 96, height: 96 }}>
+                      <img src={url} alt="" style={{ width: 96, height: 96, objectFit: "cover", borderRadius: 10, border: "1px solid #e0e0e0" }} />
+                      <button
+                        onClick={() => handleQuitarImagen(idx)}
+                        style={{ position: "absolute", top: -6, right: -6, width: 22, height: 22, borderRadius: "50%", border: "none", background: "rgba(0,0,0,0.6)", color: "#fff", fontSize: 12, cursor: "pointer" }}
+                      >
+                        ✕
+                      </button>
+                    </div>
+                  ))}
+                  {imagenesUrls.length < MAX_IMAGENES && (
+                    <label
+                      style={{
+                        width: 96, height: 96, borderRadius: 10, border: "1.5px dashed #d0d0d0",
+                        display: "flex", alignItems: "center", justifyContent: "center",
+                        fontSize: 12, color: "#999", cursor: subiendoImagen ? "not-allowed" : "pointer", textAlign: "center",
+                      }}
+                    >
+                      {subiendoImagen ? "Subiendo..." : "+ Subir foto"}
+                      <input
+                        ref={fileInputRef}
+                        type="file"
+                        accept="image/*"
+                        multiple
+                        disabled={subiendoImagen}
+                        onChange={(e) => handleSubirImagenes(e.target.files)}
+                        style={{ display: "none" }}
+                      />
+                    </label>
+                  )}
+                </div>
+              </>
+            )}
+
+            <p style={{ fontSize: 14, fontWeight: 600, marginBottom: 8, color: "#1a1a1a" }}>
+              {modoWizard ? "Cuéntanos de tu producto (opcional)" : "2. Cuéntanos de tu producto (opcional)"}
+            </p>
+            <textarea
+              value={argumentacion}
+              onChange={(e) => setArgumentacion(e.target.value)}
+              placeholder="Ej: Crema hidratante facial, ideal para piel seca, hecha en Colombia..."
+              style={{ width: "100%", minHeight: 70, padding: 10, borderRadius: 8, border: "1px solid #e0e0e0", fontSize: 13, resize: "vertical", boxSizing: "border-box", marginBottom: modoWizard ? 20 : 16, fontFamily: "inherit" }}
+            />
+
+            {!modoWizard && (
+              <>
+                {/* Selector, no campo de texto libre -- es un parámetro de
+                    campaña (como elegir la fuente de las fotos), no algo
+                    que el usuario redacte. Los textos en pantalla del
+                    video (incluido el CTA) se generan solos con IA según
+                    esta elección -- ya no hay campo de CTA manual acá. En
+                    modo wizard esto ya viene decidido desde el paso 3 y
+                    no se vuelve a preguntar. */}
+                <p style={{ fontSize: 14, fontWeight: 600, marginBottom: 8, color: "#1a1a1a" }}>3. Objetivo de la campaña</p>
+                <select
+                  value={objetivo}
+                  onChange={(e) => setObjetivo(e.target.value)}
+                  style={{ width: "100%", padding: 10, borderRadius: 8, border: "1px solid #e0e0e0", fontSize: 13, boxSizing: "border-box", marginBottom: 6, background: "#fff", color: objetivo ? "#1a1a1a" : "#999" }}
+                >
+                  <option value="">Selecciona un objetivo...</option>
+                  {OBJETIVOS_INFO.map((opt) => (
+                    <option key={opt.id} value={opt.id}>{opt.label}</option>
+                  ))}
+                </select>
+                <p style={{ fontSize: 11.5, color: "#999", marginTop: 0, marginBottom: 20 }}>
+                  Los textos que aparecen en el video se generan solos según este objetivo.
+                </p>
+              </>
+            )}
+
+            <button
+              onClick={handleGenerar}
+              disabled={imagenesUrls.length < MIN_IMAGENES || subiendoImagen || precargandoFotos || (!modoWizard && !objetivo)}
+              style={{
+                width: "100%", background: imagenesUrls.length < MIN_IMAGENES || precargandoFotos || (!modoWizard && !objetivo) ? "#ccc" : "#534AB7", color: "#fff",
+                border: "none", padding: 14, borderRadius: 10, fontSize: 15, fontWeight: 600,
+                cursor: imagenesUrls.length < MIN_IMAGENES || precargandoFotos || (!modoWizard && !objetivo) ? "not-allowed" : "pointer",
+              }}
+            >
+              Generar video →
+            </button>
+          </div>
+        )}
+
+        {paso === "generando" && (
+          <div style={cardStyle}>
+            <EsperaGeneracionVideo />
+          </div>
+        )}
+
+        {paso === "uniendo" && (
+          <div style={cardStyle}>
+            <CargandoQuiubot mensaje="Uniendo tu video final" />
+          </div>
+        )}
+
+        {paso === "revision" && (() => {
+          const activo = segmentos.find((s) => s.orden === segmentoSeleccionado) || segmentos[0];
+          const regenerandoActivo = regenerandoOrden === segmentoSeleccionado;
+          return (
+            <div>
+              <p style={{ fontSize: 15, fontWeight: 600, color: "#1a1a1a", marginBottom: 4 }}>Revisa tus fragmentos</p>
+              <p style={{ fontSize: 12.5, color: "#999", marginBottom: 16 }}>
+                Regeneraciones usadas: {regeneracionesUsadas}/{LIMITE_REGENERACIONES}
+              </p>
+
+              <div style={cardStyle}>
+                {/* Player grande -- mismo componente que la pantalla de resultado final */}
+                <div style={{ position: "relative", marginBottom: 10 }}>
+                  {activo && <VideoPlayerGrande src={activo.url_video} videoRef={videoRef} onTimeUpdate={handleTimeUpdate} />}
+                  {regenerandoActivo && (
+                    <div style={{ position: "absolute", inset: 0, display: "flex", alignItems: "center", justifyContent: "center", background: "rgba(0,0,0,0.35)", borderRadius: 10 }}>
+                      <div style={{ width: 32, height: 32, border: "3px solid rgba(255,255,255,0.35)", borderTopColor: "#fff", borderRadius: "50%", animation: "girarVideo 0.9s linear infinite" }} />
+                    </div>
+                  )}
+                </div>
+
+                {/* Barra delgada de progreso, tipo "stories" -- una franja por fragmento */}
+                <div style={{ display: "flex", gap: 4, marginBottom: 14 }}>
+                  {segmentos.map((s) => {
+                    const pct = s.orden < segmentoSeleccionado ? 100 : s.orden === segmentoSeleccionado ? progreso : 0;
+                    return (
+                      <div key={s.orden} style={{ flex: 1, height: 3, borderRadius: 2, background: "#ECE9F7", overflow: "hidden" }}>
+                        <div style={{ width: `${pct}%`, height: "100%", background: "#7F77DD", transition: "width 0.1s linear" }} />
+                      </div>
+                    );
+                  })}
+                </div>
+
+                {/* Filmstrip de miniaturas -- click para seleccionar, icono de regenerar superpuesto */}
+                <div style={{ display: "flex", gap: 10 }}>
+                  {segmentos.map((s) => {
+                    const regenerando = regenerandoOrden === s.orden;
+                    const seleccionado = s.orden === segmentoSeleccionado;
+                    return (
+                      <div
+                        key={s.orden}
+                        onClick={() => handleSeleccionarFragmento(s.orden)}
+                        style={{
+                          position: "relative", flex: 1, cursor: "pointer", borderRadius: 8, overflow: "hidden",
+                          border: seleccionado ? "2px solid #534AB7" : "2px solid transparent",
+                        }}
+                      >
+                        <video src={s.url_video} muted style={{ width: "100%", height: 64, objectFit: "cover", display: "block", opacity: regenerando ? 0.4 : 1, background: "#f3f2fe" }} />
+                        <div style={{ position: "absolute", bottom: 3, left: 5, fontSize: 9.5, fontWeight: 700, color: "#fff", textShadow: "0 1px 2px rgba(0,0,0,0.7)" }}>
+                          {TIPO_LABEL[s.tipo_segmento] || s.tipo_segmento}
+                        </div>
+                        <button
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            handleRegenerarFragmento(s.orden);
+                          }}
+                          disabled={regenerando || regeneracionesUsadas >= LIMITE_REGENERACIONES}
+                          title={regeneracionesUsadas >= LIMITE_REGENERACIONES ? "Ya usaste tus 2 regeneraciones gratis" : "Regenerar este fragmento"}
+                          style={{
+                            position: "absolute", top: 4, right: 4, width: 22, height: 22, borderRadius: "50%",
+                            border: "none", background: "rgba(0,0,0,0.55)", color: "#fff", fontSize: 11,
+                            display: "flex", alignItems: "center", justifyContent: "center", padding: 0,
+                            cursor: regenerando || regeneracionesUsadas >= LIMITE_REGENERACIONES ? "not-allowed" : "pointer",
+                            opacity: regeneracionesUsadas >= LIMITE_REGENERACIONES ? 0.5 : 1,
+                          }}
+                        >
+                          {regenerando ? (
+                            <span style={{ width: 10, height: 10, border: "2px solid rgba(255,255,255,0.4)", borderTopColor: "#fff", borderRadius: "50%", display: "block", animation: "girarVideo 0.8s linear infinite" }} />
+                          ) : (
+                            "🔄"
+                          )}
+                        </button>
+                      </div>
+                    );
+                  })}
+                </div>
+              </div>
+
+              <div style={{ ...cardStyle, marginTop: 16 }}>
+                {/* El CTA ya no es editable acá -- lo decide el guion con
+                    IA (texto_cierre) o el fallback por objetivo si el
+                    guion falla. Este campo quedó de cuando el CTA era
+                    manual. */}
+                <button
+                  onClick={handleConfirmarUnion}
+                  style={{ width: "100%", background: "#534AB7", color: "#fff", border: "none", padding: 14, borderRadius: 10, fontSize: 15, fontWeight: 600, cursor: "pointer" }}
+                >
+                  Confirmar y unir video final →
+                </button>
+              </div>
+            </div>
+          );
+        })()}
+
+        {paso === "listo" && videoFinalUrl && (
+          <div style={cardStyle}>
+            <p style={{ fontSize: 15, fontWeight: 600, color: "#1a1a1a", marginBottom: 12 }}>🎬 Tu video está listo</p>
+            <div style={{ marginBottom: 16 }}>
+              <VideoPlayerGrande src={videoFinalUrl} />
+            </div>
+            <div style={{ display: "flex", gap: 10 }}>
+              <a
+                href={urlDescargaCloudinary(videoFinalUrl)}
+                download
+                style={{ flex: 1, textAlign: "center", background: "#534AB7", color: "#fff", padding: 12, borderRadius: 10, fontSize: 14, fontWeight: 600, textDecoration: "none" }}
+              >
+                Descargar
+              </a>
+              <button
+                onClick={handleEmpezarDeNuevo}
+                style={{ flex: 1, background: "#fff", border: "1px solid #e0e0e0", color: "#534AB7", padding: 12, borderRadius: 10, fontSize: 14, fontWeight: 600, cursor: "pointer" }}
+              >
+                Generar otro video
+              </button>
+            </div>
+          </div>
+        )}
+
+        {paso === "error" && (
+          <div style={{ ...cardStyle, textAlign: "center" }}>
+            <p style={{ fontSize: 15, fontWeight: 600, color: "#1a1a1a", marginBottom: 8 }}>No se pudo generar el video</p>
+            <p style={{ fontSize: 13, color: "#666", marginBottom: 16 }}>{errorMsg || "Ocurrió un error inesperado."}</p>
+            <button
+              onClick={handleEmpezarDeNuevo}
+              style={{ background: "#534AB7", color: "#fff", border: "none", padding: "10px 20px", borderRadius: 10, fontSize: 14, fontWeight: 600, cursor: "pointer" }}
+            >
+              Intentar de nuevo
+            </button>
+          </div>
+        )}
+      </div>
+      <style>{`@keyframes girarVideo { to { transform: rotate(360deg); } }`}</style>
+    </div>
+  );
+}
+
+export default function VideoPage() {
+  return (
+    <Suspense fallback={<CargandoQuiubot mensaje="Cargando" />}>
+      <VideoContent />
+    </Suspense>
+  );
+}
