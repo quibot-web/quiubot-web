@@ -13,6 +13,7 @@ export const fixtureVentaDirectaWhatsapp = GuionSchema.parse({
     color_secundario: "#F48FB1",
     fuente: "impacto",
     logo_url: null,
+    nombre_marca: null,
   },
   musica: { pista_id: null, volumen: 0.35 },
   escenas: [

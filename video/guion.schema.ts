@@ -157,6 +157,8 @@ const Tema = z.object({
   color_secundario: z.string().regex(HEX_COLOR),
   fuente: z.enum(["impacto", "moderna", "elegante", "amigable"]),
   logo_url: z.url().nullable(),
+  // Respaldo del cta "suave" cuando no hay logo_url.
+  nombre_marca: z.string().max(40).nullable(),
 });
 
 const Bucle = z.object({

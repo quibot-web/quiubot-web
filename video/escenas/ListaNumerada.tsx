@@ -1,36 +1,32 @@
 import { AbsoluteFill, interpolate, spring, useCurrentFrame, useVideoConfig } from "remotion";
-import { colorTextoSobre } from "../tema";
+import { colorMasContraste, colorTextoSobre } from "../tema";
 import { FondoMarca } from "../capas/FondoMarca";
+import { cuadrosPorItemListaNumerada } from "./tipos";
 import type { PropsEscena } from "./tipos";
 
 export function ListaNumerada({ escena, tema }: PropsEscena<"lista_numerada">) {
   const frame = useCurrentFrame();
   const { fps } = useVideoConfig();
   const { titulo, items } = escena.params;
-  const cuadrosPorItem = Math.max(8, Math.floor((escena.duracion_s * fps) / items.length));
-  const indiceActivo = Math.min(items.length - 1, Math.floor(frame / cuadrosPorItem));
+  const cuadrosPorItem = cuadrosPorItemListaNumerada(escena.duracion_s, fps, items.length);
   const colorTexto = colorTextoSobre(tema.color_primario);
-  const colorNumero = colorTextoSobre(tema.color_secundario);
+  // Mismo criterio que el botón del cta y el recuadro de palabra_clave:
+  // el círculo numerado usa el color que mejor contraste dé contra el
+  // fondo real, nunca el secundario a ciegas (podía fundirse con el
+  // primario en paletas donde los dos tonos son parecidos).
+  const colorCirculo = colorMasContraste([tema.color_secundario, tema.color_primario], tema.color_primario, colorTexto);
+  const colorNumero = colorTextoSobre(colorCirculo);
+
+  // Esta escena ya NO dibuja su propio "X/Y" -- ese contador vive solo
+  // en la capa global del bucle (capas/Bucle.tsx) cuando
+  // bucle.indicador es "contador", para no mostrar dos contadores a la
+  // vez ("error de contador doble").
 
   return (
     <AbsoluteFill>
       <FondoMarca tema={tema} tono="marca" />
       <AbsoluteFill style={{ justifyContent: "center", padding: "0 8%" }}>
-        <div style={{ fontSize: 54, fontWeight: 800, color: colorTexto, marginBottom: 16 }}>{titulo}</div>
-        <div
-          style={{
-            alignSelf: "flex-start",
-            background: "rgba(0,0,0,0.25)",
-            color: colorTexto,
-            fontWeight: 800,
-            fontSize: 38,
-            padding: "6px 20px",
-            borderRadius: 999,
-            marginBottom: 26,
-          }}
-        >
-          {indiceActivo + 1}/{items.length}
-        </div>
+        <div style={{ fontSize: 60, fontWeight: 800, color: colorTexto, marginBottom: 36 }}>{titulo}</div>
         {items.map((item, i) => {
           const progreso = spring({ frame: frame - i * cuadrosPorItem, fps, config: { damping: 14 } });
           return (
@@ -39,30 +35,30 @@ export function ListaNumerada({ escena, tema }: PropsEscena<"lista_numerada">) {
               style={{
                 display: "flex",
                 alignItems: "center",
-                gap: 20,
+                gap: 24,
                 opacity: progreso,
                 transform: `scale(${interpolate(progreso, [0, 1], [0.85, 1])})`,
-                marginBottom: 22,
+                marginBottom: 28,
               }}
             >
               <div
                 style={{
-                  width: 60,
-                  height: 60,
+                  width: 86,
+                  height: 86,
                   borderRadius: "50%",
-                  background: tema.color_secundario,
+                  background: colorCirculo,
                   color: colorNumero,
                   display: "flex",
                   alignItems: "center",
                   justifyContent: "center",
                   fontWeight: 800,
-                  fontSize: 30,
+                  fontSize: 42,
                   flexShrink: 0,
                 }}
               >
                 {i + 1}
               </div>
-              <span style={{ color: colorTexto, fontSize: 42, fontWeight: 600 }}>{item}</span>
+              <span style={{ color: colorTexto, fontSize: 64, fontWeight: 700, lineHeight: 1.08 }}>{item}</span>
             </div>
           );
         })}

@@ -7,6 +7,21 @@ import type { TemaGuion } from "../tema";
 const COLOR_WHATSAPP = "#25D366";
 const ANCHO_BOTON = "66%";
 
+// Estimación de cuánto espacio ocupa el texto del botón para que quepa
+// en una sola línea dentro del 66% del ancho -- Remotion no tiene
+// medición real de texto a mano sin sumar @remotion/layout-utils, así
+// que esto es una aproximación por cantidad de caracteres (probada
+// contra los textos reales de las recetas). "Escríbenos por WhatsApp" y
+// "Pide tu cotización gratis" son los más largos y los que antes se
+// partían en dos líneas.
+function tamanoBotonAutoAjustado(texto: string): number {
+  const ANCHO_UTIL_PX = 620;
+  // 0.68: primer intento con 0.56 cortaba "Pide tu cotización gratis"
+  // en una sola línea (el estimado quedaba más ancho que el real).
+  const estimado = Math.floor(ANCHO_UTIL_PX / (texto.length * 0.68));
+  return Math.max(30, Math.min(58, estimado));
+}
+
 // El botón NUNCA usa el secundario de la marca como relleno: si el
 // secundario queda parecido al primario (fondos de la misma familia de
 // color, caso real: "retargeting" con primario y secundario teal), el
@@ -23,15 +38,41 @@ function BotonGrande({ texto, tema, progreso }: { texto: string; tema: TemaGuion
         background: colorBoton,
         color: colorTexto,
         borderRadius: 999,
-        padding: "26px 0",
-        fontSize: 58,
+        padding: "26px 18px",
+        fontSize: tamanoBotonAutoAjustado(texto),
         fontWeight: 800,
         textAlign: "center",
+        whiteSpace: "nowrap",
         boxShadow: "0 8px 24px rgba(0,0,0,0.25)",
         transform: `scale(${progreso})`,
       }}
     >
       {texto}
+    </div>
+  );
+}
+
+// El cursor que "hace clic" en web y formulario -- se ancla al botón
+// mismo (abajo-derecha de su caja real vía position:relative en el
+// contenedor), nunca a un punto adivinado de la pantalla completa.
+function CursorClic({ frame, fps, duracionCuadros }: { frame: number; fps: number; duracionCuadros: number }) {
+  const cuadroClic = Math.round(duracionCuadros * 0.6);
+  const llegada = interpolate(frame, [fps * 0.3, cuadroClic], [0, 1], { extrapolateLeft: "clamp", extrapolateRight: "clamp" });
+  const clic = spring({ frame: frame - cuadroClic, fps, config: { damping: 6, mass: 0.4 } });
+  const escalaCursor = 1 - Math.sin(Math.min(clic, 1) * Math.PI) * 0.3;
+  return (
+    <div
+      style={{
+        position: "absolute",
+        fontSize: 104,
+        right: `${interpolate(llegada, [0, 1], [-34, 4])}%`,
+        bottom: `${interpolate(llegada, [0, 1], [-70, -22])}%`,
+        transform: `scale(${escalaCursor}) rotate(-20deg)`,
+        opacity: interpolate(frame, [0, fps * 0.2], [0, 1], { extrapolateRight: "clamp" }),
+        filter: "drop-shadow(0 4px 6px rgba(0,0,0,0.4))",
+      }}
+    >
+      👆
     </div>
   );
 }
@@ -46,7 +87,7 @@ function CtaWhatsapp({ escena, tema }: PropsEscena<"cta">) {
   return (
     <AbsoluteFill style={{ justifyContent: "center", alignItems: "center", padding: "0 8%" }}>
       {mensajes && mensajes.length > 0 && (
-        <div style={{ display: "flex", flexDirection: "column", gap: 16, marginBottom: 36, alignSelf: "flex-start" }}>
+        <div style={{ display: "flex", flexDirection: "column", gap: 18, marginBottom: 40, alignSelf: "flex-start", maxWidth: "78%" }}>
           {mensajes.map((m, i) => {
             const p = spring({ frame: frame - i * 8, fps, config: { damping: 14 } });
             return (
@@ -55,9 +96,9 @@ function CtaWhatsapp({ escena, tema }: PropsEscena<"cta">) {
                 style={{
                   background: COLOR_WHATSAPP,
                   color: "#fff",
-                  borderRadius: "22px 22px 22px 4px",
-                  padding: "16px 24px",
-                  fontSize: 36,
+                  borderRadius: "26px 26px 26px 4px",
+                  padding: "20px 28px",
+                  fontSize: 46,
                   fontWeight: 600,
                   opacity: p,
                   transform: `translateY(${interpolate(p, [0, 1], [16, 0])}px)`,
@@ -81,35 +122,13 @@ function CtaWeb({ escena, tema }: PropsEscena<"cta">) {
   const { texto_boton, subtexto } = escena.params;
   const progresoBoton = spring({ frame, fps, config: { damping: 12 } });
   const colorTexto = colorTextoSobre(tema.color_primario);
-
-  // El cursor entra desde abajo-derecha y "hace clic" (se achica) justo
-  // encima del botón, a mitad de la escena.
   const duracionCuadros = Math.round(escena.duracion_s * fps);
-  const cuadroClic = Math.round(duracionCuadros * 0.6);
-  const llegada = interpolate(frame, [fps * 0.3, cuadroClic], [0, 1], { extrapolateLeft: "clamp", extrapolateRight: "clamp" });
-  const clic = spring({ frame: frame - cuadroClic, fps, config: { damping: 6, mass: 0.4 } });
-  const escalaCursor = 1 - Math.sin(Math.min(clic, 1) * Math.PI) * 0.3;
 
   return (
     <AbsoluteFill style={{ justifyContent: "center", alignItems: "center", padding: "0 8%" }}>
-      {/* position:relative para que el cursor se ancle al botón mismo
-          (abajo-derecha de su caja real), no a un punto adivinado de la
-          pantalla completa. */}
       <div style={{ position: "relative", width: ANCHO_BOTON }}>
         <BotonGrande texto={texto_boton} tema={tema} progreso={progresoBoton} />
-        <div
-          style={{
-            position: "absolute",
-            fontSize: 70,
-            right: `${interpolate(llegada, [0, 1], [-30, 6])}%`,
-            bottom: `${interpolate(llegada, [0, 1], [-60, -18])}%`,
-            transform: `scale(${escalaCursor}) rotate(-20deg)`,
-            opacity: interpolate(frame, [0, fps * 0.2], [0, 1], { extrapolateRight: "clamp" }),
-            filter: "drop-shadow(0 4px 6px rgba(0,0,0,0.4))",
-          }}
-        >
-          👆
-        </div>
+        <CursorClic frame={frame} fps={fps} duracionCuadros={duracionCuadros} />
       </div>
       {subtexto && <div style={{ fontSize: 30, color: colorTexto, marginTop: 20, opacity: progresoBoton }}>{subtexto}</div>}
     </AbsoluteFill>
@@ -153,6 +172,7 @@ function CtaFormulario({ escena, tema }: PropsEscena<"cta">) {
   const cuadroBoton = fps * 1.6;
   const progresoBoton = spring({ frame: frame - cuadroBoton, fps, config: { damping: 12 } });
   const colorTexto = colorTextoSobre(tema.color_primario);
+  const duracionCuadros = Math.round(escena.duracion_s * fps);
 
   return (
     <AbsoluteFill style={{ justifyContent: "center", alignItems: "center", padding: "0 8%" }}>
@@ -160,7 +180,10 @@ function CtaFormulario({ escena, tema }: PropsEscena<"cta">) {
         <CampoFormulario etiqueta="Nombre" frame={frame} fps={fps} inicio={0} tema={tema} />
         <CampoFormulario etiqueta="WhatsApp" frame={frame} fps={fps} inicio={fps * 0.5} tema={tema} />
       </div>
-      <BotonGrande texto={texto_boton} tema={tema} progreso={progresoBoton} />
+      <div style={{ position: "relative", width: ANCHO_BOTON }}>
+        <BotonGrande texto={texto_boton} tema={tema} progreso={progresoBoton} />
+        {frame >= cuadroBoton && <CursorClic frame={frame - cuadroBoton} fps={fps} duracionCuadros={duracionCuadros - cuadroBoton} />}
+      </div>
       {subtexto && <div style={{ fontSize: 30, color: colorTexto, marginTop: 20, opacity: progresoBoton }}>{subtexto}</div>}
     </AbsoluteFill>
   );
@@ -180,31 +203,46 @@ function CtaSeguir({ escena, tema }: PropsEscena<"cta">) {
 
   return (
     <AbsoluteFill style={{ justifyContent: "center", alignItems: "center", padding: "0 8%" }}>
+      {/* Tarjeta de perfil real al 70% del ancho, no solo un avatar
+          suelto. */}
       <div
         style={{
-          width: 170,
-          height: 170,
-          borderRadius: "50%",
-          background: "rgba(255,255,255,0.18)",
-          border: `4px solid ${tema.color_secundario}`,
+          width: "70%",
+          background: "rgba(255,255,255,0.14)",
+          borderRadius: 32,
+          padding: "44px 28px",
           display: "flex",
+          flexDirection: "column",
           alignItems: "center",
-          justifyContent: "center",
-          marginBottom: 20,
           opacity: progreso,
         }}
       >
-        {tema.logo_url ? (
-          <Img src={tema.logo_url} style={{ width: "70%", height: "70%", objectFit: "contain" }} />
-        ) : (
-          <span style={{ fontSize: 70 }}>👤</span>
-        )}
+        <div
+          style={{
+            width: 230,
+            height: 230,
+            borderRadius: "50%",
+            background: "rgba(255,255,255,0.18)",
+            border: `5px solid ${tema.color_secundario}`,
+            display: "flex",
+            alignItems: "center",
+            justifyContent: "center",
+            marginBottom: 26,
+            flexShrink: 0,
+          }}
+        >
+          {tema.logo_url ? (
+            <Img src={tema.logo_url} style={{ width: "70%", height: "70%", objectFit: "contain" }} />
+          ) : (
+            <span style={{ fontSize: 96 }}>👤</span>
+          )}
+        </div>
+        {usuario && <div style={{ fontSize: 44, color: colorTexto, marginBottom: 28, fontWeight: 700 }}>{usuario}</div>}
+        <div style={{ transform: `scale(${escalaBoton})`, width: "100%", display: "flex", justifyContent: "center" }}>
+          <BotonGrande texto={texto_boton} tema={tema} progreso={1} />
+        </div>
       </div>
-      {usuario && <div style={{ fontSize: 40, color: colorTexto, marginBottom: 22, opacity: progreso, fontWeight: 600 }}>{usuario}</div>}
-      <div style={{ transform: `scale(${escalaBoton})` }}>
-        <BotonGrande texto={texto_boton} tema={tema} progreso={progreso} />
-      </div>
-      {subtexto && <div style={{ fontSize: 30, color: colorTexto, marginTop: 20, opacity: progreso }}>{subtexto}</div>}
+      {subtexto && <div style={{ fontSize: 30, color: colorTexto, marginTop: 24, opacity: progreso }}>{subtexto}</div>}
     </AbsoluteFill>
   );
 }
@@ -215,25 +253,35 @@ function CtaSuave({ escena, tema }: PropsEscena<"cta">) {
   const { texto_boton, subtexto } = escena.params;
   const progreso = spring({ frame, fps, config: { damping: 12 } });
   const colorTexto = colorTextoSobre(tema.color_primario);
-
+  // La frase grande de marca es subtexto (ej. "Hecho para quien trabaja
+  // duro"); texto_boton ("Conócenos") queda chico debajo, sin botón --
+  // en "suave" no se pide nada. Sin logo, el nombre de la marca hace de
+  // respaldo (nunca queda la escena vacía).
   return (
     <AbsoluteFill style={{ justifyContent: "center", alignItems: "center", padding: "0 8%" }}>
-      {tema.logo_url && (
-        <Img src={tema.logo_url} style={{ width: 180, height: 180, objectFit: "contain", marginBottom: 26, opacity: progreso }} />
+      {tema.logo_url ? (
+        <Img src={tema.logo_url} style={{ width: 220, height: 220, objectFit: "contain", marginBottom: 30, opacity: progreso }} />
+      ) : (
+        tema.nombre_marca && (
+          <div style={{ fontSize: 56, fontWeight: 800, color: colorTexto, marginBottom: 20, opacity: progreso }}>{tema.nombre_marca}</div>
+        )
       )}
-      <div
-        style={{
-          fontSize: 76,
-          fontWeight: 800,
-          color: colorTexto,
-          textAlign: "center",
-          opacity: progreso,
-          transform: `translateY(${interpolate(progreso, [0, 1], [20, 0])}px)`,
-        }}
-      >
-        {texto_boton}
-      </div>
-      {subtexto && <div style={{ fontSize: 34, color: colorTexto, marginTop: 16, opacity: progreso * 0.85 }}>{subtexto}</div>}
+      {subtexto && (
+        <div
+          style={{
+            fontSize: 92,
+            fontWeight: 800,
+            color: colorTexto,
+            textAlign: "center",
+            lineHeight: 1.06,
+            opacity: progreso,
+            transform: `translateY(${interpolate(progreso, [0, 1], [20, 0])}px)`,
+          }}
+        >
+          {subtexto}
+        </div>
+      )}
+      <div style={{ fontSize: 34, color: colorTexto, marginTop: 24, opacity: progreso * 0.8, fontWeight: 600 }}>{texto_boton}</div>
     </AbsoluteFill>
   );
 }

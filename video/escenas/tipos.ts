@@ -14,3 +14,12 @@ export interface PropsEscena<T extends Escena["tipo"]> {
   tema: TemaGuion;
   medios: MediosResueltos;
 }
+
+// Compartido por ListaNumerada.tsx (el dueño del conteo) y
+// capas/Bucle.tsx (que necesita saber exactamente el mismo cuadro por
+// ítem para que su "X/Y" -- cuando indicador es "contador" -- coincida
+// con el ítem que de verdad está en pantalla, en vez de recalcularlo
+// con otra fórmula y desincronizarse.
+export function cuadrosPorItemListaNumerada(duracionS: number, fps: number, totalItems: number): number {
+  return Math.max(8, Math.floor((duracionS * fps) / totalItems));
+}

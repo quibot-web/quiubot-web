@@ -19,6 +19,7 @@ export const fixtureBucleContador = GuionSchema.parse({
     color_secundario: "#D8B48C",
     fuente: "elegante",
     logo_url: null,
+    nombre_marca: null,
   },
   musica: { pista_id: null, volumen: 0.35 },
   escenas: [

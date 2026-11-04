@@ -48,6 +48,25 @@ export function colorTextoSobre(fondoHex: string): string {
   return contrasteHex(BLANCO, fondoHex) >= contrasteHex(OSCURO, fondoHex) ? BLANCO : OSCURO;
 }
 
+// Para acentos que SÍ tienen que distinguirse del fondo (el recuadro de
+// palabra_clave, el círculo numerado) -- no basta con "legible", tiene
+// que notarse. Prueba cada candidato (normalmente color_secundario,
+// a veces color_primario) y se queda con el de mejor contraste contra
+// el fondo real de la escena; si ninguno gana al respaldo blanco/negro,
+// usa ese respaldo. Así una paleta beige-sobre-beige nunca queda invisible.
+export function colorMasContraste(candidatos: string[], fondoHex: string, respaldo: string): string {
+  let mejor = respaldo;
+  let mejorRatio = contrasteHex(respaldo, fondoHex);
+  for (const c of candidatos) {
+    const ratio = contrasteHex(c, fondoHex);
+    if (ratio > mejorRatio) {
+      mejor = c;
+      mejorRatio = ratio;
+    }
+  }
+  return mejor;
+}
+
 // rasgos_cortos.tipografia (y tipografia.estilo como respaldo) son texto
 // libre que ya genera n8n para mostrarlo en pantalla ("moderna y limpia",
 // "elegante y clasica") -- no es un enum, así que se clasifica por
@@ -68,6 +87,7 @@ export interface AdnMarcaParaTema {
   rasgos_cortos?: { tipografia?: string | null } | null;
   tipografia?: { estilo?: string | null } | null;
   logo_url?: string | null;
+  nombre_marca?: string | null;
 }
 
 export interface TemaGuion {
@@ -75,6 +95,9 @@ export interface TemaGuion {
   color_secundario: string;
   fuente: EstiloFuente;
   logo_url: string | null;
+  // Respaldo para el cta "suave" cuando no hay logo -- sin esto no
+  // queda nada que mostrar en esa escena.
+  nombre_marca: string | null;
 }
 
 export function construirTemaDesdeAdn(adn: AdnMarcaParaTema | null | undefined): TemaGuion {
@@ -88,6 +111,7 @@ export function construirTemaDesdeAdn(adn: AdnMarcaParaTema | null | undefined):
     color_secundario: secundario,
     fuente: clasificarEstiloFuente(textoTipografia),
     logo_url: adn?.logo_url ?? null,
+    nombre_marca: adn?.nombre_marca ?? null,
   };
 }
 

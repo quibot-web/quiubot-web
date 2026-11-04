@@ -1,8 +1,8 @@
 import { AbsoluteFill, useCurrentFrame } from "remotion";
 import type { Guion } from "../guion.schema";
+import { cuadrosPorItemListaNumerada } from "../escenas/tipos";
 
-// Esquina superior izquierda (CapaLogo ocupa la derecha). El tramo activo
-// va de bucle.abre_en a bucle.cierra_en (sección 3B del plan).
+// Esquina superior izquierda (CapaLogo ocupa la derecha).
 export function CapaBucle({ guion }: { guion: Guion }) {
   const frame = useCurrentFrame();
   const { bucle, escenas, fps } = guion;
@@ -16,8 +16,18 @@ export function CapaBucle({ guion }: { guion: Guion }) {
 
   let inicioCuadro = 0;
   for (let i = 0; i < indiceAbre; i++) inicioCuadro += Math.round(escenas[i].duracion_s * fps);
-  let finCuadro = inicioCuadro;
-  for (let i = indiceAbre; i <= indiceCierra; i++) finCuadro += Math.round(escenas[i].duracion_s * fps);
+
+  const escenaCierre = escenas[indiceCierra];
+  let inicioEscenaCierre = inicioCuadro;
+  for (let i = indiceAbre; i < indiceCierra; i++) inicioEscenaCierre += Math.round(escenas[i].duracion_s * fps);
+  const finEscenaCierre = inicioEscenaCierre + Math.round(escenaCierre.duracion_s * fps);
+
+  // "espera al final" deja de tener sentido apenas se llega a la escena
+  // que cumple la promesa (sea esa escena el pago -- producto, oferta --
+  // o directo el cta): se oculta DESDE que esa escena empieza, nunca
+  // sigue metida en el cta. "contador" sí se queda hasta el final de esa
+  // misma escena: ahí es donde de verdad cuenta 1/3, 2/3, 3/3.
+  const finCuadro = bucle.indicador === "espera_final" ? inicioEscenaCierre : finEscenaCierre;
 
   if (frame < inicioCuadro || frame >= finCuadro) return null;
 
@@ -25,13 +35,14 @@ export function CapaBucle({ guion }: { guion: Guion }) {
   if (bucle.indicador === "espera_final") {
     contenido = "👀 espera al final";
   } else {
-    // "contador": el total de pasos lo da la escena de lista_numerada que
-    // cierra el bucle -- el zod ya lo exige (ver guion.schema.ts), así que
-    // siempre existe cuando indicador es "contador".
-    const escenaCierre = escenas[indiceCierra];
+    // El zod ya exige que la escena de cierre sea lista_numerada cuando
+    // indicador es "contador" (ver guion.schema.ts), así que siempre
+    // existe -- y el paso usa EXACTAMENTE la misma fórmula que
+    // ListaNumerada.tsx para no desincronizarse del ítem que se ve.
     const total = escenaCierre.tipo === "lista_numerada" ? escenaCierre.params.items.length : 1;
-    const progreso = (frame - inicioCuadro) / Math.max(finCuadro - inicioCuadro, 1);
-    const paso = Math.min(total, Math.floor(progreso * total) + 1);
+    const cuadrosPorItem = cuadrosPorItemListaNumerada(escenaCierre.duracion_s, fps, total);
+    const frameEnEscena = frame - inicioEscenaCierre;
+    const paso = Math.min(total, Math.floor(frameEnEscena / cuadrosPorItem) + 1);
     contenido = `${paso}/${total}`;
   }
 

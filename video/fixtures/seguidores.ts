@@ -14,6 +14,7 @@ export const fixtureSeguidoresInstagram = GuionSchema.parse({
     color_secundario: "#AD1457",
     fuente: "amigable",
     logo_url: null,
+    nombre_marca: null,
   },
   musica: { pista_id: null, volumen: 0.35 },
   escenas: [

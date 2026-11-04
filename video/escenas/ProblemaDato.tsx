@@ -17,7 +17,7 @@ export function ProblemaDato({ escena, tema }: PropsEscena<"problema_dato">) {
       <AbsoluteFill>
         <FondoMarca tema={tema} tono="alerta" />
         <AbsoluteFill style={{ justifyContent: "center", padding: "0 8%" }}>
-          <div style={{ fontSize: 108, fontWeight: 800, color: COLOR_TEXTO, textAlign: "left", opacity: progreso, lineHeight: 1.08 }}>
+          <div style={{ fontSize: 132, fontWeight: 800, color: COLOR_TEXTO, textAlign: "left", opacity: progreso, lineHeight: 1.04 }}>
             {pregunta}
           </div>
         </AbsoluteFill>
@@ -35,13 +35,13 @@ export function ProblemaDato({ escena, tema }: PropsEscena<"problema_dato">) {
     <AbsoluteFill>
       <FondoMarca tema={tema} tono="alerta" />
       <AbsoluteFill style={{ justifyContent: "center", padding: "0 8%" }}>
-        <div style={{ fontSize: 48, color: COLOR_TEXTO, marginBottom: 16, textAlign: "left", fontWeight: 700 }}>{titulo}</div>
-        <div style={{ fontSize: 130, fontWeight: 900, color: COLOR_TEXTO, lineHeight: 1 }}>
+        <div style={{ fontSize: 60, color: COLOR_TEXTO, marginBottom: 20, textAlign: "left", fontWeight: 700 }}>{titulo}</div>
+        <div style={{ fontSize: 220, fontWeight: 900, color: COLOR_TEXTO, lineHeight: 1 }}>
           {prefijo}
           {valorActual.toLocaleString("es-CO")}
           {sufijo}
         </div>
-        {etiqueta && <div style={{ fontSize: 34, color: COLOR_TEXTO, marginTop: 14, opacity: 0.85 }}>{etiqueta}</div>}
+        {etiqueta && <div style={{ fontSize: 40, color: COLOR_TEXTO, marginTop: 18, opacity: 0.85 }}>{etiqueta}</div>}
       </AbsoluteFill>
     </AbsoluteFill>
   );

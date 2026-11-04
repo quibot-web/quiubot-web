@@ -1,5 +1,5 @@
 import { AbsoluteFill, Img, OffthreadVideo, interpolate, spring, useCurrentFrame, useVideoConfig } from "remotion";
-import { colorTextoSobre } from "../tema";
+import { colorMasContraste, colorTextoSobre } from "../tema";
 import { FondoMarca } from "../capas/FondoMarca";
 import type { PropsEscena } from "./tipos";
 
@@ -20,7 +20,16 @@ export function GanchoTexto({ escena, tema, medios }: PropsEscena<"gancho_texto"
 
   const colorFondoEfectivo = media ? "#000000" : tema.color_primario;
   const colorTextoBase = media ? BLANCO : colorTextoSobre(colorFondoEfectivo);
-  const colorChip = media ? tema.color_primario : tema.color_secundario;
+  // El recuadro de palabra_clave tiene que NOTARSE, no solo leerse: se
+  // prueba contra el fondo real y se usa el que mejor contraste dé
+  // (nunca el secundario a ciegas -- en paletas donde primario y
+  // secundario son parecidos, tipo café, un beige sobre otro casi no
+  // se ve).
+  const colorChip = colorMasContraste(
+    media ? [tema.color_primario, tema.color_secundario] : [tema.color_secundario],
+    colorFondoEfectivo,
+    colorTextoSobre(colorFondoEfectivo)
+  );
   const colorTextoChip = colorTextoSobre(colorChip);
 
   return (

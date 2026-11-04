@@ -1,9 +1,7 @@
 import { AbsoluteFill, interpolate, useCurrentFrame, useVideoConfig } from "remotion";
-import { colorTextoSobre, contrasteHex } from "../tema";
+import { colorMasContraste, colorTextoSobre } from "../tema";
 import { FondoMarca } from "../capas/FondoMarca";
 import type { PropsEscena } from "./tipos";
-
-const UMBRAL_ACENTO = 4.5;
 
 export function ObjecionRespuesta({ escena, tema }: PropsEscena<"objecion_respuesta">) {
   const frame = useCurrentFrame();
@@ -12,9 +10,7 @@ export function ObjecionRespuesta({ escena, tema }: PropsEscena<"objecion_respue
   const mitad = (escena.duracion_s * fps) / 2;
   const mostrarRespuesta = frame > mitad;
   const colorTexto = colorTextoSobre(tema.color_primario);
-  // La respuesta usa el secundario como acento si se lee bien contra el
-  // fondo; si no, cae al mismo color de texto que la objeción.
-  const colorRespuesta = contrasteHex(tema.color_secundario, tema.color_primario) >= UMBRAL_ACENTO ? tema.color_secundario : colorTexto;
+  const colorRespuesta = colorMasContraste([tema.color_secundario], tema.color_primario, colorTexto);
   const tachado = interpolate(frame, [mitad * 0.3, mitad * 0.8], [0, 100], {
     extrapolateLeft: "clamp",
     extrapolateRight: "clamp",
@@ -27,11 +23,11 @@ export function ObjecionRespuesta({ escena, tema }: PropsEscena<"objecion_respue
         <div
           style={{
             position: "relative",
-            fontSize: 62,
+            fontSize: 100,
             fontWeight: 700,
             color: colorTexto,
             opacity: mostrarRespuesta ? 0.45 : 1,
-            lineHeight: 1.08,
+            lineHeight: 1.06,
           }}
         >
           {objecion}
@@ -40,7 +36,7 @@ export function ObjecionRespuesta({ escena, tema }: PropsEscena<"objecion_respue
               position: "absolute",
               left: 0,
               top: "50%",
-              height: 5,
+              height: 7,
               background: colorTexto,
               width: `${tachado}%`,
               transform: "translateY(-50%)",
@@ -50,11 +46,11 @@ export function ObjecionRespuesta({ escena, tema }: PropsEscena<"objecion_respue
         {mostrarRespuesta && (
           <div
             style={{
-              fontSize: 66,
+              fontSize: 100,
               fontWeight: 800,
               color: colorRespuesta,
-              marginTop: 32,
-              lineHeight: 1.08,
+              marginTop: 40,
+              lineHeight: 1.06,
               opacity: interpolate(frame, [mitad, mitad + fps * 0.5], [0, 1], {
                 extrapolateLeft: "clamp",
                 extrapolateRight: "clamp",

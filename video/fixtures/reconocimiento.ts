@@ -15,6 +15,7 @@ export const fixtureReconocimiento = GuionSchema.parse({
     color_secundario: "#D8B48C",
     fuente: "elegante",
     logo_url: null,
+    nombre_marca: "Café Luna",
   },
   musica: { pista_id: null, volumen: 0.35 },
   escenas: [
@@ -47,7 +48,7 @@ export const fixtureReconocimiento = GuionSchema.parse({
       bloque: "cta",
       tipo: "cta",
       duracion_s: 2.5,
-      params: { accion: "suave", texto_boton: "Conócenos" },
+      params: { accion: "suave", texto_boton: "Conócenos", subtexto: "Un break que sabe a ti" },
     },
   ],
 });

@@ -13,6 +13,7 @@ export const fixtureRetargeting = GuionSchema.parse({
     color_secundario: "#4DB6AC",
     fuente: "moderna",
     logo_url: null,
+    nombre_marca: null,
   },
   musica: { pista_id: null, volumen: 0.35 },
   escenas: [

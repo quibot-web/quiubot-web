@@ -14,6 +14,7 @@ export const fixtureTraficoMensajes = GuionSchema.parse({
     color_secundario: "#6A1B9A",
     fuente: "moderna",
     logo_url: null,
+    nombre_marca: null,
   },
   musica: { pista_id: null, volumen: 0.35 },
   escenas: [
