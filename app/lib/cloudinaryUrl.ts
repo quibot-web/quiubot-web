@@ -42,3 +42,14 @@ export function urlPortadaVideo(url: string): string {
   const conExtensionJpg = url.replace(/\.[a-zA-Z0-9]+(\?.*)?$/, ".jpg$1");
   return conExtensionJpg.replace("/upload/", "/upload/so_1/");
 }
+
+// pistas_musicales (biblioteca de música de video/, ver docs/diseno/
+// plan_video_anuncios_fase1.md sección 8) solo guarda public_id y
+// cloudinary_name -- a diferencia de album_creativos, nunca guarda la
+// URL completa, así que hay que armarla. El audio en Cloudinary se sube
+// como resource_type "video" (no existe un tipo "audio" separado en su
+// API, ver app/api/admin/musica/route.ts), y se fuerza ".mp3" para que
+// la entrega sea consistente sin importar el formato original subido.
+export function urlPistaMusical(cloudinaryName: string, publicId: string): string {
+  return `https://res.cloudinary.com/${cloudinaryName}/video/upload/${publicId}.mp3`;
+}
