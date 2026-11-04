@@ -30,6 +30,15 @@ interface CuerpoPeticion {
   usuario_cta?: string;
 }
 
+// gpt-5.6-sol es de la familia "razonamiento" de OpenAI (como o1/o3): NO
+// acepta "temperature" distinto de 1 -- probado en staging, OpenAI
+// devuelve 400 "Unsupported value: 'temperature' does not support 0.7
+// with this model. Only the default (1) value is supported." Por eso no
+// se manda temperature en absoluto (se deja el default). Tampoco se
+// manda max_tokens (deprecado para estos modelos) sino
+// max_completion_tokens, con margen de sobra: estos modelos consumen
+// tokens de razonamiento internos antes del JSON final, que cuentan
+// contra el mismo límite aunque no se vean.
 async function llamarOpenAI(apiKey: string, prompt: string): Promise<string> {
   const controller = new AbortController();
   const timeoutId = setTimeout(() => controller.abort(), TIMEOUT_OPENAI_MS);
@@ -40,7 +49,7 @@ async function llamarOpenAI(apiKey: string, prompt: string): Promise<string> {
       body: JSON.stringify({
         model: MODELO_GUION_VIDEO,
         messages: [{ role: "system", content: prompt }],
-        temperature: 0.7,
+        max_completion_tokens: 6000,
         response_format: { type: "json_object" },
       }),
       signal: controller.signal,
@@ -237,7 +246,20 @@ export async function POST(req: NextRequest) {
 
   async function intentar(erroresPrevios?: string[]): Promise<{ ok: true; guion: Guion } | { ok: false; errores: string[] }> {
     const prompt = construirPromptGuion(entrada, erroresPrevios);
-    const contenido = await llamarOpenAI(apiKeyUsuario, prompt);
+
+    let contenido: string;
+    try {
+      contenido = await llamarOpenAI(apiKeyUsuario, prompt);
+    } catch (err) {
+      // Antes esto se perdía: si la llamada a OpenAI fallaba (código y
+      // mensaje, no solo "algo salió mal"), intentosRegistrados quedaba
+      // vacío y el panel de debug no mostraba nada -- justo lo que pasó
+      // en staging con el 400 de "temperature". Ahora SIEMPRE queda un
+      // intento registrado, se reintente o no.
+      const mensaje = err instanceof Error ? err.message : String(err);
+      intentosRegistrados.push({ errores: [`Error llamando a OpenAI: ${mensaje}`], crudo: null });
+      throw err;
+    }
 
     let crudo: unknown;
     try {

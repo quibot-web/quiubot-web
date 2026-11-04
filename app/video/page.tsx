@@ -231,7 +231,7 @@ export default function VideoNuevoPage() {
   return (
     <div style={{ minHeight: "100vh", background: "#f9f9f8", fontFamily: "system-ui, sans-serif", padding: "2rem 1.5rem" }}>
       <div style={{ maxWidth: 1100, margin: "0 auto" }}>
-        <h1 style={{ fontSize: 22, fontWeight: 700, marginBottom: 4 }}>Video de anuncio con código</h1>
+        <h1 style={{ fontSize: 22, fontWeight: 700, marginBottom: 4, color: "#1a1a1a" }}>Video de anuncio con código</h1>
         <p style={{ fontSize: 13, color: "#666", marginBottom: 20 }}>
           Fase 1a -- solo admin.{" "}
           <a href="/video/kling" style={{ color: "#534AB7" }}>
@@ -247,11 +247,11 @@ export default function VideoNuevoPage() {
 
         {(paso === "brief" || paso === "generando") && (
           <div style={{ background: "#fff", border: "1px solid #e8e8e6", borderRadius: 16, padding: 24 }}>
-            <h2 style={{ fontSize: 15, fontWeight: 700, marginBottom: 12 }}>1. Objetivo de la campaña</h2>
+            <h2 style={{ fontSize: 15, fontWeight: 700, marginBottom: 12, color: "#1a1a1a" }}>1. Objetivo de la campaña</h2>
             <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(180px, 1fr))", gap: 10, marginBottom: 20 }}>
               {OBJETIVOS_INFO.filter((o) => OBJETIVOS_VIDEO_IDS.has(o.id)).map((o) => (
                 <button key={o.id} type="button" style={tarjetaEstilo(objetivoId === o.id)} onClick={() => elegirObjetivo(o.id as ObjetivoVideo)}>
-                  <div style={{ fontWeight: 600, fontSize: 13, marginBottom: 4 }}>{o.label}</div>
+                  <div style={{ fontWeight: 600, fontSize: 13, marginBottom: 4, color: "#1a1a1a" }}>{o.label}</div>
                   <div style={{ fontSize: 11, color: "#666" }}>{o.desc}</div>
                 </button>
               ))}
@@ -263,7 +263,7 @@ export default function VideoNuevoPage() {
               </div>
             )}
 
-            <h2 style={{ fontSize: 15, fontWeight: 700, marginBottom: 12 }}>2. Producto o servicio</h2>
+            <h2 style={{ fontSize: 15, fontWeight: 700, marginBottom: 12, color: "#1a1a1a" }}>2. Producto o servicio</h2>
             <textarea
               value={productoServicio}
               onChange={(e) => setProductoServicio(e.target.value)}
@@ -272,7 +272,7 @@ export default function VideoNuevoPage() {
               style={{ width: "100%", padding: 10, borderRadius: 8, border: "1px solid #ddd", fontSize: 13, marginBottom: 16, fontFamily: "inherit" }}
             />
 
-            <h2 style={{ fontSize: 15, fontWeight: 700, marginBottom: 12 }}>3. Qué destacar</h2>
+            <h2 style={{ fontSize: 15, fontWeight: 700, marginBottom: 12, color: "#1a1a1a" }}>3. Qué destacar</h2>
             <textarea
               value={datosProducto}
               onChange={(e) => setDatosProducto(e.target.value)}
@@ -281,7 +281,7 @@ export default function VideoNuevoPage() {
               style={{ width: "100%", padding: 10, borderRadius: 8, border: "1px solid #ddd", fontSize: 13, marginBottom: 16, fontFamily: "inherit" }}
             />
 
-            <h2 style={{ fontSize: 15, fontWeight: 700, marginBottom: 12 }}>4. Piezas del álbum (hasta 3)</h2>
+            <h2 style={{ fontSize: 15, fontWeight: 700, marginBottom: 12, color: "#1a1a1a" }}>4. Piezas del álbum (hasta 3)</h2>
             <div style={{ display: "flex", gap: 8, flexWrap: "wrap", marginBottom: 20 }}>
               {piezasElegidas.map(([id, pieza]) => (
                 <div key={id} style={{ position: "relative" }}>
@@ -310,7 +310,7 @@ export default function VideoNuevoPage() {
               )}
             </div>
 
-            <h2 style={{ fontSize: 15, fontWeight: 700, marginBottom: 12 }}>5. Duración{receta ? ` (${receta.duracionMinS}-${receta.duracionMaxS}s)` : ""}</h2>
+            <h2 style={{ fontSize: 15, fontWeight: 700, marginBottom: 12, color: "#1a1a1a" }}>5. Duración{receta ? ` (${receta.duracionMinS}-${receta.duracionMaxS}s)` : ""}</h2>
             <input
               type="number"
               value={duracionS}
@@ -320,7 +320,7 @@ export default function VideoNuevoPage() {
               style={{ width: 100, padding: 8, borderRadius: 8, border: "1px solid #ddd", fontSize: 13, marginBottom: 20 }}
             />
 
-            <h2 style={{ fontSize: 15, fontWeight: 700, marginBottom: 12 }}>6. Música</h2>
+            <h2 style={{ fontSize: 15, fontWeight: 700, marginBottom: 12, color: "#1a1a1a" }}>6. Música</h2>
             <select
               value={pistaId || ""}
               onChange={(e) => setPistaId(e.target.value || null)}
@@ -336,7 +336,7 @@ export default function VideoNuevoPage() {
 
             {objetivoId === "seguidores_instagram" && (
               <>
-                <h2 style={{ fontSize: 15, fontWeight: 700, marginBottom: 12 }}>7. @usuario de Instagram</h2>
+                <h2 style={{ fontSize: 15, fontWeight: 700, marginBottom: 12, color: "#1a1a1a" }}>7. @usuario de Instagram</h2>
                 <input
                   value={usuarioCta}
                   onChange={(e) => setUsuarioCta(e.target.value)}
@@ -423,7 +423,7 @@ export default function VideoNuevoPage() {
             </div>
 
             <div style={{ position: "sticky", top: 24 }}>
-              <label style={{ display: "flex", alignItems: "center", gap: 6, fontSize: 12, marginBottom: 10 }}>
+              <label style={{ display: "flex", alignItems: "center", gap: 6, fontSize: 12, marginBottom: 10, color: "#1a1a1a" }}>
                 <input type="checkbox" checked={mostrarZonaSegura} onChange={(e) => setMostrarZonaSegura(e.target.checked)} />
                 Ver zona segura
               </label>
@@ -485,7 +485,7 @@ function PanelDebug({ intentos, mostrar, onToggle }: { intentos: Intento[]; most
       <button
         type="button"
         onClick={onToggle}
-        style={{ width: "100%", textAlign: "left", padding: "10px 14px", background: "#f5f5f5", border: "none", fontSize: 12, fontWeight: 700, cursor: "pointer" }}
+        style={{ width: "100%", textAlign: "left", padding: "10px 14px", background: "#f5f5f5", border: "none", fontSize: 12, fontWeight: 700, cursor: "pointer", color: "#1a1a1a" }}
       >
         {mostrar ? "▾" : "▸"} Detalle de generación ({intentos.length} intento{intentos.length > 1 ? "s" : ""})
       </button>
@@ -493,7 +493,7 @@ function PanelDebug({ intentos, mostrar, onToggle }: { intentos: Intento[]; most
         <div style={{ padding: 14 }}>
           {intentos.map((intento, i) => (
             <div key={i} style={{ marginBottom: 16 }}>
-              <div style={{ fontSize: 12, fontWeight: 700, marginBottom: 4 }}>
+              <div style={{ fontSize: 12, fontWeight: 700, marginBottom: 4, color: "#1a1a1a" }}>
                 Intento {i + 1} -- {intento.errores.length === 0 ? "sin motivos de rechazo" : `${intento.errores.length} motivo(s)`}
               </div>
               {intento.errores.length > 0 && (
@@ -503,7 +503,7 @@ function PanelDebug({ intentos, mostrar, onToggle }: { intentos: Intento[]; most
                   ))}
                 </ul>
               )}
-              <pre style={{ fontSize: 11, background: "#f5f5f5", padding: 10, borderRadius: 6, overflowX: "auto", maxHeight: 240 }}>
+              <pre style={{ fontSize: 11, background: "#f5f5f5", padding: 10, borderRadius: 6, overflowX: "auto", maxHeight: 240, color: "#1a1a1a" }}>
                 {JSON.stringify(intento.crudo, null, 2)}
               </pre>
             </div>
