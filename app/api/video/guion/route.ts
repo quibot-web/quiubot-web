@@ -172,11 +172,37 @@ export async function POST(req: NextRequest) {
   const analisisPiezas: Record<string, AnalisisPieza> = {};
 
   if (idsPiezas.length > 0) {
-    const { data: piezas } = await supabaseAdmin
+    const { data: piezas, error: errorPiezas } = await supabaseAdmin
       .from("album_creativos")
       .select("id, url_imagen, tipo, analisis")
       .eq("user_id", usuario.id)
       .in("id", idsPiezas);
+
+    // Antes esto se confundía con "la pieza no existe o no es tuya": un
+    // error real de la consulta (ej. una columna que todavía no existe)
+    // también deja `piezas` en null/vacío y se mostraba ese mensaje
+    // equivocado. Si Supabase devolvió error, es un fallo de consulta,
+    // no una pieza inválida -- y el mensaje real va al panel de debug
+    // (admin-only, toda esta página lo es) para no tener que ir a los
+    // logs del contenedor.
+    if (errorPiezas) {
+      registrarError({
+        origen: "video_guion",
+        userId: usuario.id,
+        email: emailBusqueda,
+        paso: "consulta_album",
+        errorMensaje: "Error consultando el álbum.",
+        detalleTecnico: errorPiezas.message,
+        objetivoId,
+      });
+      return NextResponse.json(
+        {
+          error: "Error consultando el álbum. Intenta de nuevo.",
+          intentos: [{ errores: [`Error de Supabase: ${errorPiezas.message}`], crudo: null }],
+        },
+        { status: 500 }
+      );
+    }
 
     if (!piezas || piezas.length !== idsPiezas.length) {
       return NextResponse.json({ error: "Alguna de las piezas elegidas del álbum no existe o no es tuya." }, { status: 400 });
