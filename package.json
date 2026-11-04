@@ -11,7 +11,8 @@
     "start": "next start",
     "lint": "eslint",
     "video:studio": "remotion studio video/Root.tsx",
-    "video:verificar": "tsx video/fixtures/verificar.ts"
+    "video:verificar": "tsx video/fixtures/verificar.ts",
+    "render": "tsx video/render.ts"
   },
   "dependencies": {
     "@remotion/google-fonts": "4.0.540",
@@ -30,6 +31,7 @@
     "zod": "^4.6.7"
   },
   "devDependencies": {
+    "@remotion/bundler": "4.0.540",
     "@remotion/cli": "4.0.540",
     "@remotion/renderer": "4.0.540",
     "@tailwindcss/postcss": "^4",

@@ -1,4 +1,4 @@
-import { Composition, registerRoot } from "remotion";
+import { Composition, registerRoot, type CalculateMetadataFunction } from "remotion";
 import { Composicion, duracionEnCuadros, type PropsComposicion } from "./Composicion";
 import type { Guion } from "./guion.schema";
 import { fixtureCompleta } from "./fixtures/completa";
@@ -48,6 +48,17 @@ const FIXTURES: { id: string; guion: Guion; mostrarZonaSegura?: boolean }[] = [
   { id: "retargeting", guion: fixtureRetargeting },
 ];
 
+// La duración de los fixtures de arriba se conoce de antemano (están
+// fijos en el módulo), pero "render" recibe un guion real distinto en
+// cada corrida de "npm run render -- <guion.json>" (ver video/render.ts)
+// vía --props/inputProps -- calculateMetadata la recalcula con las
+// props reales, los valores de más abajo son solo el placeholder que
+// pide <Composition> antes de que eso corra.
+const calcularMetadataRender: CalculateMetadataFunction<PropsComposicion> = ({ props }) => ({
+  durationInFrames: duracionEnCuadros(props.guion),
+  fps: props.guion.fps,
+});
+
 function RemotionRoot() {
   return (
     <>
@@ -63,6 +74,16 @@ function RemotionRoot() {
           defaultProps={{ guion, medios: MEDIOS_DEMO, mostrarZonaSegura: !!mostrarZonaSegura }}
         />
       ))}
+      <Composition<any, PropsComposicion>
+        id="render"
+        component={Composicion}
+        durationInFrames={30}
+        fps={30}
+        width={1080}
+        height={1920}
+        calculateMetadata={calcularMetadataRender}
+        defaultProps={{ guion: fixtureReconocimiento, medios: MEDIOS_DEMO, pistaUrl: null }}
+      />
     </>
   );
 }

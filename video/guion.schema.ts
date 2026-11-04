@@ -300,3 +300,18 @@ export const GuionSchema = z
   });
 
 export type Guion = z.infer<typeof GuionSchema>;
+
+// ids de media_id que la IA realmente usó (gancho opcional + producto_hero
+// obligatorio) -- "la IA nunca escribe URLs", solo puede reusar un id de
+// los que se le mandaron como disponibles. Compartido entre
+// /api/video/guion (resolver las piezas antes de guardar el guion) y
+// video/render.ts (el CLI local de "npm run render", que resuelve las
+// mismas piezas desde un guion.json ya generado).
+export function idsDeMediaUsados(escenas: Guion["escenas"]): string[] {
+  const ids: string[] = [];
+  for (const e of escenas) {
+    if (e.tipo === "producto_hero") ids.push(e.params.media_id);
+    if (e.tipo === "gancho_texto" && e.params.media_id) ids.push(e.params.media_id);
+  }
+  return ids;
+}
