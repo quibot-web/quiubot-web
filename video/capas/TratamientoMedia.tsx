@@ -1,6 +1,7 @@
 import { AbsoluteFill, Img, OffthreadVideo } from "remotion";
 import type { MediaResuelto } from "../escenas/tipos";
 import type { TemaGuion } from "../tema";
+import { ALTURA_ZONA_SEGURA } from "./ZonaSegura";
 
 // Los 3 tratamientos de imagen (sección "Tratamientos de imagen" del
 // plan) compartidos entre GanchoTexto y ProductoHero -- una sola vez,
@@ -65,27 +66,35 @@ export function MediaTarjeta({ media, anclaje = "centro" }: { media: MediaResuel
   );
 }
 
+// El chip del bucle (capas/Bucle.tsx) vive en top:16% con su propia
+// altura (~3.5% del cuadro) -- el teléfono en anclaje "centro" tiene que
+// arrancar claramente debajo de eso para no montarse encima cuando el
+// bucle está activo en esta misma escena.
+const INICIO_SEGURO_BAJO_CHIP_PORCENTAJE = 23;
+
 // La pieza dentro de un marco de teléfono, como si fuera un post real
 // -- dibujado en código (mismo criterio que el resto de video/: nada de
 // assets nuevos en public/).
 export function MediaCelular({ media, tema, anclaje = "centro" }: { media: MediaResuelto; tema: TemaGuion; anclaje?: Anclaje }) {
   const arriba = anclaje === "arriba";
+  // Pedido: el teléfono ocupa 55-60% del alto de la ZONA SEGURA (no del
+  // cuadro completo) en anclaje "centro" -- se usa 58%. En "arriba" el
+  // teléfono comparte la mitad superior con el titular del gancho, así
+  // que se queda más chico.
+  const alturaPorcentaje = arriba ? 20 : (ALTURA_ZONA_SEGURA * 58) / 100;
   return (
-    <AbsoluteFill
-      style={{
-        justifyContent: arriba ? "flex-start" : "center",
-        alignItems: "center",
-        padding: arriba ? "6% 20% 0" : "0 13% 24%",
-      }}
-    >
+    <AbsoluteFill>
       <div
         style={{
-          position: "relative",
+          position: "absolute",
+          top: arriba ? "21%" : `${INICIO_SEGURO_BAJO_CHIP_PORCENTAJE}%`,
+          left: "50%",
+          transform: "translateX(-50%)",
           // Siempre se dimensiona por ALTO, nunca por ancho: con este
           // aspect-ratio tan vertical, un teléfono sacado del 100% del
           // ancho disponible queda más alto que todo el cuadro 9:16 y se
           // sale por abajo, encima de la leyenda.
-          height: arriba ? "27%" : "68%",
+          height: `${alturaPorcentaje}%`,
           width: "auto",
           aspectRatio: "9 / 18.5",
           background: "#0a0a0a",
@@ -95,12 +104,32 @@ export function MediaCelular({ media, tema, anclaje = "centro" }: { media: Media
         }}
       >
         <div style={{ width: "100%", height: "100%", borderRadius: 38, overflow: "hidden", background: "#fff", display: "flex", flexDirection: "column" }}>
-          <div style={{ display: "flex", alignItems: "center", gap: 10, padding: "16px 18px" }}>
-            <div style={{ width: 24, height: 24, borderRadius: "50%", background: tema.color_primario, flexShrink: 0 }} />
-            <div style={{ fontSize: 16, fontWeight: 700, color: "#111" }}>tu_marca</div>
+          <div style={{ display: "flex", alignItems: "center", gap: 10, padding: "16px 18px", flexShrink: 0 }}>
+            <div
+              style={{
+                width: 28,
+                height: 28,
+                borderRadius: "50%",
+                background: tema.logo_url ? "#fff" : tema.color_primario,
+                border: tema.logo_url ? "1px solid #eee" : undefined,
+                flexShrink: 0,
+                display: "flex",
+                alignItems: "center",
+                justifyContent: "center",
+                overflow: "hidden",
+              }}
+            >
+              {tema.logo_url && <Img src={tema.logo_url} style={{ width: "100%", height: "100%", objectFit: "contain" }} />}
+            </div>
+            <div style={{ fontSize: 16, fontWeight: 700, color: "#111" }}>{tema.nombre_marca || "Nuestro negocio"}</div>
           </div>
-          <div style={{ flex: 1, position: "relative", background: "#f2f2f2" }}>
-            <MediaPlano media={media} style={{ width: "100%", height: "100%", objectFit: "cover" }} />
+          {/* La imagen COMPLETA, sin recortar (nunca le corta texto
+              impreso) -- contain, con un fondo difuminado de la misma
+              pieza detrás para no dejar un hueco gris donde la imagen no
+              llena la pantalla del teléfono. */}
+          <div style={{ flex: 1, position: "relative", background: "#000", overflow: "hidden" }}>
+            <MediaPlano media={media} style={{ position: "absolute", width: "100%", height: "100%", objectFit: "cover", filter: "blur(30px) brightness(0.55)", transform: "scale(1.25)" }} />
+            <MediaPlano media={media} style={{ position: "absolute", width: "100%", height: "100%", objectFit: "contain" }} />
           </div>
         </div>
       </div>

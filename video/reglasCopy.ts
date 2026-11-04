@@ -50,6 +50,52 @@ function normalizar(texto: string): string {
     .replace(/[̀-ͯ]/g, "");
 }
 
+// Beneficios u ofertas concretas (sección "Datos del brief") -- si el
+// guion menciona uno de estos sin que esté en el brief (datos_producto +
+// marca.info_adicional), es un dato inventado por la IA; si el brief lo
+// trae y el guion no lo menciona, falta incluirlo. Mismas palabras clave
+// que ya usa app/marca/page.tsx para los chips de "Lo que deben saber",
+// más "descuento"/"cuotas" que no estaban ahí.
+const CLAVES_PROMESA: { etiqueta: string; patron: RegExp }[] = [
+  { etiqueta: "envío", patron: /\benv[ií]os?\b|\bdomicilios?\b/ },
+  { etiqueta: "garantía", patron: /\bgarant[ií]as?\b/ },
+  { etiqueta: "descuento", patron: /\bdescuentos?\b|\brebajas?\b|%\s*(de\s*)?(descuento|dto)/ },
+  { etiqueta: "cuotas", patron: /\bcuotas?\b|\ba plazos\b|\bfinanciaci[oó]n\b/ },
+];
+
+function clavesPresentes(texto: string): Set<string> {
+  const normalizado = normalizar(texto);
+  const presentes = new Set<string>();
+  for (const { etiqueta, patron } of CLAVES_PROMESA) {
+    if (patron.test(normalizado)) presentes.add(etiqueta);
+  }
+  return presentes;
+}
+
+// "si no está en datos_producto ni en info_adicional, es un dato
+// inventado" -- compara las claves que de verdad aparecen en el texto
+// del guion contra las que aparecen en el brief (datos_producto +
+// marca.info_adicional, ya unidos por el caller). Cualquier clave en el
+// guion que no esté en el brief se rechaza.
+export function detectarPromesasInventadas(textosGuion: string[], brief: string): string[] {
+  const clavesBrief = clavesPresentes(brief);
+  const clavesGuion = clavesPresentes(textosGuion.join(" \n "));
+  return [...clavesGuion]
+    .filter((clave) => !clavesBrief.has(clave))
+    .map((clave) => `el guion menciona "${clave}" pero ese dato no está en "qué destacar" ni en la info de la marca -- no lo inventes`);
+}
+
+// La otra mitad de la misma regla: todo lo que el brief sí trae tiene
+// que aparecer en alguna escena -- si no, el guion se está dejando un
+// dato real sin usar.
+export function detectarDatosFaltantes(textosGuion: string[], brief: string): string[] {
+  const clavesBrief = clavesPresentes(brief);
+  const clavesGuion = clavesPresentes(textosGuion.join(" \n "));
+  return [...clavesBrief]
+    .filter((clave) => !clavesGuion.has(clave))
+    .map((clave) => `"qué destacar" o la info de la marca incluye "${clave}" pero ninguna escena lo menciona -- agrégalo`);
+}
+
 // Recoge todo el texto visible de las escenas: subtitulo.texto y cada
 // campo de texto (o lista de textos) de params -- genérico por
 // Object.values en vez de un caso por tipo de escena, así no hay que

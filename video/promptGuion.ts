@@ -18,6 +18,11 @@ export interface EntradaGuion {
   receta: RecetaObjetivo;
   productoServicio: string;
   datosProducto: string | null;
+  // Texto libre de marcas.info_adicional ("Lo que deben saber" en Mi
+  // marca) -- junto con datosProducto, es la ÚNICA fuente permitida de
+  // envíos, garantía, descuento o cuotas (ver reglasCopy.ts,
+  // detectarPromesasInventadas/detectarDatosFaltantes).
+  infoAdicionalMarca: string | null;
   duracionS: number;
   piezas: PiezaDisponible[];
   analisisPiezas: Record<string, AnalisisPieza>;
@@ -54,6 +59,7 @@ function seccionReceta(entrada: EntradaGuion): string {
     `- Entre 3 y 7 escenas en total. La primera es bloque "gancho" y dura 2.5s o menos, con movimiento y texto desde el primer cuadro (nada de presentación ni pantalla en negro). La última es tipo "cta".`,
     `- Duración total pedida: ${entrada.duracionS}s (la suma de duracion_s de las escenas no puede alejarse más de 2s de este número).`,
     `- Bucle de retención: ${receta.bucleTipico} bucle.indicador debe ser exactamente "${receta.indicadorBucle}". bucle.abre_en es el id de la primera escena; bucle.cierra_en es el id de la escena donde se cumple la promesa (antes o en el cta).`,
+    `- El gancho promete EXACTAMENTE lo que la escena de bucle.cierra_en entrega: nunca dejes la promesa abierta con otra pregunta o gancho distinto (ej. gancho "Mira cómo quedó..." seguido de otra pregunta en vez de mostrar el resultado) -- la escena de cierre tiene que cumplirla de forma concreta.`,
     `- El cta final usa accion "${receta.accionCta}", con un texto_boton parecido a "${receta.textoCtaSugerido}".`,
   ];
   if (receta.requiereUsuarioEnCta) {
@@ -102,7 +108,9 @@ export function construirPromptGuion(entrada: EntradaGuion, erroresPrevios?: str
     seccionReceta(entrada),
     `MARCA:\n- Titular del ADN: ${entrada.adnTitular || "(sin dato)"}\n- Frase corta de marca: ${entrada.adnFraseCorta || "(sin dato)"}`,
     `PRODUCTO O SERVICIO: ${entrada.productoServicio}`,
-    `QUÉ DESTACAR (datos reales del negocio -- precio, envíos, garantía, diferenciales -- úsalos si aplican, es lo ÚNICO de donde puedes sacar cifras): ${entrada.datosProducto || "(nada adicional)"}`,
+    `QUÉ DESTACAR (datos reales del negocio para este video): ${entrada.datosProducto || "(nada adicional)"}`,
+    `INFO DE LA MARCA (datos generales del negocio, "Lo que deben saber" en Mi marca): ${entrada.infoAdicionalMarca || "(nada adicional)"}`,
+    `REGLA DE DATOS -- "QUÉ DESTACAR" + "INFO DE LA MARCA" son la ÚNICA fuente permitida de precio, envío, garantía, descuento o cuotas: todo beneficio u oferta concreta que aparezca ahí DEBE aparecer en alguna escena del guion (no lo omitas), y nunca menciones un envío gratis, garantía, descuento o cuotas que no estén ahí (sería inventado -- el código lo rechaza en ambos sentidos).`,
     seccionPiezas(entrada.piezas, entrada.analisisPiezas),
     REFERENCIA_ESCENAS,
     `Responde ÚNICAMENTE con este JSON, sin texto adicional ni backticks ni comentarios:\n{"bucle": {"texto": "...", "abre_en": "e1", "cierra_en": "eN", "indicador": "..."}, "escenas": [ {"id": "e1", "bloque": "...", "tipo": "...", "duracion_s": 0, "subtitulo": {...opcional...}, "params": {...}} , ... ]}`,

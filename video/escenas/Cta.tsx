@@ -5,27 +5,26 @@ import type { PropsEscena } from "./tipos";
 import type { TemaGuion } from "../tema";
 
 const COLOR_WHATSAPP = "#25D366";
-// 80% del ancho de la zona segura (88% del cuadro completo), no del
-// cuadro completo -- el máximo al que puede CRECER el botón.
+// El botón SIEMPRE mide 80% del ancho de la zona segura (88% del cuadro
+// completo) -- antes solo crecía a eso cuando el texto era largo; con
+// texto corto quedaba "fit-content" y se veía chico. Ahora el ancho es
+// fijo y lo único que varía con el largo del texto es el tamaño de letra.
 const ANCHO_MAX_PX = 1080 * 0.88 * 0.8;
-const ANCHO_MAX_PORCENTAJE = `${((ANCHO_MAX_PX / 1080) * 100).toFixed(1)}%`;
+const ANCHO_BOTON_PORCENTAJE = `${((ANCHO_MAX_PX / 1080) * 100).toFixed(1)}%`;
 const PADDING_HORIZONTAL_PX = 56;
 const FUENTE_IDEAL = 56;
 const FUENTE_MINIMA = 44;
 
-// El botón CRECE primero (hasta el 80% de la zona segura) con letra
-// ideal de 56px; solo si el texto no cabe ahí se baja la letra, nunca
-// por debajo de 44px -- Remotion no mide texto real sin sumar
-// @remotion/layout-utils, así que esto es una aproximación por cantidad
-// de caracteres (0.68 probado contra "Escríbenos por WhatsApp" y "Pide
-// tu cotización gratis", los textos reales más largos de las recetas).
-function calcularBoton(texto: string): { fontSize: number; anchoMaximo: boolean } {
+// Letra ideal de 56px; solo si el texto no cabe en el ancho fijo del
+// botón se baja la letra, nunca por debajo de 44px -- Remotion no mide
+// texto real sin sumar @remotion/layout-utils, así que esto es una
+// aproximación por cantidad de caracteres (0.68 probado contra
+// "Escríbenos por WhatsApp" y "Pide tu cotización gratis", los textos
+// reales más largos de las recetas).
+function calcularFuenteBoton(texto: string): number {
   const anchoAFuenteIdeal = texto.length * FUENTE_IDEAL * 0.68 + PADDING_HORIZONTAL_PX;
-  if (anchoAFuenteIdeal <= ANCHO_MAX_PX) {
-    return { fontSize: FUENTE_IDEAL, anchoMaximo: false };
-  }
-  const fontSize = Math.max(FUENTE_MINIMA, Math.floor((ANCHO_MAX_PX - PADDING_HORIZONTAL_PX) / (texto.length * 0.68)));
-  return { fontSize, anchoMaximo: true };
+  if (anchoAFuenteIdeal <= ANCHO_MAX_PX) return FUENTE_IDEAL;
+  return Math.max(FUENTE_MINIMA, Math.floor((ANCHO_MAX_PX - PADDING_HORIZONTAL_PX) / (texto.length * 0.68)));
 }
 
 // El botón NUNCA usa el secundario de la marca como relleno: si el
@@ -37,13 +36,11 @@ function calcularBoton(texto: string): { fontSize: number; anchoMaximo: boolean 
 function BotonGrande({ texto, tema, progreso }: { texto: string; tema: TemaGuion; progreso: number }) {
   const colorBoton = colorTextoSobre(tema.color_primario);
   const colorTexto = colorTextoSobre(colorBoton);
-  const { fontSize, anchoMaximo } = calcularBoton(texto);
+  const fontSize = calcularFuenteBoton(texto);
   return (
     <div
       style={{
-        width: anchoMaximo ? ANCHO_MAX_PORCENTAJE : "fit-content",
-        minWidth: "50%",
-        maxWidth: ANCHO_MAX_PORCENTAJE,
+        width: ANCHO_BOTON_PORCENTAJE,
         background: colorBoton,
         color: colorTexto,
         borderRadius: 999,
@@ -106,8 +103,8 @@ function CtaWhatsapp({ escena, tema }: PropsEscena<"cta">) {
                   background: COLOR_WHATSAPP,
                   color: "#fff",
                   borderRadius: "26px 26px 26px 4px",
-                  padding: "20px 28px",
-                  fontSize: 46,
+                  padding: "24px 32px",
+                  fontSize: 48,
                   fontWeight: 600,
                   opacity: p,
                   transform: `translateY(${interpolate(p, [0, 1], [16, 0])}px)`,

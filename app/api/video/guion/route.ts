@@ -11,7 +11,7 @@ import { GuionSchema, OBJETIVOS_VIDEO, idsDeMediaUsados, type Guion, type Objeti
 import { construirTemaDesdeAdn } from "@/video/tema";
 import { RECETAS, validarContraReceta } from "@/video/recetas";
 import { construirPromptGuion, type PiezaDisponible } from "@/video/promptGuion";
-import { detectarFrasesDescargo, recopilarTextosEscenas } from "@/video/reglasCopy";
+import { detectarFrasesDescargo, detectarDatosFaltantes, detectarPromesasInventadas, recopilarTextosEscenas } from "@/video/reglasCopy";
 
 // Mismo modelo que ya usan los flujos de n8n (generar_estrategia,
 // crear_creativos) -- en una constante para poder cambiarlo en un solo
@@ -266,7 +266,7 @@ export async function POST(req: NextRequest) {
 
   const { data: marca } = await supabaseAdmin
     .from("marcas")
-    .select("adn_marca, nombre_marca, logo_url")
+    .select("adn_marca, nombre_marca, logo_url, info_adicional")
     .eq("email", emailBusqueda)
     .maybeSingle();
 
@@ -282,11 +282,14 @@ export async function POST(req: NextRequest) {
 
   const adnMarca = marca.adn_marca as { titular?: string | null; frase_corta?: string | null };
 
+  const infoAdicionalMarca = (marca.info_adicional as string | null)?.trim().slice(0, 800) || null;
+
   const entrada = {
     objetivoId,
     receta,
     productoServicio: producto_servicio.trim().slice(0, 300),
     datosProducto: datos_producto?.trim().slice(0, 500) || null,
+    infoAdicionalMarca,
     duracionS: duracion_s,
     piezas: piezasDisponibles,
     analisisPiezas,
@@ -369,9 +372,12 @@ export async function POST(req: NextRequest) {
     const idsValidos = new Set(piezasDisponibles.map((p) => p.id));
     const erroresMedia = idsUsados.filter((id) => !idsValidos.has(id)).map((id) => `media_id "${id}" no está entre las piezas disponibles.`);
 
-    const erroresCopy = detectarFrasesDescargo(recopilarTextosEscenas(resultado.data.escenas)).map((m) => `copy tímido: ${m}`);
+    const textosEscenas = recopilarTextosEscenas(resultado.data.escenas);
+    const erroresCopy = detectarFrasesDescargo(textosEscenas).map((m) => `copy tímido: ${m}`);
+    const brief = [entrada.datosProducto, entrada.infoAdicionalMarca].filter(Boolean).join(" \n ");
+    const erroresPromesas = [...detectarPromesasInventadas(textosEscenas, brief), ...detectarDatosFaltantes(textosEscenas, brief)];
 
-    const erroresTotales = [...erroresReceta, ...erroresMedia, ...erroresCopy];
+    const erroresTotales = [...erroresReceta, ...erroresMedia, ...erroresCopy, ...erroresPromesas];
     intentosRegistrados.push({ errores: erroresTotales, crudo });
     if (erroresTotales.length > 0) {
       return { ok: false, errores: erroresTotales };

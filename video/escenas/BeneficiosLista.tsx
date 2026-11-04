@@ -1,6 +1,7 @@
 import { AbsoluteFill, interpolate, spring, useCurrentFrame, useVideoConfig } from "remotion";
 import { colorMasContraste, colorTextoSobre } from "../tema";
 import { FondoMarca } from "../capas/FondoMarca";
+import { ZONA_SEGURA } from "../capas/ZonaSegura";
 import type { PropsEscena } from "./tipos";
 
 export function BeneficiosLista({ escena, tema }: PropsEscena<"beneficios_lista">) {
@@ -14,7 +15,12 @@ export function BeneficiosLista({ escena, tema }: PropsEscena<"beneficios_lista"
   return (
     <AbsoluteFill>
       <FondoMarca tema={tema} tono="marca" />
-      <AbsoluteFill style={{ justifyContent: "center", padding: "0 8%" }}>
+      {/* Centrado en la ZONA SEGURA real (entre los márgenes inseguros de
+          arriba y abajo), no en el cuadro completo -- con el margen
+          inferior tan grande (35%), centrar en el 100% del cuadro deja
+          el bloque más abajo de lo que se ve bien y, si la lista es
+          larga, el último ítem puede entrar en la franja insegura. */}
+      <AbsoluteFill style={{ justifyContent: "center", padding: `${ZONA_SEGURA.arriba}% 8% ${ZONA_SEGURA.abajo}%` }}>
         {titulo && <div style={{ fontSize: 60, fontWeight: 800, color: colorTexto, marginBottom: 36 }}>{titulo}</div>}
         {items.map((item, i) => {
           const progreso = spring({ frame: frame - i * cuadrosPorItem, fps, config: { damping: 14 } });
@@ -30,8 +36,8 @@ export function BeneficiosLista({ escena, tema }: PropsEscena<"beneficios_lista"
                 marginBottom: 32,
               }}
             >
-              <span style={{ color: colorCheck, fontSize: 68, flexShrink: 0 }}>✓</span>
-              <span style={{ color: colorTexto, fontSize: 68, fontWeight: 700, lineHeight: 1.08 }}>{item}</span>
+              <span style={{ color: colorCheck, fontSize: 72, flexShrink: 0 }}>✓</span>
+              <span style={{ color: colorTexto, fontSize: 72, fontWeight: 700, lineHeight: 1.08 }}>{item}</span>
             </div>
           );
         })}
