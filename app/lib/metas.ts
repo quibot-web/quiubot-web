@@ -2,8 +2,11 @@
 // de verdad para los tipos (usados por las rutas /api/metas y por el
 // bloque "Mi meta" del Inicio) y para la fórmula de progreso, que no debe
 // reinventarse en cada lugar que la necesite.
+import { z } from "zod";
 import { supabaseAdmin } from "@/lib/supabase";
 import { diasEntre, hoyBogota, ayerBogota } from "@/app/lib/fechaBogota";
+import { obtenerSaludPixel, pixelListoParaVentas, type UsuarioMetaPixel } from "@/app/lib/metaPixelSalud";
+import { obtenerSaludInstagram, type UsuarioMetaInstagram } from "@/app/lib/metaInstagramSalud";
 
 // seguidores_instagram: a diferencia de todos los demás tipos, no se
 // mide sumando conversiones de campañas (Meta no reporta "follow" como
@@ -746,4 +749,193 @@ export async function calcularCostoReferencia(tipo: TipoMeta, userId: string): P
     .single();
 
   return { valorCop: Number(data?.costo_referencia_cop) || 0, fuente: "referencia_admin" };
+}
+
+// --- Director conversacional (metas.contexto, conversaciones_meta) ---
+
+// Copiado dentro de metas.contexto al crear la meta (nunca lo decide la
+// IA -- la arma el cliente a partir del borrador ya validado, ver
+// app/lib/director/borradorMeta.schema.ts). "producto" es el único campo
+// realmente obligatorio; los demás solo aplican según el tipo de meta.
+export const MetaContextoSchema = z.object({
+  producto: z.string().min(1).max(200),
+  precio_cop: z.number().positive().optional(),
+  // Fracción 0-1 (no porcentaje) -- el punto medio de la categoría que
+  // eligió el usuario en el chat, ver TASA_CIERRE_POR_CATEGORIA.
+  tasa_cierre: z.number().min(0).max(1).optional(),
+  origen: z.enum(["conversacion", "formulario"]),
+  version: z.literal(1),
+});
+export type MetaContexto = z.infer<typeof MetaContextoSchema>;
+
+// Categorías del chip "de cada 10 que te escriben, ¿cuántos compran?"
+// (sección 5 del plan) -- texto libre de tasa de cierre real no es
+// confiable pedírselo a un cliente que nunca la ha medido, así que se
+// pide en rangos.
+export const CATEGORIAS_TASA_CIERRE = ["1_de_10", "2_3_de_10", "4_5_de_10", "mas_5_de_10", "no_sabe"] as const;
+export type CategoriaTasaCierre = (typeof CATEGORIAS_TASA_CIERRE)[number];
+
+// Punto medio de cada categoría, para convertir la respuesta del chip en
+// un número usable por calcularRangoResultados(). "no_sabe" usa un valor
+// conservador (bajo) a propósito -- mejor subestimar las ventas
+// esperadas que prometer de más con un dato que el cliente mismo dijo no
+// conocer; el Director lo muestra como "estimado" y sugiere medirlo de
+// verdad en las primeras semanas (decisión del plan, ver
+// app/lib/director/promptMetaConversacion.ts).
+export const TASA_CIERRE_POR_CATEGORIA: Record<CategoriaTasaCierre, number> = {
+  "1_de_10": 0.1,
+  "2_3_de_10": 0.25,
+  "4_5_de_10": 0.45,
+  mas_5_de_10: 0.6,
+  no_sabe: 0.15,
+};
+
+export type RangoResultados = {
+  cantidadMin: number;
+  cantidadMax: number;
+  costoPorResultado: number;
+  fuente: FuenteCostoReferencia;
+  // Solo viene si se pasó tasaCierre -- en ventas_web la cantidad YA es
+  // ventas, no hace falta estimarlas aparte (ver sección 5 del plan:
+  // "en conversaciones_whatsapp/leads la cantidad son conversaciones o
+  // leads, las ventas se muestran como estimado con la tasa de cierre").
+  ventasEstimadas: { min: number; max: number } | null;
+};
+
+// Banda de incertidumbre alrededor de calcularCostoReferencia(), más
+// ancha cuanto menos confiable es la fuente -- decisión del plan:
+// ±15% con el historial propio del cliente, ±25% con el promedio de
+// Quiubot, ±30% con el valor de referencia del admin (el peor de los
+// tres, nunca medido con datos reales de nadie parecido).
+const BANDA_INCERTIDUMBRE_POR_FUENTE: Record<FuenteCostoReferencia, number> = {
+  tu_historial: 0.15,
+  promedio_quiubot: 0.25,
+  referencia_admin: 0.3,
+};
+
+// La IA nunca calcula estos números (sección 4 del plan: "los números
+// de la simulación los calcula el código, nunca la IA") -- esta función
+// es la única fuente de los rangos que se le muestran al cliente, tanto
+// en el chat del Director como, si hiciera falta, en cualquier otro
+// lugar que necesite la misma cuenta.
+export function calcularRangoResultados(presupuestoCop: number, costoReferencia: CostoReferencia, tasaCierre?: number): RangoResultados {
+  if (costoReferencia.valorCop <= 0 || presupuestoCop <= 0) {
+    return { cantidadMin: 0, cantidadMax: 0, costoPorResultado: costoReferencia.valorCop, fuente: costoReferencia.fuente, ventasEstimadas: null };
+  }
+
+  const banda = BANDA_INCERTIDUMBRE_POR_FUENTE[costoReferencia.fuente];
+  const costoOptimista = costoReferencia.valorCop * (1 - banda);
+  const costoPesimista = costoReferencia.valorCop * (1 + banda);
+
+  // Costo más bajo -> más resultados por el mismo presupuesto (el
+  // extremo optimista del rango), costo más alto -> menos (el extremo
+  // conservador).
+  const cantidadMax = Math.round(presupuestoCop / costoOptimista);
+  const cantidadMin = Math.round(presupuestoCop / costoPesimista);
+
+  const ventasEstimadas =
+    tasaCierre !== undefined
+      ? { min: Math.round(cantidadMin * tasaCierre), max: Math.round(cantidadMax * tasaCierre) }
+      : null;
+
+  return { cantidadMin, cantidadMax, costoPorResultado: costoReferencia.valorCop, fuente: costoReferencia.fuente, ventasEstimadas };
+}
+
+export type RequisitoFaltante = {
+  mensaje: string;
+  accion?: { label: string; href: string };
+};
+
+export type ResultadoRequisitos = { ok: boolean; faltantes: RequisitoFaltante[] };
+
+export type UsuarioParaRequisitos = {
+  id: string;
+  email: string;
+} & UsuarioMetaPixel &
+  UsuarioMetaInstagram;
+
+const DIAS_MINIMOS_META = 14;
+
+// Centraliza TODOS los requisitos por tipo de meta (pixel+compras,
+// sitio_web, Instagram vinculado y autorizado, meta activa del mismo
+// tipo, duración mínima) en un solo lugar -- antes de este commit,
+// varios de estos chequeos solo existían del lado del cliente (ej. el
+// pixel de ventas_web en app/metas/crear/page.tsx) y nunca se repetían
+// en el POST real. La usa tanto POST /api/metas (la guardia real) como
+// la conversación del Director (para explicar y guiar ANTES de llegar
+// al resumen, en vez de que el cliente se entere recién al tocar "Crear
+// mi meta"). fechaFin es opcional: si no se pasa (ej. el Director todavía
+// no llegó a esa pregunta), simplemente no se valida esa parte todavía.
+export async function verificarRequisitosMeta(params: {
+  tipo: TipoMeta;
+  usuario: UsuarioParaRequisitos;
+  fechaFin?: string;
+}): Promise<ResultadoRequisitos> {
+  const { tipo, usuario, fechaFin } = params;
+  const faltantes: RequisitoFaltante[] = [];
+
+  // Por seguridad: si quedó una meta de este mismo tipo con la fecha_fin
+  // ya vencida pero todavía marcada "activa" (ej. el cron horario no ha
+  // pasado desde que venció), se cierra antes de chequear -- mismo
+  // criterio que ya usa POST /api/metas.
+  await cerrarMetasVencidas({ userId: usuario.id, tipo });
+  const { data: metaActiva } = await supabaseAdmin
+    .from("metas")
+    .select("id")
+    .eq("user_id", usuario.id)
+    .eq("tipo", tipo)
+    .eq("estado", "activa")
+    .maybeSingle();
+  if (metaActiva) {
+    faltantes.push({ mensaje: "Ya tienes una meta activa de este tipo. Pausa o cancélala antes de crear otra." });
+  }
+
+  if (fechaFin) {
+    const hoy = hoyBogota();
+    const diasDuracion = Math.round((new Date(fechaFin).getTime() - new Date(hoy).getTime()) / 86400000);
+    if (fechaFin <= hoy || diasDuracion < DIAS_MINIMOS_META) {
+      faltantes.push({ mensaje: `La meta debe durar al menos ${DIAS_MINIMOS_META} días.` });
+    }
+  }
+
+  if (tipo === "ventas_web") {
+    const salud = await obtenerSaludPixel(usuario);
+    if (!pixelListoParaVentas(salud)) {
+      faltantes.push({
+        mensaje: !salud.conectado
+          ? "Necesitas conectar tu píxel de Meta antes de crear esta meta."
+          : "Tu píxel no ha recibido compras en los últimos 7 días.",
+        accion: { label: "Conectar mi píxel de Meta", href: "/?tab=integraciones" },
+      });
+    }
+  }
+
+  if (tipo === "visitas_web") {
+    const { data: marca } = await supabaseAdmin.from("marcas").select("sitio_web").eq("email", usuario.email).maybeSingle();
+    if (!marca?.sitio_web) {
+      faltantes.push({
+        mensaje: "Necesitas conectar el sitio web de tu negocio antes de crear esta meta.",
+        accion: { label: "Conectar mi sitio web", href: "/?tab=integraciones" },
+      });
+    }
+  }
+
+  if (tipo === "seguidores_instagram") {
+    if (!usuario.meta_page_id || !usuario.meta_access_token) {
+      faltantes.push({
+        mensaje: "Necesitas conectar tu cuenta de Meta antes de crear esta meta.",
+        accion: { label: "Conectar mi cuenta de Meta", href: "/?tab=integraciones" },
+      });
+    } else {
+      const salud = await obtenerSaludInstagram(usuario);
+      if (!salud.conectado) {
+        faltantes.push({
+          mensaje:
+            "Necesitas que tu Instagram profesional esté vinculado a tu página de Facebook y autorizado en tu cuenta publicitaria (Meta Business Manager → Cuentas de Instagram → Conectar activos).",
+        });
+      }
+    }
+  }
+
+  return { ok: faltantes.length === 0, faltantes };
 }

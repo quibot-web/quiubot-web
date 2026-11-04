@@ -1,0 +1,74 @@
+<!doctype html><html lang="es"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Director: metas conversacionales</title>
+<style>
+:root{--bg:#F8F8F6;--ink:#1B1A22;--muted:#6B6880;--line:#E9E7EE;--brand:#5546B8;--bs:#EFEDFB;--ok:#1E9E6B}
+*{box-sizing:border-box;margin:0}body{background:var(--bg);font-family:-apple-system,"Inter Display",Inter,Segoe UI,Roboto,sans-serif;color:var(--ink);-webkit-font-smoothing:antialiased}
+.pag{max-width:760px;margin:0 auto;padding:28px 16px 40px}
+.cab{display:flex;align-items:center;gap:14px;margin-bottom:18px}
+.av{width:48px;height:48px;border-radius:50%;background:radial-gradient(circle at 35% 30%,#B7A9FF,#5546B8);display:grid;place-items:center;color:#fff;font-size:22px;box-shadow:0 6px 18px -6px rgba(85,70,184,.6)}
+.cab b{font-size:18px;display:block}.cab small{color:var(--ok);font-weight:600;font-size:13px}
+.prog{display:flex;gap:6px;margin:0 0 20px}.prog span{flex:1;height:6px;border-radius:9px;background:#E3E0EE}.prog span.on{background:var(--brand)}
+.prog-l{display:flex;justify-content:space-between;font-size:11.5px;color:var(--muted);margin:-12px 0 18px}
+.chat{display:flex;flex-direction:column;gap:12px}
+.m{max-width:82%;padding:13px 16px;border-radius:20px;font-size:15.5px;line-height:1.45}
+.d{background:#fff;border:1px solid var(--line);border-radius:6px 20px 20px 20px;align-self:flex-start}
+.u{background:var(--brand);color:#fff;border-radius:20px 6px 20px 20px;align-self:flex-end}
+.chips{display:flex;flex-wrap:wrap;gap:8px;align-self:flex-start;margin-top:-2px}
+.chip{border:1.5px solid var(--line);background:#fff;border-radius:999px;padding:9px 14px;font-size:14px;font-weight:600;cursor:pointer;color:var(--ink)}
+.chip.sel{border-color:var(--brand);background:var(--bs);color:var(--brand)}
+.card{align-self:flex-start;width:min(560px,100%);background:#fff;border:1px solid var(--line);border-radius:20px;padding:16px}
+.card h4{font-size:14px;color:var(--muted);font-weight:700;text-transform:uppercase;letter-spacing:.04em;margin-bottom:10px}
+.range{display:flex;justify-content:space-between;font-weight:800;font-size:22px}
+.bar{height:10px;border-radius:9px;background:linear-gradient(90deg,#FDE2B8,#5546B8);margin:12px 0 6px;position:relative}
+.bar i{position:absolute;left:58%;top:-6px;width:22px;height:22px;border-radius:50%;background:#fff;border:3px solid var(--brand)}
+.calc{display:grid;grid-template-columns:repeat(3,1fr);gap:8px;margin-top:12px}
+.calc div{background:var(--bg);border-radius:14px;padding:10px}.calc small{display:block;color:var(--muted);font-size:12px}.calc b{font-size:18px}
+.aviso{margin-top:12px;background:#FFF6E5;border-radius:12px;padding:10px 12px;font-size:13.5px;color:#7A5200}
+.res{border:2px solid var(--brand)}
+.fila{display:flex;justify-content:space-between;padding:9px 0;border-bottom:1px solid var(--line);font-size:14.5px}.fila:last-of-type{border:0}.fila span{color:var(--muted)}
+.btns{display:flex;gap:8px;margin-top:14px}
+.btn{flex:1;border:0;border-radius:14px;padding:13px;font-weight:800;font-size:15px;cursor:pointer}
+.p{background:var(--brand);color:#fff}.s{background:#fff;border:1.5px solid var(--line);color:var(--ink)}
+.input{position:sticky;bottom:0;margin-top:22px;display:flex;gap:8px;background:var(--bg);padding:10px 0}
+.input div{flex:1;background:#fff;border:1.5px solid var(--line);border-radius:999px;padding:13px 18px;color:var(--muted);font-size:15px}
+.input b{width:48px;height:48px;border-radius:50%;background:var(--brand);color:#fff;display:grid;place-items:center}
+.nota{margin-top:24px;background:#fff;border:1px solid var(--line);border-radius:14px;padding:14px 16px;color:var(--muted);font-size:13.5px;line-height:1.55}.nota b{color:var(--ink)}
+@media (prefers-color-scheme:dark){:root:not([data-theme="light"]){--bg:#121117;--ink:#F2F1F7;--muted:#A6A3B8;--line:#2A2834;--bs:#28244A}
+ :root:not([data-theme="light"]) .d,:root:not([data-theme="light"]) .card,:root:not([data-theme="light"]) .chip,:root:not([data-theme="light"]) .input div,:root:not([data-theme="light"]) .nota,:root:not([data-theme="light"]) .s{background:#1B1A22}
+ :root:not([data-theme="light"]) .aviso{background:#3A2E14;color:#FFD9A0}}
+</style></head><body><main class="pag">
+<div class="cab"><div class="av">✦</div><div><b>Director de Quiubot</b><small>● Armando tu meta contigo</small></div></div>
+<div class="prog"><span class="on"></span><span class="on"></span><span class="on"></span><span class="on"></span><span></span></div>
+<div class="prog-l"><span>Qué quieres</span><span>Producto</span><span>Dónde vendes</span><span>Presupuesto</span><span>Confirmar</span></div>
+
+<div class="chat">
+ <div class="m d">¡Hola Juan! 👋 Cuéntame con tus palabras, ¿qué quieres lograr este mes?</div>
+ <div class="m u">Necesito más ventas</div>
+ <div class="m d">¡Vamos por eso! ¿Dónde te compran normalmente tus clientes?</div>
+ <div class="chips"><span class="chip sel">💬 Por WhatsApp</span><span class="chip">🛒 En mi página web</span><span class="chip">📋 Me dejan sus datos</span><span class="chip">No estoy seguro</span></div>
+ <div class="m u">Por WhatsApp</div>
+ <div class="m d">Perfecto, entonces la meta va a ser <b>conversaciones por WhatsApp</b> que terminen en venta. ¿Qué producto quieres impulsar? Puedes elegir de tu álbum o escribirlo.</div>
+ <div class="m u">La pistola de impacto, $150.000, pago contra entrega</div>
+ <div class="m d">Buen producto 💪. De cada 10 personas que te escriben, ¿más o menos cuántas terminan comprando?</div>
+ <div class="chips"><span class="chip">1</span><span class="chip sel">2–3</span><span class="chip">4–5</span><span class="chip">Más de 5</span><span class="chip">No sé</span></div>
+ <div class="m d">¿Cuánto puedes invertir en publicidad este mes? Te muestro qué podrías lograr con cada monto 👇</div>
+ <div class="card"><h4>Tu presupuesto del mes</h4>
+  <div class="range"><span>$300.000</span><span style="color:var(--muted);font-size:14px;font-weight:600">≈ $10.000/día</span></div>
+  <div class="bar"><i></i></div>
+  <div style="display:flex;justify-content:space-between;font-size:12px;color:var(--muted)"><span>$100.000</span><span>$1.000.000</span></div>
+  <div class="calc"><div><small>Conversaciones</small><b>60–100</b></div><div><small>Ventas (2–3 de 10)</small><b>12–25</b></div><div><small>Costo por venta</small><b>$12k–25k</b></div></div>
+  <div class="aviso">📊 Calculado con costos de referencia de tu categoría en Colombia. Son rangos, no garantías: el Director los ajusta con tus resultados reales.</div>
+ </div>
+ <div class="m u">Me sirve, con $300.000</div>
+ <div class="m d">¡Listo! Mira cómo quedaría. Si algo no te cuadra, dímelo y lo cambio.</div>
+ <div class="card res"><h4>Tu meta</h4>
+  <div class="fila"><span>Objetivo</span><b>Ventas por WhatsApp</b></div>
+  <div class="fila"><span>Meta</span><b>20 ventas · ~80 conversaciones</b></div>
+  <div class="fila"><span>Producto</span><b>Pistola de impacto · $150.000</b></div>
+  <div class="fila"><span>Presupuesto</span><b>$300.000 en 30 días</b></div>
+  <div class="fila"><span>Dónde</span><b>Toda Colombia</b></div>
+  <div class="btns"><button class="btn p">✓ Crear mi meta</button><button class="btn s">Cambiar algo</button></div>
+ </div>
+</div>
+<div class="input"><div>Escríbele al Director…</div><b>➤</b></div>
+<p class="nota"><b>Cómo funciona:</b> el usuario habla normal y el Director pregunta una cosa a la vez, con botones para responder rápido. Usa lo que ya sabe (ADN, "Dónde vendes", álbum, historial) para no preguntar de más. Antes del presupuesto muestra qué se puede lograr con rangos honestos. <b>Nada se crea sin el botón "Crear mi meta"</b>, y la meta se guarda con el mismo flujo de hoy.</p>
+</main></body></html>
