@@ -16,6 +16,11 @@ export const fixtureVentaDirectaWhatsapp = GuionSchema.parse({
     nombre_marca: null,
   },
   musica: { pista_id: null, volumen: 0.35 },
+  // "completa" (ver e1) solo se permite con un análisis que confirme
+  // tiene_texto: false -- sin esto el zod ahora rechaza el fixture.
+  analisisPiezas: {
+    "demo-1": { version: 1, tiene_texto: false, es_publicitaria: false, fondo_limpio: true, recuadro_producto: null },
+  },
   escenas: [
     {
       id: "e1",

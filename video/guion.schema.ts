@@ -267,11 +267,18 @@ export const GuionSchema = z
       const tratamiento = escena.params.tratamiento;
       if (!mediaId || !tratamiento) return;
 
+      // "completa" solo se permite cuando el análisis EXISTE y dice
+      // explícitamente tiene_texto: false -- nunca por falta de dato.
+      // Antes solo se rechazaba si tiene_texto era true, así que una
+      // pieza sin analizar (ej. elegida antes de que existiera la
+      // columna analisis) pasaba igual y el recorte a pantalla completa
+      // le cortaba el texto impreso.
       const analisis = guion.analisisPiezas?.[mediaId];
-      if (analisis?.tiene_texto && tratamiento === "completa") {
+      if (tratamiento === "completa" && analisis?.tiene_texto !== false) {
+        const motivo = analisis ? "tiene texto" : "no se pudo analizar";
         ctx.addIssue({
           code: "custom",
-          message: `La escena "${escena.id}" usa "completa" en una pieza con texto (${mediaId}) -- con texto solo se permite "tarjeta" o "celular".`,
+          message: `La escena "${escena.id}" usa "completa" en una pieza que ${motivo} (${mediaId}) -- sin confirmar que no tiene texto, solo se permite "tarjeta" o "celular".`,
           path: ["escenas", indiceEscena, "params", "tratamiento"],
         });
       }

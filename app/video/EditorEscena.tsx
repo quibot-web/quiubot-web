@@ -257,8 +257,38 @@ const ETIQUETA_TRATAMIENTO: Record<TratamientoMedia, string> = {
   completa: "Pantalla completa",
 };
 
-// Si la pieza tiene texto, "completa" ni se ofrece -- el zod la rechaza
-// igual, pero mejor no dejar elegir una opción que el servidor va a tumbar.
+// Mismos colores que el badge del selector de piezas en page.tsx --
+// "sin analizar" (undefined) no bloquea "completa" aquí en la UI (el
+// zod sí la bloquea igual, ver guion.schema.ts: nunca "completa" sin un
+// análisis que confirme tiene_texto: false), pero avisa que el dato es
+// una suposición, no un análisis real.
+function EtiquetaAnalisis({ tieneTexto }: { tieneTexto: boolean | undefined }) {
+  if (tieneTexto === undefined) {
+    return (
+      <span style={{ fontSize: 10, fontWeight: 700, padding: "2px 6px", borderRadius: 999, background: "#e5e5e5", color: "#555" }}>
+        sin analizar
+      </span>
+    );
+  }
+  return (
+    <span
+      style={{
+        fontSize: 10,
+        fontWeight: 700,
+        padding: "2px 6px",
+        borderRadius: 999,
+        background: tieneTexto ? "#fef3c7" : "#dcfce7",
+        color: tieneTexto ? "#92400e" : "#166534",
+      }}
+    >
+      {tieneTexto ? "con texto" : "foto limpia"}
+    </span>
+  );
+}
+
+// Si la pieza tiene texto (o no se pudo analizar), "completa" ni se
+// ofrece -- el zod la rechaza igual, pero mejor no dejar elegir una
+// opción que el servidor va a tumbar.
 function SelectorTratamiento({
   valor,
   tieneTexto,
@@ -268,9 +298,13 @@ function SelectorTratamiento({
   tieneTexto: boolean | undefined;
   onCambiar: (t: TratamientoMedia) => void;
 }) {
-  const opciones = tieneTexto ? TRATAMIENTOS_MEDIA.filter((t) => t !== "completa") : TRATAMIENTOS_MEDIA;
+  const opciones = tieneTexto === false ? TRATAMIENTOS_MEDIA : TRATAMIENTOS_MEDIA.filter((t) => t !== "completa");
   return (
     <Campo label="Tratamiento de la imagen">
+      <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 4 }}>
+        <EtiquetaAnalisis tieneTexto={tieneTexto} />
+        <span style={{ fontSize: 11, color: "#666" }}>Quedó: {valor ? ETIQUETA_TRATAMIENTO[valor] : "sin elegir"}</span>
+      </div>
       <select style={estiloCampo} value={valor || ""} onChange={(e) => onCambiar(e.target.value as TratamientoMedia)}>
         <option value="" disabled>
           Elige un tratamiento
@@ -281,7 +315,11 @@ function SelectorTratamiento({
           </option>
         ))}
       </select>
-      {tieneTexto && <span style={{ fontSize: 11, color: "#92400e" }}>Esta pieza tiene texto -- no se puede recortar a pantalla completa.</span>}
+      {tieneTexto !== false && (
+        <span style={{ fontSize: 11, color: "#92400e" }}>
+          {tieneTexto ? "Esta pieza tiene texto" : "Esta pieza no tiene análisis confirmado"} -- no se puede recortar a pantalla completa.
+        </span>
+      )}
     </Campo>
   );
 }

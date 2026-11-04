@@ -174,7 +174,12 @@ export default function VideoNuevoPage() {
     if (typeof selectorContexto === "number" && guion) {
       const escena = guion.escenas[selectorContexto];
       if (escena.tipo === "producto_hero" || escena.tipo === "gancho_texto") {
-        cambiarEscena(selectorContexto, { ...escena, params: { ...escena.params, media_id: id } } as Escena);
+        // "tarjeta" por defecto al cambiar de pieza: nunca se sabe todavía
+        // si la nueva pieza tiene texto (el análisis se pide después, más
+        // abajo), y "tarjeta" es el único tratamiento que siempre es
+        // seguro -- nunca recorta texto impreso. El admin lo puede subir
+        // a "completa" una vez el badge confirme "foto limpia".
+        cambiarEscena(selectorContexto, { ...escena, params: { ...escena.params, media_id: id, tratamiento: "tarjeta" } } as Escena);
       }
     }
     setSelectorContexto(null);

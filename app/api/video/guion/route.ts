@@ -6,6 +6,7 @@ import { verificarLimite } from "@/lib/rateLimit";
 import { registrarError } from "@/lib/registrarError";
 import { urlPistaMusical } from "@/app/lib/cloudinaryUrl";
 import { AnalisisPiezaSchema, type AnalisisPieza } from "@/app/lib/analisisPieza";
+import { analizarPiezaConOpenAI } from "@/app/lib/analizarPiezaImagen";
 import { GuionSchema, OBJETIVOS_VIDEO, type Guion, type ObjetivoVideo } from "@/video/guion.schema";
 import { construirTemaDesdeAdn } from "@/video/tema";
 import { RECETAS, validarContraReceta } from "@/video/recetas";
@@ -170,6 +171,7 @@ export async function POST(req: NextRequest) {
   const medios: MediosResueltos = {};
   const piezasDisponibles: PiezaDisponible[] = [];
   const analisisPiezas: Record<string, AnalisisPieza> = {};
+  const erroresAnalisisPiezas: string[] = [];
 
   if (idsPiezas.length > 0) {
     const { data: piezas, error: errorPiezas } = await supabaseAdmin
@@ -213,14 +215,49 @@ export async function POST(req: NextRequest) {
       medios[pieza.id] = { url: pieza.url_imagen, tipo };
       piezasDisponibles.push({ id: pieza.id, tipo });
 
-      // El análisis es opcional -- una pieza que nunca se pasó por
-      // /api/video/analizar-pieza (ej. si el cliente no llamó esa ruta)
-      // simplemente no entra en analisisPiezas; la IA no sabrá que tiene
-      // texto y el zod no podrá bloquear "completa" para ella. Se
-      // advierte en /video, no se fuerza acá un análisis síncrono extra
-      // para no duplicar el costo de la llamada.
-      const analisis = AnalisisPiezaSchema.safeParse(pieza.analisis);
-      if (analisis.success) analisisPiezas[pieza.id] = analisis.data;
+      const analisisCache = AnalisisPiezaSchema.safeParse(pieza.analisis);
+      if (analisisCache.success) {
+        analisisPiezas[pieza.id] = analisisCache.data;
+        continue;
+      }
+
+      // Pieza de imagen sin análisis válido en caché -- se eligió antes
+      // de que existiera la columna, o la llamada a /api/video/analizar-pieza
+      // falló en su momento. Sin esto la IA solo recibía "trátala como
+      // si pudiera tener texto" y debía adivinar; ahora se reintenta
+      // aquí mismo (hasta 2 veces) antes de armar el prompt, para que el
+      // guion y el zod trabajen con un dato real en vez de una
+      // suposición. Las piezas de video no se analizan (ver
+      // analizar-pieza/route.ts).
+      if (tipo === "imagen") {
+        let analisisNuevo: AnalisisPieza | null = null;
+        let ultimoError = "";
+        for (let intento = 0; intento < 2 && !analisisNuevo; intento++) {
+          try {
+            analisisNuevo = await analizarPiezaConOpenAI(apiKeyUsuario, pieza.url_imagen);
+          } catch (err) {
+            ultimoError = err instanceof Error ? err.message : String(err);
+          }
+        }
+        if (analisisNuevo) {
+          analisisPiezas[pieza.id] = analisisNuevo;
+          await supabaseAdmin
+            .from("album_creativos")
+            .update({ analisis: analisisNuevo, analisis_en: new Date().toISOString() })
+            .eq("id", pieza.id);
+        } else {
+          erroresAnalisisPiezas.push(`No se pudo analizar la pieza ${pieza.id} con IA (2 intentos): ${ultimoError}`);
+          registrarError({
+            origen: "video_guion",
+            userId: usuario.id,
+            email: emailBusqueda,
+            paso: "analisis_pieza",
+            errorMensaje: `No se pudo analizar la pieza ${pieza.id} antes de generar el guion.`,
+            detalleTecnico: ultimoError,
+            objetivoId,
+          });
+        }
+      }
     }
   }
 
@@ -281,6 +318,13 @@ export async function POST(req: NextRequest) {
     crudo: unknown;
   }
   const intentosRegistrados: Intento[] = [];
+  // Si alguna pieza no se pudo analizar (ver el bucle de piezas más
+  // arriba) ya a esta altura, antes de intentar siquiera generar el
+  // guion -- el panel de debug siempre tiene que mostrar ese fallo real
+  // de IA, no solo los de la generación del guion en sí.
+  if (erroresAnalisisPiezas.length > 0) {
+    intentosRegistrados.push({ errores: erroresAnalisisPiezas, crudo: null });
+  }
 
   async function intentar(erroresPrevios?: string[]): Promise<{ ok: true; guion: Guion } | { ok: false; errores: string[] }> {
     const prompt = construirPromptGuion(entrada, erroresPrevios);
