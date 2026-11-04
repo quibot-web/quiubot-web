@@ -9,7 +9,7 @@
 //   pero el servidor es quien valida contra este schema antes de
 //   confiar en eso (ver app/api/metas/conversacion/route.ts, Commit 3).
 import { z } from "zod";
-import { CATEGORIAS_TASA_CIERRE } from "@/app/lib/metas";
+import { CATEGORIAS_TASA_CIERRE } from "@/app/lib/director/tasaCierre";
 
 export const TIPOS_META_DIRECTOR = [
   "conversaciones_whatsapp",

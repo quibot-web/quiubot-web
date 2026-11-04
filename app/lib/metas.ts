@@ -770,26 +770,13 @@ export const MetaContextoSchema = z.object({
 export type MetaContexto = z.infer<typeof MetaContextoSchema>;
 
 // Categorías del chip "de cada 10 que te escriben, ¿cuántos compran?"
-// (sección 5 del plan) -- texto libre de tasa de cierre real no es
-// confiable pedírselo a un cliente que nunca la ha medido, así que se
-// pide en rangos.
-export const CATEGORIAS_TASA_CIERRE = ["1_de_10", "2_3_de_10", "4_5_de_10", "mas_5_de_10", "no_sabe"] as const;
-export type CategoriaTasaCierre = (typeof CATEGORIAS_TASA_CIERRE)[number];
-
-// Punto medio de cada categoría, para convertir la respuesta del chip en
-// un número usable por calcularRangoResultados(). "no_sabe" usa un valor
-// conservador (bajo) a propósito -- mejor subestimar las ventas
-// esperadas que prometer de más con un dato que el cliente mismo dijo no
-// conocer; el Director lo muestra como "estimado" y sugiere medirlo de
-// verdad en las primeras semanas (decisión del plan, ver
-// app/lib/director/promptMetaConversacion.ts).
-export const TASA_CIERRE_POR_CATEGORIA: Record<CategoriaTasaCierre, number> = {
-  "1_de_10": 0.1,
-  "2_3_de_10": 0.25,
-  "4_5_de_10": 0.45,
-  mas_5_de_10: 0.6,
-  no_sabe: 0.15,
-};
+// (sección 5 del plan) -- viven en app/lib/director/tasaCierre.ts (sin
+// dependencias de servidor) para que el chat del Director, un
+// componente cliente, pueda importarlas sin arrastrar lib/supabase.ts
+// ("server-only") a su bundle. Re-exportadas acá para no tener que
+// actualizar los imports que ya existen en el backend.
+export { CATEGORIAS_TASA_CIERRE, TASA_CIERRE_POR_CATEGORIA } from "@/app/lib/director/tasaCierre";
+export type { CategoriaTasaCierre } from "@/app/lib/director/tasaCierre";
 
 export type RangoResultados = {
   cantidadMin: number;

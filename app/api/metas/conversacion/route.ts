@@ -27,6 +27,12 @@ type MensajeDirector = {
   rol: "director" | "usuario";
   texto: string;
   opciones?: string[];
+  // Distinto de "opciones" (chips que mandan texto de vuelta al chat):
+  // esto es un botón de navegación real, cuando verificarRequisitosMeta()
+  // bloquea el resumen por algo que solo se arregla fuera de esta
+  // conversación (conectar el pixel, el sitio web, etc. -- ver
+  // app/lib/metas.ts).
+  accion?: { label: string; href: string };
   creado_en: string;
 };
 
@@ -188,6 +194,7 @@ async function ejecutarTurno(params: {
 
   let textoDirector = parseado.data.respuesta;
   let opcionesDirector = parseado.data.opciones;
+  let accionDirector: { label: string; href: string } | undefined;
   let resumen: ResumenListo | null = null;
 
   if (parseado.data.listo_para_resumen) {
@@ -206,6 +213,7 @@ async function ejecutarTurno(params: {
       if (!resultadoRequisitos.ok) {
         textoDirector = resultadoRequisitos.faltantes.map((f: RequisitoFaltante) => f.mensaje).join(" ");
         opcionesDirector = undefined;
+        accionDirector = resultadoRequisitos.faltantes.find((f) => f.accion)?.accion;
       } else {
         const costoReferencia = await calcularCostoReferencia(listo.data.tipo, usuario.id);
         const tasaCierre =
@@ -221,7 +229,7 @@ async function ejecutarTurno(params: {
     }
   }
 
-  nuevosMensajes.push({ rol: "director", texto: textoDirector, opciones: opcionesDirector, creado_en: new Date().toISOString() });
+  nuevosMensajes.push({ rol: "director", texto: textoDirector, opciones: opcionesDirector, accion: accionDirector, creado_en: new Date().toISOString() });
 
   await supabaseAdmin
     .from("conversaciones_meta")
