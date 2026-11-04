@@ -7,6 +7,7 @@ import { supabaseAdmin } from "@/lib/supabase";
 import { diasEntre, hoyBogota, ayerBogota } from "@/app/lib/fechaBogota";
 import { obtenerSaludPixel, pixelListoParaVentas, type UsuarioMetaPixel } from "@/app/lib/metaPixelSalud";
 import { obtenerSaludInstagram, type UsuarioMetaInstagram } from "@/app/lib/metaInstagramSalud";
+import { MENSAJE_META_TOKEN_VENCIDO, ACCION_RECONECTAR_META } from "@/app/lib/metaErrors";
 
 // seguidores_instagram: a diferencia de todos los demás tipos, no se
 // mide sumando conversiones de campañas (Meta no reporta "follow" como
@@ -892,9 +893,13 @@ export async function verificarRequisitosMeta(params: {
 
   if (fechaFin) {
     const hoy = hoyBogota();
-    const diasDuracion = Math.round((new Date(fechaFin).getTime() - new Date(hoy).getTime()) / 86400000);
-    if (fechaFin <= hoy || diasDuracion < DIAS_MINIMOS_META) {
-      faltantes.push({ mensaje: `La meta debe durar al menos ${DIAS_MINIMOS_META} días.` });
+    if (fechaFin <= hoy) {
+      faltantes.push({ mensaje: "La fecha de fin debe ser futura." });
+    } else {
+      const diasDuracion = Math.round((new Date(fechaFin).getTime() - new Date(hoy).getTime()) / 86400000);
+      if (diasDuracion < DIAS_MINIMOS_META) {
+        faltantes.push({ mensaje: `La meta debe durar al menos ${DIAS_MINIMOS_META} días.` });
+      }
     }
   }
 
@@ -928,7 +933,12 @@ export async function verificarRequisitosMeta(params: {
       });
     } else {
       const salud = await obtenerSaludInstagram(usuario);
-      if (!salud.conectado) {
+      if (salud.tokenVencido) {
+        faltantes.push({
+          mensaje: MENSAJE_META_TOKEN_VENCIDO,
+          accion: { label: ACCION_RECONECTAR_META.texto, href: ACCION_RECONECTAR_META.url },
+        });
+      } else if (!salud.conectado) {
         faltantes.push({
           mensaje:
             "Necesitas que tu Instagram profesional esté vinculado a tu página de Facebook y autorizado en tu cuenta publicitaria (Meta Business Manager → Cuentas de Instagram → Conectar activos).",

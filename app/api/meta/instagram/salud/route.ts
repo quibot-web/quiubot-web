@@ -1,17 +1,14 @@
 import { auth } from "@/auth";
 import { NextResponse } from "next/server";
 import { supabaseAdmin } from "@/lib/supabase";
-
-type RespuestaSalud = {
-  conectado: boolean;
-  username: string | null;
-  followers_count: number | null;
-};
+import { obtenerSaludInstagram } from "@/app/lib/metaInstagramSalud";
 
 // ¿Tiene una cuenta de Instagram profesional vinculada a su página de
 // Facebook? Lo usa /metas/crear para decidir si ofrece seguidores_instagram
 // (no se puede fotografiar lo que no existe), igual que /api/meta/pixel/salud
-// decide si ofrece ventas_web.
+// decide si ofrece ventas_web. La lógica real vive en
+// app/lib/metaInstagramSalud.ts (compartida con verificarRequisitosMeta(),
+// ver app/lib/metas.ts) -- esta ruta solo resuelve el usuario y delega.
 export async function GET() {
   const session = await auth();
   if (!session?.user?.email) {
@@ -24,30 +21,10 @@ export async function GET() {
     .eq("email", session.user.email.trim().toLowerCase())
     .single();
 
-  if (!usuario?.meta_page_id || !usuario.meta_access_token) {
-    const vacia: RespuestaSalud = { conectado: false, username: null, followers_count: null };
-    return NextResponse.json(vacia);
+  if (!usuario) {
+    return NextResponse.json({ conectado: false, username: null, followers_count: null });
   }
 
-  try {
-    const res = await fetch(
-      `https://graph.facebook.com/v21.0/${usuario.meta_page_id}?fields=instagram_business_account{username,followers_count}&access_token=${usuario.meta_access_token}`
-    );
-    const data = await res.json();
-    const ig = data.instagram_business_account;
-    if (!ig) {
-      const vacia: RespuestaSalud = { conectado: false, username: null, followers_count: null };
-      return NextResponse.json(vacia);
-    }
-    const respuesta: RespuestaSalud = {
-      conectado: true,
-      username: typeof ig.username === "string" ? ig.username : null,
-      followers_count: typeof ig.followers_count === "number" ? ig.followers_count : null,
-    };
-    return NextResponse.json(respuesta);
-  } catch (err) {
-    console.error("Error consultando salud de Instagram:", err);
-    const vacia: RespuestaSalud = { conectado: false, username: null, followers_count: null };
-    return NextResponse.json(vacia);
-  }
+  const salud = await obtenerSaludInstagram(usuario);
+  return NextResponse.json({ conectado: salud.conectado, username: salud.username, followers_count: salud.followers_count });
 }

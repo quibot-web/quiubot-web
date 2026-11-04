@@ -1,13 +1,13 @@
 import { auth } from "@/auth";
 import { NextRequest, NextResponse } from "next/server";
 import { supabaseAdmin } from "@/lib/supabase";
-import { calcularAvanceMeta, cerrarMetasVencidas, type TipoMeta } from "@/app/lib/metas";
+import { calcularAvanceMeta, verificarRequisitosMeta, MetaContextoSchema, type TipoMeta, type MetaContexto } from "@/app/lib/metas";
+import { obtenerSaludInstagram } from "@/app/lib/metaInstagramSalud";
 import { hoyBogota } from "@/app/lib/fechaBogota";
 import { tieneAutopiloto } from "@/app/lib/planesConfig";
-import { esErrorTokenMetaVencido, MENSAJE_META_TOKEN_VENCIDO } from "@/app/lib/metaErrors";
+import { MENSAJE_META_TOKEN_VENCIDO } from "@/app/lib/metaErrors";
 
 const TIPOS_VALIDOS: TipoMeta[] = ["conversaciones_whatsapp", "leads", "ventas_web", "visitas_web", "seguidores_facebook", "seguidores_instagram"];
-const DIAS_MINIMOS = 14;
 
 export async function GET() {
   const session = await auth();
@@ -59,7 +59,9 @@ export async function POST(req: NextRequest) {
 
   const { data: usuario } = await supabaseAdmin
     .from("usuarios")
-    .select("id, rol, plan, en_trial, trial_termina_en, fecha_vencimiento, beta_autopiloto, meta_page_id, meta_access_token")
+    .select(
+      "id, rol, plan, en_trial, trial_termina_en, fecha_vencimiento, beta_autopiloto, meta_page_id, meta_access_token, meta_pixel_id, meta_ad_account_id"
+    )
     .eq("email", session.user.email.trim().toLowerCase())
     .single();
 
@@ -69,7 +71,8 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ error: "Autopiloto todavía no está disponible." }, { status: 403 });
   }
 
-  const { tipo, cantidad_objetivo, fecha_fin, presupuesto_maximo_cop, roas_minimo } = await req.json();
+  const emailBusqueda = session.user.email.trim().toLowerCase();
+  const { tipo, cantidad_objetivo, fecha_fin, presupuesto_maximo_cop, roas_minimo, contexto, conversacion_id } = await req.json();
 
   if (!TIPOS_VALIDOS.includes(tipo)) {
     return NextResponse.json({ error: "Tipo de meta inválido." }, { status: 400 });
@@ -94,94 +97,60 @@ export async function POST(req: NextRequest) {
     roasMinimo = valor;
   }
 
-  const hoy = hoyBogota();
-  if (typeof fecha_fin !== "string" || fecha_fin <= hoy) {
-    return NextResponse.json({ error: "La fecha de fin debe ser futura." }, { status: 400 });
-  }
-  const diasDuracion = Math.round((new Date(fecha_fin).getTime() - new Date(hoy).getTime()) / 86400000);
-  if (diasDuracion < DIAS_MINIMOS) {
-    return NextResponse.json({ error: `La meta debe durar al menos ${DIAS_MINIMOS} días.` }, { status: 400 });
-  }
-
-  // visitas_web necesita un sitio web real al que mandar la campaña --
-  // sin esto, generar_estrategia/publicar_estrategia no tienen a dónde
-  // apuntar el anuncio. redirigir_a lo usa el cliente para mandar
-  // directo a Integraciones en vez de solo mostrar el error.
-  if (tipo === "visitas_web") {
-    const { data: marca } = await supabaseAdmin
-      .from("marcas")
-      .select("sitio_web")
-      .eq("email", session.user.email.trim().toLowerCase())
-      .maybeSingle();
-    if (!marca?.sitio_web) {
-      return NextResponse.json(
-        { error: "Necesitas conectar el sitio web de tu negocio en Integraciones antes de crear esta meta.", redirigir_a: "/?tab=integraciones" },
-        { status: 400 }
-      );
+  // Contexto conversacional (metas.contexto, opcional -- solo lo manda
+  // el Director; el formulario rápido nunca lo manda y queda null). Si
+  // viene, se valida de verdad: un contexto a medias o con forma
+  // inesperada nunca llega a guardarse.
+  let contextoValidado: MetaContexto | null = null;
+  if (contexto !== undefined && contexto !== null) {
+    const resultadoContexto = MetaContextoSchema.safeParse(contexto);
+    if (!resultadoContexto.success) {
+      return NextResponse.json({ error: "El contexto de la meta no tiene un formato válido." }, { status: 400 });
     }
+    contextoValidado = resultadoContexto.data;
   }
 
-  // seguidores_instagram se mide por foto diaria de followers_count, así
-  // que sin una cuenta de Instagram profesional vinculada no hay nada
-  // que fotografiar -- y para publicar la campaña real (ver
-  // /api/publicar-estrategia) además hace falta que esa cuenta esté
-  // autorizada en la cuenta publicitaria, no solo en la página (se
-  // confirmó en una prueba real: sin esa autorización Meta rechaza el
-  // creativo con "must be a valid Instagram account id"). La conexión
-  // en sí se hace en Meta Business Manager, no dentro de Quiubot -- por
-  // eso no hay redirigir_a acá, solo la instrucción de dónde hacerlo. La
+  const hoy = hoyBogota();
+  if (typeof fecha_fin !== "string") {
+    return NextResponse.json({ error: "Falta la fecha de fin." }, { status: 400 });
+  }
+
+  // Centraliza acá todos los requisitos por tipo (pixel+compras para
+  // ventas_web, sitio_web para visitas_web, Instagram vinculado y
+  // autorizado para seguidores_instagram, meta activa del mismo tipo,
+  // duración mínima) -- ver app/lib/metas.ts. Antes el chequeo de pixel
+  // solo existía del lado del cliente (app/metas/crear/page.tsx), nunca
+  // en el POST real.
+  const resultadoRequisitos = await verificarRequisitosMeta({ tipo, usuario: { ...usuario, email: emailBusqueda }, fechaFin: fecha_fin });
+  if (!resultadoRequisitos.ok) {
+    const primeraAccion = resultadoRequisitos.faltantes.find((f) => f.accion)?.accion;
+    return NextResponse.json(
+      {
+        error: resultadoRequisitos.faltantes.map((f) => f.mensaje).join(" "),
+        faltantes: resultadoRequisitos.faltantes,
+        redirigir_a: primeraAccion?.href,
+      },
+      { status: 400 }
+    );
+  }
+
+  // seguidores_instagram se mide por foto diaria de followers_count
+  // (ver calcularAvanceSeguidoresInstagram en app/lib/metas.ts) -- la
   // foto inicial se toma en caliente, en este mismo momento, para no
-  // esperar a la próxima corrida del cron.
+  // esperar a la próxima corrida del cron. verificarRequisitosMeta() ya
+  // confirmó que la cuenta está vinculada y autorizada; esta segunda
+  // consulta es solo para capturar el número real de seguidores de hoy
+  // (la primera no lo necesitaba, solo el sí/no).
   let valorInicialSeguidoresInstagram: number | null = null;
   if (tipo === "seguidores_instagram") {
-    if (!usuario.meta_page_id || !usuario.meta_access_token) {
-      return NextResponse.json(
-        { error: "Necesitas conectar tu cuenta de Meta antes de crear esta meta." },
-        { status: 400 }
-      );
+    const salud = await obtenerSaludInstagram(usuario);
+    if (salud.tokenVencido) {
+      return NextResponse.json({ error: MENSAJE_META_TOKEN_VENCIDO }, { status: 400 });
     }
-    try {
-      const res = await fetch(
-        `https://graph.facebook.com/v21.0/${usuario.meta_page_id}?fields=instagram_business_account{followers_count}&access_token=${usuario.meta_access_token}`
-      );
-      const data = await res.json();
-      if (esErrorTokenMetaVencido(data.error)) {
-        return NextResponse.json({ error: MENSAJE_META_TOKEN_VENCIDO }, { status: 400 });
-      }
-      const followers = data.instagram_business_account?.followers_count;
-      if (typeof followers !== "number") {
-        return NextResponse.json(
-          {
-            error:
-              "Necesitas que tu Instagram profesional esté vinculado a tu página de Facebook y autorizado en tu cuenta publicitaria (Meta Business Manager → Cuentas de Instagram → Conectar activos) antes de crear esta meta.",
-          },
-          { status: 400 }
-        );
-      }
-      valorInicialSeguidoresInstagram = followers;
-    } catch (err) {
-      console.error("Error consultando instagram_business_account:", err);
+    if (typeof salud.followers_count !== "number") {
       return NextResponse.json({ error: "No se pudo verificar tu cuenta de Instagram en este momento." }, { status: 500 });
     }
-  }
-
-  // Por seguridad: si quedó una meta de este mismo tipo con la
-  // fecha_fin ya vencida pero todavía marcada "activa" (ej. el cron
-  // horario no ha pasado desde que venció), se cierra antes de
-  // chequear -- así una vencida vieja nunca bloquea crear la nueva por
-  // el índice único (user_id, tipo) WHERE estado='activa'.
-  await cerrarMetasVencidas({ userId: usuario.id, tipo });
-
-  const { data: metaActiva } = await supabaseAdmin
-    .from("metas")
-    .select("id")
-    .eq("user_id", usuario.id)
-    .eq("tipo", tipo)
-    .eq("estado", "activa")
-    .maybeSingle();
-
-  if (metaActiva) {
-    return NextResponse.json({ error: "Ya tienes una meta activa de este tipo. Pausa o cancélala antes de crear otra." }, { status: 409 });
+    valorInicialSeguidoresInstagram = salud.followers_count;
   }
 
   const { data: metaCreada, error } = await supabaseAdmin
@@ -196,6 +165,7 @@ export async function POST(req: NextRequest) {
       costo_objetivo_cop: presupuesto / cantidad,
       roas_minimo: roasMinimo,
       valor_inicial: valorInicialSeguidoresInstagram,
+      contexto: contextoValidado,
       nivel_autonomia: "copiloto",
       estado: "activa",
       pausado_autopiloto: false,
@@ -215,6 +185,18 @@ export async function POST(req: NextRequest) {
     // desincronizan de nuevo, que al menos se vea un mensaje legible.
     const mensaje = error?.code === "23514" ? "Ese tipo de meta no está disponible todavía." : error?.message || "No se pudo crear la meta.";
     return NextResponse.json({ error: mensaje }, { status: 500 });
+  }
+
+  // Si la meta vino de una conversación con el Director, cierra ESA
+  // conversación (nunca otra -- filtrada también por user_id) en el
+  // mismo request: así conversaciones_meta nunca se queda "activa"
+  // después de que su propia meta ya existe.
+  if (typeof conversacion_id === "string" && conversacion_id) {
+    await supabaseAdmin
+      .from("conversaciones_meta")
+      .update({ estado: "completada", meta_id: metaCreada.id, actualizado_en: new Date().toISOString() })
+      .eq("id", conversacion_id)
+      .eq("user_id", usuario.id);
   }
 
   await supabaseAdmin.from("bitacora").insert({
