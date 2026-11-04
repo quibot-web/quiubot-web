@@ -32,7 +32,7 @@ export const fixtureCompleta = GuionSchema.parse({
       bloque: "gancho",
       tipo: "gancho_texto",
       duracion_s: 2.2,
-      params: { texto: "¿Tu soldadora no aguanta el turno?", palabra_clave: "aguanta", sticker: "NUEVO", media_id: "demo-1" },
+      params: { texto: "¿Tu soldadora no aguanta el turno?", palabra_clave: "aguanta", sticker: "NUEVO", media_id: "demo-1", tratamiento: "completa" },
     },
     {
       id: "e2",
@@ -54,7 +54,7 @@ export const fixtureCompleta = GuionSchema.parse({
       tipo: "producto_hero",
       duracion_s: 3.5,
       subtitulo: { texto: "Soldadora inverter 200A, liviana y potente", palabra_clave: "potente" },
-      params: { media_id: "demo-1", nombre: "Soldadora Inverter 200A", etiqueta: "Lista para trabajar" },
+      params: { media_id: "demo-1", nombre: "Soldadora Inverter 200A", etiqueta: "Lista para trabajar", tratamiento: "tarjeta" },
     },
     {
       id: "e4",

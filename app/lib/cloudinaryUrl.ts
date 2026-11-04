@@ -53,3 +53,12 @@ export function urlPortadaVideo(url: string): string {
 export function urlPistaMusical(cloudinaryName: string, publicId: string): string {
   return `https://res.cloudinary.com/${cloudinaryName}/video/upload/${publicId}.mp3`;
 }
+
+// Recorte inteligente de Cloudinary (gratis en todos los planes, a
+// diferencia de e_background_removal) para el tratamiento "completa" de
+// video/ -- c_fill,g_auto deja que Cloudinary detecte el sujeto y
+// recorte hacia él en vez de un recorte ciego al centro. ar_9:16 porque
+// el video siempre es 9:16 (único formato de la Fase 1a).
+export function urlRecorteVertical(url: string): string {
+  return url.replace("/upload/", "/upload/c_fill,g_auto,ar_9:16/");
+}

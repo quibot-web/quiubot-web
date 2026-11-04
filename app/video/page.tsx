@@ -6,6 +6,7 @@ import { useRouter } from "next/navigation";
 import CargandoQuiubot from "@/app/components/CargandoQuiubot";
 import SelectorAlbum, { type ItemAlbum } from "@/app/components/SelectorAlbum";
 import { OBJETIVOS_INFO } from "@/app/lib/objetivosInfo";
+import type { AnalisisPieza } from "@/app/lib/analisisPieza";
 import { GuionSchema, type Guion, type ObjetivoVideo, type Escena } from "@/video/guion.schema";
 import type { MediosResueltos } from "@/video/escenas/tipos";
 import { RECETAS } from "@/video/recetas";
@@ -54,6 +55,8 @@ export default function VideoNuevoPage() {
   const [pistaId, setPistaId] = useState<string | null>(null);
   const [pistas, setPistas] = useState<Pista[]>([]);
   const [medios, setMedios] = useState<MediosResueltos>({});
+  const [analisisPorPieza, setAnalisisPorPieza] = useState<Record<string, AnalisisPieza>>({});
+  const [analizando, setAnalizando] = useState<string | null>(null);
   const [selectorContexto, setSelectorContexto] = useState<null | "brief" | number>(null);
   const [errorMsg, setErrorMsg] = useState<string | null>(null);
 
@@ -164,16 +167,35 @@ export default function VideoNuevoPage() {
 
   function elegirPiezaDesdeSelector(item: ItemAlbum) {
     if (!item.id) return;
+    const id = item.id;
     const tipo: "imagen" | "video" = item.tipo === "video" ? "video" : "imagen";
-    setMedios((prev) => ({ ...prev, [item.id as string]: { url: item.url_imagen, tipo } }));
+    setMedios((prev) => ({ ...prev, [id]: { url: item.url_imagen, tipo } }));
 
     if (typeof selectorContexto === "number" && guion) {
       const escena = guion.escenas[selectorContexto];
       if (escena.tipo === "producto_hero" || escena.tipo === "gancho_texto") {
-        cambiarEscena(selectorContexto, { ...escena, params: { ...escena.params, media_id: item.id } } as Escena);
+        cambiarEscena(selectorContexto, { ...escena, params: { ...escena.params, media_id: id } } as Escena);
       }
     }
     setSelectorContexto(null);
+
+    // Imagen con texto, "al elegir piezas" (no solo al generar el guion):
+    // se pide una sola vez por pieza -- si ya está en album_creativos.analisis
+    // la ruta responde con en_cache:true sin volver a pagarlo.
+    if (tipo === "imagen" && !analisisPorPieza[id]) {
+      setAnalizando(id);
+      fetch("/api/video/analizar-pieza", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ media_id: id }),
+      })
+        .then((r) => r.json())
+        .then((data) => {
+          if (data?.analisis) setAnalisisPorPieza((prev) => ({ ...prev, [id]: data.analisis }));
+        })
+        .catch(() => {})
+        .finally(() => setAnalizando((actual) => (actual === id ? null : actual)));
+    }
   }
 
   function aplicarJson() {
@@ -282,33 +304,62 @@ export default function VideoNuevoPage() {
             />
 
             <h2 style={{ fontSize: 15, fontWeight: 700, marginBottom: 12, color: "#1a1a1a" }}>4. Piezas del álbum (hasta 3)</h2>
-            <div style={{ display: "flex", gap: 8, flexWrap: "wrap", marginBottom: 20 }}>
-              {piezasElegidas.map(([id, pieza]) => (
-                <div key={id} style={{ position: "relative" }}>
-                  {pieza.tipo === "video" ? (
-                    <video src={pieza.url} style={{ width: 64, height: 64, borderRadius: 8, objectFit: "cover" }} muted />
-                  ) : (
-                    <img src={pieza.url} alt="" style={{ width: 64, height: 64, borderRadius: 8, objectFit: "cover" }} />
-                  )}
-                  <button
-                    type="button"
-                    onClick={() => setMedios((prev) => { const copia = { ...prev }; delete copia[id]; return copia; })}
-                    style={{ position: "absolute", top: -6, right: -6, width: 20, height: 20, borderRadius: "50%", background: "#b91c1c", color: "#fff", border: "none", fontSize: 12, cursor: "pointer" }}
-                  >
-                    ×
-                  </button>
-                </div>
-              ))}
+            <div style={{ display: "flex", gap: 8, flexWrap: "wrap", marginBottom: 8 }}>
+              {piezasElegidas.map(([id, pieza]) => {
+                const analisis = analisisPorPieza[id];
+                return (
+                  <div key={id} style={{ position: "relative", width: 72 }}>
+                    {pieza.tipo === "video" ? (
+                      <video src={pieza.url} style={{ width: 72, height: 72, borderRadius: 8, objectFit: "cover", display: "block" }} muted />
+                    ) : (
+                      <img src={pieza.url} alt="" style={{ width: 72, height: 72, borderRadius: 8, objectFit: "cover", display: "block" }} />
+                    )}
+                    <button
+                      type="button"
+                      onClick={() => setMedios((prev) => { const copia = { ...prev }; delete copia[id]; return copia; })}
+                      style={{ position: "absolute", top: -6, right: -6, width: 20, height: 20, borderRadius: "50%", background: "#b91c1c", color: "#fff", border: "none", fontSize: 12, cursor: "pointer" }}
+                    >
+                      ×
+                    </button>
+                    {pieza.tipo === "imagen" && (
+                      <div style={{ marginTop: 4, textAlign: "center" }}>
+                        {analizando === id ? (
+                          <span style={{ fontSize: 10, color: "#888" }}>analizando…</span>
+                        ) : analisis ? (
+                          <span
+                            style={{
+                              fontSize: 10,
+                              fontWeight: 700,
+                              padding: "2px 6px",
+                              borderRadius: 999,
+                              background: analisis.tiene_texto ? "#fef3c7" : "#dcfce7",
+                              color: analisis.tiene_texto ? "#92400e" : "#166534",
+                            }}
+                          >
+                            {analisis.tiene_texto ? "con texto" : "foto limpia"}
+                          </span>
+                        ) : null}
+                      </div>
+                    )}
+                  </div>
+                );
+              })}
               {piezasElegidas.length < 3 && (
                 <button
                   type="button"
                   onClick={() => setSelectorContexto("brief")}
-                  style={{ width: 64, height: 64, borderRadius: 8, border: "1px dashed #bbb", background: "#fafafa", cursor: "pointer", fontSize: 22, color: "#888" }}
+                  style={{ width: 72, height: 72, borderRadius: 8, border: "1px dashed #bbb", background: "#fafafa", cursor: "pointer", fontSize: 22, color: "#888" }}
                 >
                   +
                 </button>
               )}
             </div>
+            {piezasElegidas.some(([id, p]) => p.tipo === "imagen" && analisisPorPieza[id]?.tiene_texto) && (
+              <p style={{ fontSize: 12, color: "#92400e", background: "#fef3c7", borderRadius: 8, padding: "8px 12px", marginBottom: 12 }}>
+                Para videos más profesionales, sube fotos del producto sin texto.
+              </p>
+            )}
+            <div style={{ marginBottom: 20 }} />
 
             <h2 style={{ fontSize: 15, fontWeight: 700, marginBottom: 12, color: "#1a1a1a" }}>5. Duración{receta ? ` (${receta.duracionMinS}-${receta.duracionMaxS}s)` : ""}</h2>
             <input
@@ -392,15 +443,20 @@ export default function VideoNuevoPage() {
 
               {!modoAvanzado && (
                 <div>
-                  {guion.escenas.map((escena, i) => (
-                    <EditorEscena
-                      key={escena.id}
-                      escena={escena}
-                      piezas={piezasElegidas.map(([id, p]) => ({ id, url_imagen: p.url, tipo: p.tipo }))}
-                      onCambiar={(nueva) => cambiarEscena(i, nueva)}
-                      onElegirPieza={() => setSelectorContexto(i)}
-                    />
-                  ))}
+                  {guion.escenas.map((escena, i) => {
+                    const mediaId =
+                      escena.tipo === "gancho_texto" || escena.tipo === "producto_hero" ? escena.params.media_id : undefined;
+                    return (
+                      <EditorEscena
+                        key={escena.id}
+                        escena={escena}
+                        piezas={piezasElegidas.map(([id, p]) => ({ id, url_imagen: p.url, tipo: p.tipo }))}
+                        tieneTextoPieza={mediaId ? analisisPorPieza[mediaId]?.tiene_texto : undefined}
+                        onCambiar={(nueva) => cambiarEscena(i, nueva)}
+                        onElegirPieza={() => setSelectorContexto(i)}
+                      />
+                    );
+                  })}
                 </div>
               )}
 

@@ -35,7 +35,7 @@ export function Composicion({ guion, medios, pistaUrl, mostrarZonaSegura }: Prop
       <Series>
         {escenas.map((escena) => (
           <Series.Sequence key={escena.id} durationInFrames={Math.round(escena.duracion_s * fps)}>
-            {renderizarEscena(escena, tema, medios)}
+            {renderizarEscena(escena, tema, medios, guion.analisisPiezas)}
           </Series.Sequence>
         ))}
       </Series>

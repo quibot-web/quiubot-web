@@ -1,6 +1,6 @@
 "use client";
 
-import type { Escena } from "@/video/guion.schema";
+import { TRATAMIENTOS_MEDIA, type Escena, type TratamientoMedia } from "@/video/guion.schema";
 
 type PiezaElegida = { id: string; url_imagen: string; tipo: string };
 
@@ -27,11 +27,16 @@ function Campo({ label, children }: { label: string; children: React.ReactNode }
 export default function EditorEscena({
   escena,
   piezas,
+  tieneTextoPieza,
   onCambiar,
   onElegirPieza,
 }: {
   escena: Escena;
   piezas: PiezaElegida[];
+  // Si la pieza asignada a ESTA escena tiene texto (lo calcula la página,
+  // que es quien tiene el análisis) -- limita las opciones de
+  // tratamiento a tarjeta/celular, igual que el zod.
+  tieneTextoPieza?: boolean;
   onCambiar: (nueva: Escena) => void;
   onElegirPieza: () => void;
 }) {
@@ -86,7 +91,14 @@ export default function EditorEscena({
             />
           </Campo>
           {escena.params.media_id && (
-            <BotonPieza pieza={piezaElegida(escena.params.media_id)} onClick={onElegirPieza} />
+            <>
+              <BotonPieza pieza={piezaElegida(escena.params.media_id)} onClick={onElegirPieza} />
+              <SelectorTratamiento
+                valor={escena.params.tratamiento}
+                tieneTexto={tieneTextoPieza}
+                onCambiar={(t) => cambiarParams({ tratamiento: t })}
+              />
+            </>
           )}
         </>
       )}
@@ -113,6 +125,11 @@ export default function EditorEscena({
             <input style={estiloCampo} maxLength={40} value={escena.params.nombre} onChange={(e) => cambiarParams({ nombre: e.target.value })} />
           </Campo>
           <BotonPieza pieza={piezaElegida(escena.params.media_id)} onClick={onElegirPieza} />
+          <SelectorTratamiento
+            valor={escena.params.tratamiento}
+            tieneTexto={tieneTextoPieza}
+            onCambiar={(t) => cambiarParams({ tratamiento: t })}
+          />
           <Campo label="Subtítulo (única escena que lo muestra)">
             <input
               style={estiloCampo}
@@ -231,6 +248,41 @@ export default function EditorEscena({
         </>
       )}
     </div>
+  );
+}
+
+const ETIQUETA_TRATAMIENTO: Record<TratamientoMedia, string> = {
+  tarjeta: "Tarjeta flotante",
+  celular: "Dentro de un celular",
+  completa: "Pantalla completa",
+};
+
+// Si la pieza tiene texto, "completa" ni se ofrece -- el zod la rechaza
+// igual, pero mejor no dejar elegir una opción que el servidor va a tumbar.
+function SelectorTratamiento({
+  valor,
+  tieneTexto,
+  onCambiar,
+}: {
+  valor: TratamientoMedia | undefined;
+  tieneTexto: boolean | undefined;
+  onCambiar: (t: TratamientoMedia) => void;
+}) {
+  const opciones = tieneTexto ? TRATAMIENTOS_MEDIA.filter((t) => t !== "completa") : TRATAMIENTOS_MEDIA;
+  return (
+    <Campo label="Tratamiento de la imagen">
+      <select style={estiloCampo} value={valor || ""} onChange={(e) => onCambiar(e.target.value as TratamientoMedia)}>
+        <option value="" disabled>
+          Elige un tratamiento
+        </option>
+        {opciones.map((t) => (
+          <option key={t} value={t}>
+            {ETIQUETA_TRATAMIENTO[t]}
+          </option>
+        ))}
+      </select>
+      {tieneTexto && <span style={{ fontSize: 11, color: "#92400e" }}>Esta pieza tiene texto -- no se puede recortar a pantalla completa.</span>}
+    </Campo>
   );
 }
 

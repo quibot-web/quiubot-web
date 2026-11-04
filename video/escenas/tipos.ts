@@ -1,3 +1,5 @@
+// Relativo, no "@/..." -- ver el comentario en video/guion.schema.ts.
+import type { AnalisisPieza } from "../../app/lib/analisisPieza";
 import type { Escena } from "../guion.schema";
 import type { TemaGuion } from "../tema";
 
@@ -13,6 +15,10 @@ export interface PropsEscena<T extends Escena["tipo"]> {
   escena: EscenaDe<T>;
   tema: TemaGuion;
   medios: MediosResueltos;
+  // guion.analisisPiezas, pasado tal cual -- solo lo usan las escenas
+  // con media (ProductoHero, GanchoTexto) para el sesgo del zoom hacia
+  // recuadro_producto; las demás lo reciben pero lo ignoran.
+  analisisPiezas?: Record<string, AnalisisPieza>;
 }
 
 // Compartido por ListaNumerada.tsx (el dueño del conteo) y

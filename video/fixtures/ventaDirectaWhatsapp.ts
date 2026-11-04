@@ -22,7 +22,7 @@ export const fixtureVentaDirectaWhatsapp = GuionSchema.parse({
       bloque: "gancho",
       tipo: "gancho_texto",
       duracion_s: 2,
-      params: { texto: "¿Tu soldadora no aguanta el turno?", palabra_clave: "aguanta", media_id: "demo-1" },
+      params: { texto: "¿Tu soldadora no aguanta el turno?", palabra_clave: "aguanta", media_id: "demo-1", tratamiento: "completa" },
     },
     {
       id: "e2",
@@ -37,7 +37,7 @@ export const fixtureVentaDirectaWhatsapp = GuionSchema.parse({
       tipo: "producto_hero",
       duracion_s: 3.5,
       subtitulo: { texto: "Soldadora inverter 200A, lista para trabajar", palabra_clave: "lista" },
-      params: { media_id: "demo-1", nombre: "Soldadora Inverter 200A" },
+      params: { media_id: "demo-1", nombre: "Soldadora Inverter 200A", tratamiento: "tarjeta" },
     },
     {
       id: "e4",

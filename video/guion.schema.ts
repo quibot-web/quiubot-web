@@ -1,4 +1,8 @@
 import { z } from "zod";
+// Import relativo a propósito, no "@/..." -- el bundler propio de
+// Remotion (Studio, npm run render, el worker de Fase 1b) no entiende el
+// alias de tsconfig, solo lo resuelve el bundler de Next.
+import { AnalisisPiezaSchema } from "../app/lib/analisisPieza";
 
 // Ids reales de objetivos_config (ver app/lib/metas.ts -- OBJETIVOS_CATALOGO,
 // confirmados contra la tabla objetivos_config). Cada uno tiene su receta en
@@ -28,6 +32,14 @@ export type BloqueGuion = (typeof BLOQUES)[number];
 
 const Bloque = z.enum(BLOQUES);
 
+// Cómo se muestra una foto o video real del álbum -- sección "Tratamientos
+// de imagen" del plan. "recortado" (producto sin fondo sobre colores de
+// marca) queda afuera a propósito: el costo de e_background_removal de
+// Cloudinary depende del plan de CADA cliente y no está documentado con
+// certeza, se revisa más adelante.
+export const TRATAMIENTOS_MEDIA = ["tarjeta", "celular", "completa"] as const;
+export type TratamientoMedia = (typeof TRATAMIENTOS_MEDIA)[number];
+
 const Subtitulo = z.object({
   texto: z.string().min(1).max(80),
   palabra_clave: z.string().min(1).max(30),
@@ -44,6 +56,9 @@ const ParamsGanchoTexto = z.object({
   // esa foto o video como fondo, con degradado oscuro abajo y el texto
   // encima -- "gancho = portada" (sección "Gancho con producto").
   media_id: z.string().min(1).optional(),
+  // Solo tiene sentido si hay media_id -- se valida en el superRefine
+  // de más abajo, junto con la regla de "nunca recortar con texto".
+  tratamiento: z.enum(TRATAMIENTOS_MEDIA).optional(),
 });
 
 // La fila "problema_dato" acepta una variante "pregunta" (una pregunta
@@ -73,6 +88,7 @@ const ParamsProductoHero = z.object({
   media_id: z.string().min(1),
   nombre: z.string().max(40),
   etiqueta: z.string().max(20).optional(),
+  tratamiento: z.enum(TRATAMIENTOS_MEDIA),
 });
 
 const ParamsBeneficiosLista = z.object({
@@ -184,6 +200,12 @@ export const GuionSchema = z
     tema: Tema,
     musica: Musica,
     escenas: z.array(EscenaSchema).min(3).max(7),
+    // Copia del análisis de cada pieza usada (album_creativos.analisis),
+    // por media_id -- así el guion queda autocontenido: no hace falta
+    // volver a consultar el álbum ni pagar el análisis de nuevo para
+    // revalidar un guion ya generado (ni al editarlo, ni en el worker
+    // de render de la Fase 1b).
+    analisisPiezas: z.record(z.string(), AnalisisPiezaSchema).optional(),
   })
   // Invariantes que no dependen de la receta del objetivo -- las que sí
   // dependen (orden de bloques, rango de duracion, escenas obligatorias
@@ -230,6 +252,43 @@ export const GuionSchema = z
         message: `La suma de duracion_s (${sumaDuraciones.toFixed(1)}s) se aleja mas de 2s de duracion_objetivo_s (${guion.duracion_objetivo_s}s)`,
         path: ["escenas"],
       });
+    }
+
+    // Tratamientos de imagen (sección "Nunca recortar una pieza con
+    // texto"): si el análisis de la pieza dice tiene_texto, "completa"
+    // (recorte de pantalla completa) le cortaría el texto impreso --
+    // solo se permite "tarjeta" o "celular", que muestran la imagen
+    // entera. También variedad: la misma pieza en 2+ escenas no puede
+    // usar el mismo tratamiento en todas.
+    const porMedia = new Map<string, { indiceEscena: number; tratamiento: TratamientoMedia }[]>();
+    escenas.forEach((escena, indiceEscena) => {
+      if (escena.tipo !== "producto_hero" && escena.tipo !== "gancho_texto") return;
+      const mediaId = escena.params.media_id;
+      const tratamiento = escena.params.tratamiento;
+      if (!mediaId || !tratamiento) return;
+
+      const analisis = guion.analisisPiezas?.[mediaId];
+      if (analisis?.tiene_texto && tratamiento === "completa") {
+        ctx.addIssue({
+          code: "custom",
+          message: `La escena "${escena.id}" usa "completa" en una pieza con texto (${mediaId}) -- con texto solo se permite "tarjeta" o "celular".`,
+          path: ["escenas", indiceEscena, "params", "tratamiento"],
+        });
+      }
+
+      const lista = porMedia.get(mediaId) || [];
+      lista.push({ indiceEscena, tratamiento });
+      porMedia.set(mediaId, lista);
+    });
+
+    for (const [mediaId, usos] of porMedia) {
+      if (usos.length > 1 && usos.every((u) => u.tratamiento === usos[0].tratamiento)) {
+        ctx.addIssue({
+          code: "custom",
+          message: `La pieza ${mediaId} se usa en ${usos.length} escenas con el mismo tratamiento ("${usos[0].tratamiento}") -- usa al menos uno distinto para variar.`,
+          path: ["escenas", usos[0].indiceEscena, "params", "tratamiento"],
+        });
+      }
     }
   });
 

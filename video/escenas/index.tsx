@@ -1,3 +1,5 @@
+// Relativo, no "@/..." -- ver el comentario en video/guion.schema.ts.
+import type { AnalisisPieza } from "../../app/lib/analisisPieza";
 import type { Escena } from "../guion.schema";
 import type { TemaGuion } from "../tema";
 import type { MediosResueltos } from "./tipos";
@@ -11,14 +13,19 @@ import { OfertaPrecio } from "./OfertaPrecio";
 import { ObjecionRespuesta } from "./ObjecionRespuesta";
 import { Cta } from "./Cta";
 
-export function renderizarEscena(escena: Escena, tema: TemaGuion, medios: MediosResueltos) {
+export function renderizarEscena(
+  escena: Escena,
+  tema: TemaGuion,
+  medios: MediosResueltos,
+  analisisPiezas?: Record<string, AnalisisPieza>
+) {
   switch (escena.tipo) {
     case "gancho_texto":
-      return <GanchoTexto escena={escena} tema={tema} medios={medios} />;
+      return <GanchoTexto escena={escena} tema={tema} medios={medios} analisisPiezas={analisisPiezas} />;
     case "problema_dato":
       return <ProblemaDato escena={escena} tema={tema} medios={medios} />;
     case "producto_hero":
-      return <ProductoHero escena={escena} tema={tema} medios={medios} />;
+      return <ProductoHero escena={escena} tema={tema} medios={medios} analisisPiezas={analisisPiezas} />;
     case "beneficios_lista":
       return <BeneficiosLista escena={escena} tema={tema} medios={medios} />;
     case "lista_numerada":

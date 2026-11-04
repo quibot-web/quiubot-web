@@ -5,6 +5,7 @@ import { desencriptarSiHaceFalta } from "@/lib/crypto";
 import { verificarLimite } from "@/lib/rateLimit";
 import { registrarError } from "@/lib/registrarError";
 import { urlPistaMusical } from "@/app/lib/cloudinaryUrl";
+import { AnalisisPiezaSchema, type AnalisisPieza } from "@/app/lib/analisisPieza";
 import { GuionSchema, OBJETIVOS_VIDEO, type Guion, type ObjetivoVideo } from "@/video/guion.schema";
 import { construirTemaDesdeAdn } from "@/video/tema";
 import { RECETAS, validarContraReceta } from "@/video/recetas";
@@ -168,11 +169,12 @@ export async function POST(req: NextRequest) {
   const idsPiezas = Array.isArray(media_ids) ? media_ids.filter((id): id is string => typeof id === "string") : [];
   const medios: MediosResueltos = {};
   const piezasDisponibles: PiezaDisponible[] = [];
+  const analisisPiezas: Record<string, AnalisisPieza> = {};
 
   if (idsPiezas.length > 0) {
     const { data: piezas } = await supabaseAdmin
       .from("album_creativos")
-      .select("id, url_imagen, tipo")
+      .select("id, url_imagen, tipo, analisis")
       .eq("user_id", usuario.id)
       .in("id", idsPiezas);
 
@@ -184,6 +186,15 @@ export async function POST(req: NextRequest) {
       const tipo: "imagen" | "video" = pieza.tipo === "video" ? "video" : "imagen";
       medios[pieza.id] = { url: pieza.url_imagen, tipo };
       piezasDisponibles.push({ id: pieza.id, tipo });
+
+      // El análisis es opcional -- una pieza que nunca se pasó por
+      // /api/video/analizar-pieza (ej. si el cliente no llamó esa ruta)
+      // simplemente no entra en analisisPiezas; la IA no sabrá que tiene
+      // texto y el zod no podrá bloquear "completa" para ella. Se
+      // advierte en /video, no se fuerza acá un análisis síncrono extra
+      // para no duplicar el costo de la llamada.
+      const analisis = AnalisisPiezaSchema.safeParse(pieza.analisis);
+      if (analisis.success) analisisPiezas[pieza.id] = analisis.data;
     }
   }
 
@@ -227,6 +238,7 @@ export async function POST(req: NextRequest) {
     datosProducto: datos_producto?.trim().slice(0, 500) || null,
     duracionS: duracion_s,
     piezas: piezasDisponibles,
+    analisisPiezas,
     usuarioCta: usuarioCtaNormalizado,
     adnTitular: adnMarca?.titular?.trim() || null,
     adnFraseCorta: adnMarca?.frase_corta?.trim() || null,
@@ -280,6 +292,10 @@ export async function POST(req: NextRequest) {
       tema,
       musica: { pista_id: pista_id || null, volumen: 0.35 },
       escenas: (crudo as Record<string, unknown>)?.escenas,
+      // Copiado dentro del guion (no lo decide la IA): así queda
+      // autocontenido y la regla de "nunca recortar con texto" del zod
+      // puede validar sin depender de volver a consultar el álbum.
+      analisisPiezas: Object.keys(analisisPiezas).length > 0 ? analisisPiezas : undefined,
     };
 
     const resultado = GuionSchema.safeParse(candidato);

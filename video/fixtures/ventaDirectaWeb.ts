@@ -22,7 +22,7 @@ export const fixtureVentaDirectaWeb = GuionSchema.parse({
       bloque: "gancho",
       tipo: "gancho_texto",
       duracion_s: 2,
-      params: { texto: "La colección que se agota rápido", palabra_clave: "agota", sticker: "-20%", media_id: "demo-1" },
+      params: { texto: "La colección que se agota rápido", palabra_clave: "agota", sticker: "-20%", media_id: "demo-1", tratamiento: "celular" },
     },
     {
       id: "e2",
@@ -30,7 +30,7 @@ export const fixtureVentaDirectaWeb = GuionSchema.parse({
       tipo: "producto_hero",
       duracion_s: 3,
       subtitulo: { texto: "Hecho a mano, edición limitada", palabra_clave: "limitada" },
-      params: { media_id: "demo-1", nombre: "Bolso Aurora" },
+      params: { media_id: "demo-1", nombre: "Bolso Aurora", tratamiento: "completa" },
     },
     {
       id: "e3",

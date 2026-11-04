@@ -22,7 +22,7 @@ export const fixtureRetargeting = GuionSchema.parse({
       bloque: "gancho",
       tipo: "gancho_texto",
       duracion_s: 2,
-      params: { texto: "¿Todavía lo estás pensando?", palabra_clave: "pensando", media_id: "demo-1" },
+      params: { texto: "¿Todavía lo estás pensando?", palabra_clave: "pensando", media_id: "demo-1", tratamiento: "tarjeta" },
     },
     {
       id: "e2",
@@ -37,7 +37,7 @@ export const fixtureRetargeting = GuionSchema.parse({
       tipo: "producto_hero",
       duracion_s: 3,
       subtitulo: { texto: "Sigue disponible en tu talla", palabra_clave: "disponible" },
-      params: { media_id: "demo-1", nombre: "Chaqueta Impermeable" },
+      params: { media_id: "demo-1", nombre: "Chaqueta Impermeable", tratamiento: "celular" },
     },
     {
       id: "e4",
