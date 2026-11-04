@@ -7,6 +7,17 @@ export function urlOptimizadaCloudinary(url: string, anchoMaximo: number): strin
   return url.replace("/upload/", `/upload/f_auto,q_auto,w_${anchoMaximo}/`);
 }
 
+// Fondo difuminado resuelto por Cloudinary (e_blur), no con filter:blur()
+// de CSS -- un blur gaussiano de radio grande sobre una imagen de pantalla
+// completa es carísimo para Chrome Headless si se repite en CADA cuadro
+// del render (video/capas/TratamientoMedia.tsx). Cloudinary lo calcula
+// UNA vez y entrega el resultado ya difuminado como una imagen chica
+// (q_auto, ancho bajo -- el blur ya destruye el detalle, no hace falta
+// más resolución).
+export function urlFondoDifuminado(url: string, anchoMaximo = 480): string {
+  return url.replace("/upload/", `/upload/f_auto,q_auto,e_blur:1500,w_${anchoMaximo}/`);
+}
+
 // Fuerza que el navegador descargue el archivo en vez de reproducirlo/
 // mostrarlo inline -- Cloudinary respeta el flag fl_attachment insertado
 // en la URL de entrega. Funciona igual para /image/upload/ y
@@ -58,7 +69,11 @@ export function urlPistaMusical(cloudinaryName: string, publicId: string): strin
 // diferencia de e_background_removal) para el tratamiento "completa" de
 // video/ -- c_fill,g_auto deja que Cloudinary detecte el sujeto y
 // recorte hacia él en vez de un recorte ciego al centro. ar_9:16 porque
-// el video siempre es 9:16 (único formato de la Fase 1a).
+// el video siempre es 9:16 (único formato de la Fase 1a). w_1080,q_auto
+// porque el video final siempre mide 1080 de ancho -- sin esto se carga
+// el original completo (una foto de celular puede ser 3000px+) para
+// mostrarlo achicado, puro trabajo de decodificación perdido en cada
+// cuadro del render.
 export function urlRecorteVertical(url: string): string {
-  return url.replace("/upload/", "/upload/c_fill,g_auto,ar_9:16/");
+  return url.replace("/upload/", "/upload/c_fill,g_auto,ar_9:16,w_1080,q_auto/");
 }

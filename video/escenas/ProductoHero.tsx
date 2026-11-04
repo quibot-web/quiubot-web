@@ -1,6 +1,6 @@
 import { AbsoluteFill, Img, OffthreadVideo, interpolate, useCurrentFrame, useVideoConfig } from "remotion";
 // Relativo, no "@/..." -- ver el comentario en video/guion.schema.ts.
-import { urlRecorteVertical } from "../../app/lib/cloudinaryUrl";
+import { urlOptimizadaCloudinary, urlRecorteVertical } from "../../app/lib/cloudinaryUrl";
 import { FondoMarca } from "../capas/FondoMarca";
 import { MediaCelular, MediaTarjeta } from "../capas/TratamientoMedia";
 import { colorTextoSobre } from "../tema";
@@ -43,7 +43,7 @@ export function ProductoHero({ escena, tema, medios, analisisPiezas }: PropsEsce
           <>
             {media.tipo === "video" ? (
               <OffthreadVideo
-                src={media.url}
+                src={urlOptimizadaCloudinary(media.url, 1080)}
                 muted
                 style={{ width: "100%", height: "100%", objectFit: "cover", transform: `scale(${escala})`, transformOrigin: `${origenX}% ${origenY}%` }}
               />

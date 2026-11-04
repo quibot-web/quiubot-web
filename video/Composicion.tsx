@@ -33,7 +33,7 @@ export type PropsComposicion = {
 // es la cola: la última escena queda CUADROS_TRANSICION cuadros más
 // larga (su propio fade no tiene con qué solaparse), por eso
 // duracionEnCuadros() también suma ese mismo margen.
-export const CUADROS_TRANSICION = 10;
+export const CUADROS_TRANSICION = 8;
 
 // Compartida por Root.tsx (Remotion Studio) y por el <Player> de
 // /video/nuevo -- la misma cuenta en los dos lugares, para que la

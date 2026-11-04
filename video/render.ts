@@ -96,15 +96,30 @@ async function main() {
   const fecha = new Date().toISOString().slice(0, 10);
   const rutaSalida = path.join(CARPETA_SALIDA, `${guion.objetivo}_${fecha}.mp4`);
 
+  // RENDER_CONCURRENCY (opcional, ver npm run render) -- sin esto,
+  // renderMedia() usa su propio default (null): round(min(8, max(1,
+  // núcleos/2))). Se deja como variable de entorno (no un flag nuevo en
+  // package.json) para poder comparar valores en la misma máquina sin
+  // tocar código cada vez.
+  const concurrencyEnv = process.env.RENDER_CONCURRENCY;
+  const concurrency = concurrencyEnv ? Number(concurrencyEnv) : null;
+  console.log(`Núcleos de CPU detectados: ${os.cpus().length}. Concurrency pedida: ${concurrency ?? "(default de Remotion)"}`);
+
   const inicio = Date.now();
   console.log("Empaquetando la composición de Remotion...");
   const serveUrl = await bundle({ entryPoint: path.join(process.cwd(), "video", "Root.tsx") });
+  const trasEmpaquetado = Date.now();
+  console.log(`Empaquetado: ${((trasEmpaquetado - inicio) / 1000).toFixed(1)}s`);
 
   const inputProps = { guion, medios, pistaUrl };
   const composicion = await selectComposition({ serveUrl, id: "render", inputProps });
+  const trasSeleccion = Date.now();
+  console.log(`Selección de composición: ${((trasSeleccion - trasEmpaquetado) / 1000).toFixed(1)}s`);
 
   console.log(`Renderizando ${guion.escenas.length} escenas (${composicion.durationInFrames} cuadros) -> ${rutaSalida}`);
-  await renderMedia({ composition: composicion, serveUrl, codec: "h264", outputLocation: rutaSalida, inputProps });
+  await renderMedia({ composition: composicion, serveUrl, codec: "h264", outputLocation: rutaSalida, inputProps, concurrency });
+  const trasRender = Date.now();
+  console.log(`Render (renderMedia): ${((trasRender - trasSeleccion) / 1000).toFixed(1)}s`);
 
   const duracionS = (Date.now() - inicio) / 1000;
   console.log(`Listo: ${rutaSalida}`);

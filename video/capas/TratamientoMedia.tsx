@@ -2,6 +2,8 @@ import { AbsoluteFill, Img, OffthreadVideo } from "remotion";
 import type { MediaResuelto } from "../escenas/tipos";
 import type { TemaGuion } from "../tema";
 import { ALTURA_ZONA_SEGURA } from "./ZonaSegura";
+// Relativo, no "@/..." -- ver el comentario en video/guion.schema.ts.
+import { urlFondoDifuminado, urlOptimizadaCloudinary } from "../../app/lib/cloudinaryUrl";
 
 // Los 3 tratamientos de imagen (sección "Tratamientos de imagen" del
 // plan) compartidos entre GanchoTexto y ProductoHero -- una sola vez,
@@ -9,11 +11,19 @@ import { ALTURA_ZONA_SEGURA } from "./ZonaSegura";
 // recuadro_producto) se queda en cada escena por separado porque
 // necesita sus propios cuadros/animación; estos dos son estáticos.
 
-function MediaPlano({ media, style }: { media: MediaResuelto; style: React.CSSProperties }) {
+// El ancho real que ocupa la pieza "nítida" en pantalla nunca pasa de
+// 1080 (el video siempre mide 1080 de ancho) -- pedirle a Cloudinary el
+// original (a veces 3000px+ de una foto de celular) es trabajo de
+// decodificación perdido en CADA cuadro del render, para mostrarlo
+// achicado igual.
+const ANCHO_NITIDO = 1080;
+
+function MediaPlano({ media, style, transformarUrl }: { media: MediaResuelto; style: React.CSSProperties; transformarUrl?: (url: string) => string }) {
+  const src = transformarUrl ? transformarUrl(media.url) : media.url;
   return media.tipo === "video" ? (
-    <OffthreadVideo src={media.url} muted style={style} />
+    <OffthreadVideo src={src} muted style={style} />
   ) : (
-    <Img src={media.url} style={style} />
+    <Img src={src} style={style} />
   );
 }
 
@@ -45,7 +55,8 @@ export function MediaTarjeta({ media, anclaje = "centro" }: { media: MediaResuel
         <AbsoluteFill>
           <MediaPlano
             media={media}
-            style={{ width: "100%", height: "100%", objectFit: "cover", filter: "blur(50px) brightness(0.5)", transform: "scale(1.25)" }}
+            style={{ width: "100%", height: "100%", objectFit: "cover", filter: "brightness(0.65)", transform: "scale(1.25)" }}
+            transformarUrl={urlFondoDifuminado}
           />
         </AbsoluteFill>
       )}
@@ -60,7 +71,11 @@ export function MediaTarjeta({ media, anclaje = "centro" }: { media: MediaResuel
           lineHeight: 0,
         }}
       >
-        <MediaPlano media={media} style={{ width: "100%", maxHeight: "100%", objectFit: "contain", display: "block" }} />
+        <MediaPlano
+          media={media}
+          style={{ width: "100%", maxHeight: "100%", objectFit: "contain", display: "block" }}
+          transformarUrl={(url) => urlOptimizadaCloudinary(url, ANCHO_NITIDO)}
+        />
       </div>
     </AbsoluteFill>
   );
@@ -128,8 +143,16 @@ export function MediaCelular({ media, tema, anclaje = "centro" }: { media: Media
               pieza detrás para no dejar un hueco gris donde la imagen no
               llena la pantalla del teléfono. */}
           <div style={{ flex: 1, position: "relative", background: "#000", overflow: "hidden" }}>
-            <MediaPlano media={media} style={{ position: "absolute", width: "100%", height: "100%", objectFit: "cover", filter: "blur(30px) brightness(0.55)", transform: "scale(1.25)" }} />
-            <MediaPlano media={media} style={{ position: "absolute", width: "100%", height: "100%", objectFit: "contain" }} />
+            <MediaPlano
+              media={media}
+              style={{ position: "absolute", width: "100%", height: "100%", objectFit: "cover", filter: "brightness(0.7)", transform: "scale(1.25)" }}
+              transformarUrl={urlFondoDifuminado}
+            />
+            <MediaPlano
+              media={media}
+              style={{ position: "absolute", width: "100%", height: "100%", objectFit: "contain" }}
+              transformarUrl={(url) => urlOptimizadaCloudinary(url, ANCHO_NITIDO)}
+            />
           </div>
         </div>
       </div>
