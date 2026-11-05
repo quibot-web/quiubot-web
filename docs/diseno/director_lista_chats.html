@@ -1,0 +1,63 @@
+<!doctype html><html lang="es"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Chats del equipo</title><style>
+:root{--bg:#F4F3F8;--card:#fff;--ink:#1B1A22;--muted:#6B6880;--line:#E9E7EE;--brand:#5546B8;--bs:#EFEDFB;--chat:#EFEAE2}
+@media (prefers-color-scheme:dark){:root:not([data-theme="light"]){--bg:#121117;--card:#1B1A22;--ink:#F2F1F7;--muted:#A6A3B8;--line:#2A2834;--bs:#28244A;--chat:#16151C}}
+:root[data-theme="dark"]{--bg:#121117;--card:#1B1A22;--ink:#F2F1F7;--muted:#A6A3B8;--line:#2A2834;--bs:#28244A;--chat:#16151C}
+*{box-sizing:border-box;margin:0}body{background:var(--bg);color:var(--ink);font-family:-apple-system,"Inter Display",Inter,Segoe UI,Roboto,sans-serif;-webkit-font-smoothing:antialiased}
+.pag{max-width:1040px;margin:0 auto;padding:28px 16px 40px;display:flex;gap:32px;flex-wrap:wrap;justify-content:center}
+.col{width:min(440px,100%)}.lbl{font-size:12px;font-weight:800;color:var(--muted);text-transform:uppercase;letter-spacing:.05em;margin:0 0 10px}
+.panel{background:var(--card);border:1px solid var(--line);border-radius:26px;overflow:hidden;box-shadow:0 30px 70px -30px rgba(0,0,0,.4);height:720px;display:flex;flex-direction:column}
+.top{padding:16px;display:flex;align-items:center;gap:10px;border-bottom:1px solid var(--line)}.top b{font-size:17px}.top .x{margin-left:auto;color:var(--muted)}
+.item{display:flex;gap:12px;align-items:center;padding:12px 16px;border-bottom:1px solid var(--line)}
+.item .t{flex:1;min-width:0}.item b{font-size:15px;display:flex;justify-content:space-between}.item b em{font-style:normal;font-weight:600;font-size:12px;color:var(--muted)}
+.item p{font-size:13.5px;color:var(--muted);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;margin-top:2px}
+.item .n{min-width:22px;height:22px;border-radius:999px;background:#25D366;color:#fff;font-size:12px;font-weight:800;display:grid;place-items:center}
+.grupo{background:var(--bs)}
+.sep{padding:8px 16px;font-size:12px;font-weight:800;color:var(--muted);text-transform:uppercase;letter-spacing:.05em;background:var(--bg)}
+.av{position:relative}.av i{position:absolute;right:-2px;bottom:-2px;width:12px;height:12px;border-radius:50%;background:#3DF58B;border:2px solid var(--card)}
+.pila{display:flex}.pila svg{margin-left:-14px}.pila svg:first-child{margin-left:0}
+.cuerpo{flex:1;overflow:auto;padding:14px 12px;display:flex;flex-direction:column;gap:10px;background:var(--chat)}
+.sis{align-self:center;background:var(--card);color:var(--muted);font-size:12px;font-weight:700;border-radius:999px;padding:5px 12px}
+.m{max-width:84%;background:var(--card);border-radius:16px 16px 16px 5px;padding:8px 12px 9px;font-size:14px;line-height:1.42}
+.u{align-self:flex-end;background:#D9FDD3;color:#111;border-radius:16px 16px 5px 16px}
+.h{display:block;text-align:right;font-size:11px;color:var(--muted)}
+.dato{display:flex;gap:8px;margin-top:8px}.dato div{flex:1;background:var(--bg);border-radius:10px;padding:7px 8px}.dato small{display:block;font-size:11px;color:var(--muted)}.dato b{font-size:15px}
+.perfil{padding:14px 16px;border-bottom:1px solid var(--line);font-size:13px;color:var(--muted);line-height:1.45}
+.pie{border-top:1px solid var(--line);padding:10px 12px;display:flex;gap:8px}.pie div{flex:1;border:1.5px solid var(--line);border-radius:999px;padding:11px 14px;color:var(--muted);font-size:14px}.pie b{width:42px;height:42px;border-radius:50%;background:var(--brand);color:#fff;display:grid;place-items:center}
+.nota{width:100%;max-width:912px;background:var(--card);border:1px solid var(--line);border-radius:14px;padding:14px 16px;color:var(--muted);font-size:13.5px;line-height:1.6}.nota b{color:var(--ink)}
+</style></head><body><svg width="0" height="0" style="position:absolute"><defs>
+ <radialGradient id="gD" cx=".35" cy=".3"><stop offset="0" stop-color="#E6E0FF"/><stop offset=".6" stop-color="#A897F5"/><stop offset="1" stop-color="#6E58DB"/></radialGradient>
+ <radialGradient id="gA" cx=".35" cy=".3"><stop offset="0" stop-color="#DDFBEA"/><stop offset=".6" stop-color="#5FD99A"/><stop offset="1" stop-color="#1E9E6B"/></radialGradient>
+ <radialGradient id="gC" cx=".35" cy=".3"><stop offset="0" stop-color="#FFF1D6"/><stop offset=".6" stop-color="#FFB547"/><stop offset="1" stop-color="#E07B00"/></radialGradient>
+ <radialGradient id="gV" cx=".35" cy=".3"><stop offset="0" stop-color="#DDEBFF"/><stop offset=".6" stop-color="#6FA8FF"/><stop offset="1" stop-color="#2F6BE0"/></radialGradient>
+ <symbol id="cara" viewBox="0 0 100 100"><ellipse cx="40" cy="46" rx="6" ry="8" fill="#1B1A3A"/><ellipse cx="60" cy="46" rx="6" ry="8" fill="#1B1A3A"/><circle cx="42" cy="43" r="2.2" fill="#fff"/><circle cx="62" cy="43" r="2.2" fill="#fff"/><ellipse cx="32" cy="57" rx="5" ry="3" fill="#FF9EC7" opacity=".7"/><ellipse cx="68" cy="57" rx="5" ry="3" fill="#FF9EC7" opacity=".7"/></symbol>
+ <symbol id="D" viewBox="0 0 100 100"><path d="M6 60 A46 12 0 0 1 94 60" fill="none" stroke="#C9BEFF" stroke-width="4"/><circle cx="50" cy="50" r="32" fill="url(#gD)"/><path d="M6 60 A46 12 0 0 0 94 60" fill="none" stroke="#C9BEFF" stroke-width="4"/><use href="#cara"/></symbol>
+ <symbol id="A" viewBox="0 0 100 100"><circle cx="50" cy="52" r="34" fill="url(#gA)"/><use href="#cara"/><circle cx="40" cy="46" r="10" fill="none" stroke="#1B1A3A" stroke-width="3"/><circle cx="60" cy="46" r="10" fill="none" stroke="#1B1A3A" stroke-width="3"/><path d="M50 46h0" stroke="#1B1A3A" stroke-width="3"/></symbol>
+ <symbol id="C" viewBox="0 0 100 100"><circle cx="50" cy="54" r="34" fill="url(#gC)"/><path d="M28 30 Q50 6 74 30 Q50 22 28 30Z" fill="#E0457B"/><circle cx="74" cy="28" r="5" fill="#E0457B"/><use href="#cara"/></symbol>
+ <symbol id="V" viewBox="0 0 100 100"><circle cx="50" cy="52" r="34" fill="url(#gV)"/><path d="M50 8 l6 12 h-12z" fill="#2F6BE0"/><circle cx="50" cy="8" r="4" fill="#FFD23F"/><use href="#cara"/></symbol>
+</defs></svg><main class="pag">
+<div class="col"><p class="lbl">1 · Al abrir la burbuja: lista de chats</p><div class="panel">
+ <div class="top"><b>Quiubot</b><span class="x">⤢ &nbsp; ✕</span></div>
+ <div class="item grupo"><div class="pila"><svg width="34" height="34"><use href="#D"/></svg><svg width="34" height="34"><use href="#A"/></svg><svg width="34" height="34"><use href="#C"/></svg></div><div class="t"><b>Equipo <em>9:06</em></b><p>Director: @Juan, mi propuesta: pausar "Video pistola v2"…</p></div><span class="n">3</span></div>
+ <div class="item"><div class="av"><svg width="48" height="48"><use href="#D"/></svg><i></i></div><div class="t"><b>Director <em>9:06</em></b><p>Tienes 2 propuestas por aprobar</p></div><span class="n">2</span></div>
+ <div class="sep">Asistentes</div>
+ <div class="item"><div class="av"><svg width="48" height="48"><use href="#A"/></svg></div><div class="t"><b>Analista <em>9:02</em></b><p>Ayer: 14 conversaciones a $3.900 c/u</p></div><span class="n">1</span></div>
+ <div class="item"><div class="av"><svg width="48" height="48"><use href="#C"/></svg></div><div class="t"><b>Creativo <em>9:05</em></b><p>Tengo 3 anuncios nuevos listos</p></div></div>
+ <div class="item"><div class="av"><svg width="48" height="48"><use href="#V"/></svg></div><div class="t"><b>Optimizador <em>ayer</em></b><p>Subí el presupuesto del conjunto Cali a $25.000</p></div></div>
+ <div class="sep">Ayuda</div>
+ <div class="item"><div class="av"><svg width="48" height="48" viewBox="0 0 100 100"><circle cx="50" cy="50" r="36" fill="#B7BDC9"/><text x="50" y="62" text-anchor="middle" font-size="34" fill="#fff">?</text></svg></div><div class="t"><b>Soporte</b><p>¿Dudas sobre cómo usar Quiubot?</p></div></div>
+</div></div>
+
+<div class="col"><p class="lbl">2 · Al tocar un asistente: su chat</p><div class="panel">
+ <div class="top"><span>←</span><svg width="40" height="40"><use href="#A"/></svg><div><b>Analista</b><div style="font-size:12.5px;color:var(--muted)">Lee tus resultados de Meta cada día</div></div></div>
+ <div class="cuerpo">
+  <span class="sis">Ayer</span>
+  <div class="m">Reporte del martes: 11 conversaciones a $4.300 c/u.<span class="h">9:01</span></div>
+  <span class="sis">Hoy</span>
+  <div class="m">Reporte de ayer en tu campaña de WhatsApp:<div class="dato"><div><small>Conversaciones</small><b>14</b></div><div><small>Costo c/u</small><b>$3.900</b></div><div><small>vs. meta</small><b>↑ 12%</b></div></div><span class="h">9:02</span></div>
+  <div class="m u">¿Cuál anuncio trae más mensajes?<span class="h">9:30 ✓✓</span></div>
+  <div class="m">El de la foto con la pistola en uso: 9 de las 14 conversaciones de ayer, a $3.100 cada una.<span class="h">9:30</span></div>
+ </div>
+ <div class="pie"><div>Escríbele al Analista…</div><b>➤</b></div>
+</div></div>
+<p class="nota"><b>Cómo se organiza:</b> la burbuja abre una <b>lista de chats como WhatsApp</b>: arriba el grupo <b>Equipo</b> (reemplaza a /decisiones), luego el <b>Director</b>, cada <b>asistente</b> por separado y al final <b>Soporte</b>. Cada chat tiene su contador de no leídos. En el chat de un asistente ves solo sus mensajes y le puedes preguntar directamente; responde con datos reales de tu cuenta. Tocar una mascota dentro del grupo también abre su chat. Las propuestas se aprueban en el grupo o en el chat del Director, y quedan en el historial.</p>
+</main></body></html>

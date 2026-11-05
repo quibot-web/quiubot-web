@@ -14,8 +14,19 @@ import type { AccionPropuesta } from "@/app/lib/metas";
 import type { PropuestaUnificada } from "@/app/lib/propuestas";
 import { formatoCop } from "@/app/lib/directorTextos";
 import { NOMBRE_ASISTENTE, asistenteDeMensaje, leadInPropuesta, cuerpoPropuesta, narracionEtapaCreativos } from "@/app/lib/directorChat";
-import { CATALOGO_ACCIONES } from "@/app/lib/propuestas";
 import { campanaIdDe } from "@/app/components/burbuja/usePropuestaAcciones";
+
+// Solo las etiquetas cortas -- CATALOGO_ACCIONES (app/lib/propuestas.ts)
+// no se puede importar acá: ese módulo arrastra "server-only" (vía
+// lib/supabase.ts) y este componente es cliente.
+const ETIQUETA_ACCION: Record<AccionPropuesta, string> = {
+  generar_estrategia: "Generar estrategia",
+  crear_creativos: "Crear creativos",
+  publicar_campana: "Publicar campaña",
+  pausar: "Pausar campaña",
+  ajustar_presupuesto: "Ajustar presupuesto",
+  agregar_anuncios: "Agregar anuncios",
+};
 
 type CreativoPropuesto = {
   titulo?: string;
@@ -263,7 +274,7 @@ export function TarjetaGrupoPropuestas({
       <EsferaAsistente asistente="director" estado="normal" tamano={40} />
       <div style={{ background: "#fff", border: "1px solid #ece9f9", borderRadius: "4px 16px 16px 16px", padding: "12px 16px", maxWidth: "calc(100% - 50px)", flex: 1 }}>
         <p style={{ fontSize: 14, fontWeight: 700, color: "#1a1a1a", margin: "0 0 4px" }}>
-          Tienes {grupo.propuestas.length} propuestas para {CATALOGO_ACCIONES[grupo.accion].label.toLowerCase()}
+          Tienes {grupo.propuestas.length} propuestas para {ETIQUETA_ACCION[grupo.accion].toLowerCase()}
         </p>
         <p style={{ fontSize: 13, color: "#444", margin: "0 0 10px", lineHeight: 1.5 }}>Son del mismo tipo -- puedes revisarlas una por una{puedeAprobarTodas ? " o aprobarlas todas juntas" : ""}.</p>
         <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>

@@ -888,6 +888,10 @@ export default function Home() {
                   <span className="qb-nav-icon"><Icono><path d="M12 1v22M17 5H9.5a3.5 3.5 0 000 7h5a3.5 3.5 0 010 7H6" /></Icono></span>
                   Costos de referencia
                 </a>
+                <a href="/admin/propuestas-prueba" className="qb-admin-item">
+                  <span className="qb-nav-icon"><Icono><path d="M9 12l2 2 4-4" /><circle cx="12" cy="12" r="9" /></Icono></span>
+                  Propuestas de prueba
+                </a>
               </div>
             )}
           </div>

@@ -1,0 +1,86 @@
+<!doctype html><html lang="es"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Equipo del Director</title>
+<style>
+:root{--bg:#F4F3F8;--card:#fff;--ink:#1B1A22;--muted:#6B6880;--line:#E9E7EE;--brand:#5546B8;--bs:#EFEDFB;--chat:#EFEAE2}
+@media (prefers-color-scheme:dark){:root:not([data-theme="light"]){--bg:#121117;--card:#1B1A22;--ink:#F2F1F7;--muted:#A6A3B8;--line:#2A2834;--bs:#28244A;--chat:#16151C}}
+:root[data-theme="dark"]{--bg:#121117;--card:#1B1A22;--ink:#F2F1F7;--muted:#A6A3B8;--line:#2A2834;--bs:#28244A;--chat:#16151C}
+*{box-sizing:border-box;margin:0}body{background:var(--bg);color:var(--ink);font-family:-apple-system,"Inter Display",Inter,Segoe UI,Roboto,sans-serif;-webkit-font-smoothing:antialiased}
+.pag{max-width:1120px;margin:0 auto;padding:28px 16px 40px;display:grid;grid-template-columns:320px 1fr;gap:36px;align-items:start}
+h1{font-size:20px;margin-bottom:6px}.sub{color:var(--muted);font-size:14px;line-height:1.5;margin-bottom:18px}
+.lbl{font-size:12px;font-weight:800;color:var(--muted);text-transform:uppercase;letter-spacing:.05em;margin:18px 0 10px}
+.miembro{display:flex;gap:12px;align-items:center;background:var(--card);border:1px solid var(--line);border-radius:16px;padding:10px 12px;margin-bottom:8px}
+.miembro b{display:block;font-size:14.5px}.miembro small{color:var(--muted);font-size:12.5px;line-height:1.35;display:block}
+.tabs{display:flex;background:var(--bs);border-radius:14px;padding:4px;gap:4px;margin:0 14px 0}
+.tabs span{flex:1;text-align:center;padding:8px;border-radius:10px;font-size:13.5px;font-weight:800;color:var(--brand)}
+.tabs span.on{background:var(--card);box-shadow:0 2px 6px rgba(0,0,0,.08)}
+.panel{width:min(480px,100%);height:860px;background:var(--card);border:1px solid var(--line);border-radius:26px;overflow:hidden;display:flex;flex-direction:column;box-shadow:0 30px 70px -30px rgba(0,0,0,.4);justify-self:center}
+.head{padding:14px 16px;display:flex;align-items:center;gap:10px}
+.pila{display:flex}.pila svg{margin-left:-12px;border-radius:50%;background:var(--card)}.pila svg:first-child{margin-left:0}
+.head b{font-size:16px;display:block}.head small{color:var(--muted);font-size:12.5px}
+.cuerpo{flex:1;overflow:auto;padding:14px 12px;display:flex;flex-direction:column;gap:10px;background:var(--chat);margin-top:10px}
+.sis{align-self:center;background:var(--card);color:var(--muted);font-size:12px;font-weight:700;border-radius:999px;padding:5px 12px;box-shadow:0 1px 2px rgba(0,0,0,.06)}
+.fila{display:flex;gap:8px;align-items:flex-end}.fila.u{justify-content:flex-end}
+.m{max-width:80%;background:var(--card);border-radius:16px 16px 16px 5px;padding:8px 12px 9px;font-size:14px;line-height:1.42;box-shadow:0 1px 2px rgba(0,0,0,.06)}
+.m .n{font-size:12.5px;font-weight:800;margin-bottom:2px;display:flex;gap:6px;align-items:center}
+.m .n em{font-style:normal;font-weight:700;font-size:11px;color:var(--muted)}
+.m .h{display:block;text-align:right;font-size:11px;color:var(--muted);margin-top:2px}
+.u .m{background:#D9FDD3;color:#111;border-radius:16px 16px 5px 16px}
+.mini{width:30px;height:30px;flex:0 0 auto}
+.dato{display:flex;gap:8px;margin-top:8px}.dato div{flex:1;background:var(--bg);border-radius:10px;padding:7px 8px}.dato small{display:block;font-size:11px;color:var(--muted)}.dato b{font-size:15px}
+.spark{margin-top:8px;height:36px}
+.prop{margin-top:8px;border:1.5px solid var(--brand);border-radius:12px;padding:10px}
+.prop b{font-size:13.5px}.prop p{font-size:12.5px;color:var(--muted);margin-top:3px}
+.bts{display:flex;gap:6px;margin-top:8px}.bts span{flex:1;text-align:center;border-radius:9px;padding:8px;font-weight:800;font-size:13px}
+.si{background:var(--brand);color:#fff}.no{background:var(--card);border:1.5px solid var(--line)}
+.thumbs{display:flex;gap:6px;margin-top:8px}.thumbs i{flex:1;height:70px;border-radius:9px;background:linear-gradient(160deg,#f6b21a,#d4870a)}
+.thumbs i:nth-child(2){background:linear-gradient(160deg,#5546B8,#9d8cff)}.thumbs i:nth-child(3){background:linear-gradient(160deg,#25D366,#0e7a4a)}
+.ment{color:var(--brand);font-weight:800}
+.pie{border-top:1px solid var(--line);padding:10px 12px;display:flex;gap:8px;align-items:center}
+.pie div{flex:1;border:1.5px solid var(--line);border-radius:999px;padding:11px 14px;color:var(--muted);font-size:14px}
+.pie b{width:42px;height:42px;border-radius:50%;background:var(--brand);color:#fff;display:grid;place-items:center}
+.nota{grid-column:1/-1;background:var(--card);border:1px solid var(--line);border-radius:14px;padding:14px 16px;color:var(--muted);font-size:13.5px;line-height:1.6}.nota b{color:var(--ink)}
+@media (max-width:880px){.pag{grid-template-columns:1fr}.panel{height:auto}}
+</style></head><body>
+<svg width="0" height="0" style="position:absolute"><defs>
+ <radialGradient id="gD" cx=".35" cy=".3"><stop offset="0" stop-color="#E6E0FF"/><stop offset=".6" stop-color="#A897F5"/><stop offset="1" stop-color="#6E58DB"/></radialGradient>
+ <radialGradient id="gA" cx=".35" cy=".3"><stop offset="0" stop-color="#DDFBEA"/><stop offset=".6" stop-color="#5FD99A"/><stop offset="1" stop-color="#1E9E6B"/></radialGradient>
+ <radialGradient id="gC" cx=".35" cy=".3"><stop offset="0" stop-color="#FFF1D6"/><stop offset=".6" stop-color="#FFB547"/><stop offset="1" stop-color="#E07B00"/></radialGradient>
+ <radialGradient id="gV" cx=".35" cy=".3"><stop offset="0" stop-color="#DDEBFF"/><stop offset=".6" stop-color="#6FA8FF"/><stop offset="1" stop-color="#2F6BE0"/></radialGradient>
+ <symbol id="cara" viewBox="0 0 100 100"><ellipse cx="40" cy="46" rx="6" ry="8" fill="#1B1A3A"/><ellipse cx="60" cy="46" rx="6" ry="8" fill="#1B1A3A"/><circle cx="42" cy="43" r="2.2" fill="#fff"/><circle cx="62" cy="43" r="2.2" fill="#fff"/><ellipse cx="32" cy="57" rx="5" ry="3" fill="#FF9EC7" opacity=".7"/><ellipse cx="68" cy="57" rx="5" ry="3" fill="#FF9EC7" opacity=".7"/></symbol>
+ <symbol id="D" viewBox="0 0 100 100"><path d="M6 60 A46 12 0 0 1 94 60" fill="none" stroke="#C9BEFF" stroke-width="4"/><circle cx="50" cy="50" r="32" fill="url(#gD)"/><path d="M6 60 A46 12 0 0 0 94 60" fill="none" stroke="#C9BEFF" stroke-width="4"/><use href="#cara"/></symbol>
+ <symbol id="A" viewBox="0 0 100 100"><circle cx="50" cy="52" r="34" fill="url(#gA)"/><use href="#cara"/><circle cx="40" cy="46" r="10" fill="none" stroke="#1B1A3A" stroke-width="3"/><circle cx="60" cy="46" r="10" fill="none" stroke="#1B1A3A" stroke-width="3"/><path d="M50 46h0" stroke="#1B1A3A" stroke-width="3"/></symbol>
+ <symbol id="C" viewBox="0 0 100 100"><circle cx="50" cy="54" r="34" fill="url(#gC)"/><path d="M28 30 Q50 6 74 30 Q50 22 28 30Z" fill="#E0457B"/><circle cx="74" cy="28" r="5" fill="#E0457B"/><use href="#cara"/></symbol>
+ <symbol id="V" viewBox="0 0 100 100"><circle cx="50" cy="52" r="34" fill="url(#gV)"/><path d="M50 8 l6 12 h-12z" fill="#2F6BE0"/><circle cx="50" cy="8" r="4" fill="#FFD23F"/><use href="#cara"/></symbol>
+</defs></svg>
+<main class="pag">
+ <section>
+  <h1>El equipo del Director</h1>
+  <p class="sub">Un segundo chat, tipo grupo, donde el Director coordina a sus asistentes. Cada mascota habla de su trabajo real: números, anuncios nuevos, presupuesto. El usuario mira, aprueba y puede escribirle a cualquiera.</p>
+  <p class="lbl">Integrantes (nombres de ejemplo)</p>
+  <div class="miembro"><svg width="42" height="42"><use href="#D"/></svg><div><b style="color:#5546B8">Director</b><small>Coordina, decide y te pide aprobación.</small></div></div>
+  <div class="miembro"><svg width="42" height="42"><use href="#A"/></svg><div><b style="color:#1E9E6B">Analista</b><small>Lee los resultados de Meta cada día.</small></div></div>
+  <div class="miembro"><svg width="42" height="42"><use href="#C"/></svg><div><b style="color:#E07B00">Creativo</b><small>Hace anuncios, textos y videos nuevos.</small></div></div>
+  <div class="miembro"><svg width="42" height="42"><use href="#V"/></svg><div><b style="color:#2F6BE0">Guardián</b><small>Cuida el presupuesto y avisa de problemas.</small></div></div>
+ </section>
+
+ <div class="panel">
+  <div class="head"><div class="pila"><svg width="38" height="38"><use href="#D"/></svg><svg width="38" height="38"><use href="#A"/></svg><svg width="38" height="38"><use href="#C"/></svg><svg width="38" height="38"><use href="#V"/></svg></div>
+   <div><b>Equipo de Ferretería Juan</b><small>Director, Analista, Creativo, Guardián y tú</small></div></div>
+  <div class="tabs"><span>💬 Director</span><span class="on">👥 Equipo</span></div>
+  <div class="cuerpo">
+   <span class="sis">Hoy</span>
+   <div class="fila"><svg class="mini"><use href="#A"/></svg><div class="m"><span class="n" style="color:#1E9E6B">Analista <em>· revisión diaria</em></span>Reporte de ayer en tu campaña de WhatsApp:
+    <div class="dato"><div><small>Conversaciones</small><b>14</b></div><div><small>Costo c/u</small><b>$3.900</b></div><div><small>vs. meta</small><b>↑ 12%</b></div></div>
+    <svg class="spark" viewBox="0 0 200 36" width="100%"><polyline points="0,30 30,26 60,28 90,20 120,22 150,12 200,8" fill="none" stroke="#1E9E6B" stroke-width="3" stroke-linecap="round"/></svg><span class="h">9:02</span></div></div>
+   <div class="fila"><svg class="mini"><use href="#V"/></svg><div class="m"><span class="n" style="color:#2F6BE0">Guardián</span>Ojo: el anuncio <b>"Video pistola v2"</b> lleva 3 días con el costo subiendo y ya gastó el 40 % del día. Los otros dos van bien.<span class="h">9:03</span></div></div>
+   <div class="fila"><svg class="mini"><use href="#C"/></svg><div class="m"><span class="n" style="color:#E07B00">Creativo</span>Si lo pausamos, tengo listos 3 anuncios nuevos con ganchos distintos para reemplazarlo:
+    <div class="thumbs"><i></i><i></i><i></i></div><span class="h">9:05</span></div></div>
+   <div class="fila"><svg class="mini"><use href="#D"/></svg><div class="m"><span class="n" style="color:#5546B8">Director</span><span class="ment">@Juan</span>, mi propuesta:
+    <div class="prop"><b>Pausar "Video pistola v2" y agregar 3 anuncios nuevos</b><p>Mismo presupuesto diario. Lo reviso de nuevo en 3 días.</p><div class="bts"><span class="si">✓ Aprobar</span><span class="no">Ver detalle</span></div></div><span class="h">9:06</span></div></div>
+   <div class="fila u"><div class="m">@Creativo ¿uno de los nuevos puede mostrar la garantía de 1 año?<span class="h">9:20 ✓✓</span></div></div>
+   <div class="fila"><svg class="mini"><use href="#C"/></svg><div class="m"><span class="n" style="color:#E07B00">Creativo</span>¡Claro! Cambié el segundo: ahora el gancho es "1 año de garantía, pagas al recibir". 💪<span class="h">9:21</span></div></div>
+  </div>
+  <div class="pie"><div>Escribe al equipo o menciona con @…</div><b>➤</b></div>
+ </div>
+
+ <p class="nota"><b>Cómo funciona:</b> la burbuja tiene dos pestañas: <b>Director</b> (chat uno a uno, para preguntar, crear metas y conectar cosas) y <b>Equipo</b> (el grupo). En el grupo, <b>cada mensaje sale de algo que pasó de verdad</b>: la sincronización de Meta (Analista), las alertas y el gasto (Guardián), los creativos generados (Creativo) y las propuestas del motor del Director (Director). Nada de conversación inventada para "llenar". Las propuestas se aprueban ahí mismo. El usuario puede mencionar a un asistente con @ y responde el que corresponde. Los nombres, colores y accesorios son de ejemplo: se usan las mascotas reales del equipo.</p>
+</main></body></html>

@@ -41,7 +41,7 @@ function TarjetaContexto({ contexto }: { contexto: ContextoCuentaDirector }) {
         })}
       </div>
       {contexto.propuestasPendientes > 0 && (
-        <Link href="/decisiones" style={{ color: "#534AB7", fontWeight: 700, textDecoration: "none" }}>
+        <Link href="/equipo" style={{ color: "#534AB7", fontWeight: 700, textDecoration: "none" }}>
           {contexto.propuestasPendientes} propuesta{contexto.propuestasPendientes === 1 ? "" : "s"} pendiente{contexto.propuestasPendientes === 1 ? "" : "s"} →
         </Link>
       )}
@@ -195,7 +195,7 @@ export default function PanelDirectorGeneral({
               <button onClick={entrarACrearMeta} style={estiloChip}>
                 Crear una meta
               </button>
-              <Link href="/decisiones" style={estiloChipLink}>
+              <Link href="/equipo" style={estiloChipLink}>
                 Ver propuestas
               </Link>
               <Link href="/?tab=integraciones" style={estiloChipLink}>

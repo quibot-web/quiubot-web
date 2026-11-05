@@ -24,7 +24,7 @@ export default function BadgeDecisiones({ compacto = false }: { compacto?: boole
   if (compacto) {
     return (
       <span
-        onClick={() => router.push("/decisiones")}
+        onClick={() => router.push("/equipo")}
         style={{
           position: "absolute",
           top: -2,
@@ -51,7 +51,7 @@ export default function BadgeDecisiones({ compacto = false }: { compacto?: boole
 
   return (
     <button
-      onClick={() => router.push("/decisiones")}
+      onClick={() => router.push("/equipo")}
       style={{
         display: "flex",
         alignItems: "center",

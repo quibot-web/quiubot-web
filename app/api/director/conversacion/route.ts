@@ -11,6 +11,7 @@ import { supabaseAdmin } from "@/lib/supabase";
 import { desencriptarSiHaceFalta } from "@/lib/crypto";
 import { verificarLimite } from "@/lib/rateLimit";
 import { obtenerContextoCuenta, type UsuarioContextoCuenta } from "@/app/lib/director/contextoCuenta";
+import { llamarDirector } from "@/app/lib/director/llamarDirector";
 import {
   MODELO_DIRECTOR_GENERAL,
   RespuestaDirectorGeneralSchema,
@@ -18,7 +19,6 @@ import {
   type AccionDirector,
 } from "@/app/lib/director/promptDirectorGeneral";
 
-const TIMEOUT_OPENAI_MS = 45_000;
 const CANTIDAD_MENSAJES_HISTORIAL = 20;
 
 type MensajeDirectorGeneral = {
@@ -59,33 +59,6 @@ async function obtenerHistorial(userId: string): Promise<MensajeDirectorGeneral[
   }));
 }
 
-async function llamarDirector(apiKey: string, systemPrompt: string, historial: { role: "user" | "assistant"; content: string }[]): Promise<unknown> {
-  const controller = new AbortController();
-  const timeoutId = setTimeout(() => controller.abort(), TIMEOUT_OPENAI_MS);
-  try {
-    const res = await fetch("https://api.openai.com/v1/chat/completions", {
-      method: "POST",
-      headers: { "Content-Type": "application/json", Authorization: `Bearer ${apiKey}` },
-      body: JSON.stringify({
-        model: MODELO_DIRECTOR_GENERAL,
-        messages: [{ role: "system", content: systemPrompt }, ...historial],
-        temperature: 0.4,
-        response_format: { type: "json_object" },
-      }),
-      signal: controller.signal,
-    });
-    if (!res.ok) {
-      const detalle = await res.text();
-      throw new Error(`Error de OpenAI (${res.status}): ${detalle}`);
-    }
-    const data = await res.json();
-    const contenido = data?.choices?.[0]?.message?.content;
-    if (typeof contenido !== "string") throw new Error("OpenAI no devolvió contenido de texto.");
-    return JSON.parse(contenido);
-  } finally {
-    clearTimeout(timeoutId);
-  }
-}
 
 type ResultadoTurno =
   | { ok: true; mensajeDirector: MensajeDirectorGeneral }
@@ -113,7 +86,7 @@ async function ejecutarTurno(params: {
 
   let crudo: unknown;
   try {
-    crudo = await llamarDirector(apiKey, systemPrompt, historialOpenAI);
+    crudo = await llamarDirector(apiKey, MODELO_DIRECTOR_GENERAL, systemPrompt, historialOpenAI);
   } catch (err) {
     console.error("Error llamando al Director (general):", err);
     return { ok: false, error: "No se pudo conversar con el Director en este momento." };

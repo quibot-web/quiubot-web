@@ -133,7 +133,7 @@ export default function TarjetaEquipo() {
                 </span>
               )}
               <Link
-                href={a.id === "director" ? "/decisiones" : `/decisiones?asistente=${a.id}`}
+                href={a.id === "director" ? "/equipo" : `/equipo?asistente=${a.id}`}
                 aria-label={ariaLabelDe(a.id)}
                 className={estilos.enlaceEsfera}
               >

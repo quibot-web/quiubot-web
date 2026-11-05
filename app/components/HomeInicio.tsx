@@ -487,7 +487,7 @@ export default function HomeInicio({ nombreUsuario }: { nombreUsuario: string })
     decisiones_pendientes: () =>
       datos.es_admin ? (
         <div
-          onClick={() => router.push("/decisiones")}
+          onClick={() => router.push("/equipo")}
           style={{
             background: "#fff",
             border: "1px solid #ece9f9",
