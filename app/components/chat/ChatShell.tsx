@@ -20,7 +20,7 @@
 // en vez de revelar lo ya cargado -- hoy el techo de historial es el
 // mismo límite fijo de siempre (50-60 filas), esto solo cambiaría cómo
 // se revela, no cuánto hay disponible.
-import { useEffect, useRef, useState, Fragment } from "react";
+import { useEffect, useRef, useState } from "react";
 import { etiquetaFecha } from "./etiquetaFecha";
 
 export type ItemChat = {
@@ -181,21 +181,25 @@ export default function ChatShell({
           <>
             {hayAnteriores && <div style={{ textAlign: "center", fontSize: 11, color: "#bbb", padding: "4px 0" }}>Cargando anteriores...</div>}
             {grupos.map((g) => (
-              <Fragment key={`${g.etiqueta}-${g.items[0].id}`}>
+              // Cada día en su propio contenedor: el separador es
+              // sticky DENTRO de él, así que no puede "pegarse" más
+              // allá de donde termina ese día -- el siguiente día lo
+              // empuja solo, nunca quedan dos fechas fijas a la vez
+              // (option 1 del pedido: contención, no IntersectionObserver).
+              <div key={`${g.etiqueta}-${g.items[0].id}`} style={{ display: "flex", flexDirection: "column", gap: 10 }}>
                 <span
                   style={{
                     position: "sticky",
-                    top: -1,
+                    top: 6,
                     zIndex: 1,
                     alignSelf: "center",
                     background: "#fff",
-                    border: "1px solid #eee",
-                    color: "#888",
+                    color: "#666",
                     fontSize: 11,
                     fontWeight: 700,
                     borderRadius: 999,
-                    padding: "3px 12px",
-                    boxShadow: "0 1px 3px rgba(0,0,0,0.04)",
+                    padding: "4px 13px",
+                    boxShadow: "0 2px 6px rgba(0,0,0,0.12)",
                   }}
                 >
                   {g.etiqueta}
@@ -203,7 +207,7 @@ export default function ChatShell({
                 {g.items.map((it) => (
                   <div key={it.id}>{it.render()}</div>
                 ))}
-              </Fragment>
+              </div>
             ))}
             {escribiendo && indicadorEscribiendo}
           </>
