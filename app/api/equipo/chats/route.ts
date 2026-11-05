@@ -24,9 +24,15 @@ export async function GET() {
   const userId = await cargarUsuarioId(session.user.email.trim().toLowerCase());
   if (!userId) return NextResponse.json({ error: "Usuario no encontrado" }, { status: 404 });
 
-  const [leidosRes, mensajesEquipoRes, directorRes, soporteRes] = await Promise.all([
+  const [leidosRes, mensajesEquipoRes, propuestasRes, directorRes, soporteRes] = await Promise.all([
     supabaseAdmin.from("chats_equipo_leido").select("chat, ultimo_leido_en").eq("user_id", userId),
     supabaseAdmin.from("mensajes_equipo").select("asistente, tipo_evento, contenido, creado_en").eq("user_id", userId).order("creado_en", { ascending: false }).limit(200),
+    // Vista previa/no-leídos de los 6 asistentes también salen de
+    // propuestas -- es la única fuente real que tienen Marca/Estratega/
+    // Publicador hoy (sus otras fuentes, estrategias_jobs/
+    // campanas_publicadas/errores_publicacion, solo se leen en la
+    // transcripción completa del chat, no en este resumen de la lista).
+    supabaseAdmin.from("propuestas").select("asistente, titulo, estado, creado_en, decidido_en").eq("user_id", userId).order("creado_en", { ascending: false }).limit(200),
     supabaseAdmin.from("director_conversaciones").select("rol, mensaje, creado_en").eq("user_id", userId).order("creado_en", { ascending: false }).limit(50),
     supabaseAdmin.from("asistente_conversaciones").select("rol, mensaje, creado_en").eq("user_id", userId).order("creado_en", { ascending: false }).limit(50),
   ]);
@@ -35,12 +41,18 @@ export async function GET() {
   for (const fila of leidosRes.data ?? []) leidoPorChat.set(fila.chat as ChatEquipoId, fila.ultimo_leido_en);
 
   const mensajesEquipo = mensajesEquipoRes.data ?? [];
+  const propuestas = propuestasRes.data ?? [];
 
-  function resumenMensajesEquipo(filtro: (asistente: string) => boolean): { previa: Previa; noLeidos: number } {
-    const propios = mensajesEquipo.filter((m) => filtro(m.asistente));
-    const previa = propios[0] ? { texto: (propios[0].contenido as { texto: string }).texto, creadoEn: propios[0].creado_en } : null;
-    const leido = leidoPorChat.get("equipo") ?? EPOCA;
-    const noLeidos = propios.filter((m) => m.tipo_evento !== "mensaje_usuario" && m.creado_en > leido).length;
+  function resumenAsistente(asistente: string, chat: ChatEquipoId): { previa: Previa; noLeidos: number } {
+    const eventos = mensajesEquipo.filter((m) => m.asistente === asistente).map((m) => ({ texto: (m.contenido as { texto: string }).texto, creadoEn: m.creado_en, esDelUsuario: m.tipo_evento === "mensaje_usuario" }));
+    const suyas = propuestas
+      .filter((p) => p.asistente === asistente)
+      .map((p) => ({ texto: p.titulo as string, creadoEn: (p.decidido_en as string | null) ?? (p.creado_en as string), esDelUsuario: false }));
+
+    const todas = [...eventos, ...suyas].sort((a, b) => (a.creadoEn < b.creadoEn ? 1 : -1));
+    const previa = todas[0] ? { texto: todas[0].texto, creadoEn: todas[0].creadoEn } : null;
+    const leido = leidoPorChat.get(chat) ?? EPOCA;
+    const noLeidos = todas.filter((t) => !t.esDelUsuario && t.creadoEn > leido).length;
     return { previa, noLeidos };
   }
 
@@ -52,12 +64,22 @@ export async function GET() {
     return { previa, noLeidos };
   }
 
+  function resumenEquipo(): { previa: Previa; noLeidos: number } {
+    const previa = mensajesEquipo[0] ? { texto: (mensajesEquipo[0].contenido as { texto: string }).texto, creadoEn: mensajesEquipo[0].creado_en } : null;
+    const leido = leidoPorChat.get("equipo") ?? EPOCA;
+    const noLeidos = mensajesEquipo.filter((m) => m.tipo_evento !== "mensaje_usuario" && m.creado_en > leido).length;
+    return { previa, noLeidos };
+  }
+
   const resultado: Record<ChatEquipoId, { previa: Previa; noLeidos: number }> = {
-    equipo: resumenMensajesEquipo(() => true),
+    equipo: resumenEquipo(),
     director: resumenFilas(directorRes.data, "director"),
-    analista: resumenMensajesEquipo((a) => a === "analista"),
-    creativo: resumenMensajesEquipo((a) => a === "creativo"),
-    optimizador: resumenMensajesEquipo((a) => a === "optimizador"),
+    marca: resumenAsistente("marca", "marca"),
+    estratega: resumenAsistente("estratega", "estratega"),
+    creativo: resumenAsistente("creativo", "creativo"),
+    publicador: resumenAsistente("publicador", "publicador"),
+    analista: resumenAsistente("analista", "analista"),
+    optimizador: resumenAsistente("optimizador", "optimizador"),
     soporte: resumenFilas(soporteRes.data, "soporte"),
   };
 

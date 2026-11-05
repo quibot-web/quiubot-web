@@ -8,18 +8,20 @@
 // de texto -- el botón de abajo lleva al chat del Director, que es el
 // único que conversa con el usuario.
 import { useEffect, useRef, useState } from "react";
+import Link from "next/link";
 import EsferaAsistente from "@/app/components/esferas/EsferaAsistente";
 import type { AsistenteId } from "@/app/components/esferas/esferasShared";
+import { NOMBRE_CHAT, type ChatEquipoId } from "@/app/lib/director/chatsEquipo";
 
-type ItemTranscripcion = { id: string; rol: "asistente" | "director"; texto: string; datos?: { etiqueta: string; valor: string }[]; miniaturas?: string[]; creadoEn: string };
+type ItemTranscripcion = { id: string; rol: "asistente" | "director"; texto: string; datos?: { etiqueta: string; valor: string }[]; miniaturas?: string[]; enlaceCampanaId?: string; creadoEn: string };
 
-const NOMBRE_VISIBLE: Record<"analista" | "creativo" | "optimizador", string> = { analista: "Analista", creativo: "Creativo", optimizador: "Optimizador" };
+type AsistenteConChatPropio = "marca" | "estratega" | "creativo" | "publicador" | "analista" | "optimizador";
 
 export default function PanelAsistenteIndividual({
   asistente,
   onPreguntarAlDirector,
 }: {
-  asistente: "analista" | "creativo" | "optimizador";
+  asistente: AsistenteConChatPropio;
   onPreguntarAlDirector: (pregunta: string) => void;
 }) {
   const [transcripcion, setTranscripcion] = useState<ItemTranscripcion[]>([]);
@@ -69,6 +71,11 @@ export default function PanelAsistenteIndividual({
                     ))}
                   </div>
                 )}
+                {item.enlaceCampanaId && (
+                  <Link href={`/campanas?highlight=${item.enlaceCampanaId}`} style={{ display: "inline-block", marginTop: 6, fontSize: 12, color: "#534AB7", fontWeight: 600, textDecoration: "underline" }}>
+                    Ver campaña
+                  </Link>
+                )}
               </div>
             </div>
           ))
@@ -78,7 +85,7 @@ export default function PanelAsistenteIndividual({
 
       <div style={{ borderTop: "1px solid #eee", padding: 12 }}>
         <button
-          onClick={() => onPreguntarAlDirector(`Cuéntame más sobre lo que ha hecho el ${NOMBRE_VISIBLE[asistente]}`)}
+          onClick={() => onPreguntarAlDirector(`Cuéntame más sobre lo que ha hecho el ${NOMBRE_CHAT[asistente as ChatEquipoId]}`)}
           style={{ width: "100%", background: "#534AB7", color: "#fff", border: "none", borderRadius: 10, padding: "10px 14px", fontSize: 13, fontWeight: 700, cursor: "pointer" }}
         >
           Preguntarle al Director sobre esto

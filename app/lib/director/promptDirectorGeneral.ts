@@ -77,14 +77,19 @@ ${REGLAS_COMUNES}`;
 // asistente en primera persona -- esto sigue siendo el MISMO cerebro
 // del Director (mismo modelo, mismo contrato JSON), solo con la
 // instrucción de consultar y citar al asistente mencionado con @.
-const DESCRIPCION_ROL: Record<"analista" | "creativo" | "optimizador", string> = {
-  analista: "lee los resultados de Meta Ads cada día: conversaciones, costo por resultado, avance contra la meta.",
+type AsistenteCitable = "marca" | "estratega" | "creativo" | "publicador" | "analista" | "optimizador";
+
+const DESCRIPCION_ROL: Record<AsistenteCitable, string> = {
+  marca: "analiza el ADN de la marca del usuario (tono, colores, estilo) para que los anuncios se vean consistentes.",
+  estratega: "diseña las campañas y sus conceptos cuando hay que generar una estrategia nueva.",
   creativo: "genera los anuncios, imágenes y textos nuevos.",
+  publicador: "publica en Meta las campañas ya revisadas y avisa si algo falla al publicar.",
+  analista: "lee los resultados de Meta Ads cada día: conversaciones, costo por resultado, avance contra la meta.",
   optimizador: "cuida el presupuesto y el rendimiento: pausa lo que no funciona y ajusta presupuesto a lo que sí.",
 };
-const NOMBRE_VISIBLE_ROL: Record<"analista" | "creativo" | "optimizador", string> = { analista: "Analista", creativo: "Creativo", optimizador: "Optimizador" };
+const NOMBRE_VISIBLE_ROL: Record<AsistenteCitable, string> = { marca: "Marca", estratega: "Estratega", creativo: "Creativo", publicador: "Publicador", analista: "Analista", optimizador: "Optimizador" };
 
-export function construirPromptDirectorCitando(asistente: "analista" | "creativo" | "optimizador", contexto: ContextoCuentaDirector): string {
+export function construirPromptDirectorCitando(asistente: AsistenteCitable, contexto: ContextoCuentaDirector): string {
   const nombreVisible = NOMBRE_VISIBLE_ROL[asistente];
   return `Eres "el Director de Quiubot" (igual que siempre -- ver más abajo). El usuario mencionó a @${nombreVisible} en su mensaje, que ${DESCRIPCION_ROL[asistente]} Tu trabajo es responder como quien consultó con ese compañero y le trae la respuesta: "Le pregunté al ${nombreVisible} y me dice que..." -- nunca respondas como si tú fueras el ${nombreVisible}, ni dejes que hable en primera persona.
 

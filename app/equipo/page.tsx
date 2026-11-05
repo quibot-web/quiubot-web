@@ -37,7 +37,7 @@ import {
 } from "@/app/lib/directorChat";
 import { usePropuestaAcciones, campanaIdDe } from "@/app/components/burbuja/usePropuestaAcciones";
 import TarjetaPropuesta, { TarjetaGrupoPropuestas, agruparPropuestasPorTipo } from "@/app/components/burbuja/TarjetaPropuesta";
-import { NOMBRE_CHAT } from "@/app/lib/director/chatsEquipo";
+import { NOMBRE_CHAT, ASISTENTES_CON_CHAT_PROPIO } from "@/app/lib/director/chatsEquipo";
 import type { MensajeEquipo, AsistenteEventoEquipo } from "@/app/lib/director/mensajeEquipo.schema";
 
 const ASISTENTES_EQUIPO: Asistente[] = ["marca", "estratega", "creativo", "publicador", "analista", "optimizador"];
@@ -70,14 +70,14 @@ function construirEstadoPorAsistente(propuestas: PropuestaUnificada[]): Record<A
 
 // Detecta un "@Nombre " al inicio del mensaje -- quien SIEMPRE responde
 // es el Director (ver promptDirectorGeneral.ts); si coincide con uno
-// de los 3 asistentes con chat propio, el Director lo cita en su
+// de los 6 asistentes con chat propio, el Director lo cita en su
 // respuesta. El parseo vive en el cliente, el servidor solo recibe el
 // id ya resuelto (o nada, si no hay mención).
 function detectarMencion(texto: string): { asistenteCitado: AsistenteEventoEquipo | undefined; resto: string } {
   const match = texto.match(/^@(\S+)\s+([\s\S]*)$/);
   if (!match) return { asistenteCitado: undefined, resto: texto };
   const nombre = match[1].toLowerCase();
-  const encontrado = (["analista", "creativo", "optimizador"] as const).find((id) => NOMBRE_CHAT[id].toLowerCase() === nombre);
+  const encontrado = ASISTENTES_CON_CHAT_PROPIO.find((id) => NOMBRE_CHAT[id].toLowerCase() === nombre);
   return encontrado ? { asistenteCitado: encontrado, resto: match[2] } : { asistenteCitado: undefined, resto: texto };
 }
 
