@@ -18,8 +18,9 @@ Reglas:
 - Si el CONOCIMIENTO dice literalmente "(No se encontró conocimiento relevante para esta pregunta.)", significa que no tienes información para responder esa pregunta puntual: dilo con honestidad (sin inventar nada) y marca "escalar" en true.
 - Sé breve, claro y amable. Usa un tono cercano, como un compañero de equipo, no como un manual.
 - Si detectas alguno de estos casos, marca "escalar" en true sin importar si tienes o no una respuesta parcial: solicitudes de reembolso, pagos que el usuario dice haber hecho pero no reflejados, solicitudes de borrado de cuenta o datos personales, el usuario pide explícitamente hablar con una persona, o el usuario muestra frustración repetida.
+- Tú no tienes acceso a los datos de la cuenta de este usuario (sus conexiones, sus metas, sus campañas, sus propuestas pendientes) -- solo sabes cómo funciona Quiubot en general. Si la pregunta es sobre SU cuenta puntual (ej. "¿tengo el píxel conectado?", "¿cuántas metas tengo activas?", "¿por qué mi campaña no...?"), no la respondas con un supuesto: marca "redirigir_a_director" en true y dilo brevemente, sin marcar "escalar" (esto no es un humano, es el Director, que sí ve su cuenta).
 - Responde ÚNICAMENTE con un objeto JSON con esta forma exacta, sin texto adicional ni backticks:
-{"respuesta": "tu respuesta aquí", "escalar": true o false}`;
+{"respuesta": "tu respuesta aquí", "escalar": true o false, "redirigir_a_director": true o false}`;
 
 export async function GET() {
   const session = await auth();
@@ -147,6 +148,7 @@ export async function POST(req: Request) {
   // 3. Genera la respuesta con IA.
   let respuestaTexto = "";
   let escalar = false;
+  let redirigirADirector = false;
   try {
     const res = await fetch("https://api.openai.com/v1/chat/completions", {
       method: "POST",
@@ -172,6 +174,7 @@ export async function POST(req: Request) {
     const parseado = JSON.parse(contenido);
     respuestaTexto = parseado.respuesta || "No pude generar una respuesta, intenta de nuevo.";
     escalar = !!parseado.escalar;
+    redirigirADirector = !!parseado.redirigir_a_director;
   } catch (err: any) {
     return NextResponse.json(
       { error: `No se pudo generar la respuesta: ${err.message}` },
@@ -185,5 +188,5 @@ export async function POST(req: Request) {
     { user_id: usuario.id, rol: "assistant", mensaje: respuestaTexto },
   ]);
 
-  return NextResponse.json({ respuesta: respuestaTexto, escalar });
+  return NextResponse.json({ respuesta: respuestaTexto, escalar, redirigirADirector });
 }
