@@ -36,6 +36,9 @@ export type RecienDecidida = {
   propuesta: PropuestaUnificada;
   etiqueta: string;
   confirmacion: { texto: string; avisoReconectarMeta?: boolean };
+  // Fijado al crear la entrada, nunca recalculado al renderizar (ver
+  // ChatShell -- necesita una fecha estable para el orden cronológico).
+  creadoEn: string;
 };
 
 export type ErrorAccion = { mensaje: string; motivo?: string; paso?: string };
@@ -63,7 +66,7 @@ export function usePropuestaAcciones(campanasPorId: Record<string, string>, onCa
       const data = await leerJsonSeguro(res);
       if (!res.ok) {
         const { texto, avisoReconectarMeta } = confirmacionFalla(asistenteDeMensaje(p), (data.error as string) || "No se pudo aprobar.", data.motivo as string | undefined);
-        setRecienDecididas((prev) => [...prev, { propuesta: p, etiqueta: "Sí, adelante", confirmacion: { texto, avisoReconectarMeta } }]);
+        setRecienDecididas((prev) => [...prev, { propuesta: p, etiqueta: "Sí, adelante", confirmacion: { texto, avisoReconectarMeta }, creadoEn: new Date().toISOString() }]);
         setError({ mensaje: (data.error as string) || "No se pudo aprobar.", motivo: data.motivo as string | undefined, paso: data.paso as string | undefined });
         return;
       }
@@ -91,7 +94,7 @@ export function usePropuestaAcciones(campanasPorId: Record<string, string>, onCa
           presupuestoDespues: resultado?.presupuesto_despues,
           cantidadAnuncios: resultado?.anuncios_creados?.length,
         });
-        setRecienDecididas((prev) => [...prev, { propuesta: p, etiqueta: "Sí, adelante", confirmacion: { texto } }]);
+        setRecienDecididas((prev) => [...prev, { propuesta: p, etiqueta: "Sí, adelante", confirmacion: { texto }, creadoEn: new Date().toISOString() }]);
       }
       onCambio();
     } finally {
@@ -110,7 +113,7 @@ export function usePropuestaAcciones(campanasPorId: Record<string, string>, onCa
         setError({ mensaje: (data.error as string) || "No se pudo rechazar." });
         return;
       }
-      setRecienDecididas((prev) => [...prev, { propuesta: p, etiqueta: "No por ahora", confirmacion: { texto: TEXTO_RECHAZO } }]);
+      setRecienDecididas((prev) => [...prev, { propuesta: p, etiqueta: "No por ahora", confirmacion: { texto: TEXTO_RECHAZO }, creadoEn: new Date().toISOString() }]);
       onCambio();
     } finally {
       setProcesandoId(null);
@@ -129,7 +132,7 @@ export function usePropuestaAcciones(campanasPorId: Record<string, string>, onCa
       const data = await leerJsonSeguro(res);
       if (!res.ok) {
         const { texto, avisoReconectarMeta } = confirmacionFalla(asistenteDeMensaje(p), (data.error as string) || "No se pudo ajustar.", data.motivo as string | undefined);
-        setRecienDecididas((prev) => [...prev, { propuesta: p, etiqueta: "Sí, adelante", confirmacion: { texto, avisoReconectarMeta } }]);
+        setRecienDecididas((prev) => [...prev, { propuesta: p, etiqueta: "Sí, adelante", confirmacion: { texto, avisoReconectarMeta }, creadoEn: new Date().toISOString() }]);
         setError({ mensaje: (data.error as string) || "No se pudo ajustar.", motivo: data.motivo as string | undefined, paso: data.paso as string | undefined });
         return;
       }
@@ -140,7 +143,7 @@ export function usePropuestaAcciones(campanasPorId: Record<string, string>, onCa
         presupuestoDespues: resultado?.presupuesto_despues,
         cantidadAnuncios: resultado?.anuncios_creados?.length,
       });
-      setRecienDecididas((prev) => [...prev, { propuesta: p, etiqueta: "Sí, adelante", confirmacion: { texto } }]);
+      setRecienDecididas((prev) => [...prev, { propuesta: p, etiqueta: "Sí, adelante", confirmacion: { texto }, creadoEn: new Date().toISOString() }]);
       setAjustandoId(null);
       onCambio();
     } finally {

@@ -1,12 +1,15 @@
 "use client";
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useState } from "react";
 import Link from "next/link";
+import ChatShell, { type ItemChat } from "@/app/components/chat/ChatShell";
+import IndicadorEscribiendo from "@/app/components/chat/IndicadorEscribiendo";
 import EsferaAsistente from "@/app/components/esferas/EsferaAsistente";
 import { urlWhatsappSoporte } from "@/app/lib/contacto";
 
 type Mensaje = {
   rol: "user" | "assistant";
   mensaje: string;
+  creadoEn: string;
 };
 
 export default function PanelSoporte({
@@ -29,17 +32,12 @@ export default function PanelSoporte({
   const [preguntaEscalada, setPreguntaEscalada] = useState("");
   const [redirigir, setRedirigir] = useState(false);
   const [ultimaPregunta, setUltimaPregunta] = useState("");
-  const finRef = useRef<HTMLDivElement>(null);
-
-  useEffect(() => {
-    finRef.current?.scrollIntoView({ behavior: "smooth" });
-  }, [mensajes]);
 
   async function enviar(contenido: string) {
     const mensaje = contenido.trim();
     if (!mensaje || enviando) return;
 
-    setMensajes((prev) => [...prev, { rol: "user", mensaje }]);
+    setMensajes((prev) => [...prev, { rol: "user", mensaje, creadoEn: new Date().toISOString() }]);
     setTexto("");
     setEnviando(true);
     setEscalar(false);
@@ -55,9 +53,9 @@ export default function PanelSoporte({
       const data = await res.json();
 
       if (!res.ok) {
-        setMensajes((prev) => [...prev, { rol: "assistant", mensaje: data.error || "Algo salió mal, intenta de nuevo." }]);
+        setMensajes((prev) => [...prev, { rol: "assistant", mensaje: data.error || "Algo salió mal, intenta de nuevo.", creadoEn: new Date().toISOString() }]);
       } else {
-        setMensajes((prev) => [...prev, { rol: "assistant", mensaje: data.respuesta }]);
+        setMensajes((prev) => [...prev, { rol: "assistant", mensaje: data.respuesta, creadoEn: new Date().toISOString() }]);
         if (data.escalar) {
           setEscalar(true);
           setPreguntaEscalada(mensaje);
@@ -65,18 +63,18 @@ export default function PanelSoporte({
         if (data.redirigirADirector) setRedirigir(true);
       }
     } catch {
-      setMensajes((prev) => [...prev, { rol: "assistant", mensaje: "No se pudo conectar. Intenta de nuevo en un momento." }]);
+      setMensajes((prev) => [...prev, { rol: "assistant", mensaje: "No se pudo conectar. Intenta de nuevo en un momento.", creadoEn: new Date().toISOString() }]);
     } finally {
       setEnviando(false);
     }
   }
 
-  // Handoff desde el Director (Paso 4, acción "ir_a_soporte") -- llega
-  // con la pregunta ya escrita y se manda sola, una sola vez.
+  // Handoff desde el Director (acción "ir_a_soporte") -- llega con la
+  // pregunta ya escrita y se manda sola, una sola vez. setTimeout(0):
+  // el enviar() real queda en un callback, no en el cuerpo síncrono del
+  // efecto (react-hooks/set-state-in-effect).
   useEffect(() => {
     if (!autoenviar) return;
-    // setTimeout(0): el enviar() real queda en un callback, no en el
-    // cuerpo síncrono del efecto (react-hooks/set-state-in-effect).
     const id = setTimeout(() => {
       enviar(autoenviar);
       onConsumidoAutoenviar();
@@ -85,65 +83,74 @@ export default function PanelSoporte({
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [autoenviar]);
 
-  return (
-    <div style={{ flex: 1, display: "flex", flexDirection: "column", overflow: "hidden" }}>
-      <div style={{ flex: 1, overflowY: "auto", padding: 14, display: "flex", flexDirection: "column", gap: 10 }}>
-        {!activo ? (
-          <div style={{ background: "#f5f4fb", border: "1px solid #e3e1f7", borderRadius: 12, padding: "14px 16px", fontSize: 13, color: "#444", textAlign: "center" }}>
-            Para activar el asistente, conecta tu cuenta de OpenAI en{" "}
-            <Link href="/?tab=integraciones" style={{ color: "#7F77DD", fontWeight: 600 }}>
-              Integraciones
-            </Link>
-            .
-          </div>
-        ) : mensajes.length === 0 ? (
-          <div style={{ color: "#999", fontSize: 13, textAlign: "center", marginTop: 20 }}>Pregúntame lo que necesites sobre Quiubot.</div>
-        ) : (
-          mensajes.map((m, i) => (
-            <div key={i} style={{ display: "flex", gap: 8, alignItems: "flex-end", alignSelf: m.rol === "user" ? "flex-end" : "flex-start" }}>
-              {m.rol === "assistant" && <EsferaAsistente asistente="soporte" estado="normal" tamano={26} />}
-              <div
-                style={{
-                  background: m.rol === "user" ? "#7F77DD" : "#f2f2f0",
-                  color: m.rol === "user" ? "#fff" : "#1a1a1a",
-                  padding: "8px 12px",
-                  borderRadius: 12,
-                  fontSize: 13,
-                  maxWidth: "80%",
-                  lineHeight: 1.4,
-                }}
-              >
-                {m.mensaje}
-              </div>
-            </div>
-          ))
-        )}
-
-        {escalar && (
-          <div style={{ background: "#fff7e6", border: "1px solid #ffe1a8", borderRadius: 12, padding: "10px 12px", fontSize: 12, color: "#7a5c00", textAlign: "center" }}>
-            Esto es mejor resolverlo con el equipo directamente.{" "}
-            <a href={urlWhatsappSoporte(preguntaEscalada)} target="_blank" rel="noreferrer" style={{ color: "#7a5c00", fontWeight: 700, textDecoration: "underline" }}>
-              Escríbenos por WhatsApp
-            </a>
-          </div>
-        )}
-
-        {redirigir && (
-          <div style={{ alignSelf: "flex-start", background: "#F3F2FE", border: "1.5px solid #534AB7", borderRadius: 12, padding: "10px 12px" }}>
-            <p style={{ margin: "0 0 8px", fontSize: 12.5, color: "#1a1a1a" }}>Esto es sobre tu cuenta -- mejor te responde el Director.</p>
-            <button
-              onClick={() => onIrADirector(ultimaPregunta)}
-              style={{ background: "#534AB7", color: "#fff", border: "none", borderRadius: 8, padding: "7px 12px", fontSize: 12.5, fontWeight: 700, cursor: "pointer" }}
-            >
-              Hablar con el Director →
-            </button>
-          </div>
-        )}
-
-        <div ref={finRef} />
+  if (!activo) {
+    return (
+      <div style={{ flex: 1, display: "flex", alignItems: "center", padding: 14 }}>
+        <div style={{ background: "#f5f4fb", border: "1px solid #e3e1f7", borderRadius: 12, padding: "14px 16px", fontSize: 13, color: "#444", textAlign: "center", width: "100%" }}>
+          Para activar el asistente, conecta tu cuenta de OpenAI en{" "}
+          <Link href="/?tab=integraciones" style={{ color: "#7F77DD", fontWeight: 600 }}>
+            Integraciones
+          </Link>
+          .
+        </div>
       </div>
+    );
+  }
 
-      {activo && (
+  const items: ItemChat[] = mensajes.map((m, i) => ({
+    id: `m-${i}`,
+    creadoEn: m.creadoEn,
+    render: () => (
+      <div style={{ display: "flex", gap: 8, alignItems: "flex-end", alignSelf: m.rol === "user" ? "flex-end" : "flex-start" }}>
+        {m.rol === "assistant" && <EsferaAsistente asistente="soporte" estado="normal" tamano={26} />}
+        <div style={{ background: m.rol === "user" ? "#7F77DD" : "#f2f2f0", color: m.rol === "user" ? "#fff" : "#1a1a1a", padding: "8px 12px", borderRadius: 12, fontSize: 13, maxWidth: "80%", lineHeight: 1.4 }}>
+          {m.mensaje}
+        </div>
+      </div>
+    ),
+  }));
+
+  if (escalar) {
+    items.push({
+      id: "escalar",
+      creadoEn: new Date().toISOString(),
+      render: () => (
+        <div style={{ background: "#fff7e6", border: "1px solid #ffe1a8", borderRadius: 12, padding: "10px 12px", fontSize: 12, color: "#7a5c00", textAlign: "center" }}>
+          Esto es mejor resolverlo con el equipo directamente.{" "}
+          <a href={urlWhatsappSoporte(preguntaEscalada)} target="_blank" rel="noreferrer" style={{ color: "#7a5c00", fontWeight: 700, textDecoration: "underline" }}>
+            Escríbenos por WhatsApp
+          </a>
+        </div>
+      ),
+    });
+  }
+
+  if (redirigir) {
+    items.push({
+      id: "redirigir",
+      creadoEn: new Date().toISOString(),
+      render: () => (
+        <div style={{ alignSelf: "flex-start", background: "#F3F2FE", border: "1.5px solid #534AB7", borderRadius: 12, padding: "10px 12px" }}>
+          <p style={{ margin: "0 0 8px", fontSize: 12.5, color: "#1a1a1a" }}>Esto es sobre tu cuenta -- mejor te responde el Director.</p>
+          <button
+            onClick={() => onIrADirector(ultimaPregunta)}
+            style={{ background: "#534AB7", color: "#fff", border: "none", borderRadius: 8, padding: "7px 12px", fontSize: 12.5, fontWeight: 700, cursor: "pointer" }}
+          >
+            Hablar con el Director →
+          </button>
+        </div>
+      ),
+    });
+  }
+
+  return (
+    <ChatShell
+      items={items}
+      cargando={false}
+      escribiendo={enviando}
+      indicadorEscribiendo={<IndicadorEscribiendo asistente="soporte" />}
+      textoVacio="Pregúntame lo que necesites sobre Quiubot."
+      pie={
         <div style={{ display: "flex", borderTop: "1px solid #eee", padding: 10, gap: 8 }}>
           <input
             value={texto}
@@ -171,7 +178,7 @@ export default function PanelSoporte({
             {enviando ? "..." : "Enviar"}
           </button>
         </div>
-      )}
-    </div>
+      }
+    />
   );
 }

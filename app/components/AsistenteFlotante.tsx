@@ -10,9 +10,9 @@ import PanelSoporte from "@/app/components/burbuja/PanelSoporte"
 import PanelAsistenteIndividual from "@/app/components/burbuja/PanelAsistenteIndividual"
 import ListaChats from "@/app/components/burbuja/ListaChats"
 
-type MensajeSoporte = { rol: "user" | "assistant"; mensaje: string }
+type MensajeSoporte = { rol: "user" | "assistant"; mensaje: string; creadoEn: string }
 type AccionDirector = { label: string; tipo: "link" | "crear_meta" | "ir_a_soporte"; href?: string }
-type MensajeDirector = { rol: "user" | "assistant"; mensaje: string; acciones?: AccionDirector[] }
+type MensajeDirector = { rol: "user" | "assistant"; mensaje: string; acciones?: AccionDirector[]; creado_en?: string }
 
 const RUTAS_PUBLICAS = ["/bienvenida", "/login", "/terminos", "/pricing"]
 
@@ -58,7 +58,7 @@ export default function AsistenteFlotante() {
 
         setSoporteActivo(!!data.activo)
         if (Array.isArray(data.historial)) {
-          setSoporteHistorial(data.historial.map((h: { rol: "user" | "assistant"; mensaje: string }) => ({ rol: h.rol, mensaje: h.mensaje })))
+          setSoporteHistorial(data.historial.map((h: { rol: "user" | "assistant"; mensaje: string; creado_en: string }) => ({ rol: h.rol, mensaje: h.mensaje, creadoEn: h.creado_en })))
         }
 
         fetch("/api/director/conversacion")
