@@ -119,6 +119,7 @@ function EquipoContenido() {
   const [mostrarGrupo, setMostrarGrupo] = useState<AccionPropuesta | null>(null);
   const [procesandoLote, setProcesandoLote] = useState(false);
   const [soloPendientes, setSoloPendientes] = useState(false);
+  const [senalIrAlFondo, setSenalIrAlFondo] = useState(0);
 
   const [texto, setTexto] = useState("");
   const [enviandoMensaje, setEnviandoMensaje] = useState(false);
@@ -126,8 +127,12 @@ function EquipoContenido() {
   type PropuestaConDecision = PropuestaUnificada & { estado: string; decidido_en: string | null; resultado: Record<string, unknown> | null };
   type EventoBitacora = { id: string; tipo_evento: string; detalle: Record<string, unknown>; meta_id: string | null; creado_en: string };
 
-  const cargarTodo = () => {
-    setCargando(true);
+  // mostrarCargando solo en la primera carga real -- después de
+  // aprobar/rechazar, o cuando un PasoSubirFotos/EstadoGenerandoX
+  // termina, se actualiza en segundo plano: la tarjeta cambia y el
+  // contador baja solos, sin el parpadeo de "Cargando la conversación".
+  const cargarTodo = (mostrarCargando = false) => {
+    if (mostrarCargando) setCargando(true);
     fetch("/api/equipo/mensajes")
       .then((r) => r.json())
       .then((data) => {
@@ -137,11 +142,15 @@ function EquipoContenido() {
         setRequiereApiKey(!!data.requiereApiKey);
       })
       .catch(() => {})
-      .finally(() => setCargando(false));
+      .finally(() => {
+        if (mostrarCargando) setCargando(false);
+      });
   };
 
-  const { procesandoId, ajustandoId, setAjustandoId, porcentajeAjuste, setPorcentajeAjuste, error, setError, recienDecididas, aprobar, rechazar, confirmarAjuste, reintentarAgregarAnuncios, aprobarEnLote, nombreCampanaDe } =
-    usePropuestaAcciones(campanasPorId, cargarTodo);
+  const { procesandoId, ajustandoId, setAjustandoId, porcentajeAjuste, setPorcentajeAjuste, error, setError, recienDecididas, aprobar, rechazar, confirmarAjuste, reintentarAgregarAnuncios, aprobarEnLote, nombreCampanaDe } = usePropuestaAcciones(
+    campanasPorId,
+    () => cargarTodo(false)
+  );
 
   useEffect(() => {
     fetch("/api/usuario/rol")
@@ -157,7 +166,7 @@ function EquipoContenido() {
     // setTimeout(0): cargarTodo() llama setCargando() de entrada, y
     // react-hooks/set-state-in-effect exige que quede en un callback,
     // no directo en el cuerpo síncrono del efecto.
-    const id = setTimeout(cargarTodo, 0);
+    const id = setTimeout(() => cargarTodo(true), 0);
     fetch("/api/metas")
       .then((r) => (r.ok ? r.json() : { metas: [] }))
       .then((data) => {
@@ -662,11 +671,20 @@ function EquipoContenido() {
           escribiendo={enviandoMensaje}
           indicadorEscribiendo={<IndicadorEscribiendo asistente="director" />}
           textoVacio="Todavía no hay nada en el chat del equipo."
+          senalIrAlFondo={senalIrAlFondo}
           pildora={
-            totalPendientesVisibles > 0
+            soloPendientes
               ? {
-                  texto: soloPendientes ? "Ver todo" : `Tienes ${totalPendientesVisibles} pendiente${totalPendientesVisibles === 1 ? "" : "s"}`,
-                  onClick: () => setSoloPendientes((v) => !v),
+                  texto: `Mostrando ${totalPendientesVisibles} pendiente${totalPendientesVisibles === 1 ? "" : "s"} · Ver todo`,
+                  onClick: () => {
+                    setSoloPendientes(false);
+                    setSenalIrAlFondo((v) => v + 1);
+                  },
+                }
+              : totalPendientesVisibles > 0
+              ? {
+                  texto: `Tienes ${totalPendientesVisibles} pendiente${totalPendientesVisibles === 1 ? "" : "s"}`,
+                  onClick: () => setSoloPendientes(true),
                 }
               : null
           }

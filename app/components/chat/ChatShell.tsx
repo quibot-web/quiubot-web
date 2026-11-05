@@ -14,6 +14,12 @@
 // chat y agotar lo ya cargado no hay diferencia visible; más allá de
 // eso, hoy no hay nada más que mostrar (mismo techo que ya existía con
 // el botón "Ver anteriores" que este componente reemplaza).
+//
+// PENDIENTE (anotado, no resuelto todavía): paginar los mensajes
+// antiguos desde el servidor con un cursor real (ej. ?antes=<fecha>),
+// en vez de revelar lo ya cargado -- hoy el techo de historial es el
+// mismo límite fijo de siempre (50-60 filas), esto solo cambiaría cómo
+// se revela, no cuánto hay disponible.
 import { useEffect, useRef, useState, Fragment } from "react";
 import { etiquetaFecha } from "./etiquetaFecha";
 
@@ -35,6 +41,7 @@ export default function ChatShell({
   pildora,
   pie,
   textoVacio = "Todavía no hay nada acá.",
+  senalIrAlFondo,
 }: {
   /** Ascendente -- el más viejo primero, el más nuevo al final. */
   items: ItemChat[];
@@ -46,6 +53,10 @@ export default function ChatShell({
   /** El campo de texto (o, en los chats de solo lectura, el botón de abajo). */
   pie: React.ReactNode;
   textoVacio?: string;
+  /** Cambia este valor (ej. un contador) para forzar ir al fondo ya
+   * mismo -- "Ver todo" lo usa para no depender de si el usuario
+   * estaba "cerca del fondo" cuando quitó un filtro. */
+  senalIrAlFondo?: number | string;
 }) {
   const scrollRef = useRef<HTMLDivElement>(null);
   const [visibles, setVisibles] = useState(LOTE_VISIBLE);
@@ -117,6 +128,17 @@ export default function ChatShell({
     if (el) el.scrollTop = el.scrollHeight;
     setMensajesNuevos(0);
   }
+
+  // Señal externa (ej. "Ver todo" al quitar el filtro de pendientes)
+  // -- va DESPUÉS del efecto de "creció al final" a propósito, para
+  // ganarle si ambos se disparan en la misma pasada (quitar el filtro
+  // también cambia items.length).
+  const senalAnteriorRef = useRef(senalIrAlFondo);
+  useEffect(() => {
+    if (senalIrAlFondo === undefined || senalIrAlFondo === senalAnteriorRef.current) return;
+    senalAnteriorRef.current = senalIrAlFondo;
+    requestAnimationFrame(irAlFondo);
+  }, [senalIrAlFondo]);
 
   const grupos: { etiqueta: string; items: ItemChat[] }[] = [];
   for (const it of itemsVisibles) {
