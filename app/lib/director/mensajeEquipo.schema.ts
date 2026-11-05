@@ -43,6 +43,14 @@ export const MensajeEquipoContenidoSchema = z.object({
   // Qué asistente citó el Director en esta respuesta (si el usuario
   // mencionó uno con @) -- solo para la mini-esfera de la UI.
   asistenteCitado: ASISTENTE_EVENTO_EQUIPO.optional(),
+  // Solo para eventos automáticos -- la versión "asistente le reporta
+  // al Director" (primera persona, dirigida al Director, nunca al
+  // usuario) y la respuesta corta del Director a ESE asistente. Vive
+  // junto a "texto" (la versión que el Director le cuenta al usuario
+  // en el grupo) para no recalcular nada al armar el chat individual
+  // de solo lectura (Commit 2).
+  textoInterno: z.string().min(1).optional(),
+  respuestaDirector: z.string().min(1).optional(),
 });
 export type MensajeEquipoContenido = z.infer<typeof MensajeEquipoContenidoSchema>;
 

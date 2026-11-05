@@ -125,10 +125,13 @@ export default function TarjetaPropuesta({
       <div style={{ display: "flex", gap: 10 }}>
         <EsferaAsistente asistente="director" estado="normal" tamano={40} />
         <div style={{ background: "#fff", border: "1px solid #ece9f9", borderRadius: "4px 16px 16px 16px", padding: "10px 14px", maxWidth: "calc(100% - 50px)" }}>
-          <div style={{ display: "flex", alignItems: "center", gap: 6, marginBottom: 4 }}>
+          <button
+            onClick={() => window.dispatchEvent(new CustomEvent("quiubot:abrir-chat-equipo", { detail: { chat: asistenteDeMensaje(p) } }))}
+            style={{ display: "flex", alignItems: "center", gap: 6, marginBottom: 4, background: "none", border: "none", padding: 0, cursor: "pointer" }}
+          >
             <EsferaAsistente asistente={asistenteDeMensaje(p)} estado="normal" tamano={22} />
             <span style={{ fontSize: 11, fontWeight: 700, color: "#534AB7", textTransform: "uppercase", letterSpacing: "0.02em" }}>{NOMBRE_ASISTENTE[asistenteDeMensaje(p)]}</span>
-          </div>
+          </button>
           <p style={{ fontSize: 13.5, color: "#1a1a1a", margin: 0, lineHeight: 1.5 }}>{p.justificacion}</p>
           {campanaId && (
             <a href={`/campanas?highlight=${campanaId}`} style={{ display: "inline-block", marginTop: 6, fontSize: 12.5, color: "#534AB7", fontWeight: 600, textDecoration: "underline" }}>
@@ -151,10 +154,13 @@ export default function TarjetaPropuesta({
     <div style={{ display: "flex", gap: 10 }}>
       <EsferaAsistente asistente="director" estado="normal" tamano={40} />
       <div style={{ background: "#fff", border: "1px solid #ece9f9", borderRadius: "4px 16px 16px 16px", padding: "12px 16px", maxWidth: "calc(100% - 50px)", flex: 1 }}>
-        <div style={{ display: "flex", alignItems: "center", gap: 6, marginBottom: 6 }}>
+        <button
+          onClick={() => window.dispatchEvent(new CustomEvent("quiubot:abrir-chat-equipo", { detail: { chat: asistenteDeMensaje(p) } }))}
+          style={{ display: "flex", alignItems: "center", gap: 6, marginBottom: 6, background: "none", border: "none", padding: 0, cursor: "pointer", textAlign: "left" }}
+        >
           <EsferaAsistente asistente={asistenteDeMensaje(p)} estado={estadoMiniEsfera} tamano={22} />
           <span style={{ fontSize: 13, color: "#1a1a1a" }}>{leadInPropuesta(p.accion as AccionPropuesta, nombreCampana, creativos.length)}</span>
-        </div>
+        </button>
 
         {creativos.length > 0 && !ajustando && (
           <div style={{ display: "flex", gap: 8, flexWrap: "wrap", marginBottom: 10 }}>

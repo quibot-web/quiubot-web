@@ -2,10 +2,12 @@
 // espíritu que directorTextos.ts/directorChat.ts: texto en español con
 // números reales interpolados, sin IA. Corregido (Fase 2, corrección
 // de voz): los asistentes NUNCA le hablan directo al usuario -- le
-// reportan al Director, y es el Director quien se lo cuenta al
-// usuario citando a quien lo dijo. Mismo criterio que ya usa
-// leadInPropuesta()/confirmacionExito() de directorChat.ts para las
-// propuestas. El materializador
+// reportan al Director. Cada función devuelve DOS versiones del mismo
+// evento real: "texto" (el Director se lo cuenta al usuario en el
+// grupo, citando al asistente -- mismo criterio que
+// leadInPropuesta()/confirmacionExito() de directorChat.ts) y
+// "textoInterno"/"respuestaDirector" (la transcripción de solo lectura
+// asistente→Director del chat individual, Commit 2). El materializador
 // (app/api/cron/materializar-mensajes-equipo/route.ts) es el único que
 // llama estas funciones.
 import type { TipoMeta } from "@/app/lib/metas";
@@ -44,23 +46,35 @@ export function textoReporteDiario(params: {
     { etiqueta: "Costo c/u", valor: formatoCop(params.costoPorResultado) },
   ];
 
-  let texto = `El Analista revisó tus campañas: ayer tuviste ${params.conversiones} ${unidad} a ${formatoCop(params.costoPorResultado)} cada ${cadaUno}.`;
+  const resumen = `ayer tuviste ${params.conversiones} ${unidad} a ${formatoCop(params.costoPorResultado)} cada ${cadaUno}`;
+  let texto = `El Analista revisó tus campañas: ${resumen}.`;
+  let textoInterno = `Director, revisé las campañas: ${resumen}.`;
 
   if (params.vsMetaPorcentaje !== null) {
     const flecha = params.vsMetaPorcentaje >= 0 ? "↑" : "↓";
     const pctAbs = Math.abs(Math.round(params.vsMetaPorcentaje));
-    texto += ` Vas ${flecha} ${pctAbs}% ${params.vsMetaPorcentaje >= 0 ? "por encima" : "por debajo"} del ritmo de tu meta.`;
+    const vsMeta = ` Vas ${flecha} ${pctAbs}% ${params.vsMetaPorcentaje >= 0 ? "por encima" : "por debajo"} del ritmo de tu meta.`;
+    texto += vsMeta;
+    textoInterno += vsMeta.replace("Vas", "Va");
     datos.push({ etiqueta: "vs. meta", valor: `${flecha} ${pctAbs}%` });
   }
 
-  return { texto, datos };
+  const respuestaDirector = params.vsMetaPorcentaje !== null && params.vsMetaPorcentaje < 0 ? "Gracias, lo tengo en cuenta para la próxima revisión." : "Perfecto, se lo cuento a Juan.";
+
+  return { texto, datos, textoInterno, respuestaDirector };
 }
 
 export function textoCreativosListos(params: { cantidad: number; miniaturas: string[] }): MensajeEquipoContenido {
   const texto = params.cantidad === 1 ? "El Creativo ya tiene listo un anuncio nuevo." : `El Creativo ya tiene listos ${params.cantidad} anuncios nuevos.`;
-  return { texto, miniaturas: params.miniaturas.slice(0, 6) };
+  const textoInterno = params.cantidad === 1 ? "Director, ya tengo listo un anuncio nuevo." : `Director, ya tengo listos ${params.cantidad} anuncios nuevos.`;
+  return { texto, miniaturas: params.miniaturas.slice(0, 6), textoInterno, respuestaDirector: "Perfecto, lo uso para sus anuncios." };
 }
 
 export function textoVideoListo(params: { urlVideo: string }): MensajeEquipoContenido {
-  return { texto: "El Creativo ya tiene listo tu video nuevo.", miniaturas: [params.urlVideo] };
+  return {
+    texto: "El Creativo ya tiene listo tu video nuevo.",
+    miniaturas: [params.urlVideo],
+    textoInterno: "Director, ya tengo listo el video nuevo.",
+    respuestaDirector: "Perfecto, lo uso para sus anuncios.",
+  };
 }

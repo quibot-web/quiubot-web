@@ -211,7 +211,7 @@ export default function AsistenteFlotante() {
           {vista === "soporte" && (
             <PanelSoporte activo={soporteActivo} historialInicial={soporteHistorial} autoenviar={autoenviarSoporte} onConsumidoAutoenviar={() => setAutoenviarSoporte(null)} onIrADirector={irADirector} />
           )}
-          {(vista === "analista" || vista === "creativo" || vista === "optimizador") && <PanelAsistenteIndividual asistente={vista} />}
+          {(vista === "analista" || vista === "creativo" || vista === "optimizador") && <PanelAsistenteIndividual asistente={vista} onPreguntarAlDirector={irADirector} />}
         </div>
       )}
 

@@ -18,9 +18,13 @@ import { obtenerContextoCuenta, type UsuarioContextoCuenta } from "@/app/lib/dir
 import { llamarDirector } from "@/app/lib/director/llamarDirector";
 import { MODELO_DIRECTOR_GENERAL, RespuestaDirectorGeneralSchema, construirPromptDirectorGeneral, construirPromptDirectorCitando } from "@/app/lib/director/promptDirectorGeneral";
 import { ASISTENTE_EVENTO_EQUIPO, type MensajeEquipo } from "@/app/lib/director/mensajeEquipo.schema";
+import { textoAsistenteReportaPropuesta, textoDirectorResponde } from "@/app/lib/directorChat";
 
 const CANTIDAD_MENSAJES_HISTORIAL = 60;
 const CANTIDAD_CONVERSACION_PARA_IA = 20;
+const CANTIDAD_PROPUESTAS_TRANSCRIPCION = 30;
+
+type ItemTranscripcion = { id: string; rol: "asistente" | "director"; texto: string; datos?: { etiqueta: string; valor: string }[]; miniaturas?: string[]; creadoEn: string };
 
 type UsuarioEquipo = UsuarioContextoCuenta & { id: string; email: string; rol: string; plan: string; en_trial: boolean; trial_termina_en: string | null; fecha_vencimiento: string | null; beta_autopiloto: boolean };
 
@@ -47,18 +51,35 @@ export async function GET(req: NextRequest) {
     return NextResponse.json({ error: "Autopiloto todavía no está disponible." }, { status: 403 });
   }
 
-  // Chat individual de un asistente (Commit 5) -- solo sus mensajes,
-  // sin la agregación pesada de pendientes/historial que no le aplica.
+  // Chat individual de un asistente (Commit 2/5) -- transcripción de
+  // SOLO LECTURA asistente→Director, nunca una conversación con el
+  // usuario: cada evento real (mensajes_equipo) y cada propuesta suya
+  // se parte en dos burbujas, "asistente" (textoInterno / justificación,
+  // dirigida al Director) y "director" (su respuesta corta, citando al
+  // cliente en tercera persona).
   const parseadoFiltro = ASISTENTE_EVENTO_EQUIPO.safeParse(new URL(req.url).searchParams.get("asistente"));
   if (parseadoFiltro.success) {
-    const { data } = await supabaseAdmin
-      .from("mensajes_equipo")
-      .select("*")
-      .eq("user_id", usuario.id)
-      .eq("asistente", parseadoFiltro.data)
-      .order("creado_en", { ascending: false })
-      .limit(CANTIDAD_MENSAJES_HISTORIAL);
-    return NextResponse.json({ mensajesEquipo: ((data ?? []) as MensajeEquipo[]).reverse(), requiereApiKey: !usuario.openai_key });
+    const asistente = parseadoFiltro.data;
+    const nombreUsuario = session.user.name?.trim().split(/\s+/)[0] || "tu cliente";
+
+    const [eventosRes, propuestasRes] = await Promise.all([
+      supabaseAdmin.from("mensajes_equipo").select("*").eq("user_id", usuario.id).eq("asistente", asistente).order("creado_en", { ascending: false }).limit(CANTIDAD_MENSAJES_HISTORIAL),
+      supabaseAdmin.from("propuestas").select("*").eq("user_id", usuario.id).eq("asistente", asistente).order("creado_en", { ascending: false }).limit(CANTIDAD_PROPUESTAS_TRANSCRIPCION),
+    ]);
+
+    const itemsEventos = ((eventosRes.data ?? []) as MensajeEquipo[]).flatMap((m): ItemTranscripcion[] => [
+      { id: `${m.id}-a`, rol: "asistente", texto: m.contenido.textoInterno ?? m.contenido.texto, datos: m.contenido.datos, miniaturas: m.contenido.miniaturas, creadoEn: m.creado_en },
+      ...(m.contenido.respuestaDirector ? [{ id: `${m.id}-d`, rol: "director" as const, texto: m.contenido.respuestaDirector, creadoEn: m.creado_en }] : []),
+    ]);
+
+    const itemsPropuestas = (propuestasRes.data ?? []).flatMap((p): ItemTranscripcion[] => [
+      { id: `${p.id}-a`, rol: "asistente", texto: textoAsistenteReportaPropuesta(p.justificacion), creadoEn: p.creado_en },
+      { id: `${p.id}-d`, rol: "director", texto: textoDirectorResponde(p.estado, nombreUsuario, (p.resultado as { error?: string } | null)?.error ?? null), creadoEn: p.decidido_en ?? p.creado_en },
+    ]);
+
+    const transcripcion = [...itemsEventos, ...itemsPropuestas].sort((a, b) => (a.creadoEn < b.creadoEn ? -1 : 1));
+
+    return NextResponse.json({ transcripcion, requiereApiKey: !usuario.openai_key });
   }
 
   const [pendientes, historialRes, mensajesRes] = await Promise.all([

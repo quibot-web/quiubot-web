@@ -159,6 +159,37 @@ export const TEXTO_RECHAZO = "Entendido, lo dejamos así por ahora.";
 export const TEXTO_VENCIDA =
   "Como no alcanzamos a revisarlo a tiempo, lo dejé quieto. Si vuelve a hacer falta, te lo propongo de nuevo.";
 
+// Transcripción de solo lectura del chat individual de un asistente
+// (Fase 2, corrección de voz) -- distinto de todo lo demás en este
+// archivo: ahí arriba el Director le habla al cliente ("tú"); acá le
+// responde a UN ASISTENTE sobre lo que el cliente decidió, en tercera
+// persona ("Juan aprobó..."), nunca se le muestra al cliente como si
+// fuera dirigido a él. justificacion ya viene escrita por
+// directorTextos.ts -- se reusa tal cual, solo se le pone el "Director,"
+// delante para que se lea como el reporte interno que es.
+export function textoAsistenteReportaPropuesta(justificacion: string): string {
+  return `Director, ${justificacion}`;
+}
+
+export function textoDirectorResponde(estado: string, nombreUsuario: string, errorReal: string | null): string {
+  switch (estado) {
+    case "pendiente":
+      return `Se lo propongo a ${nombreUsuario}.`;
+    case "aprobada":
+      return `${nombreUsuario} aprobó, ya estoy en eso.`;
+    case "rechazada":
+      return `${nombreUsuario} prefirió no hacerlo por ahora.`;
+    case "ejecutada":
+      return "Listo, ya quedó hecho. Gracias.";
+    case "fallida":
+      return `Hubo un problema: ${errorReal || "no se pudo completar"}.`;
+    case "vencida":
+      return `Se venció sin que ${nombreUsuario} decidiera -- lo dejamos así.`;
+    default:
+      return "Entendido.";
+  }
+}
+
 // Narración de las etapas de crear_creativos mientras está en curso
 // (no son decisiones, no llevan botones) -- el Creativo queda en
 // "trabajando" mientras se muestran.
