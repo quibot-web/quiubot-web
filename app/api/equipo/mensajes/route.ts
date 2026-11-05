@@ -2,10 +2,11 @@
 // GET junta lo que antes traían /api/propuestas + /api/propuestas/historial
 // (mismas queries, sin reescribir esa lógica) más los mensajes_equipo
 // (eventos automáticos + conversación). POST maneja el texto libre del
-// usuario, con @mención opcional a un asistente puntual -- reusa el
-// MISMO cerebro del Director (Paso 4 de la Fase 1: mismo modelo,
-// mismo contrato JSON, mismo CONTEXTO DE CUENTA), solo cambia el
-// prompt de persona si hay mención.
+// usuario -- reusa el MISMO cerebro del Director (Paso 4 de la Fase 1:
+// mismo modelo, mismo contrato JSON, mismo CONTEXTO DE CUENTA). Voz
+// corregida: los asistentes nunca le hablan al usuario -- si hay
+// @mención, el Director responde citando a ese asistente
+// ("Le pregunté al Analista y me dice..."), nunca deja que hable él.
 import { auth } from "@/auth";
 import { NextRequest, NextResponse } from "next/server";
 import { supabaseAdmin } from "@/lib/supabase";
@@ -15,8 +16,8 @@ import { tieneAutopiloto } from "@/app/lib/planesConfig";
 import { obtenerPropuestasPendientes } from "@/app/lib/propuestas";
 import { obtenerContextoCuenta, type UsuarioContextoCuenta } from "@/app/lib/director/contextoCuenta";
 import { llamarDirector } from "@/app/lib/director/llamarDirector";
-import { MODELO_DIRECTOR_GENERAL, RespuestaDirectorGeneralSchema, construirPromptDirectorGeneral, construirPromptAsistenteEquipo } from "@/app/lib/director/promptDirectorGeneral";
-import { ASISTENTE_CONVERSACION_EQUIPO, type MensajeEquipo } from "@/app/lib/director/mensajeEquipo.schema";
+import { MODELO_DIRECTOR_GENERAL, RespuestaDirectorGeneralSchema, construirPromptDirectorGeneral, construirPromptDirectorCitando } from "@/app/lib/director/promptDirectorGeneral";
+import { ASISTENTE_EVENTO_EQUIPO, type MensajeEquipo } from "@/app/lib/director/mensajeEquipo.schema";
 
 const CANTIDAD_MENSAJES_HISTORIAL = 60;
 const CANTIDAD_CONVERSACION_PARA_IA = 20;
@@ -48,8 +49,8 @@ export async function GET(req: NextRequest) {
 
   // Chat individual de un asistente (Commit 5) -- solo sus mensajes,
   // sin la agregación pesada de pendientes/historial que no le aplica.
-  const parseadoFiltro = ASISTENTE_CONVERSACION_EQUIPO.safeParse(new URL(req.url).searchParams.get("asistente"));
-  if (parseadoFiltro.success && parseadoFiltro.data !== "director") {
+  const parseadoFiltro = ASISTENTE_EVENTO_EQUIPO.safeParse(new URL(req.url).searchParams.get("asistente"));
+  if (parseadoFiltro.success) {
     const { data } = await supabaseAdmin
       .from("mensajes_equipo")
       .select("*")
@@ -103,8 +104,10 @@ export async function POST(req: NextRequest) {
   const mensaje = typeof body.mensaje === "string" ? body.mensaje.trim() : "";
   if (!mensaje) return NextResponse.json({ error: "El mensaje no puede estar vacío." }, { status: 400 });
 
-  const parseadoAsistente = ASISTENTE_CONVERSACION_EQUIPO.safeParse(body.asistente ?? "director");
-  const asistente = parseadoAsistente.success ? parseadoAsistente.data : "director";
+  // asistenteCitado: quién mencionó el usuario con @ (si alguien) -- el
+  // Director SIEMPRE es quien responde, esto solo decide si lo cita.
+  const parseadoCitado = ASISTENTE_EVENTO_EQUIPO.safeParse(body.asistente);
+  const asistenteCitado = parseadoCitado.success ? parseadoCitado.data : undefined;
 
   let apiKey: string;
   try {
@@ -125,7 +128,7 @@ export async function POST(req: NextRequest) {
       .limit(CANTIDAD_CONVERSACION_PARA_IA),
   ]);
 
-  const systemPrompt = asistente === "director" ? construirPromptDirectorGeneral(contexto) : construirPromptAsistenteEquipo(asistente, contexto);
+  const systemPrompt = asistenteCitado ? construirPromptDirectorCitando(asistenteCitado, contexto) : construirPromptDirectorGeneral(contexto);
 
   const historialOpenAI = (historialPrevio.data ?? [])
     .reverse()
@@ -146,11 +149,11 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ error: "El equipo respondió algo inesperado, intenta de nuevo." }, { status: 503 });
   }
 
-  await supabaseAdmin.from("mensajes_equipo").insert({ user_id: usuario.id, asistente, tipo_evento: "mensaje_usuario", contenido: { texto: mensaje } });
+  await supabaseAdmin.from("mensajes_equipo").insert({ user_id: usuario.id, asistente: "director", tipo_evento: "mensaje_usuario", contenido: { texto: mensaje, asistenteCitado } });
 
   const { data: filaRespuesta } = await supabaseAdmin
     .from("mensajes_equipo")
-    .insert({ user_id: usuario.id, asistente, tipo_evento: "respuesta", contenido: { texto: parseado.data.respuesta, acciones: parseado.data.acciones } })
+    .insert({ user_id: usuario.id, asistente: "director", tipo_evento: "respuesta", contenido: { texto: parseado.data.respuesta, acciones: parseado.data.acciones, asistenteCitado } })
     .select("*")
     .single();
 

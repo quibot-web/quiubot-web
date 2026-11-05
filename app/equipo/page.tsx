@@ -37,8 +37,8 @@ import {
 } from "@/app/lib/directorChat";
 import { usePropuestaAcciones, campanaIdDe } from "@/app/components/burbuja/usePropuestaAcciones";
 import TarjetaPropuesta, { TarjetaGrupoPropuestas, agruparPropuestasPorTipo } from "@/app/components/burbuja/TarjetaPropuesta";
-import { NOMBRE_CHAT, ESFERA_POR_CHAT, type ChatEquipoId } from "@/app/lib/director/chatsEquipo";
-import type { MensajeEquipo, AsistenteConversacionEquipo } from "@/app/lib/director/mensajeEquipo.schema";
+import { NOMBRE_CHAT } from "@/app/lib/director/chatsEquipo";
+import type { MensajeEquipo, AsistenteEventoEquipo } from "@/app/lib/director/mensajeEquipo.schema";
 
 const ASISTENTES_EQUIPO: Asistente[] = ["marca", "estratega", "creativo", "publicador", "analista", "optimizador"];
 
@@ -68,16 +68,17 @@ function construirEstadoPorAsistente(propuestas: PropuestaUnificada[]): Record<A
   return estado;
 }
 
-// Detecta un "@Nombre " al inicio del mensaje -- si coincide con uno de
-// los 3 asistentes con chat propio, el turno se dirige a esa persona;
-// si no, responde el Director. El parseo vive en el cliente, el
-// servidor solo recibe el id ya resuelto.
-function detectarMencion(texto: string): { asistente: AsistenteConversacionEquipo; resto: string } {
+// Detecta un "@Nombre " al inicio del mensaje -- quien SIEMPRE responde
+// es el Director (ver promptDirectorGeneral.ts); si coincide con uno
+// de los 3 asistentes con chat propio, el Director lo cita en su
+// respuesta. El parseo vive en el cliente, el servidor solo recibe el
+// id ya resuelto (o nada, si no hay mención).
+function detectarMencion(texto: string): { asistenteCitado: AsistenteEventoEquipo | undefined; resto: string } {
   const match = texto.match(/^@(\S+)\s+([\s\S]*)$/);
-  if (!match) return { asistente: "director", resto: texto };
+  if (!match) return { asistenteCitado: undefined, resto: texto };
   const nombre = match[1].toLowerCase();
   const encontrado = (["analista", "creativo", "optimizador"] as const).find((id) => NOMBRE_CHAT[id].toLowerCase() === nombre);
-  return encontrado ? { asistente: encontrado, resto: match[2] } : { asistente: "director", resto: texto };
+  return encontrado ? { asistenteCitado: encontrado, resto: match[2] } : { asistenteCitado: undefined, resto: texto };
 }
 
 export default function EquipoPage() {
@@ -214,23 +215,24 @@ function EquipoContenido() {
   const enviarMensaje = async () => {
     const contenido = texto.trim();
     if (!contenido || enviandoMensaje) return;
-    const { asistente, resto } = detectarMencion(contenido);
+    const { asistenteCitado, resto } = detectarMencion(contenido);
 
     setEnviandoMensaje(true);
     setTexto("");
     // Optimista: la fila real (con id/creado_en reales) llega en la
     // respuesta y reemplaza esto al recargar -- mientras tanto, el
-    // propio mensaje del usuario ya se ve en el hilo.
+    // propio mensaje del usuario ya se ve en el hilo. asistente queda
+    // "director" siempre -- el usuario también le habla al Director.
     setMensajesEquipo((prev) => [
       ...prev,
-      { id: `tmp-${Date.now()}`, user_id: "", asistente, tipo_evento: "mensaje_usuario", contenido: { texto: resto }, origen_id: null, creado_en: new Date().toISOString() },
+      { id: `tmp-${Date.now()}`, user_id: "", asistente: "director", tipo_evento: "mensaje_usuario", contenido: { texto: resto, asistenteCitado }, origen_id: null, creado_en: new Date().toISOString() },
     ]);
 
     try {
       const res = await fetch("/api/equipo/mensajes", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ mensaje: resto, asistente }),
+        body: JSON.stringify({ mensaje: resto, asistente: asistenteCitado }),
       });
       const data = await res.json();
       if (res.ok && data.mensaje) {
@@ -274,9 +276,24 @@ function EquipoContenido() {
   const eventosAutopiloto = !filtro || filtro === "director" ? eventosBitacora.filter((e) => e.tipo_evento === "autopiloto_pausado" || e.tipo_evento === "autopiloto_reanudado") : [];
   const revisionMasReciente = !filtro || filtro === "director" ? eventosBitacora.find((e) => e.tipo_evento === "director_revision" && revisionNoPropusoNada(e.detalle as { evaluaciones?: { propuso?: boolean }[] })) : undefined;
 
+  // Corrección de voz (Fase 2): los mensajes de mensajes_equipo
+  // (eventos automáticos + conversación, siempre en voz del Director)
+  // se intercalan por fecha con el resto del historial -- ya no es una
+  // sección aparte al final. Filtrado: un evento automático es del
+  // asistente que lo generó; una conversación es "del Director" si no
+  // citó a nadie, o del asistente citado si lo hizo.
+  const mensajesEquipoFiltrados = mensajesEquipo.filter((m) => {
+    if (!filtro) return true;
+    if (m.tipo_evento === "mensaje_usuario" || m.tipo_evento === "respuesta") {
+      return filtro === "director" ? !m.contenido.asistenteCitado : m.contenido.asistenteCitado === filtro;
+    }
+    return m.asistente === filtro;
+  });
+
   type Item = { orden: string; key: string; render: () => React.ReactNode };
   const itemsHistorial: Item[] = [
     ...historialFiltrado.map((p) => ({ orden: p.decidido_en || p.creadoEn, key: `hist-${p.id}`, render: () => renderDecidida(p) })),
+    ...mensajesEquipoFiltrados.map((m) => ({ orden: m.creado_en, key: `meq-${m.id}`, render: () => renderMensajeEquipo(m) })),
     ...eventosMeta.map((e) => ({ orden: e.creado_en, key: `meta-${e.id}`, render: () => renderDirectorSolo(narracionMetaCreada(e.detalle as Parameters<typeof narracionMetaCreada>[0])) })),
     ...eventosAutopiloto.map((e) => ({ orden: e.creado_en, key: `auto-${e.id}`, render: () => renderDirectorSolo(e.tipo_evento === "autopiloto_pausado" ? TEXTO_AUTOPILOTO_PAUSADO : TEXTO_AUTOPILOTO_REANUDADO) })),
     ...(revisionMasReciente
@@ -307,7 +324,6 @@ function EquipoContenido() {
   const sinPendientes = propuestas.length === 0;
   const ultimaDecidida = historial.propuestas[0];
 
-  const mensajesEquipoFiltrados = mensajesEquipo.filter((m) => !filtro || filtro === m.asistente || (filtro === "director" && m.asistente === "director"));
   const totalPendientesVisibles = itemsPendientesSueltos.length + grupos.length;
 
   function renderDirectorSolo(texto: string) {
@@ -420,19 +436,27 @@ function EquipoContenido() {
   function renderMensajeEquipo(m: MensajeEquipo) {
     if (m.tipo_evento === "mensaje_usuario") return renderUsuario(m.contenido.texto);
 
-    const esfera = (ESFERA_POR_CHAT[m.asistente as ChatEquipoId] ?? "director") as AsistenteId;
-    // Tocar la mascota abre su chat individual en la burbuja (decisión
-    // de la Fase 2) -- el evento lo escucha AsistenteFlotante.tsx.
+    // Corrección de voz: el que habla con el usuario es SIEMPRE el
+    // Director -- un evento automático cita al asistente que lo generó
+    // (m.asistente), una respuesta libre cita a quien el usuario
+    // mencionó con @ (contenido.asistenteCitado), si a alguien.
+    const esEvento = m.tipo_evento === "reporte_diario" || m.tipo_evento === "creativos_listos";
+    const citado = esEvento ? (m.asistente as Asistente) : (m.contenido.asistenteCitado as Asistente | undefined);
+
     return (
       <div style={{ display: "flex", gap: 10 }}>
-        <button
-          onClick={() => window.dispatchEvent(new CustomEvent("quiubot:abrir-chat-equipo", { detail: { chat: m.asistente } }))}
-          style={{ background: "none", border: "none", padding: 0, cursor: "pointer", flexShrink: 0 }}
-          aria-label={`Hablar con ${NOMBRE_ASISTENTE[m.asistente as Asistente] ?? m.asistente}`}
-        >
-          <EsferaAsistente asistente={esfera} estado="normal" tamano={40} />
-        </button>
+        <EsferaAsistente asistente="director" estado="normal" tamano={40} />
         <div style={{ background: "#fff", border: "1px solid #ece9f9", borderRadius: "4px 16px 16px 16px", padding: "10px 14px", maxWidth: "calc(100% - 50px)" }}>
+          {citado && (
+            <button
+              onClick={() => window.dispatchEvent(new CustomEvent("quiubot:abrir-chat-equipo", { detail: { chat: citado } }))}
+              style={{ display: "flex", alignItems: "center", gap: 6, marginBottom: 6, background: "none", border: "none", padding: 0, cursor: "pointer" }}
+              aria-label={`Hablar con ${NOMBRE_ASISTENTE[citado]}`}
+            >
+              <EsferaAsistente asistente={citado as AsistenteId} estado="normal" tamano={22} />
+              <span style={{ fontSize: 11, fontWeight: 700, color: "#534AB7", textTransform: "uppercase", letterSpacing: "0.02em" }}>{NOMBRE_ASISTENTE[citado]}</span>
+            </button>
+          )}
           <p style={{ fontSize: 13.5, color: "#1a1a1a", margin: 0, lineHeight: 1.5 }}>{m.contenido.texto}</p>
           {m.contenido.datos && m.contenido.datos.length > 0 && (
             <div style={{ display: "flex", gap: 8, marginTop: 8 }}>
@@ -643,7 +667,6 @@ function EquipoContenido() {
                 </div>
               ))}
 
-              {mensajesEquipoFiltrados.map((m) => <div key={m.id}>{renderMensajeEquipo(m)}</div>)}
               <div ref={anclaFinalRef} />
             </div>
           )}

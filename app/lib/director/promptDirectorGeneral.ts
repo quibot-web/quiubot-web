@@ -70,19 +70,25 @@ ${construirContextoTexto(contexto)}
 ${REGLAS_COMUNES}`;
 }
 
-// Mismo cerebro (modelo, contrato JSON, CONTEXTO DE CUENTA), distinta
-// voz -- para el grupo "Equipo" (@mención a un asistente puntual) y el
-// chat individual de ese asistente (Fase 2, Commits 4 y 5). Construido
-// una sola vez, reusado por ambos.
+// Corrección de voz (Fase 2): los asistentes NUNCA le hablan directo al
+// usuario -- le reportan al Director, y el Director es el único que
+// habla con el usuario, citándolos ("Le pregunté al Analista y me
+// dice..."). Por eso ya no existe un prompt que haga hablar al
+// asistente en primera persona -- esto sigue siendo el MISMO cerebro
+// del Director (mismo modelo, mismo contrato JSON), solo con la
+// instrucción de consultar y citar al asistente mencionado con @.
 const DESCRIPCION_ROL: Record<"analista" | "creativo" | "optimizador", string> = {
-  analista: "Lees los resultados de Meta Ads cada día: conversaciones, costo por resultado, avance contra la meta. Hablas de números reales de la cuenta, nunca inventados.",
-  creativo: "Generas los anuncios, imágenes y textos nuevos. Hablas de los creativos que ya hiciste o que podrías hacer, no de presupuesto ni de métricas de resultados (eso es del Analista/Optimizador).",
-  optimizador: "Cuidas el presupuesto y el rendimiento: pausas lo que no funciona y ajustas presupuesto a lo que sí. Hablas de esas decisiones y su impacto, con números reales.",
+  analista: "lee los resultados de Meta Ads cada día: conversaciones, costo por resultado, avance contra la meta.",
+  creativo: "genera los anuncios, imágenes y textos nuevos.",
+  optimizador: "cuida el presupuesto y el rendimiento: pausa lo que no funciona y ajusta presupuesto a lo que sí.",
 };
+const NOMBRE_VISIBLE_ROL: Record<"analista" | "creativo" | "optimizador", string> = { analista: "Analista", creativo: "Creativo", optimizador: "Optimizador" };
 
-export function construirPromptAsistenteEquipo(asistente: "analista" | "creativo" | "optimizador", contexto: ContextoCuentaDirector): string {
-  const nombreVisible = asistente === "analista" ? "Analista" : asistente === "creativo" ? "Creativo" : "Optimizador";
-  return `Eres el "${nombreVisible} de Quiubot", parte del equipo que coordina el Director para manejar la pauta de Meta Ads del usuario. ${DESCRIPCION_ROL[asistente]} Hablas en primera persona, cercano, sobre tu trabajo específico -- si te preguntan algo que no es tuyo, dilo con honestidad (es tema del Director o de otro compañero, no lo inventes).
+export function construirPromptDirectorCitando(asistente: "analista" | "creativo" | "optimizador", contexto: ContextoCuentaDirector): string {
+  const nombreVisible = NOMBRE_VISIBLE_ROL[asistente];
+  return `Eres "el Director de Quiubot" (igual que siempre -- ver más abajo). El usuario mencionó a @${nombreVisible} en su mensaje, que ${DESCRIPCION_ROL[asistente]} Tu trabajo es responder como quien consultó con ese compañero y le trae la respuesta: "Le pregunté al ${nombreVisible} y me dice que..." -- nunca respondas como si tú fueras el ${nombreVisible}, ni dejes que hable en primera persona.
+
+Eres "el Director de Quiubot", quien coordina al equipo de IA (Analista, Creativo, Publicador, Estratega, Optimizador) que maneja la pauta de Meta Ads del usuario. Hablas en primera persona, cercano, como un compañero de equipo que conoce su cuenta -- nunca como un manual.
 
 CONTEXTO DE CUENTA (datos reales de ahora mismo, nunca inventes otros ni asumas valores que no aparezcan acá):
 ${construirContextoTexto(contexto)}

@@ -10,13 +10,18 @@ import { ASISTENTES_CON_CHAT_PROPIO } from "@/app/lib/director/chatsEquipo";
 export const TIPOS_EVENTO_EQUIPO = ["reporte_diario", "creativos_listos", "mensaje_usuario", "respuesta"] as const;
 export type TipoEventoEquipo = (typeof TIPOS_EVENTO_EQUIPO)[number];
 
-// Un mensaje de evento automático siempre lo "dice" uno de estos 3,
-// nunca el Director ni Soporte (esos no generan eventos automáticos).
+// Un mensaje de evento automático siempre lo "dice" uno de estos
+// asistentes, reportándole al Director -- nunca el Director ni
+// Soporte (esos no generan eventos automáticos).
 export const ASISTENTE_EVENTO_EQUIPO = z.enum(ASISTENTES_CON_CHAT_PROPIO);
+export type AsistenteEventoEquipo = z.infer<typeof ASISTENTE_EVENTO_EQUIPO>;
 
-// mensaje_usuario/respuesta sí pueden ser del Director -- es quien
-// responde por defecto cuando nadie menciona a un asistente puntual.
-export const ASISTENTE_CONVERSACION_EQUIPO = z.enum(["director", ...ASISTENTES_CON_CHAT_PROPIO]);
+// Corrección de voz (Fase 2): mensaje_usuario/respuesta son SIEMPRE
+// del Director -- es el único que le habla al usuario. Si el usuario
+// menciona a un asistente con @, eso queda en contenido.asistenteCitado
+// (solo para que la UI muestre la mini-esfera correcta), nunca cambia
+// quién "dice" la fila.
+export const ASISTENTE_CONVERSACION_EQUIPO = z.literal("director");
 export type AsistenteConversacionEquipo = z.infer<typeof ASISTENTE_CONVERSACION_EQUIPO>;
 
 export const AccionMensajeEquipoSchema = z.object({
@@ -28,21 +33,23 @@ export const AccionMensajeEquipoSchema = z.object({
 export const MensajeEquipoContenidoSchema = z.object({
   texto: z.string().min(1),
   // Chips de datos chicos (ej. "Conversaciones: 14") -- opcional, solo
-  // para reporte_diario.
+  // para eventos automáticos.
   datos: z.array(z.object({ etiqueta: z.string().min(1), valor: z.string().min(1) })).max(4).optional(),
-  // URLs de Cloudinary (o de video) de lo que esté listo -- opcional,
-  // solo para creativos_listos.
+  // URLs de Cloudinary (o de video) de lo que esté listo -- opcional.
   miniaturas: z.array(z.string().url()).max(6).optional(),
-  // Botones de acción en una respuesta del Director/asistente dentro
-  // del grupo -- mismo contrato que promptDirectorGeneral.ts.
+  // Botones de acción en una respuesta del Director dentro del grupo
+  // -- mismo contrato que promptDirectorGeneral.ts.
   acciones: z.array(AccionMensajeEquipoSchema).max(3).optional(),
+  // Qué asistente citó el Director en esta respuesta (si el usuario
+  // mencionó uno con @) -- solo para la mini-esfera de la UI.
+  asistenteCitado: ASISTENTE_EVENTO_EQUIPO.optional(),
 });
 export type MensajeEquipoContenido = z.infer<typeof MensajeEquipoContenidoSchema>;
 
 export type MensajeEquipo = {
   id: string;
   user_id: string;
-  asistente: AsistenteConversacionEquipo;
+  asistente: z.infer<typeof ASISTENTE_EVENTO_EQUIPO> | AsistenteConversacionEquipo;
   tipo_evento: TipoEventoEquipo;
   contenido: MensajeEquipoContenido;
   origen_id: string | null;
