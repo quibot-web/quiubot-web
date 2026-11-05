@@ -11,6 +11,7 @@
 // ejemplo, el costo de un freelancer) o la cifra ya resuelta y fija
 // de CUPOS_FUNDADOR, que es una política, no un precio.
 import type { AsistenteId } from "@/app/components/esferas/esferasShared";
+import type { Asistente } from "@/app/lib/metas";
 
 export type ValorToken =
   | "precioAutopilotoPrincipal" // precio de fundador si hay cupos, si no el normal
@@ -342,7 +343,7 @@ export const EJEMPLO_PROPUESTA = {
 // Nombres cortos para la fila de 7 esferas (más compactos que
 // NOMBRE_ASISTENTE de directorChat.ts, que es la fuente para el resto
 // de la app -- aquí hay menos espacio horizontal).
-export const NOMBRE_CORTO: Record<AsistenteId, string> = {
+export const NOMBRE_CORTO: Record<Asistente, string> = {
   director: "Director",
   marca: "Marca",
   estratega: "Estratega",
@@ -354,7 +355,7 @@ export const NOMBRE_CORTO: Record<AsistenteId, string> = {
 
 // Orden de la fila de esferas -- el Director en el centro, como en la
 // maqueta.
-export const ORDEN_EQUIPO: AsistenteId[] = ["marca", "estratega", "creativo", "director", "publicador", "analista", "optimizador"];
+export const ORDEN_EQUIPO: Asistente[] = ["marca", "estratega", "creativo", "director", "publicador", "analista", "optimizador"];
 
 // --- Textos del resto de la experiencia (fuera del chat), también
 // editables aquí sin tocar los componentes. ---

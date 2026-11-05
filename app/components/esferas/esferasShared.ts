@@ -8,7 +8,8 @@ export type AsistenteId =
   | "creativo"
   | "publicador"
   | "analista"
-  | "optimizador";
+  | "optimizador"
+  | "soporte";
 
 export type EstadoEsfera = "normal" | "trabajando" | "esperando" | "pausa";
 

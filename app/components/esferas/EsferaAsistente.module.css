@@ -136,5 +136,8 @@
 .publicador  { --c1:#A6F0CD; --c2:#33B884; --c3:#0F6343; --retraso:3.1s; --ritmo:6.4s; }
 .analista    { --c1:#A8EEF5; --c2:#2DB2C2; --c3:#0D5E69; --retraso:1.8s; --ritmo:4.9s; }
 .optimizador { --c1:#FFE3A6; --c2:#E5AE3A; --c3:#85590C; --retraso:2.8s; --ritmo:5.9s; }
+/* Soporte no es un rol del Director (no genera propuestas) -- tono
+   neutro a propósito, para distinguirlo de los 7 cálidos/fríos de arriba. */
+.soporte     { --c1:#D9DBE3; --c2:#8B90A3; --c3:#4B4F63; --retraso:3.6s; --ritmo:5.4s; }
 
 @media (prefers-reduced-motion: reduce) { .cuerpo, .ojo, .ojos, .gema, .gema::before, .zz { animation:none !important; } }

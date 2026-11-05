@@ -2,11 +2,12 @@
 import { useEffect, useState } from "react";
 import Link from "next/link";
 import EsferaAsistente from "@/app/components/esferas/EsferaAsistente";
-import type { AsistenteId, EstadoEsfera } from "@/app/components/esferas/esferasShared";
+import type { EstadoEsfera } from "@/app/components/esferas/esferasShared";
 import { NOMBRE_ASISTENTE, asistenteDeMensaje } from "@/app/lib/directorChat";
+import type { Asistente } from "@/app/lib/metas";
 import estilos from "./TarjetaEquipo.module.css";
 
-const EQUIPO: { id: AsistenteId; corto: string; principal?: boolean }[] = [
+const EQUIPO: { id: Asistente; corto: string; principal?: boolean }[] = [
   { id: "director", corto: "Director", principal: true },
   { id: "marca", corto: "Marca" },
   { id: "estratega", corto: "Estratega" },
@@ -44,8 +45,8 @@ const TEXTO_CORTO_RECORDATORIO: Record<string, string> = {
 export default function TarjetaEquipo() {
   const [cargando, setCargando] = useState(true);
   const [visible, setVisible] = useState(false);
-  const [asistentesEsperando, setAsistentesEsperando] = useState<Set<AsistenteId>>(new Set());
-  const [previa, setPrevia] = useState<{ titulo: string; asistente: AsistenteId; extra: number } | null>(null);
+  const [asistentesEsperando, setAsistentesEsperando] = useState<Set<Asistente>>(new Set());
+  const [previa, setPrevia] = useState<{ titulo: string; asistente: Asistente; extra: number } | null>(null);
 
   // El fetch a /api/metas sigue acá -- no por su contenido, sino porque
   // si no responde 200 (sin tieneAutopiloto) este bloque no debe
@@ -70,7 +71,7 @@ export default function TarjetaEquipo() {
         // campo asistente guardado, para que un dato de prueba viejo o
         // un error futuro al guardar no cambie qué esfera se marca
         // "esperando".
-        const conjunto = new Set<AsistenteId>(lista.map((p) => asistenteDeMensaje(p)));
+        const conjunto = new Set<Asistente>(lista.map((p) => asistenteDeMensaje(p)));
         setAsistentesEsperando(conjunto);
 
         // El recordatorio de renovación tiene prioridad sobre la
@@ -100,17 +101,17 @@ export default function TarjetaEquipo() {
 
   if (cargando || !visible) return null;
 
-  const estadoDe = (id: AsistenteId): EstadoEsfera => {
+  const estadoDe = (id: Asistente): EstadoEsfera => {
     if (asistentesEsperando.has(id)) return "esperando";
     return "normal";
   };
 
-  const textoDe = (id: AsistenteId): string => {
+  const textoDe = (id: Asistente): string => {
     if (asistentesEsperando.has(id)) return "Te necesita";
     return "Activo";
   };
 
-  const ariaLabelDe = (id: AsistenteId): string => {
+  const ariaLabelDe = (id: Asistente): string => {
     const estado = textoDe(id);
     return id === "director" ? `Hablar con el Director: ${estado}` : `Hablar con el Director sobre el ${NOMBRE_ASISTENTE[id]}: ${estado}`;
   };
