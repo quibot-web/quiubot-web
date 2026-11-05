@@ -1,6 +1,6 @@
 "use client"
 
-const TU_WHATSAPP = "573243490766"
+import { urlWhatsappSoporte } from "@/app/lib/contacto"
 
 export default function PagoExitosoPage() {
   return (
@@ -53,7 +53,7 @@ export default function PagoExitosoPage() {
         </a>
 
         <a
-          href={"https://wa.me/" + TU_WHATSAPP + "?text=" + encodeURIComponent("Hola, ya realicé el pago de Quiubot y quería confirmarlo.")}
+          href={urlWhatsappSoporte("Hola, ya realicé el pago de Quiubot y quería confirmarlo.")}
           target="_blank"
           rel="noopener noreferrer"
           style={{

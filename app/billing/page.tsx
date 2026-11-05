@@ -7,8 +7,7 @@ import CargandoQuiubot from "@/app/components/CargandoQuiubot"
 
 import { OBJETIVOS_INFO } from "@/app/lib/objetivosInfo"
 import { AUTOPILOTO_PUBLICO, nombreVisiblePlan, precioMensual, precioAnual, BENEFICIOS_AUTOPILOTO, CUPOS_FUNDADOR, PRECIO_FUNDADOR } from "@/app/lib/planesConfig"
-
-const TU_WHATSAPP = "573243490766"
+import { urlWhatsappSoporte } from "@/app/lib/contacto"
 
 const ORDEN_PLANES = ["arranque", "crecimiento", "escala"]
 
@@ -541,7 +540,7 @@ export default function BillingPage() {
             Si ya pagaste y tu cuenta no está activa, contáctanos.
           </p>
           <a
-            href={"https://wa.me/" + TU_WHATSAPP + "?text=" + encodeURIComponent(mensajeWhatsapp)}
+            href={urlWhatsappSoporte(mensajeWhatsapp)}
             target="_blank"
             rel="noopener noreferrer"
             style={{ display: "block", background: "#25D366", color: "#fff", padding: "10px", borderRadius: 10, fontSize: 14, fontWeight: 600, textDecoration: "none", textAlign: "center" }}

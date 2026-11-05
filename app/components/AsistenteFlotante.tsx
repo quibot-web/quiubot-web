@@ -1,6 +1,7 @@
 "use client"
 import { useEffect, useRef, useState } from "react"
 import { usePathname } from "next/navigation"
+import { urlWhatsappSoporte } from "@/app/lib/contacto"
 
 type Mensaje = {
   rol: "user" | "assistant"
@@ -20,6 +21,7 @@ export default function AsistenteFlotante() {
   const [texto, setTexto] = useState("")
   const [enviando, setEnviando] = useState(false)
   const [escalar, setEscalar] = useState(false)
+  const [preguntaEscalada, setPreguntaEscalada] = useState("")
   const finRef = useRef<HTMLDivElement>(null)
 
   useEffect(() => {
@@ -76,7 +78,10 @@ export default function AsistenteFlotante() {
         ])
       } else {
         setMensajes((prev) => [...prev, { rol: "assistant", mensaje: data.respuesta }])
-        if (data.escalar) setEscalar(true)
+        if (data.escalar) {
+          setEscalar(true)
+          setPreguntaEscalada(contenido)
+        }
       }
     } catch {
       setMensajes((prev) => [
@@ -198,7 +203,7 @@ export default function AsistenteFlotante() {
               >
                 Esto es mejor resolverlo con el equipo directamente.{" "}
                 <a
-                  href="https://wa.me/00000000000"
+                  href={urlWhatsappSoporte(preguntaEscalada)}
                   target="_blank"
                   rel="noreferrer"
                   style={{ color: "#7a5c00", fontWeight: 700, textDecoration: "underline" }}
