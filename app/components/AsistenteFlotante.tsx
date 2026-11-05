@@ -1,99 +1,101 @@
 "use client"
 import { useEffect, useRef, useState } from "react"
 import { usePathname } from "next/navigation"
-import { urlWhatsappSoporte } from "@/app/lib/contacto"
+import EsferaAsistente from "@/app/components/esferas/EsferaAsistente"
+import type { EstadoEsfera } from "@/app/components/esferas/esferasShared"
+import type { ContextoCuentaDirector } from "@/app/lib/director/contextoCuenta"
+import PanelDirectorGeneral from "@/app/components/burbuja/PanelDirectorGeneral"
+import PanelSoporte from "@/app/components/burbuja/PanelSoporte"
 
-type Mensaje = {
-  rol: "user" | "assistant"
-  mensaje: string
-}
+type MensajeSoporte = { rol: "user" | "assistant"; mensaje: string }
+type AccionDirector = { label: string; tipo: "link" | "crear_meta" | "ir_a_soporte"; href?: string }
+type MensajeDirector = { rol: "user" | "assistant"; mensaje: string; acciones?: AccionDirector[] }
 
 const RUTAS_PUBLICAS = ["/bienvenida", "/login", "/terminos", "/pricing"]
 
+// Paso 6/6 de la burbuja del Director -- dos pestañas visibles (la
+// burbuja siempre fue "Asistente Quiubot"/Soporte; ahora el Director
+// de Quiubot es el modo principal y Soporte queda aparte). La pestaña
+// "Equipo" (Fase 2, grupo de mascotas) se agrega después -- este
+// switcher ya está armado para sumarla sin rehacer nada de acá.
 export default function AsistenteFlotante() {
   const pathname = usePathname()
   const esRutaPublica = RUTAS_PUBLICAS.some((ruta) => pathname?.startsWith(ruta))
 
   const [mostrar, setMostrar] = useState(false)
-  const [activo, setActivo] = useState(false)
   const [abierto, setAbierto] = useState(false)
-  const [mensajes, setMensajes] = useState<Mensaje[]>([])
-  const [texto, setTexto] = useState("")
-  const [enviando, setEnviando] = useState(false)
-  const [escalar, setEscalar] = useState(false)
-  const [preguntaEscalada, setPreguntaEscalada] = useState("")
-  const finRef = useRef<HTMLDivElement>(null)
+  const [pantallaCompleta, setPantallaCompleta] = useState(false)
+  const [pestana, setPestana] = useState<"director" | "soporte">("director")
+  const [estadoDirector, setEstadoDirector] = useState<"listo" | "pensando">("listo")
+
+  const [soporteActivo, setSoporteActivo] = useState(false)
+  const [soporteHistorial, setSoporteHistorial] = useState<MensajeSoporte[]>([])
+  const [autoenviarSoporte, setAutoenviarSoporte] = useState<string | null>(null)
+
+  const [directorActivo, setDirectorActivo] = useState(false)
+  const [directorHistorial, setDirectorHistorial] = useState<MensajeDirector[]>([])
+  const [autoenviarDirector, setAutoenviarDirector] = useState<string | null>(null)
+  const [contexto, setContexto] = useState<ContextoCuentaDirector | null>(null)
+
+  const cargado = useRef(false)
 
   useEffect(() => {
-    if (esRutaPublica) return
+    if (esRutaPublica || cargado.current) return
+    cargado.current = true
 
     fetch("/api/asistente")
       .then((res) => res.json())
       .then((data) => {
         setMostrar(!!data.mostrar)
-        setActivo(!!data.activo)
-        if (data.historial) {
-          setMensajes(
-            data.historial.map((h: any) => ({ rol: h.rol, mensaje: h.mensaje }))
-          )
+        if (!data.mostrar) return
+
+        setSoporteActivo(!!data.activo)
+        if (Array.isArray(data.historial)) {
+          setSoporteHistorial(data.historial.map((h: { rol: "user" | "assistant"; mensaje: string }) => ({ rol: h.rol, mensaje: h.mensaje })))
         }
+
+        fetch("/api/director/conversacion")
+          .then((r) => r.json())
+          .then((d) => {
+            setDirectorActivo(!!d.activo)
+            if (Array.isArray(d.mensajes)) setDirectorHistorial(d.mensajes)
+          })
+          .catch(() => {})
+
+        fetch("/api/director/contexto")
+          .then((r) => (r.ok ? r.json() : null))
+          .then((c) => setContexto(c))
+          .catch(() => {})
       })
       .catch(() => setMostrar(false))
   }, [esRutaPublica])
 
-  useEffect(() => {
-    finRef.current?.scrollIntoView({ behavior: "smooth" })
-  }, [mensajes, abierto])
-
   // Otras partes de la app (ej. la tarjeta "¿No sabes cuál elegir?" del
-  // carrusel de objetivos en /estrategia) necesitan abrir este chat sin
-  // tener acceso directo a su estado -- un evento global es más simple
-  // que subir "abierto" a un contexto solo para este único caso.
+  // carrusel de objetivos en /estrategia) abren este chat sin acceso
+  // directo a su estado -- siempre abrían el chat de soporte, eso no
+  // cambia con las pestañas nuevas.
   useEffect(() => {
-    const abrir = () => setAbierto(true)
+    const abrir = () => {
+      setPestana("soporte")
+      setAbierto(true)
+    }
     window.addEventListener("quiubot:abrir-asistente", abrir)
     return () => window.removeEventListener("quiubot:abrir-asistente", abrir)
   }, [])
 
-  async function enviar() {
-    const contenido = texto.trim()
-    if (!contenido || enviando) return
+  if (esRutaPublica || !mostrar) return null
 
-    setMensajes((prev) => [...prev, { rol: "user", mensaje: contenido }])
-    setTexto("")
-    setEnviando(true)
-
-    try {
-      const res = await fetch("/api/asistente", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ mensaje: contenido }),
-      })
-      const data = await res.json()
-
-      if (!res.ok) {
-        setMensajes((prev) => [
-          ...prev,
-          { rol: "assistant", mensaje: data.error || "Algo salió mal, intenta de nuevo." },
-        ])
-      } else {
-        setMensajes((prev) => [...prev, { rol: "assistant", mensaje: data.respuesta }])
-        if (data.escalar) {
-          setEscalar(true)
-          setPreguntaEscalada(contenido)
-        }
-      }
-    } catch {
-      setMensajes((prev) => [
-        ...prev,
-        { rol: "assistant", mensaje: "No se pudo conectar. Intenta de nuevo en un momento." },
-      ])
-    } finally {
-      setEnviando(false)
-    }
+  const irASoporte = (pregunta: string) => {
+    setPestana("soporte")
+    if (pregunta) setAutoenviarSoporte(pregunta)
+  }
+  const irADirector = (pregunta: string) => {
+    setPestana("director")
+    if (pregunta) setAutoenviarDirector(pregunta)
   }
 
-  if (esRutaPublica || !mostrar) return null
+  const estadoEsferaDirector: EstadoEsfera = estadoDirector === "pensando" ? "trabajando" : "normal"
+  const mostrarAvisoProactivo = !abierto && !!contexto && contexto.propuestasPendientes > 0
 
   return (
     <div data-tour="asistente-flotante" style={{ position: "fixed", bottom: 24, right: 24, zIndex: 1000, fontFamily: "system-ui, sans-serif" }}>
@@ -112,145 +114,109 @@ export default function AsistenteFlotante() {
         }
       `}</style>
 
-      {abierto && (
-        <div
+      {mostrarAvisoProactivo && (
+        <button
+          onClick={() => {
+            setPestana("director")
+            setAbierto(true)
+          }}
           style={{
-            width: 340,
-            height: 460,
+            display: "block",
+            marginBottom: 10,
+            marginLeft: "auto",
+            maxWidth: 220,
             background: "#fff",
-            borderRadius: 18,
-            boxShadow: "0 8px 32px rgba(0,0,0,0.16)",
-            display: "flex",
-            flexDirection: "column",
-            marginBottom: 12,
-            overflow: "hidden",
             border: "1px solid #e8e8e6",
+            borderRadius: "14px 14px 4px 14px",
+            padding: "10px 14px",
+            fontSize: 12.5,
+            color: "#1a1a1a",
+            textAlign: "left",
+            cursor: "pointer",
+            boxShadow: "0 6px 20px rgba(0,0,0,0.1)",
           }}
         >
-          <div
-            style={{
-              background: "#7F77DD",
-              color: "#fff",
-              padding: "14px 16px",
-              display: "flex",
-              alignItems: "center",
-              justifyContent: "space-between",
-            }}
-          >
-            <span style={{ fontWeight: 600, fontSize: 14 }}>Asistente Quiubot</span>
-            <button
-              onClick={() => setAbierto(false)}
-              style={{ background: "none", border: "none", color: "#fff", cursor: "pointer", fontSize: 18, lineHeight: 1 }}
-            >
-              ×
-            </button>
-          </div>
+          Tienes {contexto!.propuestasPendientes} propuesta{contexto!.propuestasPendientes === 1 ? "" : "s"} pendiente{contexto!.propuestasPendientes === 1 ? "" : "s"} →
+        </button>
+      )}
 
-          <div style={{ flex: 1, overflowY: "auto", padding: 14, display: "flex", flexDirection: "column", gap: 10 }}>
-            {!activo ? (
-              <div
-                style={{
-                  background: "#f5f4fb",
-                  border: "1px solid #e3e1f7",
-                  borderRadius: 12,
-                  padding: "14px 16px",
-                  fontSize: 13,
-                  color: "#444",
-                  textAlign: "center",
-                }}
-              >
-                Para activar el asistente, conecta tu cuenta de OpenAI en{" "}
-                <a href="/?tab=integraciones" style={{ color: "#7F77DD", fontWeight: 600 }}>
-                  Integraciones
-                </a>
-                .
+      {abierto && (
+        <div
+          style={
+            pantallaCompleta
+              ? { position: "fixed", inset: 20, background: "#fff", borderRadius: 18, boxShadow: "0 8px 32px rgba(0,0,0,0.25)", display: "flex", flexDirection: "column", overflow: "hidden", border: "1px solid #e8e8e6", zIndex: 1001 }
+              : { width: 360, height: 500, background: "#fff", borderRadius: 18, boxShadow: "0 8px 32px rgba(0,0,0,0.16)", display: "flex", flexDirection: "column", marginBottom: 12, overflow: "hidden", border: "1px solid #e8e8e6" }
+          }
+        >
+          <div style={{ background: "#534AB7", color: "#fff", padding: "12px 16px", display: "flex", alignItems: "center", justifyContent: "space-between", gap: 10 }}>
+            <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
+              <EsferaAsistente asistente={pestana === "director" ? "director" : "soporte"} estado={pestana === "director" ? estadoEsferaDirector : "normal"} tamano={30} />
+              <div>
+                <span style={{ fontWeight: 700, fontSize: 14, display: "block" }}>{pestana === "director" ? "Director de Quiubot" : "Soporte Quiubot"}</span>
+                {pestana === "director" && (
+                  <span style={{ fontSize: 11, opacity: 0.85 }}>{estadoDirector === "pensando" ? "Pensando..." : "Listo"}</span>
+                )}
               </div>
-            ) : mensajes.length === 0 ? (
-              <div style={{ color: "#999", fontSize: 13, textAlign: "center", marginTop: 20 }}>
-                Pregúntame lo que necesites sobre Quiubot.
-              </div>
-            ) : (
-              mensajes.map((m, i) => (
-                <div
-                  key={i}
-                  style={{
-                    alignSelf: m.rol === "user" ? "flex-end" : "flex-start",
-                    background: m.rol === "user" ? "#7F77DD" : "#f2f2f0",
-                    color: m.rol === "user" ? "#fff" : "#1a1a1a",
-                    padding: "8px 12px",
-                    borderRadius: 12,
-                    fontSize: 13,
-                    maxWidth: "80%",
-                    lineHeight: 1.4,
-                  }}
-                >
-                  {m.mensaje}
-                </div>
-              ))
-            )}
-
-            {escalar && (
-              <div
-                style={{
-                  background: "#fff7e6",
-                  border: "1px solid #ffe1a8",
-                  borderRadius: 12,
-                  padding: "10px 12px",
-                  fontSize: 12,
-                  color: "#7a5c00",
-                  textAlign: "center",
-                }}
-              >
-                Esto es mejor resolverlo con el equipo directamente.{" "}
-                <a
-                  href={urlWhatsappSoporte(preguntaEscalada)}
-                  target="_blank"
-                  rel="noreferrer"
-                  style={{ color: "#7a5c00", fontWeight: 700, textDecoration: "underline" }}
-                >
-                  Escríbenos por WhatsApp
-                </a>
-              </div>
-            )}
-
-            <div ref={finRef} />
-          </div>
-
-          {activo && (
-            <div style={{ display: "flex", borderTop: "1px solid #eee", padding: 10, gap: 8 }}>
-              <input
-                value={texto}
-                onChange={(e) => setTexto(e.target.value)}
-                onKeyDown={(e) => e.key === "Enter" && enviar()}
-                placeholder="Escribe tu pregunta..."
-                disabled={enviando}
-                style={{
-                  flex: 1,
-                  border: "1px solid #e0e0e0",
-                  borderRadius: 10,
-                  padding: "8px 12px",
-                  fontSize: 13,
-                  outline: "none",
-                }}
-              />
+            </div>
+            <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
               <button
-                onClick={enviar}
-                disabled={enviando || !texto.trim()}
-                style={{
-                  background: "#7F77DD",
-                  color: "#fff",
-                  border: "none",
-                  borderRadius: 10,
-                  padding: "8px 14px",
-                  fontSize: 13,
-                  fontWeight: 600,
-                  cursor: enviando ? "default" : "pointer",
-                  opacity: enviando || !texto.trim() ? 0.6 : 1,
-                }}
+                onClick={() => setPantallaCompleta((v) => !v)}
+                aria-label={pantallaCompleta ? "Salir de pantalla completa" : "Pantalla completa"}
+                style={{ background: "none", border: "none", color: "#fff", cursor: "pointer", fontSize: 16, lineHeight: 1, opacity: 0.9 }}
               >
-                {enviando ? "..." : "Enviar"}
+                {pantallaCompleta ? "⤡" : "⤢"}
+              </button>
+              <button
+                onClick={() => setAbierto(false)}
+                style={{ background: "none", border: "none", color: "#fff", cursor: "pointer", fontSize: 18, lineHeight: 1 }}
+              >
+                ×
               </button>
             </div>
+          </div>
+
+          <div style={{ display: "flex", background: "#F3F2FE", padding: 4, gap: 4, margin: "10px 10px 0" }}>
+            {(["director", "soporte"] as const).map((t) => (
+              <button
+                key={t}
+                onClick={() => setPestana(t)}
+                style={{
+                  flex: 1,
+                  textAlign: "center",
+                  padding: "7px 0",
+                  borderRadius: 9,
+                  fontSize: 12.5,
+                  fontWeight: 700,
+                  color: "#534AB7",
+                  border: "none",
+                  cursor: "pointer",
+                  background: pestana === t ? "#fff" : "transparent",
+                  boxShadow: pestana === t ? "0 2px 6px rgba(0,0,0,.08)" : "none",
+                }}
+              >
+                {t === "director" ? "💬 Director" : "🎧 Soporte"}
+              </button>
+            ))}
+          </div>
+
+          {pestana === "director" ? (
+            <PanelDirectorGeneral
+              activo={directorActivo}
+              historialInicial={directorHistorial}
+              contexto={contexto}
+              autoenviar={autoenviarDirector}
+              onConsumidoAutoenviar={() => setAutoenviarDirector(null)}
+              onIrASoporte={irASoporte}
+              onCambiarEstado={setEstadoDirector}
+            />
+          ) : (
+            <PanelSoporte
+              activo={soporteActivo}
+              historialInicial={soporteHistorial}
+              autoenviar={autoenviarSoporte}
+              onConsumidoAutoenviar={() => setAutoenviarSoporte(null)}
+              onIrADirector={irADirector}
+            />
           )}
         </div>
       )}
@@ -289,11 +255,7 @@ export default function AsistenteFlotante() {
             justifyContent: "center",
           }}
         >
-          {abierto ? (
-            <span style={{ color: "#534AB7", fontSize: 22, fontWeight: 300 }}>×</span>
-          ) : (
-            <img src="/marca/icono-quiubot.svg" alt="Asistente Quiubot" width={30} height={30} />
-          )}
+          {abierto ? <span style={{ color: "#534AB7", fontSize: 22, fontWeight: 300 }}>×</span> : <EsferaAsistente asistente="director" estado="normal" tamano={38} />}
         </button>
       </div>
     </div>

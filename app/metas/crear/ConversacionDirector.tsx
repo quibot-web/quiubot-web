@@ -86,9 +86,15 @@ function formatoCop(valor: number): string {
 export default function ConversacionDirector({
   datosIniciales,
   onPreferirFormulario,
+  variante = "pagina",
 }: {
   datosIniciales: DatosInicialesConversacion;
   onPreferirFormulario: (prefill?: PrefillFormularioRapido) => void;
+  // "pagina" (por defecto): /metas/crear, pensado para el viewport
+  // completo. "embebida": la burbuja del Director (Paso 6) la monta
+  // dentro de un panel chico -- mismo componente y lógica, solo cambia
+  // el contenedor exterior (sin 100vh ni el padding de página completa).
+  variante?: "pagina" | "embebida";
 }) {
   const router = useRouter();
   const [mensajes, setMensajes] = useState<MensajeDirector[]>(datosIniciales.mensajes);
@@ -198,9 +204,17 @@ export default function ConversacionDirector({
   // esto es una estimación por campos llenos, no una máquina de estados.
   const pasos = [!!borrador.tipo, !!borrador.producto, !!borrador.presupuesto_cop, !!resumen];
 
+  const esPagina = variante === "pagina";
+
   return (
-    <div style={{ minHeight: "100vh", background: "#F8F8F6", fontFamily: "-apple-system, Inter, Segoe UI, Roboto, sans-serif", display: "flex", justifyContent: "center", padding: "28px 16px 40px" }}>
-      <div style={{ maxWidth: 760, width: "100%" }}>
+    <div
+      style={
+        esPagina
+          ? { minHeight: "100vh", background: "#F8F8F6", fontFamily: "-apple-system, Inter, Segoe UI, Roboto, sans-serif", display: "flex", justifyContent: "center", padding: "28px 16px 40px" }
+          : { height: "100%", background: "#F8F8F6", fontFamily: "-apple-system, Inter, Segoe UI, Roboto, sans-serif", display: "flex", flexDirection: "column", padding: "14px 14px 10px", overflow: "hidden" }
+      }
+    >
+      <div style={esPagina ? { maxWidth: 760, width: "100%" } : { flex: 1, display: "flex", flexDirection: "column", overflow: "hidden", minHeight: 0 }}>
         <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 18 }}>
           <div style={{ display: "flex", alignItems: "center", gap: 14 }}>
             <div
@@ -239,7 +253,7 @@ export default function ConversacionDirector({
           ))}
         </div>
 
-        <div style={{ display: "flex", flexDirection: "column", gap: 12 }}>
+        <div style={esPagina ? { display: "flex", flexDirection: "column", gap: 12 } : { display: "flex", flexDirection: "column", gap: 12, flex: 1, overflowY: "auto", minHeight: 0 }}>
           {mensajes.map((m, i) => (
             <div key={i} style={{ display: "flex", flexDirection: "column", alignItems: m.rol === "usuario" ? "flex-end" : "flex-start", gap: 8 }}>
               <div
@@ -374,7 +388,7 @@ export default function ConversacionDirector({
         </div>
 
         {!resumen && (
-          <div style={{ position: "sticky", bottom: 0, marginTop: 22, display: "flex", gap: 8, background: "#F8F8F6", padding: "10px 0" }}>
+          <div style={esPagina ? { position: "sticky", bottom: 0, marginTop: 22, display: "flex", gap: 8, background: "#F8F8F6", padding: "10px 0" } : { flexShrink: 0, marginTop: 10, display: "flex", gap: 8, background: "#F8F8F6", padding: "10px 0 0" }}>
             <input
               value={texto}
               onChange={(e) => setTexto(e.target.value)}
