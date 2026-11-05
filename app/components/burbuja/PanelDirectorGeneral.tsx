@@ -33,8 +33,8 @@ function TarjetaContexto({ contexto }: { contexto: ContextoCuentaDirector }) {
         {ETIQUETA_CONEXION.map(({ clave, etiqueta }) => {
           const conectado = contexto.conexiones[clave].conectado;
           return (
-            <span key={clave} style={{ display: "flex", alignItems: "center", gap: 4, background: "#fff", border: "1px solid #E9E7EE", borderRadius: 999, padding: "3px 8px" }}>
-              <span style={{ width: 6, height: 6, borderRadius: "50%", background: conectado ? "#1E9E6B" : "#D0CDE0" }} />
+            <span key={clave} style={{ display: "flex", alignItems: "center", gap: 4, background: "#fff", border: "1px solid #E9E7EE", borderRadius: 999, padding: "3px 8px", color: "#1a1a1a" }}>
+              <span style={{ width: 6, height: 6, borderRadius: "50%", background: conectado ? "#1E9E6B" : "#E5AE3A" }} />
               {etiqueta}
             </span>
           );
