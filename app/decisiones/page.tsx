@@ -990,17 +990,19 @@ function DecisionesContenido() {
             </div>
           )}
 
-          <div style={{ marginTop: 28, borderTop: "1px solid #e8e8e6", paddingTop: 20 }}>
-            <button
-              onClick={() => setMostrarHerramientas((v) => !v)}
-              style={{ background: "none", border: "none", color: "#888", fontSize: 12.5, fontWeight: 600, cursor: "pointer", padding: 0 }}
-            >
-              {mostrarHerramientas ? "Ocultar herramientas de prueba" : "Herramientas de prueba (admin)"}
-            </button>
-            {mostrarHerramientas && (
-              <HerramientaPruebaPropuesta onCreada={cargarPropuestas} />
-            )}
-          </div>
+          {esAdmin && (
+            <div style={{ marginTop: 28, borderTop: "1px solid #e8e8e6", paddingTop: 20 }}>
+              <button
+                onClick={() => setMostrarHerramientas((v) => !v)}
+                style={{ background: "none", border: "none", color: "#888", fontSize: 12.5, fontWeight: 600, cursor: "pointer", padding: 0 }}
+              >
+                {mostrarHerramientas ? "Ocultar herramientas de prueba" : "Herramientas de prueba (admin)"}
+              </button>
+              {mostrarHerramientas && (
+                <HerramientaPruebaPropuesta onCreada={cargarPropuestas} />
+              )}
+            </div>
+          )}
         </div>
       </div>
     </ProveedorEsferas>
