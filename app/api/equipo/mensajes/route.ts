@@ -36,7 +36,7 @@ async function cargarUsuario(email: string): Promise<UsuarioEquipo | null> {
   return { ...usuario, email };
 }
 
-export async function GET() {
+export async function GET(req: NextRequest) {
   const session = await auth();
   if (!session?.user?.email) return NextResponse.json({ error: "No autorizado" }, { status: 401 });
 
@@ -44,6 +44,20 @@ export async function GET() {
   if (!usuario) return NextResponse.json({ error: "Usuario no encontrado" }, { status: 404 });
   if (!tieneAutopiloto(usuario)) {
     return NextResponse.json({ error: "Autopiloto todavía no está disponible." }, { status: 403 });
+  }
+
+  // Chat individual de un asistente (Commit 5) -- solo sus mensajes,
+  // sin la agregación pesada de pendientes/historial que no le aplica.
+  const parseadoFiltro = ASISTENTE_CONVERSACION_EQUIPO.safeParse(new URL(req.url).searchParams.get("asistente"));
+  if (parseadoFiltro.success && parseadoFiltro.data !== "director") {
+    const { data } = await supabaseAdmin
+      .from("mensajes_equipo")
+      .select("*")
+      .eq("user_id", usuario.id)
+      .eq("asistente", parseadoFiltro.data)
+      .order("creado_en", { ascending: false })
+      .limit(CANTIDAD_MENSAJES_HISTORIAL);
+    return NextResponse.json({ mensajesEquipo: ((data ?? []) as MensajeEquipo[]).reverse(), requiereApiKey: !usuario.openai_key });
   }
 
   const [pendientes, historialRes, mensajesRes] = await Promise.all([

@@ -1,11 +1,14 @@
 "use client"
 import { useEffect, useRef, useState } from "react"
-import { usePathname } from "next/navigation"
+import { usePathname, useRouter } from "next/navigation"
 import EsferaAsistente from "@/app/components/esferas/EsferaAsistente"
-import type { EstadoEsfera } from "@/app/components/esferas/esferasShared"
+import type { AsistenteId, EstadoEsfera } from "@/app/components/esferas/esferasShared"
 import type { ContextoCuentaDirector } from "@/app/lib/director/contextoCuenta"
+import { NOMBRE_CHAT, ESFERA_POR_CHAT, type ChatEquipoId } from "@/app/lib/director/chatsEquipo"
 import PanelDirectorGeneral from "@/app/components/burbuja/PanelDirectorGeneral"
 import PanelSoporte from "@/app/components/burbuja/PanelSoporte"
+import PanelAsistenteIndividual from "@/app/components/burbuja/PanelAsistenteIndividual"
+import ListaChats from "@/app/components/burbuja/ListaChats"
 
 type MensajeSoporte = { rol: "user" | "assistant"; mensaje: string }
 type AccionDirector = { label: string; tipo: "link" | "crear_meta" | "ir_a_soporte"; href?: string }
@@ -13,19 +16,23 @@ type MensajeDirector = { rol: "user" | "assistant"; mensaje: string; acciones?: 
 
 const RUTAS_PUBLICAS = ["/bienvenida", "/login", "/terminos", "/pricing"]
 
-// Paso 6/6 de la burbuja del Director -- dos pestañas visibles (la
-// burbuja siempre fue "Asistente Quiubot"/Soporte; ahora el Director
-// de Quiubot es el modo principal y Soporte queda aparte). La pestaña
-// "Equipo" (Fase 2, grupo de mascotas) se agrega después -- este
-// switcher ya está armado para sumarla sin rehacer nada de acá.
+type Vista = "lista" | ChatEquipoId
+
+// Fase 2, Commit 5/5 -- la burbuja ahora abre en una LISTA de chats
+// (docs/diseno/director_lista_chats.html), no en una pestaña fija:
+// Equipo (lleva a /equipo, página completa), Director, cada asistente
+// con chat propio, Soporte. Reemplaza las pestañas Director/Soporte
+// del Paso 6 de la Fase 1 -- esos dos paneles siguen siendo los mismos
+// componentes, solo cambia cómo se llega a ellos.
 export default function AsistenteFlotante() {
   const pathname = usePathname()
+  const router = useRouter()
   const esRutaPublica = RUTAS_PUBLICAS.some((ruta) => pathname?.startsWith(ruta))
 
   const [mostrar, setMostrar] = useState(false)
   const [abierto, setAbierto] = useState(false)
   const [pantallaCompleta, setPantallaCompleta] = useState(false)
-  const [pestana, setPestana] = useState<"director" | "soporte">("director")
+  const [vista, setVista] = useState<Vista>("lista")
   const [estadoDirector, setEstadoDirector] = useState<"listo" | "pensando">("listo")
 
   const [soporteActivo, setSoporteActivo] = useState(false)
@@ -70,32 +77,49 @@ export default function AsistenteFlotante() {
       .catch(() => setMostrar(false))
   }, [esRutaPublica])
 
+  function abrirChat(chat: ChatEquipoId) {
+    setVista(chat)
+    setAbierto(true)
+    fetch("/api/equipo/chats", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ chat }) }).catch(() => {})
+  }
+
   // Otras partes de la app (ej. la tarjeta "¿No sabes cuál elegir?" del
   // carrusel de objetivos en /estrategia) abren este chat sin acceso
-  // directo a su estado -- siempre abrían el chat de soporte, eso no
-  // cambia con las pestañas nuevas.
+  // directo a su estado -- siempre abrían Soporte directo, eso no
+  // cambia con la lista nueva.
   useEffect(() => {
-    const abrir = () => {
-      setPestana("soporte")
-      setAbierto(true)
-    }
+    const abrir = () => abrirChat("soporte")
     window.addEventListener("quiubot:abrir-asistente", abrir)
     return () => window.removeEventListener("quiubot:abrir-asistente", abrir)
+  }, [])
+
+  // Tocar la mascota de un mensaje de evento en /equipo abre su chat
+  // individual acá, con el detalle {chat} (ver app/equipo/page.tsx).
+  useEffect(() => {
+    const abrir = (e: Event) => {
+      const chat = (e as CustomEvent<{ chat: ChatEquipoId }>).detail?.chat
+      if (chat) abrirChat(chat)
+    }
+    window.addEventListener("quiubot:abrir-chat-equipo", abrir)
+    return () => window.removeEventListener("quiubot:abrir-chat-equipo", abrir)
   }, [])
 
   if (esRutaPublica || !mostrar) return null
 
   const irASoporte = (pregunta: string) => {
-    setPestana("soporte")
+    abrirChat("soporte")
     if (pregunta) setAutoenviarSoporte(pregunta)
   }
   const irADirector = (pregunta: string) => {
-    setPestana("director")
+    abrirChat("director")
     if (pregunta) setAutoenviarDirector(pregunta)
   }
 
   const estadoEsferaDirector: EstadoEsfera = estadoDirector === "pensando" ? "trabajando" : "normal"
   const mostrarAvisoProactivo = !abierto && !!contexto && contexto.propuestasPendientes > 0
+
+  const tituloVista = vista === "lista" ? "Quiubot" : NOMBRE_CHAT[vista]
+  const esferaVista: AsistenteId | null = vista === "lista" ? null : vista === "director" ? "director" : vista === "soporte" ? "soporte" : (ESFERA_POR_CHAT[vista] ?? null)
 
   return (
     <div data-tour="asistente-flotante" style={{ position: "fixed", bottom: 24, right: 24, zIndex: 1000, fontFamily: "system-ui, sans-serif" }}>
@@ -116,10 +140,7 @@ export default function AsistenteFlotante() {
 
       {mostrarAvisoProactivo && (
         <button
-          onClick={() => {
-            setPestana("director")
-            setAbierto(true)
-          }}
+          onClick={() => abrirChat("director")}
           style={{
             display: "block",
             marginBottom: 10,
@@ -150,12 +171,15 @@ export default function AsistenteFlotante() {
         >
           <div style={{ background: "#534AB7", color: "#fff", padding: "12px 16px", display: "flex", alignItems: "center", justifyContent: "space-between", gap: 10 }}>
             <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
-              <EsferaAsistente asistente={pestana === "director" ? "director" : "soporte"} estado={pestana === "director" ? estadoEsferaDirector : "normal"} tamano={30} />
+              {vista !== "lista" && (
+                <button onClick={() => setVista("lista")} style={{ background: "none", border: "none", color: "#fff", cursor: "pointer", fontSize: 16, lineHeight: 1, padding: 0 }} aria-label="Volver a la lista">
+                  ←
+                </button>
+              )}
+              {esferaVista && <EsferaAsistente asistente={esferaVista} estado={vista === "director" ? estadoEsferaDirector : "normal"} tamano={30} />}
               <div>
-                <span style={{ fontWeight: 700, fontSize: 14, display: "block" }}>{pestana === "director" ? "Director de Quiubot" : "Soporte Quiubot"}</span>
-                {pestana === "director" && (
-                  <span style={{ fontSize: 11, opacity: 0.85 }}>{estadoDirector === "pensando" ? "Pensando..." : "Listo"}</span>
-                )}
+                <span style={{ fontWeight: 700, fontSize: 14, display: "block" }}>{tituloVista}</span>
+                {vista === "director" && <span style={{ fontSize: 11, opacity: 0.85 }}>{estadoDirector === "pensando" ? "Pensando..." : "Listo"}</span>}
               </div>
             </div>
             <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
@@ -166,40 +190,14 @@ export default function AsistenteFlotante() {
               >
                 {pantallaCompleta ? "⤡" : "⤢"}
               </button>
-              <button
-                onClick={() => setAbierto(false)}
-                style={{ background: "none", border: "none", color: "#fff", cursor: "pointer", fontSize: 18, lineHeight: 1 }}
-              >
+              <button onClick={() => setAbierto(false)} style={{ background: "none", border: "none", color: "#fff", cursor: "pointer", fontSize: 18, lineHeight: 1 }}>
                 ×
               </button>
             </div>
           </div>
 
-          <div style={{ display: "flex", background: "#F3F2FE", padding: 4, gap: 4, margin: "10px 10px 0" }}>
-            {(["director", "soporte"] as const).map((t) => (
-              <button
-                key={t}
-                onClick={() => setPestana(t)}
-                style={{
-                  flex: 1,
-                  textAlign: "center",
-                  padding: "7px 0",
-                  borderRadius: 9,
-                  fontSize: 12.5,
-                  fontWeight: 700,
-                  color: "#534AB7",
-                  border: "none",
-                  cursor: "pointer",
-                  background: pestana === t ? "#fff" : "transparent",
-                  boxShadow: pestana === t ? "0 2px 6px rgba(0,0,0,.08)" : "none",
-                }}
-              >
-                {t === "director" ? "💬 Director" : "🎧 Soporte"}
-              </button>
-            ))}
-          </div>
-
-          {pestana === "director" ? (
+          {vista === "lista" && <ListaChats onAbrirChat={abrirChat} onAbrirEquipo={() => { setAbierto(false); router.push("/equipo") }} />}
+          {vista === "director" && (
             <PanelDirectorGeneral
               activo={directorActivo}
               historialInicial={directorHistorial}
@@ -209,51 +207,22 @@ export default function AsistenteFlotante() {
               onIrASoporte={irASoporte}
               onCambiarEstado={setEstadoDirector}
             />
-          ) : (
-            <PanelSoporte
-              activo={soporteActivo}
-              historialInicial={soporteHistorial}
-              autoenviar={autoenviarSoporte}
-              onConsumidoAutoenviar={() => setAutoenviarSoporte(null)}
-              onIrADirector={irADirector}
-            />
           )}
+          {vista === "soporte" && (
+            <PanelSoporte activo={soporteActivo} historialInicial={soporteHistorial} autoenviar={autoenviarSoporte} onConsumidoAutoenviar={() => setAutoenviarSoporte(null)} onIrADirector={irADirector} />
+          )}
+          {(vista === "analista" || vista === "creativo" || vista === "optimizador") && <PanelAsistenteIndividual asistente={vista} />}
         </div>
       )}
 
-      <div
-        className="qb-boton-flotante"
-        style={{
-          position: "relative",
-          width: 60,
-          height: 60,
-          animation: "qbPulse 2.8s infinite",
-          borderRadius: "50%",
-        }}
-      >
+      <div className="qb-boton-flotante" style={{ position: "relative", width: 60, height: 60, animation: "qbPulse 2.8s infinite", borderRadius: "50%" }}>
         <div
           className="qb-anillo"
-          style={{
-            position: "absolute",
-            inset: 0,
-            borderRadius: "50%",
-            background: "conic-gradient(from 0deg, #7F77DD, #534AB7, #C4BFF0, #7F77DD)",
-            animation: "qbSpin 3.2s linear infinite",
-          }}
+          style={{ position: "absolute", inset: 0, borderRadius: "50%", background: "conic-gradient(from 0deg, #7F77DD, #534AB7, #C4BFF0, #7F77DD)", animation: "qbSpin 3.2s linear infinite" }}
         />
         <button
           onClick={() => setAbierto((v) => !v)}
-          style={{
-            position: "absolute",
-            inset: 3,
-            borderRadius: "50%",
-            background: "#fff",
-            border: "none",
-            cursor: "pointer",
-            display: "flex",
-            alignItems: "center",
-            justifyContent: "center",
-          }}
+          style={{ position: "absolute", inset: 3, borderRadius: "50%", background: "#fff", border: "none", cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center" }}
         >
           {abierto ? <span style={{ color: "#534AB7", fontSize: 22, fontWeight: 300 }}>×</span> : <EsferaAsistente asistente="director" estado="normal" tamano={38} />}
         </button>

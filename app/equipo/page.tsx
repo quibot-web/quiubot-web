@@ -148,6 +148,8 @@ function EquipoContenido() {
       .then((r) => r.json())
       .then((data) => setPuedeUsarAutopiloto(!!data.tieneAutopiloto))
       .catch(() => setPuedeUsarAutopiloto(false));
+    // Entrar acá cuenta como leer el chat "Equipo" de la lista de la burbuja.
+    fetch("/api/equipo/chats", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ chat: "equipo" }) }).catch(() => {});
   }, []);
 
   useEffect(() => {
@@ -419,9 +421,17 @@ function EquipoContenido() {
     if (m.tipo_evento === "mensaje_usuario") return renderUsuario(m.contenido.texto);
 
     const esfera = (ESFERA_POR_CHAT[m.asistente as ChatEquipoId] ?? "director") as AsistenteId;
+    // Tocar la mascota abre su chat individual en la burbuja (decisión
+    // de la Fase 2) -- el evento lo escucha AsistenteFlotante.tsx.
     return (
       <div style={{ display: "flex", gap: 10 }}>
-        <EsferaAsistente asistente={esfera} estado="normal" tamano={40} />
+        <button
+          onClick={() => window.dispatchEvent(new CustomEvent("quiubot:abrir-chat-equipo", { detail: { chat: m.asistente } }))}
+          style={{ background: "none", border: "none", padding: 0, cursor: "pointer", flexShrink: 0 }}
+          aria-label={`Hablar con ${NOMBRE_ASISTENTE[m.asistente as Asistente] ?? m.asistente}`}
+        >
+          <EsferaAsistente asistente={esfera} estado="normal" tamano={40} />
+        </button>
         <div style={{ background: "#fff", border: "1px solid #ece9f9", borderRadius: "4px 16px 16px 16px", padding: "10px 14px", maxWidth: "calc(100% - 50px)" }}>
           <p style={{ fontSize: 13.5, color: "#1a1a1a", margin: 0, lineHeight: 1.5 }}>{m.contenido.texto}</p>
           {m.contenido.datos && m.contenido.datos.length > 0 && (
