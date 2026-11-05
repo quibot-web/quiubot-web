@@ -38,6 +38,7 @@ export function textoReporteDiario(params: {
   conversiones: number;
   costoPorResultado: number;
   vsMetaPorcentaje: number | null;
+  nombreUsuario: string;
 }): MensajeEquipoContenido {
   const unidad = params.tipoMeta ? UNIDAD_RESULTADO[params.tipoMeta] : "resultados";
   const cadaUno = params.tipoMeta && GENERO_FEMENINO[params.tipoMeta] ? "una" : "uno";
@@ -59,7 +60,8 @@ export function textoReporteDiario(params: {
     datos.push({ etiqueta: "vs. meta", valor: `${flecha} ${pctAbs}%` });
   }
 
-  const respuestaDirector = params.vsMetaPorcentaje !== null && params.vsMetaPorcentaje < 0 ? "Gracias, lo tengo en cuenta para la próxima revisión." : "Perfecto, se lo cuento a Juan.";
+  const respuestaDirector =
+    params.vsMetaPorcentaje !== null && params.vsMetaPorcentaje < 0 ? "Gracias, lo tengo en cuenta para la próxima revisión." : `Perfecto, se lo cuento a ${params.nombreUsuario}.`;
 
   return { texto, datos, textoInterno, respuestaDirector };
 }
@@ -75,6 +77,16 @@ export function textoVideoListo(params: { urlVideo: string }): MensajeEquipoCont
     texto: "El Creativo ya tiene listo tu video nuevo.",
     miniaturas: [params.urlVideo],
     textoInterno: "Director, ya tengo listo el video nuevo.",
+    respuestaDirector: "Perfecto, lo uso para sus anuncios.",
+  };
+}
+
+export function textoAdnMarcaListo(params: { nombreUsuario: string; fraseCorta: string | null; colores: string[] }): MensajeEquipoContenido {
+  const colores = params.colores.length > 0 ? `, con colores ${params.colores.join(", ")}` : "";
+  const detalle = params.fraseCorta ? `: transmite ${params.fraseCorta}${colores}` : colores;
+  return {
+    texto: `Marca terminó de analizar tu marca${detalle}.`,
+    textoInterno: `Director, terminé de analizar la marca de ${params.nombreUsuario}${detalle}.`,
     respuestaDirector: "Perfecto, lo uso para sus anuncios.",
   };
 }

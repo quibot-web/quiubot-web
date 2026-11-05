@@ -7,7 +7,7 @@
 import { z } from "zod";
 import { ASISTENTES_CON_CHAT_PROPIO } from "@/app/lib/director/chatsEquipo";
 
-export const TIPOS_EVENTO_EQUIPO = ["reporte_diario", "creativos_listos", "mensaje_usuario", "respuesta"] as const;
+export const TIPOS_EVENTO_EQUIPO = ["reporte_diario", "creativos_listos", "adn_marca_listo", "mensaje_usuario", "respuesta"] as const;
 export type TipoEventoEquipo = (typeof TIPOS_EVENTO_EQUIPO)[number];
 
 // Un mensaje de evento automático siempre lo "dice" uno de estos

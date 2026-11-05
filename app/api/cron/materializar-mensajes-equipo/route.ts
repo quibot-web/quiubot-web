@@ -1,11 +1,14 @@
-// Fase 2, Commit 2 -- materializa en mensajes_equipo los eventos
-// reales que todavía no tenían dónde vivir: el reporte diario del
-// Analista (desde campanas_snapshots, que ya llena sync-meta-insights)
-// y los creativos/videos listos del Creativo (desde creativos_jobs y
-// video_jobs). Las propuestas y campañas-con-problema NO se
-// materializan acá -- siguen leyéndose en vivo de
-// obtenerPropuestasPendientes(), para no tener dos fuentes de verdad
-// del estado "pendiente". Sin IA: todo el texto sale de
+// Materializa en mensajes_equipo los eventos reales que no tenían
+// dónde vivir: el reporte diario del Analista (desde
+// campanas_snapshots, que ya llena sync-meta-insights), los
+// creativos/videos listos del Creativo (creativos_jobs/video_jobs), y
+// el ADN de marca listo (trabajos_ia tipo "adn_marca" -- corrección de
+// voz, Fase 2 4/4). Estratega y Publicador NO se materializan acá --
+// su trabajo real (estrategias_jobs, campanas_publicadas,
+// errores_publicacion) se lee en vivo desde
+// transcripcionAsistente.ts, igual que las propuestas y las
+// campañas-con-problema (obtenerPropuestasPendientes()), para no tener
+// dos fuentes de verdad. Sin IA: todo el texto sale de
 // textosEquipo.ts con números reales. Llamado una vez al día por un
 // Schedule Trigger en n8n, después de sync-meta-insights?modo=cierre
 // (necesita el snapshot de ayer ya cerrado).
@@ -14,7 +17,7 @@ import { timingSafeEqual } from "crypto";
 import { supabaseAdmin } from "@/lib/supabase";
 import { ayerBogota } from "@/app/lib/fechaBogota";
 import { calcularAvanceMeta, type TipoMeta } from "@/app/lib/metas";
-import { textoReporteDiario, textoCreativosListos, textoVideoListo } from "@/app/lib/director/textosEquipo";
+import { textoReporteDiario, textoCreativosListos, textoVideoListo, textoAdnMarcaListo } from "@/app/lib/director/textosEquipo";
 
 const VENTANA_CREATIVOS_HORAS = 48;
 
@@ -35,6 +38,9 @@ async function materializarReportesDiarios(): Promise<number> {
 
   const usuariosConCampana = [...new Set((campanasActivas ?? []).map((c) => c.user_id as string))];
   let creados = 0;
+
+  const { data: usuariosInfo } = await supabaseAdmin.from("usuarios").select("id, nombre, email").in("id", usuariosConCampana);
+  const nombrePorUsuario = new Map((usuariosInfo ?? []).map((u) => [u.id as string, ((u.nombre as string | null) || (u.email as string)).trim().split(/\s+/)[0]]));
 
   for (const userId of usuariosConCampana) {
     const { data: snapshotsAyer } = await supabaseAdmin
@@ -73,6 +79,7 @@ async function materializarReportesDiarios(): Promise<number> {
       conversiones,
       costoPorResultado: conversiones > 0 ? spend / conversiones : 0,
       vsMetaPorcentaje,
+      nombreUsuario: nombrePorUsuario.get(userId) || "tu cliente",
     });
 
     const { error } = await supabaseAdmin.from("mensajes_equipo").insert({
@@ -143,6 +150,51 @@ async function materializarCreativosListos(): Promise<number> {
   return creados;
 }
 
+// ADN de marca listo (Marca) -- trabajos_ia tipo "adn_marca", mismo
+// shape que lee app/marca/page.tsx: resultado.adn_marca.frase_corta y
+// .paleta_color.{color_primario_hex,color_secundario_hex,colores_acento_hex}.
+async function materializarAdnMarca(): Promise<number> {
+  const desde = new Date(Date.now() - VENTANA_CREATIVOS_HORAS * 60 * 60 * 1000).toISOString();
+  let creados = 0;
+
+  const { data: jobs } = await supabaseAdmin.from("trabajos_ia").select("id, user_id, resultado").eq("tipo", "adn_marca").eq("estado", "lista").gte("creado_en", desde);
+  if (!jobs || jobs.length === 0) return 0;
+
+  const { data: usuariosInfo } = await supabaseAdmin
+    .from("usuarios")
+    .select("id, nombre, email")
+    .in("id", [...new Set(jobs.map((j) => j.user_id as string))]);
+  const nombrePorUsuario = new Map((usuariosInfo ?? []).map((u) => [u.id as string, ((u.nombre as string | null) || (u.email as string)).trim().split(/\s+/)[0]]));
+
+  for (const job of jobs) {
+    const adn = (job.resultado as { adn_marca?: Record<string, unknown> } | null)?.adn_marca;
+    if (!adn) continue;
+
+    const paleta = (adn.paleta_color as Record<string, unknown>) || {};
+    const colores = [paleta.color_primario_hex, paleta.color_secundario_hex, ...(Array.isArray(paleta.colores_acento_hex) ? paleta.colores_acento_hex : [])].filter(
+      (c): c is string => typeof c === "string"
+    );
+
+    const contenido = textoAdnMarcaListo({
+      nombreUsuario: nombrePorUsuario.get(job.user_id as string) || "tu cliente",
+      fraseCorta: typeof adn.frase_corta === "string" ? adn.frase_corta : null,
+      colores,
+    });
+
+    const { error } = await supabaseAdmin.from("mensajes_equipo").insert({
+      user_id: job.user_id,
+      asistente: "marca",
+      tipo_evento: "adn_marca_listo",
+      contenido,
+      origen_id: `am:${job.id}`,
+    });
+    if (!error) creados++;
+    else if (error.code !== "23505") console.error("Error insertando adn_marca_listo:", error);
+  }
+
+  return creados;
+}
+
 export async function POST(req: NextRequest) {
   const adminSecret = process.env.ADMIN_SECRET;
   if (!adminSecret) {
@@ -156,7 +208,7 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ error: "No autorizado" }, { status: 401 });
   }
 
-  const [reportesDiarios, creativosListos] = await Promise.all([materializarReportesDiarios(), materializarCreativosListos()]);
+  const [reportesDiarios, creativosListos, adnMarcaListo] = await Promise.all([materializarReportesDiarios(), materializarCreativosListos(), materializarAdnMarca()]);
 
-  return NextResponse.json({ ok: true, reportesDiarios, creativosListos });
+  return NextResponse.json({ ok: true, reportesDiarios, creativosListos, adnMarcaListo });
 }
