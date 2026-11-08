@@ -9,6 +9,18 @@ import { MENSAJE_META_TOKEN_VENCIDO } from "@/app/lib/metaErrors";
 
 const TIPOS_VALIDOS: TipoMeta[] = ["conversaciones_whatsapp", "leads", "ventas_web", "visitas_web", "seguidores_facebook", "seguidores_instagram"];
 
+// Solo para el mensaje de "meta_creada" en el hilo del Director -- ver
+// ETIQUETA_TIPO en PanelDirectorGeneral.tsx para la etiqueta completa
+// que ya usa la tarjeta de resumen (esta es más corta, para una frase).
+const ETIQUETA_TIPO_META: Record<TipoMeta, string> = {
+  conversaciones_whatsapp: "conversaciones por WhatsApp",
+  leads: "leads",
+  ventas_web: "ventas en tu sitio web",
+  visitas_web: "visitas a tu sitio web",
+  seguidores_facebook: "seguidores de Facebook",
+  seguidores_instagram: "seguidores de Instagram",
+};
+
 export async function GET() {
   const session = await auth();
   if (!session?.user?.email) return NextResponse.json({ error: "No autorizado" }, { status: 401 });
@@ -197,6 +209,18 @@ export async function POST(req: NextRequest) {
       .update({ estado: "completada", meta_id: metaCreada.id, actualizado_en: new Date().toISOString() })
       .eq("id", conversacion_id)
       .eq("user_id", usuario.id);
+
+    // Chat único con el Director (ver app/lib/director/flujoCrearMeta.ts):
+    // deja un mensaje liviano en el MISMO hilo para que el Director
+    // pueda referirse a esta meta más adelante -- sin IA, solo un
+    // evento con los datos reales que ya se acaban de validar arriba.
+    await supabaseAdmin.from("director_conversaciones").insert({
+      user_id: usuario.id,
+      rol: "assistant",
+      mensaje: `¡Listo! Ya creé tu meta de ${ETIQUETA_TIPO_META[tipo as TipoMeta]}: ${cantidad} en ${new Intl.NumberFormat("es-CO", { style: "currency", currency: "COP", maximumFractionDigits: 0 }).format(presupuesto)}.`,
+      contenido: { tipoEvento: "meta_creada" },
+      conversacion_meta_id: conversacion_id,
+    });
   }
 
   await supabaseAdmin.from("bitacora").insert({
