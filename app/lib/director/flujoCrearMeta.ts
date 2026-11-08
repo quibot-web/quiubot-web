@@ -69,6 +69,10 @@ export type ContenidoMeta = {
   accionMeta?: { label: string; href: string };
   resumen?: ResumenMetaListo;
   tipoEvento?: "meta_creada";
+  // Progreso aproximado para la barra de pasos -- igual que antes, por
+  // campos llenos, no una máquina de estados (el Director puede saltar
+  // según lo que el cliente ya contó).
+  pasos?: boolean[];
 };
 
 export type FilaHiloMeta = {
@@ -254,7 +258,8 @@ export async function ejecutarTurnoMeta(params: {
     await supabaseAdmin.from("director_conversaciones").insert({ user_id: usuario.id, rol: "user", mensaje: mensajeUsuario, conversacion_meta_id: conversacionId, creado_en: ahora });
   }
 
-  const contenido: ContenidoMeta | null = opcionesDirector || accionDirector || resumen ? { opciones: opcionesDirector, accionMeta: accionDirector, resumen } : null;
+  const pasos = [!!borradorNuevo.tipo, !!borradorNuevo.producto, !!borradorNuevo.presupuesto_cop, !!resumen];
+  const contenido: ContenidoMeta = { opciones: opcionesDirector, accionMeta: accionDirector, resumen, pasos };
 
   const { data: filaGuardada } = await supabaseAdmin
     .from("director_conversaciones")

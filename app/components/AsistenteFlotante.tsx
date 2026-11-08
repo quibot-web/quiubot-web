@@ -5,6 +5,7 @@ import EsferaAsistente from "@/app/components/esferas/EsferaAsistente"
 import type { AsistenteId, EstadoEsfera } from "@/app/components/esferas/esferasShared"
 import type { ContextoCuentaDirector } from "@/app/lib/director/contextoCuenta"
 import { NOMBRE_CHAT, ESFERA_POR_CHAT, type ChatEquipoId } from "@/app/lib/director/chatsEquipo"
+import type { ContenidoMeta } from "@/app/lib/director/flujoCrearMeta"
 import PanelDirectorGeneral from "@/app/components/burbuja/PanelDirectorGeneral"
 import PanelSoporte from "@/app/components/burbuja/PanelSoporte"
 import PanelAsistenteIndividual from "@/app/components/burbuja/PanelAsistenteIndividual"
@@ -12,7 +13,7 @@ import ListaChats from "@/app/components/burbuja/ListaChats"
 
 type MensajeSoporte = { rol: "user" | "assistant"; mensaje: string; creadoEn: string }
 type AccionDirector = { label: string; tipo: "link" | "crear_meta" | "ir_a_soporte"; href?: string }
-type MensajeDirector = { rol: "user" | "assistant"; mensaje: string; acciones?: AccionDirector[]; creado_en?: string }
+type MensajeDirector = { rol: "user" | "assistant"; mensaje: string; acciones?: AccionDirector[]; contenido?: ContenidoMeta | null; creado_en?: string }
 
 const RUTAS_PUBLICAS = ["/bienvenida", "/login", "/terminos", "/pricing"]
 
@@ -42,6 +43,7 @@ export default function AsistenteFlotante() {
   const [directorActivo, setDirectorActivo] = useState(false)
   const [directorHistorial, setDirectorHistorial] = useState<MensajeDirector[]>([])
   const [autoenviarDirector, setAutoenviarDirector] = useState<string | null>(null)
+  const [metaActivaId, setMetaActivaId] = useState<string | null>(null)
   const [contexto, setContexto] = useState<ContextoCuentaDirector | null>(null)
 
   const cargado = useRef(false)
@@ -66,6 +68,7 @@ export default function AsistenteFlotante() {
           .then((d) => {
             setDirectorActivo(!!d.activo)
             if (Array.isArray(d.mensajes)) setDirectorHistorial(d.mensajes)
+            setMetaActivaId(d.metaActiva?.conversacionId ?? null)
           })
           .catch(() => {})
 
@@ -201,6 +204,7 @@ export default function AsistenteFlotante() {
             <PanelDirectorGeneral
               activo={directorActivo}
               historialInicial={directorHistorial}
+              metaActivaId={metaActivaId}
               contexto={contexto}
               autoenviar={autoenviarDirector}
               onConsumidoAutoenviar={() => setAutoenviarDirector(null)}

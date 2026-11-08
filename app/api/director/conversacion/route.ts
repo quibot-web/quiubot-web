@@ -230,6 +230,7 @@ export async function POST(req: NextRequest) {
 
     return NextResponse.json({
       mensajeDirector: { rol: resultado.fila.rol, mensaje: resultado.fila.mensaje, contenido: resultado.fila.contenido, creado_en: resultado.fila.creado_en },
+      conversacionId,
     });
   }
 
