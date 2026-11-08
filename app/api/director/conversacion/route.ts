@@ -155,7 +155,13 @@ export async function GET() {
     return NextResponse.json({ activo: false, requiereApiKey: true });
   }
 
-  const [historial, conversacionMetaId] = await Promise.all([obtenerHistorial(usuario.id), obtenerIdBorradorActivo(usuario.id)]);
+  // Secuencial, no Promise.all: obtenerIdBorradorActivo puede migrar
+  // mensajes viejos a director_conversaciones (ver
+  // migrarMensajesViejosSiHaceFalta) y obtenerHistorial necesita leer
+  // DESPUÉS de que esa migración ya haya terminado, o se los perdería
+  // en esta misma respuesta.
+  const conversacionMetaId = await obtenerIdBorradorActivo(usuario.id);
+  const historial = await obtenerHistorial(usuario.id);
 
   if (historial.length > 0) {
     return NextResponse.json({ activo: true, mensajes: historial, metaActiva: conversacionMetaId ? { conversacionId: conversacionMetaId } : null });
@@ -225,7 +231,11 @@ export async function POST(req: NextRequest) {
     const resultado = await ejecutarTurnoMeta({ usuario, apiKey, conversacionId, contextoNegocio, mensajeUsuario: mensajeTexto });
 
     if (!resultado.ok) {
-      return NextResponse.json({ error: resultado.error }, { status: 503 });
+      // conversacionId va también en el error: obtenerBorradorActivo ya
+      // pudo haber creado el borrador aunque esta llamada a la IA haya
+      // fallado -- sin esto, el cliente no se entera de que ya existe y
+      // "Crear una meta" podría pensar que no hay nada que retomar.
+      return NextResponse.json({ error: resultado.error, conversacionId }, { status: 503 });
     }
 
     return NextResponse.json({

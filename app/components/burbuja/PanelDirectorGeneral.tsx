@@ -243,10 +243,11 @@ export default function PanelDirectorGeneral({
       });
       const data = await res.json();
 
+      if (typeof data.conversacionId === "string") setMetaActivaId(data.conversacionId);
+
       if (!res.ok) {
         setMensajes((prev) => [...prev, { rol: "assistant", mensaje: data.error || "Algo salió mal, intenta de nuevo.", creado_en: new Date().toISOString() }]);
       } else {
-        if (typeof data.conversacionId === "string") setMetaActivaId(data.conversacionId);
         setMensajes((prev) => [...prev, { ...data.mensajeDirector, creado_en: data.mensajeDirector.creado_en ?? new Date().toISOString() }]);
       }
     } catch {
@@ -262,7 +263,12 @@ export default function PanelDirectorGeneral({
   // activo, su hilo ya está visible más arriba -- no vuelve a empezar,
   // solo baja al último mensaje.
   function empezarOContinuarCrearMeta() {
-    if (metaActivaId) {
+    // metaActivaId solo? no basta -- puede haber quedado puesto por un
+    // primer intento que falló (ver más arriba), sin ningún mensaje
+    // visible todavía. Solo se considera "ya en curso" si además hay
+    // algo que mostrar; si no, reintenta en vez de solo hacer scroll a
+    // un mensaje de error.
+    if (metaActivaId && mensajes.some((m) => m.contenido)) {
       setSenalIrAlFondo((v) => v + 1);
       return;
     }
