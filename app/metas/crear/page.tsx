@@ -4,17 +4,27 @@ import { useRouter } from "next/navigation";
 import Link from "next/link";
 import { Clock } from "lucide-react";
 import CargandoQuiubot from "@/app/components/CargandoQuiubot";
+import PanelDirectorGeneral from "@/app/components/burbuja/PanelDirectorGeneral";
+import type { ContenidoMeta } from "@/app/lib/director/flujoCrearMeta";
 import FormularioRapido, { type PrefillFormularioRapido } from "./FormularioRapido";
-import ConversacionDirector, { type DatosInicialesConversacion } from "./ConversacionDirector";
 
 type Modo = "cargando" | "conversacion" | "formulario";
 
+type MensajeDirector = { rol: "user" | "assistant"; mensaje: string; contenido?: ContenidoMeta | null; creado_en?: string };
+
+// Chat único con el Director (ver app/lib/director/flujoCrearMeta.ts):
+// esta página ya NO tiene su propia conversación -- es la vista en
+// pantalla completa del MISMO chat que la burbuja, con la intención de
+// crear una meta ya decidida de entrada (autoIniciarCrearMeta). Si ya
+// hay un borrador activo (ej. el cliente venía de la burbuja), entra
+// directo a ese hilo en vez de empezar de nuevo.
 export default function CrearMetaPage() {
   const router = useRouter();
   const [puedeUsarAutopiloto, setPuedeUsarAutopiloto] = useState<boolean | null>(null);
   const [modo, setModo] = useState<Modo>("cargando");
   const [avisoApiKey, setAvisoApiKey] = useState(false);
-  const [datosConversacion, setDatosConversacion] = useState<DatosInicialesConversacion | null>(null);
+  const [mensajesIniciales, setMensajesIniciales] = useState<MensajeDirector[]>([]);
+  const [metaActivaId, setMetaActivaId] = useState<string | null>(null);
   const [prefillFormulario, setPrefillFormulario] = useState<PrefillFormularioRapido | undefined>(undefined);
 
   useEffect(() => {
@@ -29,10 +39,10 @@ export default function CrearMetaPage() {
 
     // Entrada principal: la conversación con el Director (decisión del
     // plan) -- el formulario de siempre queda como "Prefiero llenarlo
-    // yo". Si no tiene openai_key conectada, /api/metas/conversacion
+    // yo". Si no tiene openai_key conectada, /api/director/conversacion
     // devuelve requiereApiKey:true y se abre el formulario directo con
     // el aviso, sin intentar la conversación.
-    fetch("/api/metas/conversacion")
+    fetch("/api/director/conversacion")
       .then((r) => r.json())
       .then((data) => {
         if (data.requiereApiKey) {
@@ -40,13 +50,8 @@ export default function CrearMetaPage() {
           setModo("formulario");
           return;
         }
-        setDatosConversacion({
-          conversacionId: data.conversacion_id,
-          mensajes: data.mensajes || [],
-          borrador: data.borrador || {},
-          resumen: data.resumen ?? null,
-          errorInicial: data.errorOpenAI ? data.errorMensaje : undefined,
-        });
+        setMensajesIniciales(Array.isArray(data.mensajes) ? data.mensajes : []);
+        setMetaActivaId(data.metaActiva?.conversacionId ?? null);
         setModo("conversacion");
       })
       .catch(() => setModo("formulario"));
@@ -112,12 +117,24 @@ export default function CrearMetaPage() {
   }
 
   return (
-    <ConversacionDirector
-      datosIniciales={datosConversacion!}
-      onPreferirFormulario={(prefill) => {
-        setPrefillFormulario(prefill);
-        setModo("formulario");
-      }}
-    />
+    <div style={{ height: "100vh", background: "#F8F8F6", display: "flex", justifyContent: "center", padding: "20px 16px" }}>
+      <div style={{ maxWidth: 760, width: "100%", display: "flex", flexDirection: "column", overflow: "hidden" }}>
+        <PanelDirectorGeneral
+          activo
+          historialInicial={mensajesIniciales}
+          metaActivaId={metaActivaId}
+          contexto={null}
+          autoenviar={null}
+          onConsumidoAutoenviar={() => {}}
+          onIrASoporte={() => {}}
+          variante="pagina"
+          autoIniciarCrearMeta
+          onPreferirFormulario={(prefill) => {
+            setPrefillFormulario(prefill);
+            setModo("formulario");
+          }}
+        />
+      </div>
+    </div>
   );
 }

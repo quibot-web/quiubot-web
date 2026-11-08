@@ -1,10 +1,10 @@
 // Categorías de tasa de cierre -- separado de app/lib/metas.ts (que
 // importa lib/supabase.ts, marcado "server-only") para que el chat del
-// Director (app/metas/crear/ConversacionDirector.tsx, un componente
-// cliente) pueda convertir la categoría elegida en un número sin
-// arrastrar código server-only a su bundle. app/lib/metas.ts re-exporta
-// estos dos nombres para que el resto del backend siga importándolos
-// desde ahí sin cambios.
+// Director (PanelDirectorGeneral.tsx, un componente cliente) pueda
+// convertir la categoría elegida en un número sin arrastrar código
+// server-only a su bundle. app/lib/metas.ts re-exporta estos dos
+// nombres para que el resto del backend siga importándolos desde ahí
+// sin cambios.
 export const CATEGORIAS_TASA_CIERRE = ["1_de_10", "2_3_de_10", "4_5_de_10", "mas_5_de_10", "no_sabe"] as const;
 export type CategoriaTasaCierre = (typeof CATEGORIAS_TASA_CIERRE)[number];
 

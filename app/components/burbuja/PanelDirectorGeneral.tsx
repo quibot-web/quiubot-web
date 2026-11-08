@@ -1,5 +1,5 @@
 "use client";
-import { useEffect, useState, type CSSProperties } from "react";
+import { useEffect, useRef, useState, type CSSProperties } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import ChatShell, { type ItemChat } from "@/app/components/chat/ChatShell";
@@ -190,6 +190,7 @@ export default function PanelDirectorGeneral({
   onCambiarEstado,
   variante = "embebida",
   onPreferirFormulario,
+  autoIniciarCrearMeta = false,
 }: {
   activo: boolean;
   historialInicial: MensajeDirector[];
@@ -204,6 +205,11 @@ export default function PanelDirectorGeneral({
   // nunca dos Directores distintos.
   variante?: "embebida" | "pagina";
   onPreferirFormulario?: (prefill?: PrefillFormularioRapido) => void;
+  // /metas/crear (variante "pagina") llega con la intención de crear
+  // una meta ya decidida -- entra directo al flujo en vez de esperar un
+  // click en "Crear una meta" (ver empezarOContinuarCrearMeta: si ya
+  // hay un borrador activo, esto solo baja al hilo existente).
+  autoIniciarCrearMeta?: boolean;
 }) {
   const router = useRouter();
   const [mensajes, setMensajes] = useState<MensajeDirector[]>(historialInicial);
@@ -311,6 +317,15 @@ export default function PanelDirectorGeneral({
       setCreandoMeta(false);
     }
   }
+
+  const yaAutoinicioRef = useRef(false);
+  useEffect(() => {
+    if (!autoIniciarCrearMeta || yaAutoinicioRef.current) return;
+    yaAutoinicioRef.current = true;
+    const id = setTimeout(() => empezarOContinuarCrearMeta(), 0);
+    return () => clearTimeout(id);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [autoIniciarCrearMeta]);
 
   // Handoff desde Soporte (redirigirADirector) -- llega con la pregunta
   // ya escrita y se manda sola, una sola vez.
@@ -424,27 +439,60 @@ export default function PanelDirectorGeneral({
 
   return (
     <div style={{ flex: 1, display: "flex", flexDirection: "column", overflow: "hidden", minHeight: 0 }}>
-      {contexto && <TarjetaContexto contexto={contexto} />}
-
-      <div style={{ display: "flex", flexWrap: "wrap", gap: 6, margin: "10px 14px 0", flexShrink: 0 }}>
-        <button onClick={empezarOContinuarCrearMeta} style={estiloChip}>
-          Crear una meta
-        </button>
-        <Link href="/equipo" style={estiloChipLink}>
-          Ver propuestas
-        </Link>
-        <Link href="/?tab=integraciones" style={estiloChipLink}>
-          Conectar integraciones
-        </Link>
-        <button onClick={() => onIrASoporte("")} style={estiloChip}>
-          Hablar con Soporte
-        </button>
-        {metaActivaId && (
-          <button onClick={irAFormularioRapido} style={estiloChipTexto}>
-            Prefiero llenar mi meta yo mismo
+      {variante === "pagina" ? (
+        <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", padding: "4px 16px 10px", flexShrink: 0 }}>
+          <div style={{ display: "flex", alignItems: "center", gap: 12 }}>
+            <div
+              style={{
+                width: 42,
+                height: 42,
+                borderRadius: "50%",
+                background: "radial-gradient(circle at 35% 30%, #B7A9FF, #5546B8)",
+                display: "flex",
+                alignItems: "center",
+                justifyContent: "center",
+                color: "#fff",
+                fontSize: 19,
+                boxShadow: "0 6px 18px -6px rgba(85,70,184,0.6)",
+                flexShrink: 0,
+              }}
+            >
+              ✦
+            </div>
+            <div>
+              <b style={{ fontSize: 17, display: "block", color: "#1B1A22" }}>Director de Quiubot</b>
+              <small style={{ color: "#1E9E6B", fontWeight: 600, fontSize: 12.5 }}>● Armando tu meta contigo</small>
+            </div>
+          </div>
+          <button onClick={irAFormularioRapido} style={{ background: "none", border: "none", color: "#6B6880", fontSize: 13, fontWeight: 600, cursor: "pointer", whiteSpace: "nowrap" }}>
+            Prefiero llenarlo yo
           </button>
-        )}
-      </div>
+        </div>
+      ) : (
+        <>
+          {contexto && <TarjetaContexto contexto={contexto} />}
+
+          <div style={{ display: "flex", flexWrap: "wrap", gap: 6, margin: "10px 14px 0", flexShrink: 0 }}>
+            <button onClick={empezarOContinuarCrearMeta} style={estiloChip}>
+              Crear una meta
+            </button>
+            <Link href="/equipo" style={estiloChipLink}>
+              Ver propuestas
+            </Link>
+            <Link href="/?tab=integraciones" style={estiloChipLink}>
+              Conectar integraciones
+            </Link>
+            <button onClick={() => onIrASoporte("")} style={estiloChip}>
+              Hablar con Soporte
+            </button>
+            {metaActivaId && (
+              <button onClick={irAFormularioRapido} style={estiloChipTexto}>
+                Prefiero llenar mi meta yo mismo
+              </button>
+            )}
+          </div>
+        </>
+      )}
 
       <ChatShell
         items={items}
