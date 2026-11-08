@@ -29,12 +29,21 @@ export async function POST(req: NextRequest) {
 
   const { data: usuario } = await supabaseAdmin
     .from("usuarios")
-    .select("id, cloudinary_key, cloudinary_secret")
+    .select("id, rol, cloudinary_key, cloudinary_secret")
     .eq("email", emailBusqueda)
     .single();
 
   if (!usuario) {
     return NextResponse.json({ error: "Usuario no encontrado" }, { status: 404 });
+  }
+
+  // Video es admin-only por ahora (ver generar-video/route.ts) -- antes
+  // esta ruta solo quedaba protegida porque un no-admin nunca puede
+  // llegar a tener un video_jobs propio (solo /api/generar-video los
+  // crea, y esa sí valida rol). Explícito en vez de implícito, para no
+  // depender de esa cadena si algo más cambia.
+  if (usuario.rol !== "admin") {
+    return NextResponse.json({ error: "No autorizado" }, { status: 403 });
   }
 
   const { data: job } = await supabaseAdmin
