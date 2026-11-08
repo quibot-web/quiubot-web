@@ -88,8 +88,30 @@ async function itemsPublicador(userId: string): Promise<ItemTranscripcion[]> {
   return [...publicadas, ...errores];
 }
 
+// Errores reales de generación de creativos (errores_publicacion,
+// filtrada a origen:"crear_creativos" -- cubre tanto fallas del webhook
+// de n8n como el timeout de 15 min del cron vencer-propuestas).
+async function itemsCreativo(userId: string): Promise<ItemTranscripcion[]> {
+  const { data } = await supabaseAdmin
+    .from("errores_publicacion")
+    .select("id, error_mensaje, campana_nombre, creado_en")
+    .eq("user_id", userId)
+    .eq("origen", "crear_creativos")
+    .order("creado_en", { ascending: false })
+    .limit(LIMITE);
+
+  return (data ?? []).flatMap((e): ItemTranscripcion[] => [
+    { id: `ec-${e.id}-a`, rol: "asistente", texto: `Director, tuve un problema generando${e.campana_nombre ? ` los creativos de "${e.campana_nombre}"` : " los creativos"}: ${e.error_mensaje}`, creadoEn: e.creado_en },
+    { id: `ec-${e.id}-d`, rol: "director", texto: "Gracias por avisar, lo reviso.", creadoEn: e.creado_en },
+  ]);
+}
+
 export async function obtenerTranscripcionAsistente(asistente: AsistenteEventoEquipo, userId: string, nombreUsuario: string): Promise<ItemTranscripcion[]> {
-  const extra = asistente === "estratega" ? await itemsEstratega(userId) : asistente === "publicador" ? await itemsPublicador(userId) : [];
+  const extra =
+    asistente === "estratega" ? await itemsEstratega(userId) :
+    asistente === "publicador" ? await itemsPublicador(userId) :
+    asistente === "creativo" ? await itemsCreativo(userId) :
+    [];
 
   const [eventos, propuestas] = await Promise.all([itemsEventos(asistente, userId), itemsPropuestas(asistente, userId, nombreUsuario)]);
 

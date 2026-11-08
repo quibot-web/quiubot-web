@@ -3,6 +3,7 @@ import { timingSafeEqual } from "crypto";
 import { supabaseAdmin } from "@/lib/supabase";
 import { revisarGeneracionCreativos, procesarCreacionCreativos } from "@/app/lib/propuestas";
 import { cerrarMetasVencidas } from "@/app/lib/metas";
+import { registrarError } from "@/lib/registrarError";
 import { TIMEOUT_PROCESANDO_MS } from "@/app/lib/estrategiasJobs";
 import {
   TIPO_TRABAJO as TIPO_TRABAJO_PUBLICAR_ESTRATEGIA,
@@ -19,6 +20,8 @@ function compararSeguro(a: string, b: string): boolean {
 }
 
 const VENCE_ESPERANDO_FOTOS_MS = 72 * 60 * 60 * 1000;
+const TIMEOUT_CREATIVOS_JOBS_MS = 15 * 60 * 1000;
+const MENSAJE_VENCIDO_CREATIVOS_JOBS = "vencido sin respuesta de n8n";
 
 // Llamado cada hora por un Schedule Trigger en n8n (mismo patrón que
 // sync-meta-insights). Todo esto es respaldo de algo que normalmente ya
@@ -96,6 +99,41 @@ export async function POST(req: NextRequest) {
     .in("estado", ["pendiente", "procesando"])
     .lt("intento_desde", new Date(Date.now() - TIMEOUT_PUBLICAR_ESTRATEGIA_MS).toISOString())
     .select("id");
+
+  // Respaldo propio para creativos_jobs -- tabla que escribe por completo
+  // un workflow de n8n (crear_creativos), que este repo nunca toca salvo
+  // aquí: si n8n se cae a mitad de camino, la fila queda "procesando"
+  // para siempre y sigue contando contra el cupo mensual del plan (ver
+  // /api/crear-creativos). 15 min de margen, un poco más que los 10 de
+  // estrategias_jobs/trabajos_ia porque un lote de creativos puede
+  // generar varias imágenes. El error se registra en errores_publicacion
+  // (mismo origen "crear_creativos" que ya usa esa ruta) para que el
+  // Director lo muestre en el chat individual del Creativo -- ver
+  // itemsCreativo en transcripcionAsistente.ts.
+  const { data: creativosJobsVencidos } = await supabaseAdmin
+    .from("creativos_jobs")
+    .update({ estado: "error", error_mensaje: MENSAJE_VENCIDO_CREATIVOS_JOBS })
+    .eq("estado", "procesando")
+    .lt("creado_en", new Date(Date.now() - TIMEOUT_CREATIVOS_JOBS_MS).toISOString())
+    .select("id, user_id");
+
+  if (creativosJobsVencidos && creativosJobsVencidos.length > 0) {
+    const idsUsuarios = [...new Set(creativosJobsVencidos.map((j) => j.user_id as string))];
+    const { data: usuariosInfo } = await supabaseAdmin.from("usuarios").select("id, email").in("id", idsUsuarios);
+    const emailPorUsuario = new Map((usuariosInfo ?? []).map((u) => [u.id as string, u.email as string]));
+
+    await Promise.all(
+      creativosJobsVencidos.map((job) =>
+        registrarError({
+          origen: "crear_creativos",
+          userId: job.user_id as string,
+          email: emailPorUsuario.get(job.user_id as string) ?? null,
+          paso: "cron_vencer_creativos_jobs",
+          errorMensaje: MENSAJE_VENCIDO_CREATIVOS_JOBS,
+        })
+      )
+    );
+  }
 
   const idsAgregarAnunciosVencidos = (trabajosVencidos ?? []).filter((t) => t.tipo === "agregar_anuncios").map((t) => t.id);
   if (idsAgregarAnunciosVencidos.length > 0) {
@@ -178,6 +216,7 @@ export async function POST(req: NextRequest) {
     estrategias_jobs_vencidos: estrategiasVencidas?.length ?? 0,
     trabajos_ia_vencidos: trabajosVencidos?.length ?? 0,
     publicar_estrategia_vencidos: publicarEstrategiaVencidos?.length ?? 0,
+    creativos_jobs_vencidos: creativosJobsVencidos?.length ?? 0,
     vencidas: vencidasPendiente?.length ?? 0,
     vencidas_esperando_fotos: vencidasEsperandoFotos?.length ?? 0,
     generando_revisadas: revisadas,
