@@ -110,7 +110,7 @@ type MensajeViejo = { rol: "director" | "usuario"; texto: string; opciones?: str
 // array viejo (de antes de este cambio) y nunca se copiaron, los pasa a
 // director_conversaciones -- así nadie pierde una conversación de meta
 // que haya quedado a mitad de camino en el momento del deploy.
-async function migrarMensajesViejosSiHaceFalta(conversacionId: string, userId: string): Promise<void> {
+export async function migrarMensajesViejosSiHaceFalta(conversacionId: string, userId: string): Promise<void> {
   const { data: conversacion } = await supabaseAdmin
     .from("conversaciones_meta")
     .select("mensajes")

@@ -1,10 +1,10 @@
 // Paso 4/6 de la burbuja del Director -- el cerebro general: charla
 // libre en la pestaña "Director", usando CONTEXTO DE CUENTA real
 // (app/lib/director/contextoCuenta.ts) para responder y sugerir
-// acciones. Distinto de /api/metas/conversacion (acotado a llenar el
-// borrador de una meta nueva -- ese sigue intacto, esta ruta solo
-// ofrece un botón para entrar a él). Mismo modelo/prompt que la Fase 2
-// reutilizará para las @menciones del grupo "Equipo".
+// acciones. Chat único (ver app/lib/director/flujoCrearMeta.ts): cuando
+// la intención es "crear_meta", esta misma ruta delega ahí en vez de
+// usar el prompt general -- los turnos de ambos flujos quedan en el
+// MISMO hilo de director_conversaciones, nunca en pantallas distintas.
 import { auth } from "@/auth";
 import { NextRequest, NextResponse } from "next/server";
 import { supabaseAdmin } from "@/lib/supabase";
@@ -18,6 +18,13 @@ import {
   construirPromptDirectorGeneral,
   type AccionDirector,
 } from "@/app/lib/director/promptDirectorGeneral";
+import {
+  obtenerBorradorActivo,
+  ejecutarTurnoMeta,
+  construirContextoNegocio,
+  migrarMensajesViejosSiHaceFalta,
+  type ContenidoMeta,
+} from "@/app/lib/director/flujoCrearMeta";
 
 const CANTIDAD_MENSAJES_HISTORIAL = 20;
 
@@ -25,6 +32,7 @@ type MensajeDirectorGeneral = {
   rol: "user" | "assistant";
   mensaje: string;
   acciones?: AccionDirector[];
+  contenido?: ContenidoMeta | null;
   creado_en: string;
 };
 
@@ -43,32 +51,43 @@ async function cargarUsuario(email: string): Promise<UsuarioConversacionGeneral 
   return { ...usuario, email };
 }
 
+// ascending+limit(20) dejaría siempre los 20 PRIMEROS mensajes del
+// historial (nunca los recientes) apenas alguien pase de esa cantidad
+// -- con el flujo de crear meta compartiendo ahora esta misma tabla,
+// eso sí puede pasar en la práctica. Se pide descendente y se invierte
+// acá para quedarnos con los últimos N en orden cronológico.
 async function obtenerHistorial(userId: string): Promise<MensajeDirectorGeneral[]> {
   const { data } = await supabaseAdmin
     .from("director_conversaciones")
-    .select("rol, mensaje, accion, creado_en")
+    .select("rol, mensaje, accion, contenido, creado_en")
     .eq("user_id", userId)
-    .order("creado_en", { ascending: true })
+    .order("creado_en", { ascending: false })
     .limit(CANTIDAD_MENSAJES_HISTORIAL);
 
-  return (data ?? []).map((fila) => ({
-    rol: fila.rol,
-    mensaje: fila.mensaje,
-    acciones: fila.accion ? [fila.accion as AccionDirector] : undefined,
-    creado_en: fila.creado_en,
-  }));
+  return (data ?? [])
+    .map((fila) => ({
+      rol: fila.rol,
+      mensaje: fila.mensaje,
+      acciones: fila.accion ? [fila.accion as AccionDirector] : undefined,
+      contenido: (fila.contenido as ContenidoMeta | null) ?? undefined,
+      creado_en: fila.creado_en,
+    }))
+    .reverse();
 }
 
+async function obtenerIdBorradorActivo(userId: string): Promise<string | null> {
+  const { data } = await supabaseAdmin.from("conversaciones_meta").select("id").eq("user_id", userId).eq("estado", "activa").maybeSingle();
+  if (data) await migrarMensajesViejosSiHaceFalta(data.id, userId);
+  return data?.id ?? null;
+}
 
-type ResultadoTurno =
-  | { ok: true; mensajeDirector: MensajeDirectorGeneral }
-  | { ok: false; error: string };
+type ResultadoTurno = { ok: true; mensajeDirector: MensajeDirectorGeneral } | { ok: false; error: string };
 
-// Un turno: arma el contexto de cuenta real, llama a la IA, valida con
-// zod (nunca confía en que el JSON crudo tenga la forma esperada), y
-// guarda ambos mensajes (si hubo mensaje de usuario) en
-// director_conversaciones antes de devolver el resultado.
-async function ejecutarTurno(params: {
+// Un turno del chat general: arma el contexto de cuenta real, llama a
+// la IA, valida con zod (nunca confía en que el JSON crudo tenga la
+// forma esperada), y guarda ambos mensajes (si hubo mensaje de usuario)
+// en director_conversaciones antes de devolver el resultado.
+async function ejecutarTurnoGeneral(params: {
   usuario: UsuarioConversacionGeneral;
   apiKey: string;
   historialActual: MensajeDirectorGeneral[];
@@ -136,10 +155,10 @@ export async function GET() {
     return NextResponse.json({ activo: false, requiereApiKey: true });
   }
 
-  const historial = await obtenerHistorial(usuario.id);
+  const [historial, conversacionMetaId] = await Promise.all([obtenerHistorial(usuario.id), obtenerIdBorradorActivo(usuario.id)]);
 
   if (historial.length > 0) {
-    return NextResponse.json({ activo: true, mensajes: historial });
+    return NextResponse.json({ activo: true, mensajes: historial, metaActiva: conversacionMetaId ? { conversacionId: conversacionMetaId } : null });
   }
 
   // Primera vez que se abre esta conversación -- se genera el saludo
@@ -152,13 +171,13 @@ export async function GET() {
     return NextResponse.json({ activo: false, requiereApiKey: true });
   }
 
-  const resultado = await ejecutarTurno({ usuario, apiKey, historialActual: [], mensajeUsuario: null });
+  const resultado = await ejecutarTurnoGeneral({ usuario, apiKey, historialActual: [], mensajeUsuario: null });
 
   if (!resultado.ok) {
-    return NextResponse.json({ activo: true, mensajes: [], errorOpenAI: true, errorMensaje: resultado.error });
+    return NextResponse.json({ activo: true, mensajes: [], metaActiva: null, errorOpenAI: true, errorMensaje: resultado.error });
   }
 
-  return NextResponse.json({ activo: true, mensajes: [resultado.mensajeDirector] });
+  return NextResponse.json({ activo: true, mensajes: [resultado.mensajeDirector], metaActiva: conversacionMetaId ? { conversacionId: conversacionMetaId } : null });
 }
 
 export async function POST(req: NextRequest) {
@@ -182,8 +201,10 @@ export async function POST(req: NextRequest) {
     );
   }
 
-  const { mensaje } = await req.json().catch(() => ({ mensaje: null }));
-  if (typeof mensaje !== "string" || !mensaje.trim()) {
+  const { mensaje, intencion } = await req.json().catch(() => ({ mensaje: null, intencion: null }));
+  const mensajeTexto = typeof mensaje === "string" && mensaje.trim() ? mensaje.trim() : null;
+
+  if (intencion !== "crear_meta" && !mensajeTexto) {
     return NextResponse.json({ error: "El mensaje no puede estar vacío." }, { status: 400 });
   }
 
@@ -198,8 +219,22 @@ export async function POST(req: NextRequest) {
     );
   }
 
+  if (intencion === "crear_meta") {
+    const { id: conversacionId } = await obtenerBorradorActivo(usuario.id);
+    const contextoNegocio = await construirContextoNegocio(usuario);
+    const resultado = await ejecutarTurnoMeta({ usuario, apiKey, conversacionId, contextoNegocio, mensajeUsuario: mensajeTexto });
+
+    if (!resultado.ok) {
+      return NextResponse.json({ error: resultado.error }, { status: 503 });
+    }
+
+    return NextResponse.json({
+      mensajeDirector: { rol: resultado.fila.rol, mensaje: resultado.fila.mensaje, contenido: resultado.fila.contenido, creado_en: resultado.fila.creado_en },
+    });
+  }
+
   const historialActual = await obtenerHistorial(usuario.id);
-  const resultado = await ejecutarTurno({ usuario, apiKey, historialActual, mensajeUsuario: mensaje.trim() });
+  const resultado = await ejecutarTurnoGeneral({ usuario, apiKey, historialActual, mensajeUsuario: mensajeTexto });
 
   if (!resultado.ok) {
     return NextResponse.json({ error: resultado.error }, { status: 503 });
