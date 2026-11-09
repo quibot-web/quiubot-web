@@ -44,6 +44,9 @@ vi.mock("@/app/lib/metas", async (importOriginal) => {
   };
 });
 
+const registrarErrorMock = vi.fn();
+vi.mock("@/lib/registrarError", () => ({ registrarError: (...args: unknown[]) => registrarErrorMock(...args) }));
+
 const { PATCH } = await import("./route");
 
 const USUARIO_BASE = { id: "user-1", rol: "admin" };
@@ -77,6 +80,7 @@ describe("PATCH /api/metas/[id]", () => {
     fromMock.mockClear();
     cambiarEstadoMetaMock.mockReset();
     calcularAvanceMetaMock.mockReset();
+    registrarErrorMock.mockReset();
     usuarioActual = { ...USUARIO_BASE };
     metaExistenteActual = { ...META_BASE };
     vi.spyOn(console, "error").mockImplementation(() => {});
@@ -125,10 +129,15 @@ describe("PATCH /api/metas/[id]", () => {
     expect(res.status).toBe(404);
   });
 
-  it("500 cuando cambiarEstadoMeta lanza (error real de la RPC)", async () => {
-    cambiarEstadoMetaMock.mockRejectedValue(new Error("boom"));
+  it("500 cuando cambiarEstadoMeta lanza (error real de la RPC) -- mensaje amable, nunca el texto crudo, y lo registra", async () => {
+    cambiarEstadoMetaMock.mockRejectedValue(new Error("Could not find the function public.cambiar_estado_meta(...)"));
     const res = await patch({ estado: "cancelada" });
+    const data = await res.json();
+
     expect(res.status).toBe(500);
+    expect(data.error).toBe("No pude actualizar tu meta en este momento, inténtalo de nuevo en un minuto.");
+    expect(data.error).not.toContain("function public");
+    expect(registrarErrorMock).toHaveBeenCalledWith(expect.objectContaining({ origen: "cambiar_estado_meta", paso: "rpc_cambiar_estado_meta" }));
   });
 
   it("editar presupuesto: rechaza un valor <= 0 sin calcular avance ni llamar a cambiarEstadoMeta", async () => {
@@ -136,6 +145,19 @@ describe("PATCH /api/metas/[id]", () => {
     expect(res.status).toBe(400);
     expect(calcularAvanceMetaMock).not.toHaveBeenCalled();
     expect(cambiarEstadoMetaMock).not.toHaveBeenCalled();
+  });
+
+  it("editar presupuesto: si calcularAvanceMeta falla, mensaje amable (nunca el crudo) y lo registra", async () => {
+    calcularAvanceMetaMock.mockRejectedValue(new Error("fetch failed: ECONNRESET"));
+
+    const res = await patch({ presupuesto_maximo_cop: 400000 });
+    const data = await res.json();
+
+    expect(res.status).toBe(500);
+    expect(data.error).toBe("No pude verificar tu gasto actual en este momento, inténtalo de nuevo en un minuto.");
+    expect(data.error).not.toContain("ECONNRESET");
+    expect(cambiarEstadoMetaMock).not.toHaveBeenCalled();
+    expect(registrarErrorMock).toHaveBeenCalledWith(expect.objectContaining({ origen: "editar_presupuesto_meta" }));
   });
 
   it("editar presupuesto: rechaza un valor menor a lo ya gastado, sin llamar a cambiarEstadoMeta", async () => {

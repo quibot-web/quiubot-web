@@ -3,6 +3,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { supabaseAdmin } from "@/lib/supabase";
 import { tieneAutopiloto } from "@/app/lib/planesConfig";
 import { calcularAvanceMeta, cambiarEstadoMeta, ETIQUETA_TIPO_META, type TipoMeta } from "@/app/lib/metas";
+import { registrarError } from "@/lib/registrarError";
 
 // Trae UNA meta puntual por id -- hace falta desde que puede haber
 // varias activas a la vez (una por tipo): /estrategia la usa para
@@ -52,11 +53,12 @@ export async function PATCH(req: NextRequest, { params }: { params: Promise<{ id
 
   const session = await auth();
   if (!session?.user?.email) return NextResponse.json({ error: "No autorizado" }, { status: 401 });
+  const emailBusqueda = session.user.email.trim().toLowerCase();
 
   const { data: usuario } = await supabaseAdmin
     .from("usuarios")
     .select("id, rol, plan, en_trial, trial_termina_en, fecha_vencimiento, beta_autopiloto")
-    .eq("email", session.user.email.trim().toLowerCase())
+    .eq("email", emailBusqueda)
     .single();
 
   if (!usuario) return NextResponse.json({ error: "Usuario no encontrado" }, { status: 404 });
@@ -112,7 +114,15 @@ export async function PATCH(req: NextRequest, { params }: { params: Promise<{ id
       avance = await calcularAvanceMeta(metaExistente);
     } catch (err) {
       console.error(`Error calculando el avance de la meta ${id} antes de editar el presupuesto:`, err);
-      return NextResponse.json({ error: "No se pudo verificar el gasto actual en este momento." }, { status: 500 });
+      registrarError({
+        origen: "editar_presupuesto_meta",
+        userId: usuario.id,
+        email: emailBusqueda,
+        paso: "calcularAvanceMeta",
+        errorMensaje: "No se pudo verificar el gasto actual",
+        detalleTecnico: err instanceof Error ? err.message : String(err),
+      });
+      return NextResponse.json({ error: "No pude verificar tu gasto actual en este momento, inténtalo de nuevo en un minuto." }, { status: 500 });
     }
 
     const gastoActual = avance.spend ?? 0;
@@ -148,7 +158,15 @@ export async function PATCH(req: NextRequest, { params }: { params: Promise<{ id
     });
   } catch (err) {
     console.error(`Error cambiando el estado de la meta ${id}:`, err);
-    return NextResponse.json({ error: "No se pudo actualizar la meta en este momento." }, { status: 500 });
+    registrarError({
+      origen: "cambiar_estado_meta",
+      userId: usuario.id,
+      email: emailBusqueda,
+      paso: "rpc_cambiar_estado_meta",
+      errorMensaje: "No se pudo actualizar la meta",
+      detalleTecnico: err instanceof Error ? err.message : String(err),
+    });
+    return NextResponse.json({ error: "No pude actualizar tu meta en este momento, inténtalo de nuevo en un minuto." }, { status: 500 });
   }
 
   if (!meta) {

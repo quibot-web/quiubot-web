@@ -6,7 +6,7 @@
 -- conversaciones_meta(id) porque esas filas nunca se borran (solo se
 -- cierran por estado), así que no hace falta ON DELETE.
 alter table metas
-  add column conversacion_id uuid unique references conversaciones_meta(id) on delete set null;
+  add column if not exists conversacion_id uuid unique references conversaciones_meta(id) on delete set null;
 
 
 -- ============================================================
@@ -258,3 +258,15 @@ $$;
 
 revoke all on function cambiar_estado_meta from public, anon, authenticated;
 grant execute on function cambiar_estado_meta to service_role;
+
+
+-- ============================================================
+-- 4) Refresca la caché de esquema de PostgREST
+-- ============================================================
+-- Sin esto, la API (supabaseAdmin.rpc(...)) puede seguir devolviendo
+-- "Could not find the function public.crear_meta_completa(...)"
+-- aunque las funciones ya existan -- PostgREST cachea el esquema y no
+-- se entera solo de que hay funciones nuevas o cambiadas. Correr
+-- SIEMPRE al final de cualquier script que cree o reemplace una
+-- función (ver docs/sql/README.md).
+notify pgrst, 'reload schema';

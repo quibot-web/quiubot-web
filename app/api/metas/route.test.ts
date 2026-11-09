@@ -31,6 +31,9 @@ vi.mock("@/app/lib/metas", async (importOriginal) => {
 const obtenerSaludInstagramMock = vi.fn();
 vi.mock("@/app/lib/metaInstagramSalud", () => ({ obtenerSaludInstagram: (...args: unknown[]) => obtenerSaludInstagramMock(...args) }));
 
+const registrarErrorMock = vi.fn();
+vi.mock("@/lib/registrarError", () => ({ registrarError: (...args: unknown[]) => registrarErrorMock(...args) }));
+
 const { POST } = await import("./route");
 
 const USUARIO_BASE = {
@@ -79,7 +82,9 @@ describe("POST /api/metas", () => {
     rpcMock.mockReset();
     verificarRequisitosMetaMock.mockReset().mockResolvedValue({ ok: true, faltantes: [] });
     obtenerSaludInstagramMock.mockReset();
+    registrarErrorMock.mockReset();
     mockUsuario(USUARIO_BASE);
+    vi.spyOn(console, "error").mockImplementation(() => {});
   });
 
   it("rechaza sin sesión", async () => {
@@ -146,7 +151,7 @@ describe("POST /api/metas", () => {
     expect(rpcMock).toHaveBeenCalledWith("crear_meta_completa", expect.objectContaining({ p_conversacion_id: null }));
   });
 
-  it("traduce el choque con el índice único de meta activa por tipo (23505) a un mensaje claro, 409", async () => {
+  it("traduce el choque con el índice único de meta activa por tipo (23505) a un mensaje claro, 409, sin registrarError", async () => {
     rpcMock.mockResolvedValue({ data: null, error: { code: "23505", message: "duplicate key value violates unique constraint" } });
 
     const res = await POST(req(BODY_VALIDO));
@@ -155,9 +160,10 @@ describe("POST /api/metas", () => {
     expect(res.status).toBe(409);
     expect(data.error).toBe("Ya tienes una meta activa de este tipo.");
     expect(data.error).not.toContain("duplicate key");
+    expect(registrarErrorMock).not.toHaveBeenCalled();
   });
 
-  it("traduce el check_violation de tipo (23514) a un mensaje claro, 500", async () => {
+  it("traduce el check_violation de tipo (23514) a un mensaje claro, 500, sin registrarError", async () => {
     rpcMock.mockResolvedValue({ data: null, error: { code: "23514", message: "violates check constraint" } });
 
     const res = await POST(req(BODY_VALIDO));
@@ -165,6 +171,20 @@ describe("POST /api/metas", () => {
 
     expect(res.status).toBe(500);
     expect(data.error).toBe("Ese tipo de meta no está disponible todavía.");
+    expect(registrarErrorMock).not.toHaveBeenCalled();
+  });
+
+  it("cualquier otro error de la RPC (ej. la función no existe todavía) nunca muestra el texto crudo de Postgres, y lo registra con registrarError", async () => {
+    rpcMock.mockResolvedValue({ data: null, error: { code: "PGRST202", message: "Could not find the function public.crear_meta_completa(...) in the schema cache" } });
+
+    const res = await POST(req(BODY_VALIDO));
+    const data = await res.json();
+
+    expect(res.status).toBe(500);
+    expect(data.error).toBe("No pude crear tu meta en este momento, inténtalo de nuevo en un minuto.");
+    expect(data.error).not.toContain("schema cache");
+    expect(data.error).not.toContain("Postgres");
+    expect(registrarErrorMock).toHaveBeenCalledWith(expect.objectContaining({ origen: "crear_meta", paso: "rpc_crear_meta_completa" }));
   });
 
   it("seguidores_instagram: token vencido corta antes de llamar a la RPC", async () => {

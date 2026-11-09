@@ -6,6 +6,7 @@ import { obtenerSaludInstagram } from "@/app/lib/metaInstagramSalud";
 import { hoyBogota } from "@/app/lib/fechaBogota";
 import { tieneAutopiloto } from "@/app/lib/planesConfig";
 import { MENSAJE_META_TOKEN_VENCIDO } from "@/app/lib/metaErrors";
+import { registrarError } from "@/lib/registrarError";
 
 const TIPOS_VALIDOS: TipoMeta[] = ["conversaciones_whatsapp", "leads", "ventas_web", "visitas_web", "seguidores_facebook", "seguidores_instagram"];
 
@@ -189,13 +190,26 @@ export async function POST(req: NextRequest) {
     // que puede pasar hoy es una carrera real entre dos pestañas que
     // intentan crear el MISMO tipo con conversaciones distintas (si
     // fuera la misma conversación, crear_meta_completa ya lo resuelve
-    // sola, sin error). Nunca se debe mostrar el texto crudo de
-    // Postgres en ninguno de los dos casos.
-    const mensaje =
-      error?.code === "23514" ? "Ese tipo de meta no está disponible todavía." :
-      error?.code === "23505" ? "Ya tienes una meta activa de este tipo." :
-      error?.message || "No se pudo crear la meta.";
-    return NextResponse.json({ error: mensaje }, { status: error?.code === "23505" ? 409 : 500 });
+    // sola, sin error). Cualquier OTRO error (ej. la función no existe
+    // todavía en Supabase, o cualquier falla real de la RPC) NUNCA
+    // muestra el texto crudo de Postgres/PostgREST -- se registra con
+    // registrarError() y se responde con un mensaje amable.
+    if (error?.code === "23514") {
+      return NextResponse.json({ error: "Ese tipo de meta no está disponible todavía." }, { status: 500 });
+    }
+    if (error?.code === "23505") {
+      return NextResponse.json({ error: "Ya tienes una meta activa de este tipo." }, { status: 409 });
+    }
+
+    registrarError({
+      origen: "crear_meta",
+      userId: usuario.id,
+      email: emailBusqueda,
+      paso: "rpc_crear_meta_completa",
+      errorMensaje: error?.message || "crear_meta_completa no devolvió ninguna meta",
+      detalleTecnico: error ? JSON.stringify(error) : null,
+    });
+    return NextResponse.json({ error: "No pude crear tu meta en este momento, inténtalo de nuevo en un minuto." }, { status: 500 });
   }
 
   return NextResponse.json({ meta: metaCreada });
