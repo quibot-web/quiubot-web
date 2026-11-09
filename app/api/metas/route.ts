@@ -165,71 +165,50 @@ export async function POST(req: NextRequest) {
     valorInicialSeguidoresInstagram = salud.followers_count;
   }
 
-  const { data: metaCreada, error } = await supabaseAdmin
-    .from("metas")
-    .insert({
-      user_id: usuario.id,
-      tipo,
-      cantidad_objetivo: cantidad,
-      fecha_inicio: hoy,
-      fecha_fin,
-      presupuesto_maximo_cop: presupuesto,
-      costo_objetivo_cop: presupuesto / cantidad,
-      roas_minimo: roasMinimo,
-      valor_inicial: valorInicialSeguidoresInstagram,
-      contexto: contextoValidado,
-      nivel_autonomia: "copiloto",
-      estado: "activa",
-      pausado_autopiloto: false,
-    })
-    .select()
-    .single();
+  const etiquetaTipo = ETIQUETA_TIPO_META[tipo as TipoMeta];
+  const presupuestoFormateado = new Intl.NumberFormat("es-CO", { style: "currency", currency: "COP", maximumFractionDigits: 0 }).format(presupuesto);
+  const conversacionIdFinal = typeof conversacion_id === "string" && conversacion_id ? conversacion_id : null;
+
+  // Atómico (ver docs/sql/metas_atomicas.sql): inserta la meta, cierra
+  // el borrador que la originó (y cualquier OTRO borrador activo del
+  // mismo tipo que haya quedado obsoleto por crearse por otro camino),
+  // y deja los eventos en director_conversaciones y bitacora -- todo
+  // en una sola transacción de Postgres. Idempotente por
+  // conversacion_id: un reintento o una carrera entre dos pestañas
+  // nunca crea una segunda meta, siempre devuelve la misma fila.
+  const { data: metaCreada, error } = await supabaseAdmin.rpc("crear_meta_completa", {
+    p_user_id: usuario.id,
+    p_tipo: tipo,
+    p_cantidad_objetivo: cantidad,
+    p_fecha_inicio: hoy,
+    p_fecha_fin: fecha_fin,
+    p_presupuesto_maximo_cop: presupuesto,
+    p_costo_objetivo_cop: presupuesto / cantidad,
+    p_roas_minimo: roasMinimo,
+    p_valor_inicial: valorInicialSeguidoresInstagram,
+    p_contexto: contextoValidado,
+    p_nivel_autonomia: "copiloto",
+    p_conversacion_id: conversacionIdFinal,
+    p_mensaje_meta_creada: `¡Listo! Ya creé tu meta de ${etiquetaTipo}: ${cantidad} en ${presupuestoFormateado}.`,
+    p_mensaje_meta_creada_otro_borrador: `Vi que creaste tu meta de ${etiquetaTipo} por otro camino, así que dejé esta conversación como terminada.`,
+  });
 
   if (error || !metaCreada) {
-    // 23514 = check_violation -- pasó de verdad en producción con
-    // "ventas_web" antes de que metas_tipo_check lo aceptara: el
-    // mensaje crudo de Postgres ("new row ... violates check
-    // constraint ...") llegaba tal cual al cliente, sin que nada lo
-    // escondiera (ver app/metas/crear/page.tsx, que solo hace
-    // setError(data.error)) -- solo que era un mensaje incomprensible
-    // en vez de uno claro. Con TIPOS_VALIDOS y el constraint ya
-    // alineados esto no debería volver a pasar, pero si algún día se
-    // desincronizan de nuevo, que al menos se vea un mensaje legible.
-    const mensaje = error?.code === "23514" ? "Ese tipo de meta no está disponible todavía." : error?.message || "No se pudo crear la meta.";
-    return NextResponse.json({ error: mensaje }, { status: 500 });
+    // 23514 = check_violation (tipo no aceptado por el constraint --
+    // ver el comentario viejo de este archivo, sigue pudiendo pasar si
+    // TIPOS_VALIDOS y metas_tipo_check se desincronizan). 23505 = choque
+    // con el índice único de meta activa por tipo -- la única forma en
+    // que puede pasar hoy es una carrera real entre dos pestañas que
+    // intentan crear el MISMO tipo con conversaciones distintas (si
+    // fuera la misma conversación, crear_meta_completa ya lo resuelve
+    // sola, sin error). Nunca se debe mostrar el texto crudo de
+    // Postgres en ninguno de los dos casos.
+    const mensaje =
+      error?.code === "23514" ? "Ese tipo de meta no está disponible todavía." :
+      error?.code === "23505" ? "Ya tienes una meta activa de este tipo." :
+      error?.message || "No se pudo crear la meta.";
+    return NextResponse.json({ error: mensaje }, { status: error?.code === "23505" ? 409 : 500 });
   }
-
-  // Si la meta vino de una conversación con el Director, cierra ESA
-  // conversación (nunca otra -- filtrada también por user_id) en el
-  // mismo request: así conversaciones_meta nunca se queda "activa"
-  // después de que su propia meta ya existe.
-  if (typeof conversacion_id === "string" && conversacion_id) {
-    await supabaseAdmin
-      .from("conversaciones_meta")
-      .update({ estado: "completada", meta_id: metaCreada.id, actualizado_en: new Date().toISOString() })
-      .eq("id", conversacion_id)
-      .eq("user_id", usuario.id);
-
-    // Chat único con el Director (ver app/lib/director/flujoCrearMeta.ts):
-    // deja un mensaje liviano en el MISMO hilo para que el Director
-    // pueda referirse a esta meta más adelante -- sin IA, solo un
-    // evento con los datos reales que ya se acaban de validar arriba.
-    await supabaseAdmin.from("director_conversaciones").insert({
-      user_id: usuario.id,
-      rol: "assistant",
-      mensaje: `¡Listo! Ya creé tu meta de ${ETIQUETA_TIPO_META[tipo as TipoMeta]}: ${cantidad} en ${new Intl.NumberFormat("es-CO", { style: "currency", currency: "COP", maximumFractionDigits: 0 }).format(presupuesto)}.`,
-      contenido: { tipoEvento: "meta_creada" },
-      conversacion_meta_id: conversacion_id,
-    });
-  }
-
-  await supabaseAdmin.from("bitacora").insert({
-    user_id: usuario.id,
-    meta_id: metaCreada.id,
-    propuesta_id: null,
-    tipo_evento: "meta_creada",
-    detalle: { tipo, cantidad_objetivo: cantidad, fecha_fin, presupuesto_maximo_cop: presupuesto },
-  });
 
   return NextResponse.json({ meta: metaCreada });
 }
