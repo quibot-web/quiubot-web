@@ -24,15 +24,25 @@ export type Producto = {
   actualizado_en: string;
 };
 
+// Lo que devuelve GET /api/productos -- album_ids resuelto a {id,
+// url_imagen} reales (album_creativos), ignorando cualquier id que ya
+// no exista en el álbum sin romper nada. Se guarda el id junto a la
+// url (no solo la url) para que el formulario pueda editar la
+// selección sin adivinar a qué id pertenece cada foto. "fotos" nunca
+// se guarda así en la base, se resuelve en cada lectura.
+export type ProductoConFotos = Producto & { fotos: { id: string; url_imagen: string }[] };
+
+const MAX_FOTOS_PRODUCTO = 3;
+
 const CamposComunes = {
   tipo: z.enum(TIPOS_PRODUCTO),
   nombre: z.string().trim().min(1, "Falta el nombre.").max(200),
   precio_cop: z.number().int().positive().nullable().optional(),
   destacar: z.string().trim().max(500).nullable().optional(),
-  // ids del álbum del usuario -- si alguno deja de existir ahí, se
-  // ignora al mostrar la tarjeta (nunca se valida acá que existan de
-  // verdad, eso lo decide quien los lea).
-  album_ids: z.array(z.string()).max(20).optional(),
+  // ids del álbum del usuario, hasta 3 -- si alguno deja de existir
+  // ahí, se ignora al mostrar la tarjeta (nunca se valida acá que
+  // existan de verdad, eso lo decide quien los lea).
+  album_ids: z.array(z.string()).max(MAX_FOTOS_PRODUCTO).optional(),
   url: z.string().trim().max(500).nullable().optional(),
 };
 
@@ -44,3 +54,12 @@ export const ActualizarProductoSchema = z.object({
   nombre: CamposComunes.nombre.optional(),
   activo: z.boolean().optional(),
 });
+
+// Chips sugeridos para "qué destacar" -- completan el texto en vez de
+// reemplazarlo, para que el usuario pueda combinar varios.
+export const CHIPS_DESTACAR = [
+  { emoji: "🚚", texto: "Envío gratis" },
+  { emoji: "🛡️", texto: "Garantía" },
+  { emoji: "💵", texto: "Contraentrega" },
+  { emoji: "💳", texto: "Cuotas" },
+] as const;

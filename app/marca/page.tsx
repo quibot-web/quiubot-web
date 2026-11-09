@@ -7,6 +7,9 @@ import TourGuiado from "@/app/components/TourGuiado";
 import CargandoQuiubot from "@/app/components/CargandoQuiubot";
 import { comprimirSiHaceFalta, esArchivoDeImagen } from "@/app/lib/imagenes";
 import { PAISES_COBERTURA, BanderaPais, SelectorPais } from "@/app/components/SelectorPais";
+import SeccionProductos from "@/app/components/marca/SeccionProductos";
+import { urlOptimizadaCloudinary } from "@/app/lib/cloudinaryUrl";
+import type { ProductoConFotos } from "@/app/lib/productos";
 
 const MIN_IMAGENES = 3;
 const MAX_IMAGENES = 5;
@@ -15,14 +18,15 @@ const MAX_IMAGENES = 5;
 const COLOR_ACTIVO_DEFECTO = "#534AB7";
 const COLOR_CLARO_DEFECTO = "#7F77DD";
 
-// Tokens de los 3 módulos -- elegidos para buen contraste tanto en el
+// Tokens de los 4 módulos -- elegidos para buen contraste tanto en el
 // círculo numerado (texto blanco sobre "color") como en el fondo del
 // panel abierto (texto oscuro sobre "fondo", bien clareado).
-type NumeroModulo = 1 | 2 | 3;
+type NumeroModulo = 1 | 2 | 3 | 4;
 const TOKENS_MODULO: Record<NumeroModulo, { color: string; claro: string; fondo: string }> = {
   1: { color: "#534AB7", claro: "#7F77DD", fondo: "#F3F2FE" }, // ADN de marca
   2: { color: "#2563EB", claro: "#5B8DEF", fondo: "#EFF4FE" }, // Dónde vendes
   3: { color: "#D97706", claro: "#F0A94E", fondo: "#FFF8E6" }, // Lo que deben saber
+  4: { color: "#0B7A5C", claro: "#3FA98A", fondo: "#E7F7F1" }, // Lo que vendes
 };
 
 // El análisis corre en segundo plano (trabajos_ia, ver
@@ -810,6 +814,13 @@ export default function MarcaPage() {
   // Módulo 3 -- mismo motivo que el módulo 2.
   const [infoAdicionalValor, setInfoAdicionalValor] = useState("");
 
+  // Módulo 4 -- mismo motivo que el módulo 2: la tarjeta cerrada
+  // necesita mostrar cuántos productos hay y su primera foto sin
+  // depender de que el panel esté abierto. SeccionProductos (el panel)
+  // arranca con esta misma lista y avisa con onCambio cada vez que
+  // cambia, para no tener dos fuentes de verdad.
+  const [productosResumen, setProductosResumen] = useState<ProductoConFotos[]>([]);
+
   // Solo para elegir el texto del botón del aviso final ("primera" vs
   // "nueva" estrategia) -- null mientras no se ha consultado todavía.
   const [tieneCampanasPublicadas, setTieneCampanasPublicadas] = useState<boolean | null>(null);
@@ -878,11 +889,13 @@ export default function MarcaPage() {
     } catch {}
 
     const cargarDatosIniciales = async () => {
-      const [adnData, marcaData, coberturaData] = await Promise.all([
+      const [adnData, marcaData, coberturaData, productosData] = await Promise.all([
         fetch("/api/marca-adn").then((r) => r.json()).catch(() => ({})),
         fetch("/api/marca").then((r) => r.json()).catch(() => ({})),
         fetch("/api/marca/cobertura").then((r) => r.json()).catch(() => ({})),
+        fetch("/api/productos").then((r) => r.json()).catch(() => ({})),
       ]);
+      setProductosResumen(productosData?.productos ?? []);
 
       if (adnData.tieneAdn) {
         setTieneAdn(true);
@@ -1222,6 +1235,19 @@ export default function MarcaPage() {
   // --- Módulo 3: Lo que deben saber ---------------------------------
   const modulo3Listo = !!infoAdicionalValor.trim();
 
+  // --- Módulo 4: Lo que vendes ---------------------------------------
+  const modulo4Listo = productosResumen.length > 0;
+  const cantidadProductos = productosResumen.filter((p) => p.tipo === "producto").length;
+  const cantidadServicios = productosResumen.filter((p) => p.tipo === "servicio").length;
+  const resumenLineaProductos = (() => {
+    if (!modulo4Listo) return "Guarda lo que vendes para no escribirlo cada vez.";
+    const partes: string[] = [];
+    if (cantidadProductos > 0) partes.push(`${cantidadProductos} producto${cantidadProductos === 1 ? "" : "s"}`);
+    if (cantidadServicios > 0) partes.push(`${cantidadServicios} servicio${cantidadServicios === 1 ? "" : "s"}`);
+    return `${partes.join(" y ")} guardado${productosResumen.length === 1 ? "" : "s"}`;
+  })();
+  const fotosResumenProductos = productosResumen.flatMap((p) => p.fotos.slice(0, 1)).slice(0, 3);
+
   const toggleModulo = (n: NumeroModulo) => {
     setModuloAbierto((actual) => (actual === n ? null : n));
   };
@@ -1268,7 +1294,7 @@ export default function MarcaPage() {
             </div>
           </div>
 
-          {/* Los 3 módulos, lado a lado en escritorio (ver .modulos-fila y
+          {/* Los 4 módulos, lado a lado en escritorio (ver .modulos-fila y
               su media query más abajo) -- solo se apilan en una columna
               por debajo de 860px. El panel del que esté abierto se pinta
               UNA vez, después de esta fila, a todo el ancho -- nunca
@@ -1376,6 +1402,36 @@ export default function MarcaPage() {
               accionTexto={modulo3Listo ? "Editar" : "Completar"}
               abierto={moduloAbierto === 3}
               onClick={() => toggleModulo(3)}
+            />
+            <TarjetaModulo
+              numero={4}
+              titulo="Lo que vendes"
+              listo={modulo4Listo}
+              imagenResumen={
+                fotosResumenProductos.length > 0 ? (
+                  <div style={{ display: "flex" }}>
+                    {fotosResumenProductos.map((foto, i) => (
+                      // eslint-disable-next-line @next/next/no-img-element -- Cloudinary ya optimiza, miniatura chica de resumen.
+                      <img
+                        key={foto.id}
+                        src={urlOptimizadaCloudinary(foto.url_imagen, 120)}
+                        alt=""
+                        style={{ width: 64, height: 64, borderRadius: 12, objectFit: "cover", border: "2px solid #fff", boxShadow: "0 2px 6px rgba(0,0,0,0.1)", marginLeft: i === 0 ? 0 : -18 }}
+                      />
+                    ))}
+                  </div>
+                ) : (
+                  <svg width="30" height="30" viewBox="0 0 24 24" fill="none" stroke="#3FA98A" strokeWidth={1.6} aria-hidden="true">
+                    <rect x="3" y="4" width="18" height="16" rx="2" />
+                    <circle cx="8.5" cy="9.5" r="1.7" />
+                    <path d="M21 16l-5.2-5.2a1.5 1.5 0 0 0-2.1 0L5 19" />
+                  </svg>
+                )
+              }
+              resumenLinea={resumenLineaProductos}
+              accionTexto={modulo4Listo ? "Editar" : "Agregar"}
+              abierto={moduloAbierto === 4}
+              onClick={() => toggleModulo(4)}
             />
           </div>
 
@@ -1889,6 +1945,12 @@ export default function MarcaPage() {
             </div>
           )}
 
+          {moduloAbierto === 4 && (
+            <div style={{ background: TOKENS_MODULO[4].fondo, borderTop: `4px solid ${TOKENS_MODULO[4].color}`, borderRadius: "0 0 16px 16px", padding: "20px 18px 22px", marginBottom: 14 }}>
+              <SeccionProductos productosIniciales={productosResumen} onCambio={setProductosResumen} />
+            </div>
+          )}
+
           {modulo1Listo && modulo3Listo && (
             <div style={{ background: "#F3F2FE", border: "1.5px solid #534AB7", borderRadius: 16, padding: "20px 22px", textAlign: "center", marginTop: 6 }}>
               <p style={{ fontSize: 16, fontWeight: 700, color: "#1a1a1a", margin: "0 0 4px" }}>¡Tu marca está lista!</p>
@@ -1937,10 +1999,10 @@ export default function MarcaPage() {
           .adn-espiral-transicion { transition: none !important; }
         }
 
-        /* Los 3 módulos lado a lado en escritorio -- nunca un acordeón
+        /* Los 4 módulos lado a lado en escritorio -- nunca un acordeón
            vertical ahí. Solo se apilan en una columna por debajo de
            860px (celular/tablet angosto). */
-        .modulos-fila { display: grid; grid-template-columns: repeat(3, 1fr); gap: 14px; margin-bottom: 14px; }
+        .modulos-fila { display: grid; grid-template-columns: repeat(4, 1fr); gap: 14px; margin-bottom: 14px; }
         @media (max-width: 860px) {
           .modulos-fila { grid-template-columns: 1fr; }
         }

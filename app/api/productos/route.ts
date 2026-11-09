@@ -4,11 +4,11 @@ import { supabaseAdmin } from "@/lib/supabase";
 import { registrarError } from "@/lib/registrarError";
 import { CrearProductoSchema } from "@/app/lib/productos";
 
-// Lista el catálogo activo del usuario -- ordenado por ultimo_uso_en
-// (los más usados primero) para que el selector y el contexto del
-// Director muestren primero lo más relevante. Los archivados nunca se
-// listan acá (no hay "ver archivados" todavía -- no se pidió).
-export async function GET() {
+// Lista el catálogo del usuario -- activo por defecto, o archivado con
+// ?archivados=1 ("Ver archivados" + restaurar). Ordenado por
+// ultimo_uso_en (los más usados primero) para que el selector y el
+// contexto del Director muestren primero lo más relevante.
+export async function GET(req: NextRequest) {
   const session = await auth();
   if (!session?.user?.email) return NextResponse.json({ error: "No autorizado" }, { status: 401 });
 
@@ -20,15 +20,50 @@ export async function GET() {
 
   if (!usuario) return NextResponse.json({ error: "Usuario no encontrado" }, { status: 404 });
 
+  const archivados = new URL(req.url).searchParams.get("archivados") === "1";
+
   const { data: productos } = await supabaseAdmin
     .from("productos")
     .select("*")
     .eq("user_id", usuario.id)
-    .eq("activo", true)
+    .eq("activo", !archivados)
     .order("ultimo_uso_en", { ascending: false, nullsFirst: false })
     .order("creado_en", { ascending: false });
 
-  return NextResponse.json({ productos: productos ?? [] });
+  const respuesta: { productos: unknown[]; archivadosCount?: number } = {
+    productos: await adjuntarFotos(productos ?? []),
+  };
+
+  // El contador de archivados solo hace falta en la lista activa (para
+  // el botón "Ver archivados (N)") -- pedirlo también en la vista de
+  // archivados sería una consulta de más sin ningún uso.
+  if (!archivados) {
+    const { count } = await supabaseAdmin.from("productos").select("id", { count: "exact", head: true }).eq("user_id", usuario.id).eq("activo", false);
+    respuesta.archivadosCount = count ?? 0;
+  }
+
+  return NextResponse.json(respuesta);
+}
+
+// Resuelve album_ids -> {id, url_imagen} reales -- si un id ya no
+// existe en el álbum del usuario (se borró esa foto), se ignora sin
+// error; nunca rompe la tarjeta. Se guarda el id junto a la url para
+// que el formulario de edición sepa exactamente qué está seleccionado.
+async function adjuntarFotos(productos: { album_ids: unknown }[]): Promise<unknown[]> {
+  const idsUnicos = [...new Set(productos.flatMap((p) => (Array.isArray(p.album_ids) ? (p.album_ids as string[]) : [])))];
+  if (idsUnicos.length === 0) {
+    return productos.map((p) => ({ ...p, fotos: [] }));
+  }
+
+  const { data: items } = await supabaseAdmin.from("album_creativos").select("id, url_imagen").in("id", idsUnicos);
+  const urlPorId = new Map((items ?? []).map((it) => [it.id as string, it.url_imagen as string]));
+
+  return productos.map((p) => ({
+    ...p,
+    fotos: (Array.isArray(p.album_ids) ? (p.album_ids as string[]) : [])
+      .map((id) => ({ id, url_imagen: urlPorId.get(id) }))
+      .filter((f): f is { id: string; url_imagen: string } => !!f.url_imagen),
+  }));
 }
 
 export async function POST(req: NextRequest) {
