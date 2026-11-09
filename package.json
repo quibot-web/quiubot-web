@@ -10,6 +10,7 @@
     "build": "next build --webpack",
     "start": "next start",
     "lint": "eslint",
+    "test": "vitest run",
     "video:studio": "remotion studio video/Root.tsx",
     "video:verificar": "tsx video/fixtures/verificar.ts",
     "render": "tsx video/render.ts"
@@ -46,6 +47,7 @@
     "eslint-config-next": "16.2.9",
     "tailwindcss": "^4",
     "tsx": "^4.23.15",
-    "typescript": "^5"
+    "typescript": "^5",
+    "vitest": "^3.2.7"
   }
 }
