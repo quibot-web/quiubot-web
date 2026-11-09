@@ -12,10 +12,14 @@ import { TASA_CIERRE_POR_CATEGORIA, type CategoriaTasaCierre } from "@/app/lib/d
 import type { TipoMeta } from "@/app/lib/metas";
 import type { PrefillFormularioRapido } from "@/app/metas/crear/FormularioRapido";
 
+type CambioMeta = { pausado_autopiloto?: boolean; estado?: "cancelada"; presupuesto_maximo_cop?: number };
+
 type AccionDirector = {
   label: string;
-  tipo: "link" | "crear_meta" | "ir_a_soporte";
+  tipo: "link" | "crear_meta" | "ir_a_soporte" | "confirmar_cambio_meta";
   href?: string;
+  metaId?: string;
+  cambio?: CambioMeta;
 };
 
 type MensajeDirector = {
@@ -180,6 +184,77 @@ function TarjetaResumenMeta({
   );
 }
 
+function textoConfirmacionCambioMeta(cambio: CambioMeta | undefined): string {
+  if (!cambio) return "¿Confirmas este cambio en tu meta?";
+  if (cambio.pausado_autopiloto === true) return "¿Pauso esta meta? El Autopiloto deja de generar propuestas nuevas para ella hasta que la reanudes.";
+  if (cambio.pausado_autopiloto === false) return "¿Reanudo esta meta?";
+  if (cambio.estado === "cancelada") return "¿Cancelo esta meta? No se puede deshacer -- vas a poder crear otra del mismo tipo de inmediato.";
+  if (typeof cambio.presupuesto_maximo_cop === "number")
+    return `¿Cambio el presupuesto de esta meta a ${new Intl.NumberFormat("es-CO", { style: "currency", currency: "COP", maximumFractionDigits: 0 }).format(cambio.presupuesto_maximo_cop)}?`;
+  return "¿Confirmas este cambio en tu meta?";
+}
+
+// El Director NUNCA aplica un cambio de meta por su cuenta -- esta
+// tarjeta es el único camino: al confirmar, llama a PATCH
+// /api/metas/[id] (la MISMA ruta que usa la página de Metas), nunca
+// escribe en la base directo.
+function TarjetaConfirmarCambioMeta({ accion, onHecho }: { accion: AccionDirector; onHecho: () => void }) {
+  const [estado, setEstado] = useState<"pendiente" | "aplicando" | "hecho" | "descartado">("pendiente");
+  const [error, setError] = useState<string | null>(null);
+
+  async function confirmar() {
+    if (!accion.metaId || !accion.cambio) return;
+    setEstado("aplicando");
+    setError(null);
+    try {
+      const res = await fetch(`/api/metas/${accion.metaId}`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(accion.cambio),
+      });
+      const data = await res.json();
+      if (!res.ok) {
+        setError(data.error || "No se pudo aplicar el cambio.");
+        setEstado("pendiente");
+        return;
+      }
+      setEstado("hecho");
+      onHecho();
+    } catch {
+      setError("No se pudo conectar con el servidor.");
+      setEstado("pendiente");
+    }
+  }
+
+  if (estado === "hecho") return null; // el hilo ya se refrescó con el evento real -- esta tarjeta no repite nada.
+  if (estado === "descartado") {
+    return <p style={{ fontSize: 12, color: "#999", margin: "0 0 0 34px" }}>Listo, no cambié nada.</p>;
+  }
+
+  return (
+    <div style={{ marginLeft: 34, width: "min(280px, 100%)", background: "#fff", border: "1.5px solid #E9E7EE", borderRadius: 14, padding: 12 }}>
+      <p style={{ fontSize: 13, color: "#1a1a1a", margin: "0 0 10px" }}>{textoConfirmacionCambioMeta(accion.cambio)}</p>
+      {error && <p style={{ fontSize: 12, color: "#B3261E", margin: "0 0 10px" }}>{error}</p>}
+      <div style={{ display: "flex", gap: 8 }}>
+        <button
+          onClick={confirmar}
+          disabled={estado === "aplicando"}
+          style={{ flex: 1, border: 0, borderRadius: 10, padding: 9, fontWeight: 700, fontSize: 12.5, cursor: estado === "aplicando" ? "default" : "pointer", background: "#5546B8", color: "#fff" }}
+        >
+          {estado === "aplicando" ? "..." : "Sí, hazlo"}
+        </button>
+        <button
+          onClick={() => setEstado("descartado")}
+          disabled={estado === "aplicando"}
+          style={{ flex: 1, border: "1.5px solid #E9E7EE", borderRadius: 10, padding: 9, fontWeight: 700, fontSize: 12.5, cursor: estado === "aplicando" ? "default" : "pointer", background: "#fff", color: "#1B1A22" }}
+        >
+          No
+        </button>
+      </div>
+    </div>
+  );
+}
+
 export default function PanelDirectorGeneral({
   activo,
   historialInicial,
@@ -274,6 +349,24 @@ export default function PanelDirectorGeneral({
       return;
     }
     enviarTurno(null, "crear_meta");
+  }
+
+  // Después de confirmar un cambio de meta (TarjetaConfirmarCambioMeta):
+  // el PATCH ya dejó el evento real en director_conversaciones del lado
+  // del servidor -- esto solo trae el hilo actualizado para que ese
+  // mensaje y su tarjeta viva aparezcan, sin que el cliente construya
+  // nada por su cuenta.
+  async function refrescarHiloTrasCambioMeta(metaId: string) {
+    try {
+      const res = await fetch("/api/director/conversacion");
+      const data = await res.json();
+      if (Array.isArray(data.mensajes)) setMensajes(data.mensajes);
+    } catch {
+      // El cambio ya se aplicó del lado del servidor -- si esto falla,
+      // el usuario lo ve de todas formas la próxima vez que abra el chat.
+    }
+    window.dispatchEvent(new CustomEvent("quiubot:meta-cambio", { detail: { metaId } }));
+    setSenalIrAlFondo((v) => v + 1);
   }
 
   function enviarDesdeInput() {
@@ -402,19 +495,25 @@ export default function PanelDirectorGeneral({
 
           {mostrarPasos && <BarraPasos pasos={contenido!.pasos!} />}
 
-          {accionesActivas && accionesActivas.length > 0 && (
+          {accionesActivas?.filter((a) => a.tipo === "confirmar_cambio_meta").map((a, j) => (
+            <TarjetaConfirmarCambioMeta key={j} accion={a} onHecho={() => refrescarHiloTrasCambioMeta(a.metaId!)} />
+          ))}
+
+          {accionesActivas && accionesActivas.filter((a) => a.tipo !== "confirmar_cambio_meta").length > 0 && (
             <div style={{ display: "flex", flexWrap: "wrap", gap: 6, marginLeft: 34 }}>
-              {accionesActivas.map((a, j) =>
-                a.tipo === "link" && a.href ? (
-                  <Link key={j} href={a.href} style={estiloChipLink}>
-                    {a.label}
-                  </Link>
-                ) : (
-                  <button key={j} onClick={() => (a.tipo === "crear_meta" ? empezarOContinuarCrearMeta() : onIrASoporte(ultimoMensajeUsuarioAnterior(mensajes)))} style={estiloChip}>
-                    {a.label}
-                  </button>
-                )
-              )}
+              {accionesActivas
+                .filter((a) => a.tipo !== "confirmar_cambio_meta")
+                .map((a, j) =>
+                  a.tipo === "link" && a.href ? (
+                    <Link key={j} href={a.href} style={estiloChipLink}>
+                      {a.label}
+                    </Link>
+                  ) : (
+                    <button key={j} onClick={() => (a.tipo === "crear_meta" ? empezarOContinuarCrearMeta() : onIrASoporte(ultimoMensajeUsuarioAnterior(mensajes)))} style={estiloChip}>
+                      {a.label}
+                    </button>
+                  )
+                )}
             </div>
           )}
 

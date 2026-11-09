@@ -12,7 +12,8 @@ import PanelAsistenteIndividual from "@/app/components/burbuja/PanelAsistenteInd
 import ListaChats from "@/app/components/burbuja/ListaChats"
 
 type MensajeSoporte = { rol: "user" | "assistant"; mensaje: string; creadoEn: string }
-type AccionDirector = { label: string; tipo: "link" | "crear_meta" | "ir_a_soporte"; href?: string }
+type CambioMeta = { pausado_autopiloto?: boolean; estado?: "cancelada"; presupuesto_maximo_cop?: number }
+type AccionDirector = { label: string; tipo: "link" | "crear_meta" | "ir_a_soporte" | "confirmar_cambio_meta"; href?: string; metaId?: string; cambio?: CambioMeta }
 type MensajeDirector = { rol: "user" | "assistant"; mensaje: string; acciones?: AccionDirector[]; contenido?: ContenidoMeta | null; creado_en?: string }
 
 const RUTAS_PUBLICAS = ["/bienvenida", "/login", "/terminos", "/pricing"]

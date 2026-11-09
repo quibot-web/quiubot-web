@@ -10,14 +10,26 @@ import type { ContextoCuentaDirector } from "@/app/lib/director/contextoCuenta";
 
 export const MODELO_DIRECTOR_GENERAL = "gpt-4o";
 
+export const CambioMetaSchema = z.object({
+  pausado_autopiloto: z.boolean().optional(),
+  estado: z.literal("cancelada").optional(),
+  presupuesto_maximo_cop: z.number().positive().optional(),
+});
+
 export const AccionDirectorSchema = z.object({
   label: z.string().min(1),
   // link: navega a href. crear_meta: la UI monta el flujo existente de
   // /api/metas/conversacion (nunca se recrea esa lógica acá). ir_a_soporte:
   // la UI cambia a la pestaña Soporte con la última pregunta del usuario
   // ya escrita (la UI la toma de su propio estado, el Director no la repite).
-  tipo: z.enum(["link", "crear_meta", "ir_a_soporte"]),
+  // confirmar_cambio_meta: la UI muestra una tarjeta de confirmación que,
+  // si el cliente acepta, llama a PATCH /api/metas/[id] -- la MISMA ruta
+  // que usa la página de Metas. El Director nunca escribe en la base
+  // directo, solo propone el cambio con metaId+cambio.
+  tipo: z.enum(["link", "crear_meta", "ir_a_soporte", "confirmar_cambio_meta"]),
   href: z.string().min(1).optional(),
+  metaId: z.string().min(1).optional(),
+  cambio: CambioMetaSchema.optional(),
 });
 
 export const RespuestaDirectorGeneralSchema = z.object({
@@ -34,7 +46,8 @@ function formatoConexionMeta(c: ContextoCuentaDirector["conexiones"]["meta"]): s
 }
 
 function formatoMeta(m: ContextoCuentaDirector["metasActivas"][number]): string {
-  return `${m.tipo} (objetivo ${m.cantidad_objetivo}, hasta ${m.fecha_fin})`;
+  const diasTexto = m.diasRestantes <= 0 ? "vencida" : `quedan ${m.diasRestantes} días`;
+  return `id ${m.id}: ${m.tipo} (objetivo ${m.cantidadObjetivo}, ${m.estado}, lleva ${m.conversiones} conseguidos, ${diasTexto}, hasta ${m.fechaFin})`;
 }
 
 function construirContextoTexto(contexto: ContextoCuentaDirector): string {
@@ -56,9 +69,10 @@ const REGLAS_COMUNES = `Reglas:
 - Si falta una conexión que el usuario necesita (Meta, píxel, Instagram, OpenAI, Cloudinary), ofrece un botón de acción con tipo "link" y href "/?tab=integraciones".
 - Si el usuario quiere crear una meta nueva, empezar una campaña, o lograr un objetivo que todavía no tiene como meta activa, NO intentes recolectar los datos tú mismo (producto, presupuesto, plazo, etc.) -- ofrece un botón de acción con tipo "crear_meta" y una respuesta breve invitándolo a seguir ahí. Ese flujo ya existe aparte y tiene su propia lógica.
 - Si la pregunta es sobre cómo funciona Quiubot en general, precios, planes, facturación, o un problema técnico que no depende de los datos de esta cuenta -- eso es soporte, no tuyo: responde breve que es mejor resolverlo con Soporte y ofrece un botón de acción con tipo "ir_a_soporte".
+- Si el usuario pide pausar, reanudar, cancelar, o cambiar el presupuesto de una meta que SÍ aparece en "Metas activas" -- ofrece un botón de acción con tipo "confirmar_cambio_meta", metaId con el id EXACTO que ves ahí (nunca inventado) y cambio con el campo que corresponda: {"pausado_autopiloto": true} para pausar, {"pausado_autopiloto": false} para reanudar, {"estado": "cancelada"} para cancelar, o {"presupuesto_maximo_cop": NUMERO} para cambiar el presupuesto. NUNCA apliques el cambio tú mismo ni digas que ya quedó hecho -- el botón existe para que el cliente lo confirme antes de que se ejecute de verdad. Si no tiene ninguna meta de ese tipo, o hay más de una y no quedó claro cuál, pregúntale cuál en vez de adivinar.
 - Sé breve, claro y directo. Máximo 3 acciones por respuesta, solo cuando de verdad ayudan.
 - Responde ÚNICAMENTE con un objeto JSON con esta forma exacta, sin texto adicional ni backticks:
-{"respuesta": "tu respuesta aquí", "acciones": [{"label": "...", "tipo": "link"|"crear_meta"|"ir_a_soporte", "href": "..." (solo si tipo es "link")}]}
+{"respuesta": "tu respuesta aquí", "acciones": [{"label": "...", "tipo": "link"|"crear_meta"|"ir_a_soporte"|"confirmar_cambio_meta", "href": "..." (solo si tipo es "link"), "metaId": "..." (solo si tipo es "confirmar_cambio_meta"), "cambio": {...} (solo si tipo es "confirmar_cambio_meta")}]}
 El campo "acciones" es opcional -- omítelo si no aplica ninguna.`;
 
 export function construirPromptDirectorGeneral(contexto: ContextoCuentaDirector): string {

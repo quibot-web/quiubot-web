@@ -66,9 +66,11 @@ export async function PATCH(req: NextRequest, { params }: { params: Promise<{ id
   }
 
   // Para armar un mensaje del Director que diga de qué meta se trata
-  // ("Pausé tu meta de Leads") -- si no existe para este usuario, se
-  // corta acá con el mismo 404 de siempre, sin llamar a la RPC.
-  const { data: metaExistente } = await supabaseAdmin.from("metas").select("tipo").eq("id", id).eq("user_id", usuario.id).maybeSingle();
+  // ("Pausé tu meta de Leads") y, si lo que se pide es editar el
+  // presupuesto, para saber cuánto lleva gastado -- si no existe para
+  // este usuario, se corta acá con el mismo 404 de siempre, sin llamar
+  // a la RPC.
+  const { data: metaExistente } = await supabaseAdmin.from("metas").select("*").eq("id", id).eq("user_id", usuario.id).maybeSingle();
   if (!metaExistente) {
     return NextResponse.json({ error: "Meta no encontrada, o ya no está activa." }, { status: 404 });
   }
@@ -78,6 +80,8 @@ export async function PATCH(req: NextRequest, { params }: { params: Promise<{ id
   let tipoEvento: string;
   let pausadoAutopiloto: boolean | undefined;
   let estadoNuevo: "cancelada" | undefined;
+  let presupuestoMaximoCop: number | undefined;
+  let detalle: Record<string, unknown> = {};
   let mensajeDirector: string;
 
   if (typeof body.pausado_autopiloto === "boolean") {
@@ -94,9 +98,38 @@ export async function PATCH(req: NextRequest, { params }: { params: Promise<{ id
     estadoNuevo = "cancelada";
     tipoEvento = "meta_cancelada";
     mensajeDirector = `Cancelé tu meta de ${etiqueta}.`;
+  } else if (typeof body.presupuesto_maximo_cop === "number") {
+    // Por ahora SOLO el presupuesto -- no cantidad_objetivo ni fecha_fin
+    // (decisión explícita: cambiar esas dos tiene implicaciones en el
+    // cálculo de avance que no se pidieron todavía).
+    const nuevoPresupuesto = body.presupuesto_maximo_cop;
+    if (!Number.isFinite(nuevoPresupuesto) || nuevoPresupuesto <= 0) {
+      return NextResponse.json({ error: "El presupuesto debe ser mayor a cero." }, { status: 400 });
+    }
+
+    let avance;
+    try {
+      avance = await calcularAvanceMeta(metaExistente);
+    } catch (err) {
+      console.error(`Error calculando el avance de la meta ${id} antes de editar el presupuesto:`, err);
+      return NextResponse.json({ error: "No se pudo verificar el gasto actual en este momento." }, { status: 500 });
+    }
+
+    const gastoActual = avance.spend ?? 0;
+    if (nuevoPresupuesto < gastoActual) {
+      return NextResponse.json(
+        { error: `El nuevo presupuesto no puede ser menor a lo que ya gastaste (${formatoCop(gastoActual)}).` },
+        { status: 400 }
+      );
+    }
+
+    presupuestoMaximoCop = nuevoPresupuesto;
+    tipoEvento = "presupuesto_actualizado";
+    detalle = { presupuesto_anterior: metaExistente.presupuesto_maximo_cop, presupuesto_nuevo: nuevoPresupuesto };
+    mensajeDirector = `Actualicé el presupuesto de tu meta de ${etiqueta} a ${formatoCop(nuevoPresupuesto)}.`;
   } else {
     return NextResponse.json(
-      { error: "Mandá pausado_autopiloto (true/false) o estado: \"cancelada\"." },
+      { error: "Mandá pausado_autopiloto (true/false), estado: \"cancelada\", o presupuesto_maximo_cop." },
       { status: 400 }
     );
   }
@@ -109,6 +142,8 @@ export async function PATCH(req: NextRequest, { params }: { params: Promise<{ id
       tipoEvento,
       pausadoAutopiloto,
       estadoNuevo,
+      presupuestoMaximoCop,
+      detalle,
       mensajeDirector,
     });
   } catch (err) {
@@ -121,4 +156,8 @@ export async function PATCH(req: NextRequest, { params }: { params: Promise<{ id
   }
 
   return NextResponse.json({ meta });
+}
+
+function formatoCop(valor: number): string {
+  return new Intl.NumberFormat("es-CO", { style: "currency", currency: "COP", maximumFractionDigits: 0 }).format(valor);
 }
