@@ -3,6 +3,7 @@ import { useEffect, useRef, useState, type CSSProperties } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import ChatShell, { type ItemChat } from "@/app/components/chat/ChatShell";
+import TarjetaMetaViva from "@/app/components/chat/TarjetaMetaViva";
 import IndicadorEscribiendo from "@/app/components/chat/IndicadorEscribiendo";
 import EsferaAsistente from "@/app/components/esferas/EsferaAsistente";
 import type { ContextoCuentaDirector } from "@/app/lib/director/contextoCuenta";
@@ -438,6 +439,8 @@ export default function PanelDirectorGeneral({
               onCambiarAlgo={() => enviarTurno("Quiero cambiar algo de la meta", "crear_meta")}
             />
           )}
+
+          {contenido?.metaId && <TarjetaMetaViva metaId={contenido.metaId} />}
         </div>
       ),
     };

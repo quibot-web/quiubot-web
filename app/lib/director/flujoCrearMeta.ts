@@ -68,7 +68,13 @@ export type ContenidoMeta = {
   opciones?: string[];
   accionMeta?: { label: string; href: string };
   resumen?: ResumenMetaListo;
-  tipoEvento?: "meta_creada";
+  // "meta_creada" lo pone crear_meta_completa(); "meta_evento" lo pone
+  // cambiar_estado_meta() (pausar/reanudar/cancelar/vencer/cumplir/
+  // editar presupuesto) -- ver docs/sql/metas_atomicas.sql. Ambos traen
+  // metaId: la tarjeta viva del chat (TarjetaMetaViva) se dispara con
+  // cualquiera de los dos, nunca con texto/números fijos.
+  tipoEvento?: "meta_creada" | "meta_evento";
+  metaId?: string;
   // Progreso aproximado para la barra de pasos -- igual que antes, por
   // campos llenos, no una máquina de estados (el Director puede saltar
   // según lo que el cliente ya contó).
