@@ -18,6 +18,20 @@ export function urlFondoDifuminado(url: string, anchoMaximo = 480): string {
   return url.replace("/upload/", `/upload/f_auto,q_auto,e_blur:1500,w_${anchoMaximo}/`);
 }
 
+// Para convertir a base64 una foto ya subida (álbum/catálogo) antes de
+// mandarla a un webhook de IA (ver aBase64 en app/lib/propuestas.ts) --
+// sin esto, Cloudinary entregaría el archivo original tal cual quedó
+// subido, que puede pesar varios MB. w_1600/h_1600 + c_limit igualan el
+// tope de lado que ya usa comprimirSiHaceFalta() al subir una foto
+// directo desde el navegador (1600px, nunca agranda una foto más chica
+// que eso); q_auto es el mismo criterio de calidad que ya usa
+// urlOptimizadaCloudinary en el resto del proyecto. f_jpg es explícito
+// a propósito (nunca f_auto): un webhook/IA necesita un formato fijo y
+// conocido, no "el mejor formato para el navegador que lo pida".
+export function urlReducidaParaIA(url: string): string {
+  return url.replace("/upload/", "/upload/w_1600,h_1600,c_limit,q_auto:good,f_jpg/");
+}
+
 // Fuerza que el navegador descargue el archivo en vez de reproducirlo/
 // mostrarlo inline -- Cloudinary respeta el flag fl_attachment insertado
 // en la URL de entrega. Funciona igual para /image/upload/ y

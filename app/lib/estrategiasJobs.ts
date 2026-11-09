@@ -2,6 +2,7 @@ import "server-only";
 import { supabaseAdmin } from "@/lib/supabase";
 import { registrarError } from "@/lib/registrarError";
 import { aBase64 } from "@/app/lib/propuestas";
+import { urlReducidaParaIA } from "@/app/lib/cloudinaryUrl";
 
 // Mismo problema que ya resolvimos para crear_creativos (ver el
 // comentario en app/api/propuestas/[id]/subir-fotos/route.ts): el proxy
@@ -85,9 +86,13 @@ export async function procesarGeneracionEstrategia(
     // Las fotos elegidas del catálogo/álbum llegan como URL de
     // Cloudinary (nunca base64) -- se convierten acá, antes de llamar
     // a n8n, para que el webhook siga recibiendo exactamente lo mismo
-    // de siempre (un array de strings base64, nunca URLs).
+    // de siempre (un array de strings base64, nunca URLs). Se le pide a
+    // Cloudinary la versión ya reducida (ver urlReducidaParaIA) para no
+    // mandar el archivo original de varios MB -- una foto subida
+    // directo ya sale liviana del navegador (comprimirSiHaceFalta), así
+    // que esto solo iguala ese mismo tope para las que vienen de acá.
     const imagenesParaN8n = await Promise.all(
-      datos.imagenesBase64.map((img) => (img.startsWith("data:") ? img : aBase64({ tipo: "url", valor: img })))
+      datos.imagenesBase64.map((img) => (img.startsWith("data:") ? img : aBase64({ tipo: "url", valor: urlReducidaParaIA(img) })))
     );
     const n8nRes = await fetch("https://n8n.quiubot.site/webhook/generar_estrategia", {
       method: "POST",
