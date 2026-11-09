@@ -32,20 +32,25 @@ export async function resolverProductoAlUsar(valor: ValorSelectorProducto): Prom
   if (!valor.nombre.trim()) return { productoId: null };
 
   if (valor.productoId) {
-    if (valor.actualizarCatalogo) {
-      try {
-        const res = await fetch(`/api/productos/${valor.productoId}`, {
-          method: "PATCH",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ precio_cop: valor.precioCop, destacar: valor.destacar }),
-        });
-        if (!res.ok) {
-          const data = await res.json().catch(() => ({}));
-          return { productoId: valor.productoId, error: data.error || "No se pudo actualizar tu catálogo, pero se usó igual." };
-        }
-      } catch {
-        return { productoId: valor.productoId, error: "No se pudo actualizar tu catálogo, pero se usó igual." };
+    try {
+      // Siempre se toca ultimo_uso_en acá -- aunque no se haya editado
+      // nada, esto SÍ es un uso real (ver marcar_uso en la ruta).
+      const cambios: Record<string, unknown> = { marcar_uso: true };
+      if (valor.actualizarCatalogo) {
+        cambios.precio_cop = valor.precioCop;
+        cambios.destacar = valor.destacar;
       }
+      const res = await fetch(`/api/productos/${valor.productoId}`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(cambios),
+      });
+      if (!res.ok) {
+        const data = await res.json().catch(() => ({}));
+        return { productoId: valor.productoId, error: data.error || "No se pudo actualizar tu catálogo, pero se usó igual." };
+      }
+    } catch {
+      return { productoId: valor.productoId, error: "No se pudo actualizar tu catálogo, pero se usó igual." };
     }
     return { productoId: valor.productoId };
   }
@@ -56,13 +61,60 @@ export async function resolverProductoAlUsar(valor: ValorSelectorProducto): Prom
     const res = await fetch("/api/productos", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ tipo: valor.tipo, nombre: valor.nombre.trim(), precio_cop: valor.precioCop, destacar: valor.destacar }),
+      body: JSON.stringify({ tipo: valor.tipo, nombre: valor.nombre.trim(), precio_cop: valor.precioCop, destacar: valor.destacar, marcar_uso: true }),
     });
     const data = await res.json();
     if (!res.ok) return { productoId: null, error: data.error };
     return { productoId: data.producto.id };
   } catch {
     return { productoId: null, error: "No se pudo guardar en tu catálogo, pero se usó igual." };
+  }
+}
+
+// Para el chat del Director: ahí "producto" llega como texto libre
+// dentro del borrador (ver promptMetaConversacion.ts), sin ningún
+// checkbox ni confirmación posible a esta altura (el turno ya cerró).
+// Reusa un producto existente ante una coincidencia exacta o muy
+// parecida (nunca pregunta "¿es el mismo?" -- no hay con quién), y
+// solo crea uno nuevo cuando de verdad no hay nada parecido guardado.
+export async function resolverProductoDesdeTexto(
+  nombre: string,
+  precioCop: number | null | undefined,
+  productosConocidos: { id: string; nombre: string }[]
+): Promise<{ productoId: string | null }> {
+  const limpio = nombre.trim();
+  if (!limpio) return { productoId: null };
+
+  const normalizado = limpio.toLowerCase();
+  const exacto = productosConocidos.find((p) => p.nombre.trim().toLowerCase() === normalizado);
+  const parecido = exacto ? null : productoParecido(limpio, productosConocidos);
+  const existente = exacto ?? (parecido ? productosConocidos.find((p) => p.nombre === parecido) : undefined);
+
+  if (existente) {
+    try {
+      await fetch(`/api/productos/${existente.id}`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ marcar_uso: true }),
+      });
+    } catch {
+      // El uso real (la meta) ya se crea igual -- esto solo actualiza
+      // ultimo_uso_en, no es motivo para bloquear nada.
+    }
+    return { productoId: existente.id };
+  }
+
+  try {
+    const res = await fetch("/api/productos", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ tipo: "producto", nombre: limpio, precio_cop: precioCop ?? undefined, marcar_uso: true }),
+    });
+    if (!res.ok) return { productoId: null };
+    const data = await res.json();
+    return { productoId: data.producto?.id ?? null };
+  } catch {
+    return { productoId: null };
   }
 }
 

@@ -75,6 +75,12 @@ export async function POST(req: NextRequest) {
   if (!usuario) return NextResponse.json({ error: "Usuario no encontrado" }, { status: 404 });
 
   const cuerpo = await req.json().catch(() => null);
+  // Igual que en PATCH [id]: no es un campo del producto, se saca antes
+  // de validar. Lo manda resolverProductoAlUsar al crear uno nuevo
+  // directamente desde un uso real (metas/estrategia/video) -- creado
+  // desde "Mi marca" en cambio no se ha usado todavía, así que
+  // ultimo_uso_en se queda en null hasta su primer uso real.
+  const marcarUso = !!(cuerpo && typeof cuerpo === "object" && (cuerpo as Record<string, unknown>).marcar_uso === true);
   const resultado = CrearProductoSchema.safeParse(cuerpo);
   if (!resultado.success) {
     return NextResponse.json({ error: "Revisa los datos del producto -- falta el nombre o el tipo." }, { status: 400 });
@@ -90,6 +96,7 @@ export async function POST(req: NextRequest) {
       destacar: resultado.data.destacar ?? null,
       album_ids: resultado.data.album_ids ?? [],
       url: resultado.data.url ?? null,
+      ultimo_uso_en: marcarUso ? new Date().toISOString() : null,
     })
     .select()
     .single();

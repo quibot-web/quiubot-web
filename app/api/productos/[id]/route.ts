@@ -20,14 +20,23 @@ export async function PATCH(req: NextRequest, { params }: { params: Promise<{ id
   if (!usuario) return NextResponse.json({ error: "Usuario no encontrado" }, { status: 404 });
 
   const cuerpo = await req.json().catch(() => null);
+  // No es un campo del producto -- se saca antes de validar para que
+  // nunca llegue a la tabla por error (el esquema solo tiene las
+  // columnas editables de verdad). Lo manda resolverProductoAlUsar en
+  // cada uso real, aunque no haya cambiado nada más, para que
+  // ultimo_uso_en refleje el uso y no solo las ediciones.
+  const marcarUso = !!(cuerpo && typeof cuerpo === "object" && (cuerpo as Record<string, unknown>).marcar_uso === true);
   const resultado = ActualizarProductoSchema.safeParse(cuerpo);
-  if (!resultado.success || Object.keys(resultado.data).length === 0) {
+  if (!resultado.success || (Object.keys(resultado.data).length === 0 && !marcarUso)) {
     return NextResponse.json({ error: "No hay nada para actualizar." }, { status: 400 });
   }
 
+  const cambios: Record<string, unknown> = { ...resultado.data, actualizado_en: new Date().toISOString() };
+  if (marcarUso) cambios.ultimo_uso_en = new Date().toISOString();
+
   const { data: producto, error } = await supabaseAdmin
     .from("productos")
-    .update({ ...resultado.data, actualizado_en: new Date().toISOString() })
+    .update(cambios)
     .eq("id", id)
     .eq("user_id", usuario.id)
     .select()

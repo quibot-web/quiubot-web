@@ -11,6 +11,7 @@ import type { ContenidoMeta, ResumenMetaListo } from "@/app/lib/director/flujoCr
 import { TASA_CIERRE_POR_CATEGORIA, type CategoriaTasaCierre } from "@/app/lib/director/tasaCierre";
 import type { TipoMeta } from "@/app/lib/metas";
 import type { PrefillFormularioRapido } from "@/app/metas/crear/FormularioRapido";
+import { resolverProductoDesdeTexto } from "@/app/components/SelectorProducto";
 
 type CambioMeta = { pausado_autopiloto?: boolean; estado?: "cancelada"; presupuesto_maximo_cop?: number };
 
@@ -501,6 +502,14 @@ export default function PanelDirectorGeneral({
     const contextoMeta: Record<string, unknown> = { producto: borrador.producto, origen: "conversacion", version: 1 };
     if (borrador.precio_cop !== undefined) contextoMeta.precio_cop = borrador.precio_cop;
     if (borrador.tasa_cierre_categoria) contextoMeta.tasa_cierre = TASA_CIERRE_POR_CATEGORIA[borrador.tasa_cierre_categoria];
+
+    // El chat no tiene checkbox ni confirmación -- se resuelve solo
+    // contra el catálogo (reusa uno parecido, o crea uno nuevo) para
+    // que este producto también quede guardado la próxima vez.
+    if (borrador.producto) {
+      const { productoId } = await resolverProductoDesdeTexto(borrador.producto, borrador.precio_cop, contexto?.productosActivos ?? []);
+      if (productoId) contextoMeta.producto_id = productoId;
+    }
 
     try {
       const res = await fetch("/api/metas", {
