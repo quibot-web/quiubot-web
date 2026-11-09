@@ -1,6 +1,6 @@
 "use client";
-import { useEffect, useState } from "react";
-import { useRouter } from "next/navigation";
+import { Suspense, useEffect, useState } from "react";
+import { useRouter, useSearchParams } from "next/navigation";
 import Link from "next/link";
 import { Clock } from "lucide-react";
 import CargandoQuiubot from "@/app/components/CargandoQuiubot";
@@ -19,7 +19,22 @@ type MensajeDirector = { rol: "user" | "assistant"; mensaje: string; contenido?:
 // hay un borrador activo (ej. el cliente venía de la burbuja), entra
 // directo a ese hilo en vez de empezar de nuevo.
 export default function CrearMetaPage() {
+  return (
+    <Suspense fallback={<CargandoQuiubot mensaje="Verificando tu acceso" />}>
+      <CrearMetaContenido />
+    </Suspense>
+  );
+}
+
+function CrearMetaContenido() {
   const router = useRouter();
+  // "Prefiero llenarlo yo" desde la burbuja (variante "embebida") navega
+  // acá con ?formulario=1 porque no tiene cómo pasar el prefill por
+  // estado de React -- sin este chequeo, esta página ignoraba el query
+  // param y mandaba al cliente de vuelta al chat (regresión real,
+  // encontrada al revisar la sincronización Metas↔Director).
+  const searchParams = useSearchParams();
+  const forzarFormulario = searchParams.get("formulario") === "1";
   const [puedeUsarAutopiloto, setPuedeUsarAutopiloto] = useState<boolean | null>(null);
   const [modo, setModo] = useState<Modo>("cargando");
   const [avisoApiKey, setAvisoApiKey] = useState(false);
@@ -36,6 +51,13 @@ export default function CrearMetaPage() {
 
   useEffect(() => {
     if (puedeUsarAutopiloto !== true) return;
+
+    if (forzarFormulario) {
+      // setTimeout(0) en vez de llamar setModo() directo acá -- mismo
+      // motivo que en PanelDirectorGeneral (react-hooks/set-state-in-effect).
+      const id = setTimeout(() => setModo("formulario"), 0);
+      return () => clearTimeout(id);
+    }
 
     // Entrada principal: la conversación con el Director (decisión del
     // plan) -- el formulario de siempre queda como "Prefiero llenarlo
@@ -55,7 +77,7 @@ export default function CrearMetaPage() {
         setModo("conversacion");
       })
       .catch(() => setModo("formulario"));
-  }, [puedeUsarAutopiloto]);
+  }, [puedeUsarAutopiloto, forzarFormulario]);
 
   if (puedeUsarAutopiloto === null || modo === "cargando") {
     return <CargandoQuiubot mensaje="Verificando tu acceso" />;
