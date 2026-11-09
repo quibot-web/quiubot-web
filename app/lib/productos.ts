@@ -63,3 +63,44 @@ export const CHIPS_DESTACAR = [
   { emoji: "💵", texto: "Contraentrega" },
   { emoji: "💳", texto: "Cuotas" },
 ] as const;
+
+function normalizarNombre(nombre: string): string {
+  return nombre
+    .trim()
+    .toLowerCase()
+    .normalize("NFD")
+    .replace(/[̀-ͯ]/g, "");
+}
+
+// Distancia de edición simple -- sin librería externa, solo para
+// nombres de productos (strings cortas, nunca párrafos).
+function distanciaLevenshtein(a: string, b: string): number {
+  const filas = Array.from({ length: a.length + 1 }, (_, i) => [i, ...Array(b.length).fill(0)]);
+  for (let j = 0; j <= b.length; j++) filas[0][j] = j;
+  for (let i = 1; i <= a.length; i++) {
+    for (let j = 1; j <= b.length; j++) {
+      filas[i][j] = a[i - 1] === b[j - 1] ? filas[i - 1][j - 1] : 1 + Math.min(filas[i - 1][j], filas[i][j - 1], filas[i - 1][j - 1]);
+    }
+  }
+  return filas[a.length][b.length];
+}
+
+// ¿"nombreNuevo" se parece lo suficiente a alguno de los guardados
+// como para preguntar "¿es el mismo que '...'?" en vez de dejar crear
+// un duplicado? Heurística simple a propósito: mismo nombre
+// normalizado, uno contiene al otro, o distancia de edición chica
+// (typos / variaciones cortas) -- nunca compara nombres muy cortos
+// (3 letras o menos), donde cualquier heurística da falsos positivos.
+export function productoParecido(nombreNuevo: string, guardados: { nombre: string }[]): string | null {
+  const normalizado = normalizarNombre(nombreNuevo);
+  if (normalizado.length < 4) return null;
+
+  for (const g of guardados) {
+    const otro = normalizarNombre(g.nombre);
+    if (otro.length < 4) continue;
+    if (normalizado === otro) continue; // ya es exactamente igual -- eso lo bloquea el índice único, no esta pregunta.
+    if (normalizado.includes(otro) || otro.includes(normalizado)) return g.nombre;
+    if (distanciaLevenshtein(normalizado, otro) <= 2) return g.nombre;
+  }
+  return null;
+}

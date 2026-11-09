@@ -10,6 +10,7 @@ import ProgresoPasos from "@/app/components/ProgresoPasos";
 import EsperaCreativos from "@/app/components/EsperaCreativos";
 import CargandoQuiubot from "@/app/components/CargandoQuiubot";
 import LogoMarca from "@/app/components/LogoMarca";
+import SelectorProducto, { resolverProductoAlUsar, valorVacioSelectorProducto, type ValorSelectorProducto } from "@/app/components/SelectorProducto";
 import { urlDescargaCloudinary, extraerFramesVideo } from "@/app/lib/cloudinaryUrl";
 import { comprimirSiHaceFalta, esArchivoDeImagen } from "@/app/lib/imagenes";
 import { nombreVisiblePlan, type PlanId } from "@/app/lib/planesConfig";
@@ -1159,6 +1160,11 @@ function EstrategiaContent() {
   // muestra formateado.
   const [mostrarPrecio, setMostrarPrecio] = useState(false);
   const [precio, setPrecio] = useState<number | null>(null);
+  // Selector del catálogo de productos/servicios -- su "destacar" y
+  // "precioCop" se espejan hacia descripcionServicio/datosProducto y
+  // precio (ver alCambiarProductoCatalogo) para que el resto del
+  // formulario y los payloads que ya existían no tengan que cambiar.
+  const [productoCatalogo, setProductoCatalogo] = useState<ValorSelectorProducto>(valorVacioSelectorProducto());
   const [imagenesBase64, setImagenesBase64] = useState<string[]>([]);
   const [procesandoImagenes, setProcesandoImagenes] = useState(false);
   const [arrastrandoImagenes, setArrastrandoImagenes] = useState(false);
@@ -1621,6 +1627,27 @@ function EstrategiaContent() {
     if (!confirm("¿Seguro que quieres salir? Se cancelará esta estrategia y volverás al inicio.")) return;
     limpiarProgresoGuardado();
     router.push("/");
+  }
+
+  // datos_producto/descripcion_servicio siguen siendo texto libre para
+  // n8n (mismo contrato de siempre) -- antes el nombre se escribía a
+  // mano dentro de ese texto, ahora que viene del selector hay que
+  // armarlo acá para no perderlo (el precio NO va en este texto: sigue
+  // viajando aparte, en precio/mostrar_precio, igual que siempre).
+  function alCambiarProductoCatalogo(v: ValorSelectorProducto) {
+    setProductoCatalogo(v);
+    const texto = [v.nombre.trim(), v.destacar?.trim()].filter(Boolean).join(". ");
+    if (tipoContenido === "servicio") setDescripcionServicio(texto);
+    else setDatosProducto(texto);
+    setPrecio(v.precioCop);
+    if (!v.precioCop) setMostrarPrecio(false);
+  }
+
+  // Guarda/actualiza el catálogo según lo elegido en el paso de producto
+  // -- se llama una sola vez, al salir de ese paso (no en cada tecla).
+  async function avanzarDesdePaso2() {
+    await resolverProductoAlUsar(productoCatalogo);
+    setStep("objetivo");
   }
 
   // Requisito previo: sin ADN de marca sintetizado, no se puede usar el
@@ -2983,6 +3010,7 @@ function EstrategiaContent() {
           tipo_contenido: tipoContenido,
           descripcion_servicio: tipoContenido === "servicio" ? descripcionServicio : null,
           datos_producto: tipoContenido === "producto" ? datosProducto : null,
+          producto_id: productoCatalogo.productoId,
         }),
       });
       const data = await res.json().catch(() => ({}));
@@ -3309,73 +3337,17 @@ function EstrategiaContent() {
               {imagenesBase64.length}/{MAX_IMAGENES_PRODUCTO} subidas · mínimo {MIN_IMAGENES_PRODUCTO}
             </p>
 
-            {tipoContenido === "servicio" && (
+            {(tipoContenido === "servicio" || tipoContenido === "producto") && (
               <div>
                 <label style={{ fontSize: 13, fontWeight: 600, color: "#1a1a1a", display: "block", marginBottom: 6 }}>
-                  ¿Quieres darnos más contexto? <span style={{ fontWeight: 400, color: "#999" }}>(opcional)</span>
+                  {tipoContenido === "servicio" ? "¿Qué servicio es?" : "¿Qué producto es?"}{" "}
+                  <span style={{ fontWeight: 400, color: "#999" }}>(opcional)</span>
                 </label>
-                <textarea
-                  className="quiubot-textarea-servicio"
-                  value={descripcionServicio}
-                  onChange={(e) => {
-                    setDescripcionServicio(e.target.value.slice(0, 500));
-                    // Auto-crece con el contenido en vez de mostrar scroll interno
-                    // desde el principio -- mucho más natural mientras se escribe.
-                    // Al llegar al tope (200px) sí aparece scroll, para que un
-                    // texto muy largo no empuje el resto de la página hacia abajo.
-                    e.target.style.height = "auto";
-                    e.target.style.height = Math.min(e.target.scrollHeight, 200) + "px";
-                  }}
-                  onFocus={(e) => {
-                    // Al volver a hacer foco, recupera el alto que le
-                    // corresponde según el contenido actual (pudo haberse
-                    // "achicado" por el onBlur de la última vez).
-                    e.target.style.height = "auto";
-                    e.target.style.height = Math.min(e.target.scrollHeight, 200) + "px";
-                  }}
-                  onBlur={(e) => {
-                    // Mientras no se está editando, se reduce a un tamaño
-                    // compacto -- ocupa menos espacio en la página y dedica
-                    // el cuadro grande solo al momento de escribir.
-                    e.target.style.height = "42px";
-                  }}
-                  placeholder='Ej: "Paquete todo incluido a Cartagena, 4 noches, incluye vuelos"'
-                  maxLength={500}
-                  style={{ width: "100%", padding: 12, borderRadius: 10, border: "1.5px solid #e0e0e0", background: "#fcfcff", fontSize: 13, color: "#1a1a1a", resize: "none", height: 42, maxHeight: 200, overflowY: "auto", fontFamily: "inherit", boxSizing: "border-box", outline: "none", transition: "height .18s ease, border-color .15s ease, box-shadow .15s ease" }}
-                />
-                <div style={{ fontSize: 11, color: "#999", textAlign: "right", marginTop: 4 }}>{descripcionServicio.length}/500</div>
-              </div>
-            )}
-
-            {tipoContenido === "producto" && (
-              <div>
-                <label style={{ fontSize: 13, fontWeight: 600, color: "#1a1a1a", display: "block", marginBottom: 6 }}>
-                  ¿Qué quieres destacar de este producto? <span style={{ fontWeight: 400, color: "#999" }}>(opcional)</span>
-                </label>
-                <textarea
-                  className="quiubot-textarea-servicio"
-                  value={datosProducto}
-                  onChange={(e) => {
-                    setDatosProducto(e.target.value.slice(0, 500));
-                    e.target.style.height = "auto";
-                    e.target.style.height = Math.min(e.target.scrollHeight, 200) + "px";
-                  }}
-                  onFocus={(e) => {
-                    e.target.style.height = "auto";
-                    e.target.style.height = Math.min(e.target.scrollHeight, 200) + "px";
-                  }}
-                  onBlur={(e) => {
-                    e.target.style.height = "42px";
-                  }}
-                  placeholder="Ej.: precio $1.200.000, combo con 3 herramientas, 10% de descuento esta semana"
-                  maxLength={500}
-                  style={{ width: "100%", padding: 12, borderRadius: 10, border: "1.5px solid #e0e0e0", background: "#fcfcff", fontSize: 13, color: "#1a1a1a", resize: "none", height: 42, maxHeight: 200, overflowY: "auto", fontFamily: "inherit", boxSizing: "border-box", outline: "none", transition: "height .18s ease, border-color .15s ease, box-shadow .15s ease" }}
-                />
-                <div style={{ fontSize: 11, color: "#999", textAlign: "right", marginTop: 4 }}>{datosProducto.length}/500</div>
-                <p style={{ fontSize: 11.5, color: "#999", margin: "4px 0 0" }}>
+                <SelectorProducto tipoContenido={tipoContenido} valor={productoCatalogo} onCambio={alCambiarProductoCatalogo} />
+                <p style={{ fontSize: 11.5, color: "#999", margin: "6px 0 0" }}>
                   La IA usa esto para escribir tus anuncios. Mientras más concreto, mejor venden.
                 </p>
-                {tieneInfoAdicional === false && (
+                {tipoContenido === "producto" && tieneInfoAdicional === false && (
                   <a
                     href="/marca"
                     style={{ display: "inline-block", marginTop: 8, fontSize: 12, color: "#7F77DD", textDecoration: "none" }}
@@ -3386,50 +3358,36 @@ function EstrategiaContent() {
               </div>
             )}
 
-            <div>
-              <button
-                type="button"
-                onClick={() => setMostrarPrecio((v) => !v)}
-                style={{ display: "flex", alignItems: "flex-start", gap: 10, border: "none", background: "none", width: "100%", textAlign: "left", cursor: "pointer" }}
-              >
-                <div
-                  style={{
-                    width: 18, height: 18, borderRadius: 5, marginTop: 1, flexShrink: 0,
-                    border: mostrarPrecio ? "none" : "2px solid #ccc",
-                    background: mostrarPrecio ? "#534AB7" : "transparent",
-                    display: "flex", alignItems: "center", justifyContent: "center",
-                  }}
+            {!!productoCatalogo.precioCop && productoCatalogo.precioCop > 0 && (
+              <div>
+                <button
+                  type="button"
+                  onClick={() => setMostrarPrecio((v) => !v)}
+                  style={{ display: "flex", alignItems: "flex-start", gap: 10, border: "none", background: "none", width: "100%", textAlign: "left", cursor: "pointer" }}
                 >
-                  {mostrarPrecio && <span style={{ color: "#fff", fontSize: 12, fontWeight: 700 }}>✓</span>}
-                </div>
-                <p style={{ fontSize: 13, fontWeight: 600, color: "#333", margin: 0 }}>
-                  Quiero que en mis creativos aparezca el precio
-                </p>
-              </button>
-              {mostrarPrecio && (
-                <div style={{ marginTop: 10, marginLeft: 28 }}>
-                  <div style={{ display: "flex", alignItems: "center", gap: 6, padding: "10px 12px", borderRadius: 8, border: "1.5px solid #e0e0e0", background: "#fcfcff" }}>
-                    <span style={{ fontSize: 15, fontWeight: 600, color: "#666" }}>$</span>
-                    <input
-                      type="text"
-                      inputMode="numeric"
-                      value={precio ? precio.toLocaleString("es-CO") : ""}
-                      onChange={(e) => {
-                        const soloDigitos = e.target.value.replace(/\D/g, "");
-                        setPrecio(soloDigitos ? parseInt(soloDigitos, 10) : null);
-                      }}
-                      placeholder="89.900"
-                      style={{ flex: 1, border: "none", outline: "none", fontSize: 14, color: "#1a1a1a", fontFamily: "inherit", background: "transparent" }}
-                    />
+                  <div
+                    style={{
+                      width: 18, height: 18, borderRadius: 5, marginTop: 1, flexShrink: 0,
+                      border: mostrarPrecio ? "none" : "2px solid #ccc",
+                      background: mostrarPrecio ? "#534AB7" : "transparent",
+                      display: "flex", alignItems: "center", justifyContent: "center",
+                    }}
+                  >
+                    {mostrarPrecio && <span style={{ color: "#fff", fontSize: 12, fontWeight: 700 }}>✓</span>}
                   </div>
-                  <p style={{ fontSize: 11, color: "#999", margin: "6px 0 0" }}>
+                  <p style={{ fontSize: 13, fontWeight: 600, color: "#333", margin: 0 }}>
+                    Quiero que en mis creativos aparezca el precio
+                  </p>
+                </button>
+                {mostrarPrecio && (
+                  <p style={{ fontSize: 11, color: "#999", margin: "6px 0 0 28px" }}>
                     Lo mostraremos en algunos de tus anuncios, no en todos, para combinar conceptos con y sin precio.
                   </p>
-                </div>
-              )}
-            </div>
+                )}
+              </div>
+            )}
 
-            <button data-tour="estrategia-siguiente" onClick={() => setStep("objetivo")} disabled={imagenesBase64.length < MIN_IMAGENES_PRODUCTO || (mostrarPrecio && (!precio || precio <= 0))} style={{ background: (imagenesBase64.length < MIN_IMAGENES_PRODUCTO || (mostrarPrecio && (!precio || precio <= 0))) ? "#ccc" : "#534AB7", color: "#fff", border: "none", padding: "16px", borderRadius: 10, fontSize: 16, fontWeight: 600, cursor: (imagenesBase64.length < MIN_IMAGENES_PRODUCTO || (mostrarPrecio && (!precio || precio <= 0))) ? "not-allowed" : "pointer" }}>
+            <button data-tour="estrategia-siguiente" onClick={avanzarDesdePaso2} disabled={imagenesBase64.length < MIN_IMAGENES_PRODUCTO || (mostrarPrecio && (!precio || precio <= 0))} style={{ background: (imagenesBase64.length < MIN_IMAGENES_PRODUCTO || (mostrarPrecio && (!precio || precio <= 0))) ? "#ccc" : "#534AB7", color: "#fff", border: "none", padding: "16px", borderRadius: 10, fontSize: 16, fontWeight: 600, cursor: (imagenesBase64.length < MIN_IMAGENES_PRODUCTO || (mostrarPrecio && (!precio || precio <= 0))) ? "not-allowed" : "pointer" }}>
               Siguiente paso
             </button>
           </div>

@@ -142,6 +142,7 @@ export async function procesarPublicarEstrategia(
     tipoContenido: unknown;
     descripcionServicio: string | null;
     datosProducto: string | null;
+    productoId: string | null;
   }
 ): Promise<void> {
   const { data: job } = await supabaseAdmin.from("trabajos_ia").select("*").eq("id", jobId).eq("tipo", TIPO_TRABAJO).single();
@@ -302,6 +303,19 @@ export async function procesarPublicarEstrategia(
       metaIdValidado = metaDelUsuario?.id ?? null;
     }
 
+    // Mismo motivo que metaIdValidado: viene del cliente, se confirma
+    // que es de verdad un producto de este usuario antes de confiar en él.
+    let productoIdValidado: string | null = null;
+    if (typeof datos.productoId === "string" && datos.productoId) {
+      const { data: productoDelUsuario } = await supabaseAdmin
+        .from("productos")
+        .select("id")
+        .eq("id", datos.productoId)
+        .eq("user_id", datos.userId)
+        .maybeSingle();
+      productoIdValidado = productoDelUsuario?.id ?? null;
+    }
+
     // Para que el refresco de Autopiloto (intentarGenerarYCrearCreativos)
     // pueda reenviar el mismo contexto más adelante -- ver app/lib/propuestas.ts.
     const tipoContenidoFinal: string = datos.tipoContenido === "servicio" ? "servicio" : "producto";
@@ -330,6 +344,7 @@ export async function procesarPublicarEstrategia(
         tipo_contenido: tipoContenidoFinal,
         descripcion_servicio: descripcionServicioFinal,
         datos_producto: datosProductoFinal,
+        producto_id: productoIdValidado,
       })
       .select()
       .single();

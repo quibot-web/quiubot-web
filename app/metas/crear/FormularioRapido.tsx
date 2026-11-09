@@ -4,6 +4,7 @@ import { useRouter } from "next/navigation";
 import { MessageCircle, Target, ShoppingCart, Calendar, Wallet, Globe, ThumbsUp, Camera } from "lucide-react";
 import { hoyBogota } from "@/app/lib/fechaBogota";
 import type { TipoMeta } from "@/app/lib/metas";
+import SelectorProducto, { resolverProductoAlUsar, valorVacioSelectorProducto, type ValorSelectorProducto } from "@/app/components/SelectorProducto";
 
 const DIAS_MINIMOS = 14;
 const ROAS_MINIMO_SUGERIDO = "2";
@@ -62,9 +63,11 @@ export default function FormularioRapido({
   const [tiposYaActivos, setTiposYaActivos] = useState<Set<TipoMeta>>(new Set());
 
   // Si ya venía con tipo prellenado (desde el Director), arranca directo
-  // en el paso de cantidad en vez de hacerlo elegir de nuevo.
+  // en el paso de producto en vez de hacerlo elegir de nuevo (el prefill
+  // nunca trae producto: eso lo decide el catálogo, no la conversación).
   const [paso, setPaso] = useState(prefill?.tipo ? 2 : 1);
   const [tipo, setTipo] = useState<TipoMeta | null>(prefill?.tipo ?? null);
+  const [producto, setProducto] = useState<ValorSelectorProducto>(valorVacioSelectorProducto());
   const [cantidad, setCantidad] = useState("");
   const [fechaFin, setFechaFin] = useState(prefill?.fechaFin ?? "");
   const [presupuesto, setPresupuesto] = useState(prefill?.presupuestoCop ? String(prefill.presupuestoCop) : "");
@@ -119,6 +122,20 @@ export default function FormularioRapido({
     setError(null);
     setRedirigirA(null);
     try {
+      // Guarda/actualiza el catálogo según lo que el cliente decidió en
+      // el paso de producto (checkbox "Guardar en mis productos" o
+      // "Actualizar catálogo"/"Solo por ahora") -- nunca antes de este
+      // punto, para no guardar nada mientras todavía estaba decidiendo.
+      const { productoId } = await resolverProductoAlUsar(producto);
+      const contexto = producto.nombre.trim()
+        ? {
+            producto: producto.nombre.trim(),
+            precio_cop: producto.precioCop ?? undefined,
+            producto_id: productoId ?? undefined,
+            origen: "formulario" as const,
+            version: 1 as const,
+          }
+        : undefined;
       const res = await fetch("/api/metas", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
@@ -128,6 +145,7 @@ export default function FormularioRapido({
           fecha_fin: fechaFin,
           presupuesto_maximo_cop: presupuestoFinal,
           roas_minimo: tipo === "ventas_web" ? Number(roasMinimo) : undefined,
+          contexto,
           // Si esto venía de una conversación con el Director que no
           // terminó (ver PrefillFormularioRapido), cierra esa misma
           // conversación al crear la meta por acá -- sin esto quedaría
@@ -202,7 +220,7 @@ export default function FormularioRapido({
           </button>
         )}
         <p style={{ fontSize: 12.5, fontWeight: 700, color: "#534AB7", margin: "0 0 6px", letterSpacing: "0.02em" }}>
-          Paso {paso} de 4
+          Paso {paso} de 5
         </p>
         <h1 style={{ fontSize: 22, fontWeight: 700, color: "#1a1a1a", margin: "0 0 20px" }}>Crear meta de Autopiloto</h1>
 
@@ -277,6 +295,20 @@ export default function FormularioRapido({
 
         {paso === 2 && (
           <div>
+            <p style={{ fontSize: 14, color: "#666", margin: "0 0 18px" }}>¿Qué vas a promocionar?</p>
+            <SelectorProducto valor={producto} onCambio={setProducto} />
+            <div style={{ marginBottom: 14 }} />
+            <div style={{ display: "flex", gap: 10 }}>
+              <button style={estiloBotonSecundario} onClick={() => setPaso(1)}>← Atrás</button>
+              <button style={estiloBotonPrimario} onClick={() => setPaso(3)}>
+                Continuar →
+              </button>
+            </div>
+          </div>
+        )}
+
+        {paso === 3 && (
+          <div>
             <p style={{ fontSize: 14, color: "#666", margin: "0 0 18px" }}>¿Cuántas quieres conseguir?</p>
             <input
               type="number"
@@ -287,15 +319,15 @@ export default function FormularioRapido({
               style={{ ...estiloInput, marginBottom: 24 }}
             />
             <div style={{ display: "flex", gap: 10 }}>
-              <button style={estiloBotonSecundario} onClick={() => setPaso(1)}>← Atrás</button>
-              <button style={estiloBotonPrimario} disabled={!cantidadNum || cantidadNum <= 0} onClick={() => setPaso(3)}>
+              <button style={estiloBotonSecundario} onClick={() => setPaso(2)}>← Atrás</button>
+              <button style={estiloBotonPrimario} disabled={!cantidadNum || cantidadNum <= 0} onClick={() => setPaso(4)}>
                 Continuar →
               </button>
             </div>
           </div>
         )}
 
-        {paso === 3 && (
+        {paso === 4 && (
           <div>
             <p style={{ fontSize: 14, color: "#666", margin: "0 0 10px" }}>¿En cuánto tiempo? (mínimo {DIAS_MINIMOS} días)</p>
             <div style={{ display: "flex", alignItems: "center", gap: 10, marginBottom: 24 }}>
@@ -309,15 +341,15 @@ export default function FormularioRapido({
               />
             </div>
             <div style={{ display: "flex", gap: 10 }}>
-              <button style={estiloBotonSecundario} onClick={() => setPaso(2)}>← Atrás</button>
-              <button style={estiloBotonPrimario} disabled={!fechaFin || fechaFin < fechaMinima()} onClick={() => setPaso(4)}>
+              <button style={estiloBotonSecundario} onClick={() => setPaso(3)}>← Atrás</button>
+              <button style={estiloBotonPrimario} disabled={!fechaFin || fechaFin < fechaMinima()} onClick={() => setPaso(5)}>
                 Continuar →
               </button>
             </div>
           </div>
         )}
 
-        {paso === 4 && !previsualizacion && (
+        {paso === 5 && !previsualizacion && (
           <div>
             <p style={{ fontSize: 14, color: "#666", margin: "0 0 18px" }}>¿Cuál es tu presupuesto máximo?</p>
             <div style={{ display: "flex", alignItems: "center", gap: 10, marginBottom: 24 }}>
@@ -332,7 +364,7 @@ export default function FormularioRapido({
               />
             </div>
             <div style={{ display: "flex", gap: 10 }}>
-              <button style={estiloBotonSecundario} onClick={() => setPaso(3)}>← Atrás</button>
+              <button style={estiloBotonSecundario} onClick={() => setPaso(4)}>← Atrás</button>
               <button
                 style={estiloBotonPrimario}
                 disabled={!presupuestoNum || presupuestoNum <= 0 || cargando}
@@ -344,7 +376,7 @@ export default function FormularioRapido({
           </div>
         )}
 
-        {paso === 4 && previsualizacion && (
+        {paso === 5 && previsualizacion && (
           <div>
             {tipo === "ventas_web" && (
               <div style={{ background: "#F9F8FD", border: "1px solid #E4E1F7", borderRadius: 12, padding: "14px 16px", marginBottom: 20 }}>

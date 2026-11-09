@@ -833,6 +833,10 @@ export const MetaContextoSchema = z.object({
   // Fracción 0-1 (no porcentaje) -- el punto medio de la categoría que
   // eligió el usuario en el chat, ver TASA_CIERRE_POR_CATEGORIA.
   tasa_cierre: z.number().min(0).max(1).optional(),
+  // Referencia viva al catálogo (app/lib/productos.ts) cuando el
+  // producto venía de ahí -- opcional porque el chat sigue aceptando
+  // "producto" en texto libre sin pasar por el catálogo.
+  producto_id: z.string().uuid().optional(),
   origen: z.enum(["conversacion", "formulario"]),
   version: z.literal(1),
 });

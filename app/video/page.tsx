@@ -5,6 +5,7 @@ import dynamic from "next/dynamic";
 import { useRouter } from "next/navigation";
 import CargandoQuiubot from "@/app/components/CargandoQuiubot";
 import SelectorAlbum, { type ItemAlbum } from "@/app/components/SelectorAlbum";
+import SelectorProducto, { resolverProductoAlUsar, valorVacioSelectorProducto, type ValorSelectorProducto } from "@/app/components/SelectorProducto";
 import { OBJETIVOS_INFO } from "@/app/lib/objetivosInfo";
 import type { AnalisisPieza } from "@/app/lib/analisisPieza";
 import { GuionSchema, type Guion, type ObjetivoVideo, type Escena } from "@/video/guion.schema";
@@ -50,6 +51,10 @@ export default function VideoNuevoPage() {
   const [objetivoId, setObjetivoId] = useState<ObjetivoVideo | null>(null);
   const [productoServicio, setProductoServicio] = useState("");
   const [datosProducto, setDatosProducto] = useState("");
+  // Espejado hacia productoServicio/datosProducto (ver
+  // alCambiarProductoCatalogo) para no cambiar el contrato de
+  // /api/video/guion -- sigue mandando los mismos dos campos de texto.
+  const [productoCatalogo, setProductoCatalogo] = useState<ValorSelectorProducto>(valorVacioSelectorProducto());
   const [duracionS, setDuracionS] = useState<number>(10);
   const [usuarioCta, setUsuarioCta] = useState("");
   const [pistaId, setPistaId] = useState<string | null>(null);
@@ -98,6 +103,13 @@ export default function VideoNuevoPage() {
     })();
   }, []);
 
+  function alCambiarProductoCatalogo(v: ValorSelectorProducto) {
+    setProductoCatalogo(v);
+    setProductoServicio(v.nombre);
+    const partes = [v.destacar?.trim(), v.precioCop ? `Precio: $${v.precioCop.toLocaleString("es-CO")}` : null].filter(Boolean);
+    setDatosProducto(partes.join(". "));
+  }
+
   function elegirObjetivo(id: ObjetivoVideo) {
     setObjetivoId(id);
     const r = RECETAS[id];
@@ -123,6 +135,7 @@ export default function VideoNuevoPage() {
     setErrorMsg(null);
     setPaso("generando");
     try {
+      await resolverProductoAlUsar(productoCatalogo);
       const res = await fetch("/api/video/guion", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
@@ -291,24 +304,11 @@ export default function VideoNuevoPage() {
             )}
 
             <h2 style={{ fontSize: 15, fontWeight: 700, marginBottom: 12, color: "#1a1a1a" }}>2. Producto o servicio</h2>
-            <textarea
-              value={productoServicio}
-              onChange={(e) => setProductoServicio(e.target.value)}
-              placeholder="Qué vendes o qué servicio ofreces"
-              rows={2}
-              style={{ width: "100%", padding: 10, borderRadius: 8, border: "1px solid #ddd", fontSize: 13, marginBottom: 16, fontFamily: "inherit" }}
-            />
+            <div style={{ marginBottom: 16 }}>
+              <SelectorProducto valor={productoCatalogo} onCambio={alCambiarProductoCatalogo} />
+            </div>
 
-            <h2 style={{ fontSize: 15, fontWeight: 700, marginBottom: 12, color: "#1a1a1a" }}>3. Qué destacar</h2>
-            <textarea
-              value={datosProducto}
-              onChange={(e) => setDatosProducto(e.target.value)}
-              placeholder="Precio, envíos, garantía, diferenciales reales -- la IA nunca inventa datos que no vengan aquí"
-              rows={2}
-              style={{ width: "100%", padding: 10, borderRadius: 8, border: "1px solid #ddd", fontSize: 13, marginBottom: 16, fontFamily: "inherit" }}
-            />
-
-            <h2 style={{ fontSize: 15, fontWeight: 700, marginBottom: 12, color: "#1a1a1a" }}>4. Piezas del álbum (hasta 3)</h2>
+            <h2 style={{ fontSize: 15, fontWeight: 700, marginBottom: 12, color: "#1a1a1a" }}>3. Piezas del álbum (hasta 3)</h2>
             <div style={{ display: "flex", gap: 8, flexWrap: "wrap", marginBottom: 8 }}>
               {piezasElegidas.map(([id, pieza]) => {
                 const analisis = analisisPorPieza[id];
@@ -366,7 +366,7 @@ export default function VideoNuevoPage() {
             )}
             <div style={{ marginBottom: 20 }} />
 
-            <h2 style={{ fontSize: 15, fontWeight: 700, marginBottom: 12, color: "#1a1a1a" }}>5. Duración{receta ? ` (${receta.duracionMinS}-${receta.duracionMaxS}s)` : ""}</h2>
+            <h2 style={{ fontSize: 15, fontWeight: 700, marginBottom: 12, color: "#1a1a1a" }}>4. Duración{receta ? ` (${receta.duracionMinS}-${receta.duracionMaxS}s)` : ""}</h2>
             <input
               type="number"
               value={duracionS}
@@ -376,7 +376,7 @@ export default function VideoNuevoPage() {
               style={{ width: 100, padding: 8, borderRadius: 8, border: "1px solid #ddd", fontSize: 13, marginBottom: 20 }}
             />
 
-            <h2 style={{ fontSize: 15, fontWeight: 700, marginBottom: 12, color: "#1a1a1a" }}>6. Música</h2>
+            <h2 style={{ fontSize: 15, fontWeight: 700, marginBottom: 12, color: "#1a1a1a" }}>5. Música</h2>
             <select
               value={pistaId || ""}
               onChange={(e) => setPistaId(e.target.value || null)}
@@ -392,7 +392,7 @@ export default function VideoNuevoPage() {
 
             {objetivoId === "seguidores_instagram" && (
               <>
-                <h2 style={{ fontSize: 15, fontWeight: 700, marginBottom: 12, color: "#1a1a1a" }}>7. @usuario de Instagram</h2>
+                <h2 style={{ fontSize: 15, fontWeight: 700, marginBottom: 12, color: "#1a1a1a" }}>6. @usuario de Instagram</h2>
                 <input
                   value={usuarioCta}
                   onChange={(e) => setUsuarioCta(e.target.value)}

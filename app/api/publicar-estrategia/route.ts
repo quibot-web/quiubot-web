@@ -20,7 +20,7 @@ export async function POST(req: NextRequest) {
   }
 
   const emailBusqueda = session.user.email.trim().toLowerCase();
-  const { estrategia, creativos, fuente_creativos, efectividad_final, meta_id, tipo_contenido, descripcion_servicio, datos_producto } = await req.json();
+  const { estrategia, creativos, fuente_creativos, efectividad_final, meta_id, tipo_contenido, descripcion_servicio, datos_producto, producto_id } = await req.json();
 
   if (!estrategia) {
     return NextResponse.json({ error: "Falta la estrategia a publicar" }, { status: 400 });
@@ -124,6 +124,7 @@ export async function POST(req: NextRequest) {
       tipoContenido: tipo_contenido,
       descripcionServicio: typeof descripcion_servicio === "string" ? descripcion_servicio : null,
       datosProducto: typeof datos_producto === "string" ? datos_producto : null,
+      productoId: typeof producto_id === "string" ? producto_id : null,
     }).catch(async (err) => {
       console.error("Error no manejado en procesarPublicarEstrategia:", err);
       await supabaseAdmin.from("trabajos_ia").update({ estado: "fallida", error: MENSAJE_SIN_CONFIRMAR }).eq("id", trabajo.id);
