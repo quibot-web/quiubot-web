@@ -3,7 +3,7 @@ import { useState, useRef, useEffect, Suspense } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 import { ShoppingBag, Target, Camera, Sparkles, Check, Shirt, Smartphone, UtensilsCrossed, Plane, Briefcase, Palmtree, Video, Watch, Bot, FolderOpen, Dna, X, ShoppingCart, Tag, DollarSign, CheckCircle2, MessageCircle, Phone, Send, Megaphone, Eye, Heart, Star, RefreshCw, Repeat, Users, MousePointerClick, TrendingUp, Zap, Globe, Image as ImageIcon, Play, Upload, Lock } from "lucide-react";
 import ElegirEstrategia, { type CreativoPropio, type CarruselConfig } from "@/app/components/ElegirEstrategia";
-import SelectorAlbum from "@/app/components/SelectorAlbum";
+import SelectorAlbum, { type ItemAlbum } from "@/app/components/SelectorAlbum";
 import TutorialVideo from "@/app/components/TutorialVideo";
 import TourGuiado from "@/app/components/TourGuiado";
 import ProgresoPasos from "@/app/components/ProgresoPasos";
@@ -1165,6 +1165,14 @@ function EstrategiaContent() {
   // precio (ver alCambiarProductoCatalogo) para que el resto del
   // formulario y los payloads que ya existían no tengan que cambiar.
   const [productoCatalogo, setProductoCatalogo] = useState<ValorSelectorProducto>(valorVacioSelectorProducto());
+  const [errorProducto, setErrorProducto] = useState<string | null>(null);
+  const [productoValido, setProductoValido] = useState(true);
+  const [mostrarSelectorAlbumFotos, setMostrarSelectorAlbumFotos] = useState(false);
+  // URLs de imagenesBase64 que vinieron SOLAS del producto elegido (no
+  // subidas a mano) -- al cambiar de producto, solo estas se
+  // reemplazan por las del nuevo; lo que el cliente agregó a mano para
+  // esta campaña se queda tal cual.
+  const [fotosDesdeProducto, setFotosDesdeProducto] = useState<Set<string>>(new Set());
   const [imagenesBase64, setImagenesBase64] = useState<string[]>([]);
   const [procesandoImagenes, setProcesandoImagenes] = useState(false);
   const [arrastrandoImagenes, setArrastrandoImagenes] = useState(false);
@@ -1636,18 +1644,43 @@ function EstrategiaContent() {
   // viajando aparte, en precio/mostrar_precio, igual que siempre).
   function alCambiarProductoCatalogo(v: ValorSelectorProducto) {
     setProductoCatalogo(v);
+    setErrorProducto(null);
     const texto = [v.nombre.trim(), v.destacar?.trim()].filter(Boolean).join(". ");
     if (tipoContenido === "servicio") setDescripcionServicio(texto);
     else setDatosProducto(texto);
     setPrecio(v.precioCop);
     if (!v.precioCop) setMostrarPrecio(false);
+
+    // Las fotos del producto elegido se cargan solas como fotos de la
+    // campaña -- se quitan primero las del producto anterior (nunca lo
+    // que el cliente agregó a mano) y se agregan las nuevas, hasta el
+    // máximo de la campaña.
+    const nuevasUrls = v.fotosProducto.map((f) => f.url_imagen);
+    setImagenesBase64((prev) => {
+      const sinLasDelProductoAnterior = prev.filter((src) => !fotosDesdeProducto.has(src));
+      const cupoLibre = MAX_IMAGENES_PRODUCTO - sinLasDelProductoAnterior.length;
+      return [...sinLasDelProductoAnterior, ...nuevasUrls.slice(0, Math.max(0, cupoLibre))];
+    });
+    setFotosDesdeProducto(new Set(nuevasUrls));
   }
 
   // Guarda/actualiza el catálogo según lo elegido en el paso de producto
   // -- se llama una sola vez, al salir de ese paso (no en cada tecla).
   async function avanzarDesdePaso2() {
-    await resolverProductoAlUsar(productoCatalogo);
+    const { error: errorAlGuardar } = await resolverProductoAlUsar(productoCatalogo);
+    if (errorAlGuardar && !productoCatalogo.productoId) {
+      setErrorProducto(errorAlGuardar);
+      return;
+    }
     setStep("objetivo");
+  }
+
+  function agregarFotosDesdeAlbum(items: ItemAlbum[]) {
+    setImagenesBase64((prev) => {
+      const cupoLibre = MAX_IMAGENES_PRODUCTO - prev.length;
+      return [...prev, ...items.slice(0, Math.max(0, cupoLibre)).map((it) => it.url_imagen)];
+    });
+    setMostrarSelectorAlbumFotos(false);
   }
 
   // Requisito previo: sin ADN de marca sintetizado, no se puede usar el
@@ -3276,13 +3309,41 @@ function EstrategiaContent() {
             <button onClick={() => setStep("tipo")} style={{ background: "none", border: "none", color: "#7F77DD", cursor: "pointer", fontSize: 13, padding: 0, alignSelf: "flex-start" }}>
               ← Cambiar tipo
             </button>
-            <p style={{ fontSize: 15, fontWeight: 600, color: "#1a1a1a" }}>
-              2. {tipoContenido === "servicio" ? "Sube la pieza gráfica de tu servicio" : "Sube fotos de tu producto"}
+            <p style={{ fontSize: 15, fontWeight: 600, color: "#1a1a1a" }}>2. ¿Qué vas a promocionar?</p>
+            <p style={{ fontSize: 13, color: "#666", marginTop: -12 }}>Elige uno de tus productos o agrega uno nuevo.</p>
+
+            {(tipoContenido === "servicio" || tipoContenido === "producto") && (
+              <div>
+                <SelectorProducto
+                  tipoContenido={tipoContenido}
+                  valor={productoCatalogo}
+                  onCambio={alCambiarProductoCatalogo}
+                  errorGuardado={errorProducto}
+                  onValidezCambia={setProductoValido}
+                />
+                <p style={{ fontSize: 11.5, color: "#999", margin: "6px 0 0" }}>
+                  La IA usa esto para escribir tus anuncios. Mientras más concreto, mejor venden.
+                </p>
+                {tipoContenido === "producto" && tieneInfoAdicional === false && (
+                  <a
+                    href="/marca"
+                    style={{ display: "inline-block", marginTop: 8, fontSize: 12, color: "#7F77DD", textDecoration: "none" }}
+                  >
+                    Tus anuncios venden mejor si completas lo que tus clientes deben saber de tu negocio →
+                  </a>
+                )}
+              </div>
+            )}
+
+            <p style={{ fontSize: 15, fontWeight: 600, color: "#1a1a1a", margin: 0 }}>
+              {tipoContenido === "servicio" ? "Pieza gráfica de tu servicio" : "Fotos de tu producto"}
             </p>
             <p style={{ fontSize: 13, color: "#666", marginTop: -12 }}>
-              {tipoContenido === "servicio"
-                ? "Sube de 1 a 3 piezas ya diseñadas (por ti o con otro editor/IA) que muestren la información de tu servicio: destino, precio, fecha, beneficio principal, etc. Si subes varias, cada una debe aportar algo distinto para entender mejor tu servicio."
-                : "Sube de 1 a 3 fotos de tu producto — si subes varias, que sean ángulos distintos del mismo producto (frente, detalle, en uso, empaque, etc.) para que la IA lo entienda mejor."}
+              {productoCatalogo.fotosProducto.length > 0
+                ? `Son las fotos guardadas de "${productoCatalogo.nombre}". Puedes quitar o agregar para esta campaña.`
+                : tipoContenido === "servicio"
+                  ? "Sube de 1 a 3 piezas ya diseñadas (por ti o con otro editor/IA) que muestren la información de tu servicio: destino, precio, fecha, beneficio principal, etc. Si subes varias, cada una debe aportar algo distinto para entender mejor tu servicio."
+                  : "Sube de 1 a 3 fotos de tu producto — si subes varias, que sean ángulos distintos del mismo producto (frente, detalle, en uso, empaque, etc.) para que la IA lo entienda mejor."}
             </p>
 
             <div data-tour="estrategia-upload" style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(130px, 1fr))", gap: 12 }}>
@@ -3300,7 +3361,6 @@ function EstrategiaContent() {
               ))}
               {imagenesBase64.length < MAX_IMAGENES_PRODUCTO && (
                 <div
-                  onClick={() => fileRef.current?.click()}
                   onDragOver={(e) => { e.preventDefault(); setArrastrandoImagenes(true); }}
                   onDragLeave={() => setArrastrandoImagenes(false)}
                   onDrop={handleDropImagenes}
@@ -3308,7 +3368,7 @@ function EstrategiaContent() {
                     aspectRatio: "1",
                     border: arrastrandoImagenes ? "1.5px dashed #534AB7" : "1.5px dashed #7F77DD",
                     borderRadius: 12, display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center",
-                    cursor: "pointer", background: arrastrandoImagenes ? "#F3F2FE" : "#fcfcff", gap: 6,
+                    cursor: "pointer", background: arrastrandoImagenes ? "#F3F2FE" : "#fcfcff", gap: 4, padding: 6, textAlign: "center",
                   }}
                 >
                   {procesandoImagenes ? (
@@ -3319,13 +3379,24 @@ function EstrategiaContent() {
                   ) : (
                     <>
                       <Camera size={22} color="#534AB7" strokeWidth={2} aria-hidden="true" />
-                      <span style={{ fontSize: 11, color: "#534AB7", fontWeight: 500, textAlign: "center", padding: "0 8px" }}>
+                      <button
+                        type="button"
+                        onClick={() => fileRef.current?.click()}
+                        style={{ border: "none", background: "none", color: "#534AB7", fontSize: 11, fontWeight: 600, cursor: "pointer", padding: 0 }}
+                      >
                         {arrastrandoImagenes
                           ? "Suelta tus imágenes aquí"
                           : imagenesBase64.length === 0
                             ? (tipoContenido === "servicio" ? "Subir pieza gráfica" : "Subir foto del producto")
-                            : "Subir otra"}
-                      </span>
+                            : "Agregar o cambiar"}
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => setMostrarSelectorAlbumFotos(true)}
+                        style={{ border: "none", background: "none", color: "#7F77DD", fontSize: 10.5, fontWeight: 600, cursor: "pointer", padding: 0 }}
+                      >
+                        Elegir del álbum
+                      </button>
                     </>
                   )}
                 </div>
@@ -3334,28 +3405,18 @@ function EstrategiaContent() {
             </div>
 
             <p style={{ fontSize: 12, color: "#999", marginTop: -12 }}>
-              {imagenesBase64.length}/{MAX_IMAGENES_PRODUCTO} subidas · mínimo {MIN_IMAGENES_PRODUCTO}
+              {imagenesBase64.length}/{MAX_IMAGENES_PRODUCTO} subidas · mínimo {MIN_IMAGENES_PRODUCTO}. Varias a la vez, del computador o del álbum.
             </p>
 
-            {(tipoContenido === "servicio" || tipoContenido === "producto") && (
-              <div>
-                <label style={{ fontSize: 13, fontWeight: 600, color: "#1a1a1a", display: "block", marginBottom: 6 }}>
-                  {tipoContenido === "servicio" ? "¿Qué servicio es?" : "¿Qué producto es?"}{" "}
-                  <span style={{ fontWeight: 400, color: "#999" }}>(opcional)</span>
-                </label>
-                <SelectorProducto tipoContenido={tipoContenido} valor={productoCatalogo} onCambio={alCambiarProductoCatalogo} />
-                <p style={{ fontSize: 11.5, color: "#999", margin: "6px 0 0" }}>
-                  La IA usa esto para escribir tus anuncios. Mientras más concreto, mejor venden.
-                </p>
-                {tipoContenido === "producto" && tieneInfoAdicional === false && (
-                  <a
-                    href="/marca"
-                    style={{ display: "inline-block", marginTop: 8, fontSize: 12, color: "#7F77DD", textDecoration: "none" }}
-                  >
-                    Tus anuncios venden mejor si completas lo que tus clientes deben saber de tu negocio →
-                  </a>
-                )}
-              </div>
+            {mostrarSelectorAlbumFotos && (
+              <SelectorAlbum
+                titulo="Elige hasta 3 fotos para esta campaña"
+                multiple
+                maxSeleccion={MAX_IMAGENES_PRODUCTO - imagenesBase64.length}
+                onElegir={() => {}}
+                onElegirVarios={agregarFotosDesdeAlbum}
+                onCerrar={() => setMostrarSelectorAlbumFotos(false)}
+              />
             )}
 
             {!!productoCatalogo.precioCop && productoCatalogo.precioCop > 0 && (
@@ -3387,7 +3448,7 @@ function EstrategiaContent() {
               </div>
             )}
 
-            <button data-tour="estrategia-siguiente" onClick={avanzarDesdePaso2} disabled={imagenesBase64.length < MIN_IMAGENES_PRODUCTO || (mostrarPrecio && (!precio || precio <= 0))} style={{ background: (imagenesBase64.length < MIN_IMAGENES_PRODUCTO || (mostrarPrecio && (!precio || precio <= 0))) ? "#ccc" : "#534AB7", color: "#fff", border: "none", padding: "16px", borderRadius: 10, fontSize: 16, fontWeight: 600, cursor: (imagenesBase64.length < MIN_IMAGENES_PRODUCTO || (mostrarPrecio && (!precio || precio <= 0))) ? "not-allowed" : "pointer" }}>
+            <button data-tour="estrategia-siguiente" onClick={avanzarDesdePaso2} disabled={imagenesBase64.length < MIN_IMAGENES_PRODUCTO || (mostrarPrecio && (!precio || precio <= 0)) || !productoValido} style={{ background: (imagenesBase64.length < MIN_IMAGENES_PRODUCTO || (mostrarPrecio && (!precio || precio <= 0)) || !productoValido) ? "#ccc" : "#534AB7", color: "#fff", border: "none", padding: "16px", borderRadius: 10, fontSize: 16, fontWeight: 600, cursor: (imagenesBase64.length < MIN_IMAGENES_PRODUCTO || (mostrarPrecio && (!precio || precio <= 0)) || !productoValido) ? "not-allowed" : "pointer" }}>
               Siguiente paso
             </button>
           </div>

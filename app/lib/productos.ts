@@ -72,6 +72,19 @@ function normalizarNombre(nombre: string): string {
     .replace(/[̀-ͯ]/g, "");
 }
 
+// Nunca aportan nada a la comparación -- si dos nombres solo
+// comparten "de"/"para"/etc. eso no los hace el mismo producto.
+const PALABRAS_VACIAS = new Set([
+  "de", "la", "el", "los", "las", "un", "una", "unos", "unas", "y", "o",
+  "para", "con", "del", "al", "en", "por", "que", "su", "sus", "a",
+]);
+
+function palabrasSignificativas(nombre: string): string[] {
+  return normalizarNombre(nombre)
+    .split(/[^a-z0-9]+/)
+    .filter((p) => p.length >= 3 && !PALABRAS_VACIAS.has(p));
+}
+
 // Distancia de edición simple -- sin librería externa, solo para
 // nombres de productos (strings cortas, nunca párrafos).
 function distanciaLevenshtein(a: string, b: string): number {
@@ -85,15 +98,32 @@ function distanciaLevenshtein(a: string, b: string): number {
   return filas[a.length][b.length];
 }
 
+// ¿Esta palabra de un nombre se parece a esta otra palabra del otro
+// nombre? Igual, o una es prefijo largo de la otra ("impact" / "impacto"),
+// o difieren por un solo caracter (typo corto) -- nunca para palabras
+// cortas, donde cualquiera de estas reglas da demasiados falsos positivos.
+function palabrasParecidas(a: string, b: string): boolean {
+  if (a === b) return true;
+  if (a.length < 4 || b.length < 4) return false;
+  const corta = a.length <= b.length ? a : b;
+  const larga = a.length <= b.length ? b : a;
+  if (corta.length >= 5 && larga.startsWith(corta)) return true;
+  return distanciaLevenshtein(a, b) <= 1;
+}
+
 // ¿"nombreNuevo" se parece lo suficiente a alguno de los guardados
 // como para preguntar "¿es el mismo que '...'?" en vez de dejar crear
-// un duplicado? Heurística simple a propósito: mismo nombre
-// normalizado, uno contiene al otro, o distancia de edición chica
-// (typos / variaciones cortas) -- nunca compara nombres muy cortos
-// (3 letras o menos), donde cualquier heurística da falsos positivos.
+// un duplicado? Combina dos heurísticas: la frase completa normalizada
+// (contención, o distancia de edición chica -- typos/variaciones
+// cortas) y, por separado, si comparten alguna palabra significativa
+// igual/parecida ("pistola de impacto" vs "pistola Impact" comparten
+// "pistola", y "impact"≈"impacto" por prefijo). Nunca compara nombres
+// muy cortos (3 letras o menos), donde cualquier heurística da falsos
+// positivos.
 export function productoParecido(nombreNuevo: string, guardados: { nombre: string }[]): string | null {
   const normalizado = normalizarNombre(nombreNuevo);
   if (normalizado.length < 4) return null;
+  const palabrasNuevo = palabrasSignificativas(nombreNuevo);
 
   for (const g of guardados) {
     const otro = normalizarNombre(g.nombre);
@@ -101,6 +131,10 @@ export function productoParecido(nombreNuevo: string, guardados: { nombre: strin
     if (normalizado === otro) continue; // ya es exactamente igual -- eso lo bloquea el índice único, no esta pregunta.
     if (normalizado.includes(otro) || otro.includes(normalizado)) return g.nombre;
     if (distanciaLevenshtein(normalizado, otro) <= 2) return g.nombre;
+
+    const palabrasGuardado = palabrasSignificativas(g.nombre);
+    const compartenPalabra = palabrasNuevo.some((p1) => palabrasGuardado.some((p2) => palabrasParecidas(p1, p2)));
+    if (compartenPalabra) return g.nombre;
   }
   return null;
 }

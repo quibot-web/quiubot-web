@@ -1,6 +1,7 @@
 import "server-only";
 import { supabaseAdmin } from "@/lib/supabase";
 import { registrarError } from "@/lib/registrarError";
+import { aBase64 } from "@/app/lib/propuestas";
 
 // Mismo problema que ya resolvimos para crear_creativos (ver el
 // comentario en app/api/propuestas/[id]/subir-fotos/route.ts): el proxy
@@ -81,12 +82,19 @@ export async function procesarGeneracionEstrategia(
   const timeoutId = setTimeout(() => controller.abort(), TIMEOUT_N8N_MS);
 
   try {
+    // Las fotos elegidas del catálogo/álbum llegan como URL de
+    // Cloudinary (nunca base64) -- se convierten acá, antes de llamar
+    // a n8n, para que el webhook siga recibiendo exactamente lo mismo
+    // de siempre (un array de strings base64, nunca URLs).
+    const imagenesParaN8n = await Promise.all(
+      datos.imagenesBase64.map((img) => (img.startsWith("data:") ? img : aBase64({ tipo: "url", valor: img })))
+    );
     const n8nRes = await fetch("https://n8n.quiubot.site/webhook/generar_estrategia", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({
         email: datos.emailBusqueda,
-        imagenes_base64: datos.imagenesBase64,
+        imagenes_base64: imagenesParaN8n,
         objetivo: datos.objetivo,
         presupuesto_diario_cop: datos.presupuestoDiarioCop,
         openai_key: datos.openaiKey,

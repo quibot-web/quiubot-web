@@ -55,6 +55,12 @@ export default function VideoNuevoPage() {
   // alCambiarProductoCatalogo) para no cambiar el contrato de
   // /api/video/guion -- sigue mandando los mismos dos campos de texto.
   const [productoCatalogo, setProductoCatalogo] = useState<ValorSelectorProducto>(valorVacioSelectorProducto());
+  const [errorProducto, setErrorProducto] = useState<string | null>(null);
+  const [productoValido, setProductoValido] = useState(true);
+  // ids de medios que vinieron SOLOS del producto elegido -- al
+  // cambiar de producto, solo estos se quitan (lo elegido a mano para
+  // este video se queda tal cual).
+  const [mediosDesdeProducto, setMediosDesdeProducto] = useState<Set<string>>(new Set());
   const [duracionS, setDuracionS] = useState<number>(10);
   const [usuarioCta, setUsuarioCta] = useState("");
   const [pistaId, setPistaId] = useState<string | null>(null);
@@ -105,9 +111,20 @@ export default function VideoNuevoPage() {
 
   function alCambiarProductoCatalogo(v: ValorSelectorProducto) {
     setProductoCatalogo(v);
+    setErrorProducto(null);
     setProductoServicio(v.nombre);
     const partes = [v.destacar?.trim(), v.precioCop ? `Precio: $${v.precioCop.toLocaleString("es-CO")}` : null].filter(Boolean);
     setDatosProducto(partes.join(". "));
+
+    // Las fotos del producto elegido entran solas como piezas -- se
+    // quitan primero las del producto anterior (nunca lo elegido a
+    // mano) y se agregan las nuevas.
+    setMedios((prev) => {
+      const sinLasDelProductoAnterior = Object.fromEntries(Object.entries(prev).filter(([id]) => !mediosDesdeProducto.has(id)));
+      for (const foto of v.fotosProducto) sinLasDelProductoAnterior[foto.id] = { url: foto.url_imagen, tipo: "imagen" };
+      return sinLasDelProductoAnterior;
+    });
+    setMediosDesdeProducto(new Set(v.fotosProducto.map((f) => f.id)));
   }
 
   function elegirObjetivo(id: ObjetivoVideo) {
@@ -135,7 +152,12 @@ export default function VideoNuevoPage() {
     setErrorMsg(null);
     setPaso("generando");
     try {
-      await resolverProductoAlUsar(productoCatalogo);
+      const { error: errorAlGuardar } = await resolverProductoAlUsar(productoCatalogo);
+      if (errorAlGuardar && !productoCatalogo.productoId) {
+        setErrorProducto(errorAlGuardar);
+        setPaso("brief");
+        return;
+      }
       const res = await fetch("/api/video/guion", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
@@ -201,6 +223,38 @@ export default function VideoNuevoPage() {
     // se pide una sola vez por pieza -- si ya está en album_creativos.analisis
     // la ruta responde con en_cache:true sin volver a pagarlo.
     if (tipo === "imagen" && !analisisPorPieza[id]) {
+      setAnalizando(id);
+      fetch("/api/video/analizar-pieza", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ media_id: id }),
+      })
+        .then((r) => r.json())
+        .then((data) => {
+          if (data?.analisis) setAnalisisPorPieza((prev) => ({ ...prev, [id]: data.analisis }));
+        })
+        .catch(() => {})
+        .finally(() => setAnalizando((actual) => (actual === id ? null : actual)));
+    }
+  }
+
+  // Variante múltiple de elegirPiezaDesdeSelector -- solo tiene sentido
+  // al armar el brief ("+ Agregar", hasta 3 piezas); cambiar la pieza
+  // de una escena puntual sigue siendo de una sola, con la versión de
+  // arriba.
+  function elegirPiezasDesdeSelectorMultiple(items: ItemAlbum[]) {
+    setMedios((prev) => {
+      const siguiente = { ...prev };
+      for (const item of items) {
+        if (!item.id) continue;
+        siguiente[item.id] = { url: item.url_imagen, tipo: item.tipo === "video" ? "video" : "imagen" };
+      }
+      return siguiente;
+    });
+    setSelectorContexto(null);
+    for (const item of items) {
+      const id = item.id;
+      if (!id || item.tipo === "video" || analisisPorPieza[id]) continue;
       setAnalizando(id);
       fetch("/api/video/analizar-pieza", {
         method: "POST",
@@ -305,7 +359,12 @@ export default function VideoNuevoPage() {
 
             <h2 style={{ fontSize: 15, fontWeight: 700, marginBottom: 12, color: "#1a1a1a" }}>2. Producto o servicio</h2>
             <div style={{ marginBottom: 16 }}>
-              <SelectorProducto valor={productoCatalogo} onCambio={alCambiarProductoCatalogo} />
+              <SelectorProducto
+                valor={productoCatalogo}
+                onCambio={alCambiarProductoCatalogo}
+                errorGuardado={errorProducto}
+                onValidezCambia={setProductoValido}
+              />
             </div>
 
             <h2 style={{ fontSize: 15, fontWeight: 700, marginBottom: 12, color: "#1a1a1a" }}>3. Piezas del álbum (hasta 3)</h2>
@@ -404,7 +463,7 @@ export default function VideoNuevoPage() {
 
             <button
               type="button"
-              disabled={paso === "generando"}
+              disabled={paso === "generando" || !productoValido}
               onClick={generar}
               style={{
                 padding: "12px 24px",
@@ -501,7 +560,14 @@ export default function VideoNuevoPage() {
       </div>
 
       {selectorContexto !== null && (
-        <SelectorAlbum titulo="Elige una pieza del álbum" onElegir={elegirPiezaDesdeSelector} onCerrar={() => setSelectorContexto(null)} />
+        <SelectorAlbum
+          titulo={selectorContexto === "brief" ? "Elige hasta 3 piezas del álbum" : "Elige una pieza del álbum"}
+          onElegir={elegirPiezaDesdeSelector}
+          multiple={selectorContexto === "brief"}
+          maxSeleccion={selectorContexto === "brief" ? 3 - piezasElegidas.length : undefined}
+          onElegirVarios={elegirPiezasDesdeSelectorMultiple}
+          onCerrar={() => setSelectorContexto(null)}
+        />
       )}
     </div>
   );

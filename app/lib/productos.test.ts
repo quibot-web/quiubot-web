@@ -29,4 +29,16 @@ describe("productoParecido", () => {
   it("catálogo vacío nunca sugiere nada", () => {
     expect(productoParecido("Lo que sea", [])).toBeNull();
   });
+
+  it("caso real de staging: 'pistola Impact' sugiere 'Pistola de impacto XR200' (palabra en común + prefijo 'impact'≈'impacto')", () => {
+    expect(productoParecido("pistola Impact", [{ nombre: "Pistola de impacto XR200" }])).toBe("Pistola de impacto XR200");
+  });
+
+  it("palabras vacías compartidas (de, la, para...) nunca cuentan como coincidencia por sí solas", () => {
+    expect(productoParecido("Curso para emprendedores", [{ nombre: "Asesoría para negocios" }])).toBeNull();
+  });
+
+  it("palabras totalmente distintas, sin ningún parecido real, no sugieren nada", () => {
+    expect(productoParecido("Zapatos Deportivos", [{ nombre: "Camiseta Azul" }, { nombre: "Curso de Marketing Digital" }])).toBeNull();
+  });
 });

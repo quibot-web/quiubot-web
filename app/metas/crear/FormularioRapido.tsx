@@ -68,6 +68,8 @@ export default function FormularioRapido({
   const [paso, setPaso] = useState(prefill?.tipo ? 2 : 1);
   const [tipo, setTipo] = useState<TipoMeta | null>(prefill?.tipo ?? null);
   const [producto, setProducto] = useState<ValorSelectorProducto>(valorVacioSelectorProducto());
+  const [errorProducto, setErrorProducto] = useState<string | null>(null);
+  const [productoValido, setProductoValido] = useState(true);
   const [cantidad, setCantidad] = useState("");
   const [fechaFin, setFechaFin] = useState(prefill?.fechaFin ?? "");
   const [presupuesto, setPresupuesto] = useState(prefill?.presupuestoCop ? String(prefill.presupuestoCop) : "");
@@ -126,7 +128,16 @@ export default function FormularioRapido({
       // el paso de producto (checkbox "Guardar en mis productos" o
       // "Actualizar catálogo"/"Solo por ahora") -- nunca antes de este
       // punto, para no guardar nada mientras todavía estaba decidiendo.
-      const { productoId } = await resolverProductoAlUsar(producto);
+      const { productoId, error: errorAlGuardar } = await resolverProductoAlUsar(producto);
+      if (errorAlGuardar && !productoId) {
+        // Nombre duplicado u otro error de catálogo al crear uno nuevo
+        // -- se muestra en el paso de producto, nunca escondido, y no
+        // se sigue con la meta hasta que se resuelva.
+        setErrorProducto(errorAlGuardar);
+        setPaso(2);
+        setCargando(false);
+        return;
+      }
       const contexto = producto.nombre.trim()
         ? {
             producto: producto.nombre.trim(),
@@ -296,11 +307,19 @@ export default function FormularioRapido({
         {paso === 2 && (
           <div>
             <p style={{ fontSize: 14, color: "#666", margin: "0 0 18px" }}>¿Qué vas a promocionar?</p>
-            <SelectorProducto valor={producto} onCambio={setProducto} />
+            <SelectorProducto
+              valor={producto}
+              onCambio={(v) => {
+                setErrorProducto(null);
+                setProducto(v);
+              }}
+              errorGuardado={errorProducto}
+              onValidezCambia={setProductoValido}
+            />
             <div style={{ marginBottom: 14 }} />
             <div style={{ display: "flex", gap: 10 }}>
               <button style={estiloBotonSecundario} onClick={() => setPaso(1)}>← Atrás</button>
-              <button style={estiloBotonPrimario} onClick={() => setPaso(3)}>
+              <button style={{ ...estiloBotonPrimario, opacity: productoValido ? 1 : 0.5, cursor: productoValido ? "pointer" : "not-allowed" }} disabled={!productoValido} onClick={() => setPaso(3)}>
                 Continuar →
               </button>
             </div>

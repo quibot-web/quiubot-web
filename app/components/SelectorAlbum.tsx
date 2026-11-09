@@ -28,12 +28,20 @@ type Props = {
   onElegir: (item: ItemAlbum) => void;
   onCerrar: () => void;
   yaUsadaPorUrl?: Record<string, string>;
+  // Modo selección múltiple (ej. fotos de un producto, varias piezas
+  // de una campaña): tocar una pieza la marca en vez de elegirla ya
+  // mismo, y una barra abajo confirma "Agregar N" -- igual que /album.
+  // Con multiple:true, onElegir nunca se llama; se usa onElegirVarios.
+  multiple?: boolean;
+  onElegirVarios?: (items: ItemAlbum[]) => void;
+  maxSeleccion?: number;
 };
 
-export default function SelectorAlbum({ titulo, onElegir, onCerrar, yaUsadaPorUrl }: Props) {
+export default function SelectorAlbum({ titulo, onElegir, onCerrar, yaUsadaPorUrl, multiple, onElegirVarios, maxSeleccion }: Props) {
   const album = useAlbumPaginado();
   const [subiendo, setSubiendo] = useState(false);
   const [errorSubida, setErrorSubida] = useState<string | null>(null);
+  const [seleccionIds, setSeleccionIds] = useState<Set<string>>(new Set());
 
   const scrollRef = useRef<HTMLDivElement>(null);
   const centinelaRef = useRef<HTMLDivElement>(null);
@@ -75,6 +83,29 @@ export default function SelectorAlbum({ titulo, onElegir, onCerrar, yaUsadaPorUr
 
   const grupos = agruparPorFecha(album.items);
   const vacio = !album.cargandoInicial && album.items.length === 0 && !album.errorMsg;
+  const tope = maxSeleccion ?? Infinity;
+
+  function alTocarPieza(item: ItemAlbum) {
+    if (!multiple) {
+      onElegir(item);
+      return;
+    }
+    if (!item.id) return;
+    setSeleccionIds((prev) => {
+      const next = new Set(prev);
+      if (next.has(item.id!)) {
+        next.delete(item.id!);
+      } else if (next.size < tope) {
+        next.add(item.id!);
+      }
+      return next;
+    });
+  }
+
+  function confirmarSeleccionMultiple() {
+    const elegidos = album.items.filter((it) => it.id && seleccionIds.has(it.id));
+    onElegirVarios?.(elegidos);
+  }
 
   return (
     <div
@@ -138,7 +169,9 @@ export default function SelectorAlbum({ titulo, onElegir, onCerrar, yaUsadaPorUr
                         key={item.id || item.public_id || `${grupo.titulo}-${i}`}
                         item={item}
                         yaUsadaEn={yaUsadaPorUrl?.[item.url_imagen]}
-                        onClick={() => onElegir(item)}
+                        modoSeleccion={multiple}
+                        seleccionado={!!item.id && seleccionIds.has(item.id)}
+                        onClick={() => alTocarPieza(item)}
                       />
                     ))}
                   </div>
@@ -170,6 +203,27 @@ export default function SelectorAlbum({ titulo, onElegir, onCerrar, yaUsadaPorUr
               de disparar después del primer cambio de filtro. */}
           <div ref={centinelaRef} style={{ height: 1 }} />
         </div>
+
+        {multiple && seleccionIds.size > 0 && (
+          <div
+            onClick={(e) => e.stopPropagation()}
+            style={{
+              display: "flex", alignItems: "center", justifyContent: "space-between", gap: 10,
+              padding: "10px 1.5rem", borderTop: "1px solid #E9E7EE", flexShrink: 0,
+            }}
+          >
+            <span style={{ fontSize: 13, fontWeight: 600, color: "#1B1A22" }}>
+              {seleccionIds.size} seleccionada{seleccionIds.size !== 1 ? "s" : ""}
+              {Number.isFinite(tope) ? ` de ${tope}` : ""}
+            </span>
+            <button
+              onClick={confirmarSeleccionMultiple}
+              style={{ border: "none", background: "#5546B8", color: "#fff", borderRadius: 12, padding: "9px 16px", fontSize: 13.5, fontWeight: 700, cursor: "pointer" }}
+            >
+              Agregar {seleccionIds.size}
+            </button>
+          </div>
+        )}
       </div>
     </div>
   );
