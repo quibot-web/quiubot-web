@@ -60,6 +60,7 @@ function construirContextoTexto(contexto: ContextoCuentaDirector): string {
     `- Metas activas: ${contexto.metasActivas.length === 0 ? "ninguna" : contexto.metasActivas.map(formatoMeta).join("; ")}`,
     `- Campañas activas: ${contexto.campanasActivas}`,
     `- Propuestas pendientes de aprobar: ${contexto.propuestasPendientes}`,
+    `- Productos y servicios guardados: ${contexto.productosActivos.length === 0 ? "ninguno" : contexto.productosActivos.map((p) => p.nombre).join(", ")}`,
   ];
   return lineas.join("\n");
 }

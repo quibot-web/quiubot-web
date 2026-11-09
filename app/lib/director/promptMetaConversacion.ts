@@ -4,6 +4,7 @@
 // video/promptGuion.ts -- el texto fijo de reglas vive en un solo
 // lugar, se puede ajustar sin tocar la lógica de la ruta.
 import type { BorradorMeta } from "./borradorMeta.schema";
+import type { TipoProducto } from "@/app/lib/productos";
 
 export interface ContextoNegocioDirector {
   nombreNegocio: string | null;
@@ -15,6 +16,10 @@ export interface ContextoNegocioDirector {
   // (null si nunca creó ninguna) -- para poder sugerir "¿seguimos con
   // algo parecido?" en vez de empezar siempre de cero.
   metaAnteriorResumen: string | null;
+  // Catálogo real (ver app/lib/productos.ts) -- para que el campo
+  // "producto" ofrezca estos nombres como opciones, nunca ejemplos
+  // inventados ("Producto A", "Servicio X").
+  productos: { nombre: string; tipo: TipoProducto }[];
 }
 
 const REGLAS = `Eres el Director de Quiubot: conversas con el dueño de un negocio colombiano para armar una meta de publicidad, en vez de hacerle llenar un formulario. Español colombiano, tuteo, cercano, directo -- nunca suenes a formulario leído en voz alta ni a corporativo.
@@ -40,7 +45,7 @@ Nunca asumas en silencio: después de inferir el tipo, dilo en tu "respuesta" (e
 
 CAMPOS DEL BORRADOR ("borrador_parcial" -- solo manda los que cambiaron en este turno, nunca repitas los que no):
 - tipo: uno de los 6 valores de arriba.
-- producto: qué producto o servicio quiere impulsar (texto libre, puede incluir precio y condiciones si el cliente las da).
+- producto: qué producto o servicio quiere impulsar (texto libre, puede incluir precio y condiciones si el cliente las da). Si el CONTEXTO DEL NEGOCIO trae productos guardados, ofrécelos como "opciones" (sus nombres reales, tal cual aparecen ahí) -- nunca inventes nombres de ejemplo. Si no tiene ninguno guardado, pregúntale cuál es en texto libre y decile que se lo guardas para la próxima vez.
 - precio_cop: si el cliente dio un precio del producto (número, sin puntos ni signos).
 - tasa_cierre_categoria: SOLO para "conversaciones_whatsapp" y "leads" -- uno de "1_de_10", "2_3_de_10", "4_5_de_10", "mas_5_de_10", "no_sabe".
 - presupuesto_cop: cuánto puede invertir en este plazo (número).
@@ -63,6 +68,11 @@ function seccionContexto(contexto: ContextoNegocioDirector): string {
   if (contexto.metaAnteriorResumen) {
     lineas.push(`- Su meta más reciente (ya terminada): ${contexto.metaAnteriorResumen}. Puedes ofrecer seguir con algo parecido en vez de preguntar todo de cero.`);
   }
+  lineas.push(
+    contexto.productos.length > 0
+      ? `- Productos y servicios guardados: ${contexto.productos.map((p) => p.nombre).join(", ")}.`
+      : `- Todavía no tiene ningún producto o servicio guardado.`
+  );
   return lineas.join("\n");
 }
 

@@ -6,6 +6,7 @@ import { supabaseAdmin } from "@/lib/supabase";
 import { obtenerSaludInstagram } from "@/app/lib/metaInstagramSalud";
 import { obtenerPropuestasPendientes } from "@/app/lib/propuestas";
 import { calcularAvanceMeta } from "@/app/lib/metas";
+import type { TipoProducto } from "@/app/lib/productos";
 
 export type UsuarioContextoCuenta = {
   id: string;
@@ -40,13 +41,17 @@ export type ContextoCuentaDirector = {
   metasActivas: { id: string; tipo: string; cantidadObjetivo: number; fechaFin: string; estado: "activa" | "pausada"; conversiones: number; diasRestantes: number }[];
   campanasActivas: number;
   propuestasPendientes: number;
+  // Catálogo real (ver app/lib/productos.ts) -- ordenado por
+  // ultimo_uso_en, para que el Director responda con honestidad sobre
+  // qué hay guardado en vez de inventarlo.
+  productosActivos: { id: string; tipo: TipoProducto; nombre: string; precioCop: number | null }[];
 };
 
 export async function obtenerContextoCuenta(usuario: UsuarioContextoCuenta): Promise<ContextoCuentaDirector> {
   const tokenVencido = !!(usuario.meta_token_expira && new Date(usuario.meta_token_expira) <= new Date());
   const metaConectado = !!usuario.meta_ad_account_id && !tokenVencido;
 
-  const [metasRes, campanasRes, saludInstagram, propuestasPendientes] = await Promise.all([
+  const [metasRes, campanasRes, saludInstagram, propuestasPendientes, productosRes] = await Promise.all([
     supabaseAdmin
       .from("metas")
       .select("id, tipo, cantidad_objetivo, fecha_inicio, fecha_fin, valor_inicial, pausado_autopiloto")
@@ -59,6 +64,13 @@ export async function obtenerContextoCuenta(usuario: UsuarioContextoCuenta): Pro
       .eq("estado", "activa"),
     obtenerSaludInstagram({ meta_page_id: usuario.meta_page_id, meta_access_token: usuario.meta_access_token }),
     obtenerPropuestasPendientes(usuario.id),
+    supabaseAdmin
+      .from("productos")
+      .select("id, tipo, nombre, precio_cop")
+      .eq("user_id", usuario.id)
+      .eq("activo", true)
+      .order("ultimo_uso_en", { ascending: false, nullsFirst: false })
+      .order("creado_en", { ascending: false }),
   ]);
 
   const metasActivas = await Promise.all(
@@ -109,5 +121,6 @@ export async function obtenerContextoCuenta(usuario: UsuarioContextoCuenta): Pro
     metasActivas,
     campanasActivas: campanasRes.count ?? 0,
     propuestasPendientes: propuestasPendientes.length,
+    productosActivos: (productosRes.data ?? []).map((p) => ({ id: p.id as string, tipo: p.tipo as TipoProducto, nombre: p.nombre as string, precioCop: (p.precio_cop as number | null) ?? null })),
   };
 }

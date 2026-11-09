@@ -30,7 +30,7 @@ const MODELO_DIRECTOR_META = "gpt-4o";
 // no preguntarlo de nuevo (ver promptMetaConversacion.ts). Movido tal
 // cual desde /api/metas/conversacion.
 export async function construirContextoNegocio(usuario: { id: string; email: string }): Promise<ContextoNegocioDirector> {
-  const [{ data: marca }, { data: metaAnterior }] = await Promise.all([
+  const [{ data: marca }, { data: metaAnterior }, { data: productos }] = await Promise.all([
     supabaseAdmin.from("marcas").select("adn_marca, nombre_marca, ciudades_cobertura, pais_cobertura").eq("email", usuario.email).maybeSingle(),
     supabaseAdmin
       .from("metas")
@@ -40,6 +40,13 @@ export async function construirContextoNegocio(usuario: { id: string; email: str
       .order("actualizado_en", { ascending: false })
       .limit(1)
       .maybeSingle(),
+    supabaseAdmin
+      .from("productos")
+      .select("nombre, tipo")
+      .eq("user_id", usuario.id)
+      .eq("activo", true)
+      .order("ultimo_uso_en", { ascending: false, nullsFirst: false })
+      .order("creado_en", { ascending: false }),
   ]);
 
   const adn = (marca?.adn_marca as { titular?: string | null; frase_corta?: string | null } | null) ?? null;
@@ -53,6 +60,7 @@ export async function construirContextoNegocio(usuario: { id: string; email: str
     metaAnteriorResumen: metaAnterior
       ? `${metaAnterior.cantidad_objetivo} de tipo "${metaAnterior.tipo}" con presupuesto de ${metaAnterior.presupuesto_maximo_cop} COP`
       : null,
+    productos: productos ?? [],
   };
 }
 
