@@ -216,4 +216,30 @@ describe("POST /api/metas", () => {
 
     expect(rpcMock).toHaveBeenCalledWith("crear_meta_completa", expect.objectContaining({ p_valor_inicial: 1234 }));
   });
+
+  it("contexto con producto_id del catálogo pasa tal cual a la RPC (la copia de los datos usados)", async () => {
+    rpcMock.mockResolvedValue({ data: { id: "meta-1" }, error: null });
+
+    await POST(
+      req({
+        ...BODY_VALIDO,
+        contexto: { producto: "Camiseta Azul", precio_cop: 50000, producto_id: "11111111-1111-4111-8111-111111111111", origen: "formulario", version: 1 },
+      })
+    );
+
+    expect(rpcMock).toHaveBeenCalledWith(
+      "crear_meta_completa",
+      expect.objectContaining({
+        p_contexto: expect.objectContaining({ producto: "Camiseta Azul", producto_id: "11111111-1111-4111-8111-111111111111" }),
+      })
+    );
+  });
+
+  it("rechaza un producto_id que no es un uuid válido, antes de llamar a la RPC", async () => {
+    const res = await POST(
+      req({ ...BODY_VALIDO, contexto: { producto: "Camiseta Azul", producto_id: "no-es-un-uuid", origen: "formulario", version: 1 } })
+    );
+    expect(res.status).toBe(400);
+    expect(rpcMock).not.toHaveBeenCalled();
+  });
 });
