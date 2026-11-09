@@ -1,25 +1,13 @@
 import { auth } from "@/auth";
 import { NextRequest, NextResponse } from "next/server";
 import { supabaseAdmin } from "@/lib/supabase";
-import { calcularAvanceMeta, verificarRequisitosMeta, MetaContextoSchema, type TipoMeta, type MetaContexto } from "@/app/lib/metas";
+import { calcularAvanceMeta, verificarRequisitosMeta, MetaContextoSchema, ETIQUETA_TIPO_META, type TipoMeta, type MetaContexto } from "@/app/lib/metas";
 import { obtenerSaludInstagram } from "@/app/lib/metaInstagramSalud";
 import { hoyBogota } from "@/app/lib/fechaBogota";
 import { tieneAutopiloto } from "@/app/lib/planesConfig";
 import { MENSAJE_META_TOKEN_VENCIDO } from "@/app/lib/metaErrors";
 
 const TIPOS_VALIDOS: TipoMeta[] = ["conversaciones_whatsapp", "leads", "ventas_web", "visitas_web", "seguidores_facebook", "seguidores_instagram"];
-
-// Solo para el mensaje de "meta_creada" en el hilo del Director -- ver
-// ETIQUETA_TIPO en PanelDirectorGeneral.tsx para la etiqueta completa
-// que ya usa la tarjeta de resumen (esta es más corta, para una frase).
-const ETIQUETA_TIPO_META: Record<TipoMeta, string> = {
-  conversaciones_whatsapp: "conversaciones por WhatsApp",
-  leads: "leads",
-  ventas_web: "ventas en tu sitio web",
-  visitas_web: "visitas a tu sitio web",
-  seguidores_facebook: "seguidores de Facebook",
-  seguidores_instagram: "seguidores de Instagram",
-};
 
 export async function GET() {
   const session = await auth();

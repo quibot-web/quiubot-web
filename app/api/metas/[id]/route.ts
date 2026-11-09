@@ -2,7 +2,7 @@ import { auth } from "@/auth";
 import { NextRequest, NextResponse } from "next/server";
 import { supabaseAdmin } from "@/lib/supabase";
 import { tieneAutopiloto } from "@/app/lib/planesConfig";
-import { calcularAvanceMeta } from "@/app/lib/metas";
+import { calcularAvanceMeta, cambiarEstadoMeta, ETIQUETA_TIPO_META, type TipoMeta } from "@/app/lib/metas";
 
 // Trae UNA meta puntual por id -- hace falta desde que puede haber
 // varias activas a la vez (una por tipo): /estrategia la usa para
@@ -65,20 +65,35 @@ export async function PATCH(req: NextRequest, { params }: { params: Promise<{ id
     return NextResponse.json({ error: "Autopiloto todavía no está disponible." }, { status: 403 });
   }
 
+  // Para armar un mensaje del Director que diga de qué meta se trata
+  // ("Pausé tu meta de Leads") -- si no existe para este usuario, se
+  // corta acá con el mismo 404 de siempre, sin llamar a la RPC.
+  const { data: metaExistente } = await supabaseAdmin.from("metas").select("tipo").eq("id", id).eq("user_id", usuario.id).maybeSingle();
+  if (!metaExistente) {
+    return NextResponse.json({ error: "Meta no encontrada, o ya no está activa." }, { status: 404 });
+  }
+  const etiqueta = ETIQUETA_TIPO_META[metaExistente.tipo as TipoMeta];
+
   const body = await req.json();
-  const actualizacion: Record<string, unknown> = { actualizado_en: new Date().toISOString() };
   let tipoEvento: string;
+  let pausadoAutopiloto: boolean | undefined;
+  let estadoNuevo: "cancelada" | undefined;
+  let mensajeDirector: string;
 
   if (typeof body.pausado_autopiloto === "boolean") {
-    actualizacion.pausado_autopiloto = body.pausado_autopiloto;
-    tipoEvento = body.pausado_autopiloto ? "autopiloto_pausado" : "autopiloto_reanudado";
+    pausadoAutopiloto = body.pausado_autopiloto;
+    tipoEvento = body.pausado_autopiloto ? "meta_pausada" : "meta_reanudada";
+    mensajeDirector = body.pausado_autopiloto
+      ? `Pausé tu meta de ${etiqueta} -- avisame cuando quieras que la retome.`
+      : `Reanudé tu meta de ${etiqueta}.`;
   } else if (body.estado === "cancelada") {
     // Cancelar es definitivo (a diferencia de pausar, no hay "reanudar"
     // de vuelta desde acá) -- libera el tipo de inmediato para que el
     // cliente pueda crear otra meta del mismo tipo sin esperar a que
     // venza por fecha.
-    actualizacion.estado = "cancelada";
+    estadoNuevo = "cancelada";
     tipoEvento = "meta_cancelada";
+    mensajeDirector = `Cancelé tu meta de ${etiqueta}.`;
   } else {
     return NextResponse.json(
       { error: "Mandá pausado_autopiloto (true/false) o estado: \"cancelada\"." },
@@ -86,26 +101,24 @@ export async function PATCH(req: NextRequest, { params }: { params: Promise<{ id
     );
   }
 
-  const { data: meta, error } = await supabaseAdmin
-    .from("metas")
-    .update(actualizacion)
-    .eq("id", id)
-    .eq("user_id", usuario.id)
-    .eq("estado", "activa")
-    .select()
-    .single();
-
-  if (error || !meta) {
-    return NextResponse.json({ error: "Meta no encontrada, o ya no está activa." }, { status: 404 });
+  let meta;
+  try {
+    meta = await cambiarEstadoMeta({
+      metaId: id,
+      userId: usuario.id,
+      tipoEvento,
+      pausadoAutopiloto,
+      estadoNuevo,
+      mensajeDirector,
+    });
+  } catch (err) {
+    console.error(`Error cambiando el estado de la meta ${id}:`, err);
+    return NextResponse.json({ error: "No se pudo actualizar la meta en este momento." }, { status: 500 });
   }
 
-  await supabaseAdmin.from("bitacora").insert({
-    user_id: usuario.id,
-    meta_id: meta.id,
-    propuesta_id: null,
-    tipo_evento: tipoEvento,
-    detalle: {},
-  });
+  if (!meta) {
+    return NextResponse.json({ error: "Meta no encontrada, o ya no está activa." }, { status: 404 });
+  }
 
   return NextResponse.json({ meta });
 }

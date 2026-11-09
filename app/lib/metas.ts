@@ -637,6 +637,59 @@ export type ResultadoCierreMeta = {
 // Cierra de verdad (vencida o cumplida) las metas "activas" cuya
 // fecha_fin ya pasó -- el estado nunca se queda en "activa" para
 // siempre con la fecha vencida, porque con el índice único (user_id,
+// Etiquetas cortas por tipo, para armar frases ("tu meta de X venció")
+// -- una sola fuente para esto, usada por cerrarMetasVencidas() acá
+// mismo y por POST /api/metas (el mensaje de "meta creada").
+export const ETIQUETA_TIPO_META: Record<TipoMeta, string> = {
+  conversaciones_whatsapp: "conversaciones por WhatsApp",
+  leads: "leads",
+  ventas_web: "ventas en tu sitio web",
+  visitas_web: "visitas a tu sitio web",
+  seguidores_facebook: "seguidores de Facebook",
+  seguidores_instagram: "seguidores de Instagram",
+};
+
+// Capa delgada sobre la RPC cambiar_estado_meta (docs/sql/metas_atomicas.sql)
+// -- aplica el cambio + bitacora + (opcional) el evento en
+// director_conversaciones en una sola transacción. La usan
+// PATCH /api/metas/[id] (pausar/reanudar/cancelar/editar presupuesto)
+// y cerrarMetasVencidas() (vencer/cumplir) -- ningún caller vuelve a
+// escribir en bitacora/director_conversaciones por su cuenta para este
+// tipo de cambios, para no duplicar eventos.
+//
+// Devuelve null si la meta no existía, no era de ese usuario, o ya no
+// estaba "activa" (alguien se adelantó) -- nunca lanza por ese caso,
+// el caller decide qué hacer. Sí lanza si la RPC falla de verdad
+// (error de Postgres real).
+export async function cambiarEstadoMeta(params: {
+  metaId: string;
+  userId: string;
+  tipoEvento: string;
+  pausadoAutopiloto?: boolean;
+  estadoNuevo?: "cancelada" | "vencida" | "cumplida";
+  presupuestoMaximoCop?: number;
+  detalle?: Record<string, unknown>;
+  mensajeDirector?: string | null;
+}): Promise<Meta | null> {
+  const { data, error } = await supabaseAdmin.rpc("cambiar_estado_meta", {
+    p_meta_id: params.metaId,
+    p_user_id: params.userId,
+    p_tipo_evento: params.tipoEvento,
+    p_pausado_autopiloto: params.pausadoAutopiloto ?? null,
+    p_estado_nuevo: params.estadoNuevo ?? null,
+    p_presupuesto_maximo_cop: params.presupuestoMaximoCop ?? null,
+    p_detalle: params.detalle ?? {},
+    p_mensaje_director: params.mensajeDirector ?? null,
+  });
+
+  if (error) {
+    console.error(`Error en cambiar_estado_meta (${params.tipoEvento}) para la meta ${params.metaId}:`, error);
+    throw error;
+  }
+
+  return (data as Meta | null) ?? null;
+}
+
 // tipo) WHERE estado='activa' eso bloquearía crear una meta nueva del
 // mismo tipo. Dos llamadores: el cron horario (sin filtro, revisa a
 // todos) y /api/metas al crear una meta (filtrado a ese usuario+tipo,
@@ -670,19 +723,35 @@ export async function cerrarMetasVencidas(filtro: { userId?: string; tipo?: Tipo
     }
 
     const estadoNuevo: "vencida" | "cumplida" = conversiones >= meta.cantidad_objetivo ? "cumplida" : "vencida";
+    const etiqueta = ETIQUETA_TIPO_META[meta.tipo as TipoMeta];
+    const mensajeDirector =
+      estadoNuevo === "cumplida"
+        ? `¡Tu meta de ${etiqueta} se cumplió! Conseguimos ${conversiones} de ${meta.cantidad_objetivo}.`
+        : `Tu meta de ${etiqueta} venció. Conseguimos ${conversiones} de ${meta.cantidad_objetivo}.`;
 
-    await supabaseAdmin
-      .from("metas")
-      .update({ estado: estadoNuevo, actualizado_en: new Date().toISOString() })
-      .eq("id", meta.id);
+    let metaActualizada: Meta | null;
+    try {
+      metaActualizada = await cambiarEstadoMeta({
+        metaId: meta.id,
+        userId: meta.user_id,
+        tipoEvento: estadoNuevo === "cumplida" ? "meta_cumplida" : "meta_vencida",
+        estadoNuevo,
+        detalle: { conversiones, cantidad_objetivo: meta.cantidad_objetivo },
+        mensajeDirector,
+      });
+    } catch (err) {
+      // No se detiene el resto del lote por un error puntual -- se
+      // reintenta solo en la próxima corrida del cron (la meta sigue
+      // "activa" hasta que esto tenga éxito).
+      console.error(`cerrarMetasVencidas: no se pudo cerrar la meta ${meta.id}:`, err);
+      continue;
+    }
 
-    await supabaseAdmin.from("bitacora").insert({
-      user_id: meta.user_id,
-      meta_id: meta.id,
-      propuesta_id: null,
-      tipo_evento: estadoNuevo === "cumplida" ? "meta_cumplida" : "meta_vencida",
-      detalle: { conversiones, cantidad_objetivo: meta.cantidad_objetivo },
-    });
+    if (!metaActualizada) {
+      // Ya no estaba "activa" (alguien la pausó/canceló justo antes) --
+      // nada que cerrar.
+      continue;
+    }
 
     await supabaseAdmin.from("notificaciones").insert({
       user_id: meta.user_id,
