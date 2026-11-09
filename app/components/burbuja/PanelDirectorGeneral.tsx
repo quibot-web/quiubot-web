@@ -74,24 +74,69 @@ function formatoCop(valor: number): string {
   return new Intl.NumberFormat("es-CO", { style: "currency", currency: "COP", maximumFractionDigits: 0 }).format(valor);
 }
 
-function TarjetaContexto({ contexto }: { contexto: ContextoCuentaDirector }) {
+// Antes era una tarjeta siempre abierta (conexiones + pendientes) que
+// ocupaba casi la mitad del panel -- ahora es una sola línea plegable,
+// plegada por defecto (se recuerda en localStorage), que se despliega
+// al tocarla y se vuelve a plegar solo al escribir o hacer scroll (ver
+// los dos call sites de onToggle/colapsar más abajo).
+function PildoraContexto({
+  contexto,
+  expandido,
+  onToggle,
+}: {
+  contexto: ContextoCuentaDirector;
+  expandido: boolean;
+  onToggle: () => void;
+}) {
+  const faltante = ETIQUETA_CONEXION.find(({ clave }) => !contexto.conexiones[clave].conectado);
+  const estadoTexto = faltante ? `⚠ Falta conectar ${faltante.etiqueta}` : "● Todo conectado";
+  const pendientesTexto = contexto.propuestasPendientes > 0 ? ` · ${contexto.propuestasPendientes} pendiente${contexto.propuestasPendientes === 1 ? "" : "s"}` : "";
+
   return (
-    <div style={{ background: "#F8F8FD", border: "1px solid #E3E1F7", borderRadius: 12, padding: "10px 12px", fontSize: 11.5, margin: "10px 14px 0" }}>
-      <div style={{ display: "flex", flexWrap: "wrap", gap: 6, marginBottom: contexto.propuestasPendientes > 0 ? 8 : 0 }}>
-        {ETIQUETA_CONEXION.map(({ clave, etiqueta }) => {
-          const conectado = contexto.conexiones[clave].conectado;
-          return (
-            <span key={clave} style={{ display: "flex", alignItems: "center", gap: 4, background: "#fff", border: "1px solid #E9E7EE", borderRadius: 999, padding: "3px 8px", color: "#1a1a1a" }}>
-              <span style={{ width: 6, height: 6, borderRadius: "50%", background: conectado ? "#1E9E6B" : "#E5AE3A" }} />
-              {etiqueta}
-            </span>
-          );
-        })}
-      </div>
-      {contexto.propuestasPendientes > 0 && (
-        <Link href="/equipo" style={{ color: "#534AB7", fontWeight: 700, textDecoration: "none" }}>
-          {contexto.propuestasPendientes} propuesta{contexto.propuestasPendientes === 1 ? "" : "s"} pendiente{contexto.propuestasPendientes === 1 ? "" : "s"} →
-        </Link>
+    <div style={{ flexShrink: 0, borderBottom: "1px solid #F0EFF7" }}>
+      <button
+        onClick={onToggle}
+        style={{
+          width: "100%",
+          display: "flex",
+          alignItems: "center",
+          justifyContent: "center",
+          gap: 6,
+          background: "none",
+          border: "none",
+          padding: "8px 14px",
+          fontSize: 12,
+          fontWeight: 600,
+          color: faltante ? "#B9790A" : "#1E9E6B",
+          cursor: "pointer",
+        }}
+      >
+        <span>
+          {estadoTexto}
+          <span style={{ color: "#6B6880" }}>{pendientesTexto}</span>
+        </span>
+        <span style={{ color: "#999", fontWeight: 400, fontSize: 10 }}>{expandido ? "▲" : "▾"}</span>
+      </button>
+
+      {expandido && (
+        <div style={{ padding: "0 14px 10px" }}>
+          <div style={{ display: "flex", flexWrap: "wrap", gap: 6, marginBottom: contexto.propuestasPendientes > 0 ? 8 : 0 }}>
+            {ETIQUETA_CONEXION.map(({ clave, etiqueta }) => {
+              const conectado = contexto.conexiones[clave].conectado;
+              return (
+                <span key={clave} style={{ display: "flex", alignItems: "center", gap: 4, background: "#F8F8FD", border: "1px solid #E9E7EE", borderRadius: 999, padding: "3px 8px", fontSize: 11.5, color: "#1a1a1a" }}>
+                  <span style={{ width: 6, height: 6, borderRadius: "50%", background: conectado ? "#1E9E6B" : "#E5AE3A" }} />
+                  {etiqueta}
+                </span>
+              );
+            })}
+          </div>
+          {contexto.propuestasPendientes > 0 && (
+            <Link href="/equipo" style={{ fontSize: 11.5, color: "#534AB7", fontWeight: 700, textDecoration: "none" }}>
+              {contexto.propuestasPendientes} propuesta{contexto.propuestasPendientes === 1 ? "" : "s"} pendiente{contexto.propuestasPendientes === 1 ? "" : "s"} →
+            </Link>
+          )}
+        </div>
       )}
     </div>
   );
@@ -301,6 +346,39 @@ export default function PanelDirectorGeneral({
   const [senalIrAlFondo, setSenalIrAlFondo] = useState(0);
   const [creandoMeta, setCreandoMeta] = useState(false);
   const [errorCreacion, setErrorCreacion] = useState<string | null>(null);
+  // Plegada por defecto -- se recuerda la preferencia de cada cliente.
+  // El valor inicial siempre es false (nunca se lee localStorage en el
+  // cuerpo del render: en el render de servidor no existe y tumbaría la
+  // página) -- se sincroniza en un efecto, que solo corre en el navegador.
+  const [contextoExpandido, setContextoExpandido] = useState(false);
+  const [menuAccionesAbierto, setMenuAccionesAbierto] = useState(false);
+
+  useEffect(() => {
+    // setTimeout(0) en vez de llamar setContextoExpandido() directo acá
+    // -- mismo motivo que en los demás efectos de este archivo
+    // (react-hooks/set-state-in-effect).
+    const id = setTimeout(() => {
+      try {
+        if (localStorage.getItem("quiubot_director_contexto_expandido") === "1") setContextoExpandido(true);
+      } catch {
+        // No disponible (modo privado, cuota llena) -- se queda plegado.
+      }
+    }, 0);
+    return () => clearTimeout(id);
+  }, []);
+
+  function alternarContexto() {
+    setContextoExpandido((v) => {
+      const nuevo = !v;
+      try {
+        localStorage.setItem("quiubot_director_contexto_expandido", nuevo ? "1" : "0");
+      } catch {
+        // localStorage puede no estar disponible (modo privado, cuota
+        // llena) -- la preferencia simplemente no se recuerda esta vez.
+      }
+      return nuevo;
+    });
+  }
 
   async function enviarTurno(mensajeTexto: string | null, intencion?: "crear_meta") {
     if (estado === "pensando") return;
@@ -367,6 +445,10 @@ export default function PanelDirectorGeneral({
     }
     window.dispatchEvent(new CustomEvent("quiubot:meta-cambio", { detail: { metaId } }));
     setSenalIrAlFondo((v) => v + 1);
+  }
+
+  function colapsarContexto() {
+    if (contextoExpandido) setContextoExpandido(false);
   }
 
   function enviarDesdeInput() {
@@ -493,7 +575,16 @@ export default function PanelDirectorGeneral({
             </div>
           </div>
 
-          {mostrarPasos && <BarraPasos pasos={contenido!.pasos!} />}
+          {mostrarPasos && (
+            <>
+              <BarraPasos pasos={contenido!.pasos!} />
+              {variante === "embebida" && (
+                <button onClick={irAFormularioRapido} style={{ ...estiloChipTexto, marginLeft: 34 }}>
+                  Prefiero llenar mi meta yo mismo
+                </button>
+              )}
+            </>
+          )}
 
           {accionesActivas?.filter((a) => a.tipo === "confirmar_cambio_meta").map((a, j) => (
             <TarjetaConfirmarCambioMeta key={j} accion={a} onHecho={() => refrescarHiloTrasCambioMeta(a.metaId!)} />
@@ -582,29 +673,24 @@ export default function PanelDirectorGeneral({
           </button>
         </div>
       ) : (
-        <>
-          {contexto && <TarjetaContexto contexto={contexto} />}
+        contexto && <PildoraContexto contexto={contexto} expandido={contextoExpandido} onToggle={alternarContexto} />
+      )}
 
-          <div style={{ display: "flex", flexWrap: "wrap", gap: 6, margin: "10px 14px 0", flexShrink: 0 }}>
-            <button onClick={empezarOContinuarCrearMeta} style={estiloChip}>
-              Crear una meta
-            </button>
-            <Link href="/equipo" style={estiloChipLink}>
-              Ver propuestas
-            </Link>
-            <Link href="/?tab=integraciones" style={estiloChipLink}>
-              Conectar integraciones
-            </Link>
-            <button onClick={() => onIrASoporte("")} style={estiloChip}>
-              Hablar con Soporte
-            </button>
-            {metaActivaId && (
-              <button onClick={irAFormularioRapido} style={estiloChipTexto}>
-                Prefiero llenar mi meta yo mismo
-              </button>
-            )}
-          </div>
-        </>
+      {variante === "embebida" && mensajes.length === 0 && (
+        <div style={{ display: "flex", flexWrap: "wrap", gap: 6, margin: "10px 14px 0", flexShrink: 0 }}>
+          <button onClick={empezarOContinuarCrearMeta} style={estiloChip}>
+            Crear una meta
+          </button>
+          <Link href="/equipo" style={estiloChipLink}>
+            Ver propuestas
+          </Link>
+          <Link href="/?tab=integraciones" style={estiloChipLink}>
+            Conectar integraciones
+          </Link>
+          <button onClick={() => onIrASoporte("")} style={estiloChip}>
+            Hablar con Soporte
+          </button>
+        </div>
       )}
 
       <ChatShell
@@ -614,33 +700,88 @@ export default function PanelDirectorGeneral({
         indicadorEscribiendo={<IndicadorEscribiendo asistente="director" />}
         textoVacio="Escríbele al Director lo que necesites."
         senalIrAlFondo={senalIrAlFondo}
+        onScroll={colapsarContexto}
         pie={
-          <div style={{ display: "flex", borderTop: "1px solid #eee", padding: 10, gap: 8 }}>
-            <input
-              value={texto}
-              onChange={(e) => setTexto(e.target.value)}
-              onKeyDown={(e) => e.key === "Enter" && enviarDesdeInput()}
-              placeholder="Escríbele al Director..."
-              disabled={estado === "pensando"}
-              style={{ flex: 1, border: "1px solid #e0e0e0", borderRadius: 10, padding: "8px 12px", fontSize: 13, outline: "none" }}
-            />
-            <button
-              onClick={enviarDesdeInput}
-              disabled={estado === "pensando" || !texto.trim()}
-              style={{
-                background: "#534AB7",
-                color: "#fff",
-                border: "none",
-                borderRadius: 10,
-                padding: "8px 14px",
-                fontSize: 13,
-                fontWeight: 600,
-                cursor: estado === "pensando" ? "default" : "pointer",
-                opacity: estado === "pensando" || !texto.trim() ? 0.6 : 1,
-              }}
-            >
-              {estado === "pensando" ? "..." : "Enviar"}
-            </button>
+          <div>
+            {variante === "embebida" && mensajes.length > 0 && menuAccionesAbierto && (
+              <div style={{ display: "flex", flexWrap: "wrap", gap: 6, padding: "10px 10px 0" }}>
+                <button
+                  onClick={() => {
+                    setMenuAccionesAbierto(false);
+                    empezarOContinuarCrearMeta();
+                  }}
+                  style={estiloChip}
+                >
+                  Crear una meta
+                </button>
+                <Link href="/equipo" onClick={() => setMenuAccionesAbierto(false)} style={estiloChipLink}>
+                  Ver propuestas
+                </Link>
+                <Link href="/?tab=integraciones" onClick={() => setMenuAccionesAbierto(false)} style={estiloChipLink}>
+                  Conectar integraciones
+                </Link>
+                <button
+                  onClick={() => {
+                    setMenuAccionesAbierto(false);
+                    onIrASoporte("");
+                  }}
+                  style={estiloChip}
+                >
+                  Hablar con Soporte
+                </button>
+              </div>
+            )}
+            <div style={{ display: "flex", borderTop: "1px solid #eee", padding: 10, gap: 8 }}>
+              {variante === "embebida" && mensajes.length > 0 && (
+                <button
+                  onClick={() => setMenuAccionesAbierto((v) => !v)}
+                  aria-label="Más acciones"
+                  style={{
+                    flexShrink: 0,
+                    width: 36,
+                    height: 36,
+                    borderRadius: "50%",
+                    border: "1px solid #e0e0e0",
+                    background: menuAccionesAbierto ? "#F3F2FE" : "#fff",
+                    color: "#534AB7",
+                    fontSize: 18,
+                    fontWeight: 700,
+                    cursor: "pointer",
+                    lineHeight: 1,
+                  }}
+                >
+                  ＋
+                </button>
+              )}
+              <input
+                value={texto}
+                onChange={(e) => {
+                  setTexto(e.target.value);
+                  colapsarContexto();
+                }}
+                onKeyDown={(e) => e.key === "Enter" && enviarDesdeInput()}
+                placeholder="Escríbele al Director..."
+                disabled={estado === "pensando"}
+                style={{ flex: 1, border: "1px solid #e0e0e0", borderRadius: 10, padding: "8px 12px", fontSize: 13, outline: "none" }}
+              />
+              <button
+                onClick={enviarDesdeInput}
+                disabled={estado === "pensando" || !texto.trim()}
+                style={{
+                  background: "#534AB7",
+                  color: "#fff",
+                  border: "none",
+                  borderRadius: 10,
+                  padding: "8px 14px",
+                  fontSize: 13,
+                  fontWeight: 600,
+                  cursor: estado === "pensando" ? "default" : "pointer",
+                  opacity: estado === "pensando" || !texto.trim() ? 0.6 : 1,
+                }}
+              >
+                {estado === "pensando" ? "..." : "Enviar"}
+              </button>
+            </div>
           </div>
         }
       />

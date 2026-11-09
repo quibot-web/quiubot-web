@@ -42,6 +42,7 @@ export default function ChatShell({
   pie,
   textoVacio = "Todavía no hay nada acá.",
   senalIrAlFondo,
+  onScroll,
 }: {
   /** Ascendente -- el más viejo primero, el más nuevo al final. */
   items: ItemChat[];
@@ -57,6 +58,10 @@ export default function ChatShell({
    * mismo -- "Ver todo" lo usa para no depender de si el usuario
    * estaba "cerca del fondo" cuando quitó un filtro. */
   senalIrAlFondo?: number | string;
+  /** Además del manejo interno de scroll (infinito, botón de nuevos),
+   * para que el padre reaccione a cualquier scroll (ej. plegar un
+   * encabezado de contexto). */
+  onScroll?: () => void;
 }) {
   const scrollRef = useRef<HTMLDivElement>(null);
   const [visibles, setVisibles] = useState(LOTE_VISIBLE);
@@ -105,6 +110,7 @@ export default function ChatShell({
     const el = scrollRef.current;
     if (!el) return;
 
+    onScroll?.();
     cercaDelFondoRef.current = el.scrollHeight - el.scrollTop - el.clientHeight < UMBRAL_FONDO_PX;
     if (cercaDelFondoRef.current) setMensajesNuevos(0);
 
