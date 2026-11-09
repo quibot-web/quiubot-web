@@ -318,6 +318,11 @@ export default function PanelDirectorGeneral({
         setCreandoMeta(false);
         return;
       }
+      // El router.push de abajo manda a Home, pero si YA se estaba en
+      // Home (ej. se abrió la burbuja desde ahí) es una navegación sin
+      // efecto -- sin este evento, ListaMisMetas nunca se habría
+      // refrescado solo.
+      if (data.meta?.id) window.dispatchEvent(new CustomEvent("quiubot:meta-cambio", { detail: { metaId: data.meta.id } }));
       router.push("/");
     } catch (err) {
       setErrorCreacion(err instanceof Error ? err.message : "Algo salió mal.");

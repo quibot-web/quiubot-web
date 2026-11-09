@@ -69,7 +69,14 @@ export default function FilaMeta({
         body: JSON.stringify({ pausado_autopiloto: !meta.pausado_autopiloto }),
       });
       const data = await res.json();
-      if (res.ok) onCambio(data.meta);
+      if (res.ok) {
+        onCambio(data.meta);
+        // Mismo patrón que quiubot:abrir-chat-equipo -- avisa a
+        // cualquier otra vista que tenga esta meta en pantalla (Home,
+        // /metas, la tarjeta viva del chat) para que se refresque sin
+        // recargar.
+        window.dispatchEvent(new CustomEvent("quiubot:meta-cambio", { detail: { metaId: data.meta.id } }));
+      }
     } finally {
       setProcesando(false);
     }
@@ -84,7 +91,10 @@ export default function FilaMeta({
         body: JSON.stringify({ estado: "cancelada" }),
       });
       const data = await res.json();
-      if (res.ok) onCambio(data.meta);
+      if (res.ok) {
+        onCambio(data.meta);
+        window.dispatchEvent(new CustomEvent("quiubot:meta-cambio", { detail: { metaId: data.meta.id } }));
+      }
     } finally {
       setProcesando(false);
       setConfirmandoCancelar(false);

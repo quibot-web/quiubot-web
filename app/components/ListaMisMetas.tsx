@@ -19,7 +19,7 @@ export default function ListaMisMetas() {
   const [visible, setVisible] = useState(false);
   const [items, setItems] = useState<ItemMeta[]>([]);
 
-  useEffect(() => {
+  function cargar() {
     fetch("/api/metas")
       .then((r) => {
         if (!r.ok) throw new Error();
@@ -29,6 +29,19 @@ export default function ListaMisMetas() {
       .then((data) => setItems(data.metas ?? []))
       .catch(() => setVisible(false))
       .finally(() => setCargando(false));
+  }
+
+  useEffect(() => {
+    cargar();
+  }, []);
+
+  // Refresco sin recargar cuando una meta cambia desde OTRA vista (la
+  // página /metas, o la tarjeta viva del chat del Director) -- mismo
+  // patrón que quiubot:abrir-chat-equipo.
+  useEffect(() => {
+    const refrescar = () => cargar();
+    window.addEventListener("quiubot:meta-cambio", refrescar);
+    return () => window.removeEventListener("quiubot:meta-cambio", refrescar);
   }, []);
 
   if (cargando) return null;

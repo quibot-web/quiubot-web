@@ -28,8 +28,7 @@ export default function MetasPage() {
       .catch(() => setPuedeUsarAutopiloto(false));
   }, []);
 
-  useEffect(() => {
-    if (!puedeUsarAutopiloto) return;
+  function cargarMetas() {
     Promise.all([
       fetch("/api/metas").then((r) => (r.ok ? r.json() : { metas: [] })),
       fetch("/api/metas/historial").then((r) => (r.ok ? r.json() : { metas: [] })),
@@ -39,6 +38,20 @@ export default function MetasPage() {
         setTerminadas(terminadasData.metas ?? []);
       })
       .finally(() => setCargando(false));
+  }
+
+  useEffect(() => {
+    if (!puedeUsarAutopiloto) return;
+    cargarMetas();
+  }, [puedeUsarAutopiloto]);
+
+  // Refresco sin recargar cuando una meta cambia desde OTRA vista (el
+  // Home, o la tarjeta viva del chat del Director).
+  useEffect(() => {
+    if (!puedeUsarAutopiloto) return;
+    const refrescar = () => cargarMetas();
+    window.addEventListener("quiubot:meta-cambio", refrescar);
+    return () => window.removeEventListener("quiubot:meta-cambio", refrescar);
   }, [puedeUsarAutopiloto]);
 
   if (puedeUsarAutopiloto === null || (puedeUsarAutopiloto && cargando)) {

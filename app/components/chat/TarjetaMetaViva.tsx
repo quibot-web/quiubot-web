@@ -32,6 +32,19 @@ export default function TarjetaMetaViva({ metaId }: { metaId: string }) {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [metaId]);
 
+  // Refresco sin recargar cuando esta MISMA meta cambia desde otra
+  // vista (/metas, el Home, o pausarla/cancelarla desde esta misma
+  // tarjeta en otra pestaña).
+  useEffect(() => {
+    const refrescar = (e: Event) => {
+      const detalle = (e as CustomEvent<{ metaId?: string }>).detail;
+      if (!detalle?.metaId || detalle.metaId === metaId) cargar();
+    };
+    window.addEventListener("quiubot:meta-cambio", refrescar);
+    return () => window.removeEventListener("quiubot:meta-cambio", refrescar);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [metaId]);
+
   if (estado === "cargando") {
     return (
       <div style={{ alignSelf: "flex-start", width: "min(300px, 100%)", marginLeft: 34, background: "#fff", border: "1.5px solid #E9E7EE", borderRadius: 16, padding: 16, fontSize: 12.5, color: "#999" }}>
