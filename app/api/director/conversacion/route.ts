@@ -25,6 +25,7 @@ import {
   migrarMensajesViejosSiHaceFalta,
   type ContenidoMeta,
 } from "@/app/lib/director/flujoCrearMeta";
+import type { BorradorMeta } from "@/app/lib/director/borradorMeta.schema";
 
 const CANTIDAD_MENSAJES_HISTORIAL = 20;
 
@@ -75,10 +76,15 @@ async function obtenerHistorial(userId: string): Promise<MensajeDirectorGeneral[
     .reverse();
 }
 
-async function obtenerIdBorradorActivo(userId: string): Promise<string | null> {
-  const { data } = await supabaseAdmin.from("conversaciones_meta").select("id").eq("user_id", userId).eq("estado", "activa").maybeSingle();
-  if (data) await migrarMensajesViejosSiHaceFalta(data.id, userId);
-  return data?.id ?? null;
+// El borrador (no solo su id) hace falta para que /metas/crear pueda
+// prellenar el formulario rápido con lo que ya se conversó (tipo,
+// presupuesto, etc.) cuando el cliente toca "Prefiero llenarlo yo" --
+// ver app/metas/crear/page.tsx.
+async function obtenerBorradorActivoInfo(userId: string): Promise<{ id: string; borrador: BorradorMeta } | null> {
+  const { data } = await supabaseAdmin.from("conversaciones_meta").select("id, borrador").eq("user_id", userId).eq("estado", "activa").maybeSingle();
+  if (!data) return null;
+  await migrarMensajesViejosSiHaceFalta(data.id, userId);
+  return { id: data.id, borrador: (data.borrador as BorradorMeta) ?? {} };
 }
 
 type ResultadoTurno = { ok: true; mensajeDirector: MensajeDirectorGeneral } | { ok: false; error: string };
@@ -155,16 +161,17 @@ export async function GET() {
     return NextResponse.json({ activo: false, requiereApiKey: true });
   }
 
-  // Secuencial, no Promise.all: obtenerIdBorradorActivo puede migrar
+  // Secuencial, no Promise.all: obtenerBorradorActivoInfo puede migrar
   // mensajes viejos a director_conversaciones (ver
   // migrarMensajesViejosSiHaceFalta) y obtenerHistorial necesita leer
   // DESPUÉS de que esa migración ya haya terminado, o se los perdería
   // en esta misma respuesta.
-  const conversacionMetaId = await obtenerIdBorradorActivo(usuario.id);
+  const borradorActivo = await obtenerBorradorActivoInfo(usuario.id);
   const historial = await obtenerHistorial(usuario.id);
+  const metaActiva = borradorActivo ? { conversacionId: borradorActivo.id, borrador: borradorActivo.borrador } : null;
 
   if (historial.length > 0) {
-    return NextResponse.json({ activo: true, mensajes: historial, metaActiva: conversacionMetaId ? { conversacionId: conversacionMetaId } : null });
+    return NextResponse.json({ activo: true, mensajes: historial, metaActiva });
   }
 
   // Primera vez que se abre esta conversación -- se genera el saludo
@@ -183,7 +190,7 @@ export async function GET() {
     return NextResponse.json({ activo: true, mensajes: [], metaActiva: null, errorOpenAI: true, errorMensaje: resultado.error });
   }
 
-  return NextResponse.json({ activo: true, mensajes: [resultado.mensajeDirector], metaActiva: conversacionMetaId ? { conversacionId: conversacionMetaId } : null });
+  return NextResponse.json({ activo: true, mensajes: [resultado.mensajeDirector], metaActiva });
 }
 
 export async function POST(req: NextRequest) {

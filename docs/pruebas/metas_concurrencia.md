@@ -88,6 +88,30 @@ listas para los escenarios que las piden.
    POST (no confía en lo ya validado al armar el resumen) y rechaza la
    creación con el mensaje de reconectar Meta — la meta NO se crea.
 
+## 6. "Prefiero llenar mi meta yo mismo" desde el chat (conversación de origen)
+
+Este fue un bug real en staging: tocar este botón mandaba al formulario sin
+llevarse el `conversacion_id` -- al crear la meta ahí, el borrador del chat
+quedaba "activa" para siempre, y volver a abrir la burbuja mostraba el
+mismo flujo de crear meta congelado, como si la meta nunca se hubiera
+creado.
+
+1. Abrí la burbuja → "Crear una meta" → contestá 1-2 preguntas (no hace
+   falta llegar al resumen, ni siquiera que el Director ya sepa el tipo).
+2. Tocá "Prefiero llenar mi meta yo mismo".
+3. **Esperado:** el formulario aparece prellenado con lo que ya se alcanzó
+   a conversar (tipo, presupuesto -- si ya se habían dicho). El producto
+   NO se prellena todavía (el formulario rápido no tiene ese campo).
+4. Completá el formulario y creá la meta.
+5. Volvé a abrir la burbuja (cerrarla y abrirla de nuevo, o cambiar de
+   pestaña y volver). **Esperado:** el chat YA NO muestra el flujo de
+   crear meta congelado -- muestra el mensaje real de "Ya quedó creada tu
+   meta" con la tarjeta viva de la meta, y el input vuelve a ser para
+   charlar libre con el Director (ya no fuerza la intención "crear_meta").
+6. **Variante (abandono):** repetí 1-2, pero en el paso 2 cerrá la pestaña
+   del formulario sin crear nada. Volvé a abrir la burbuja -- el borrador
+   debe seguir activo y el chat debe retomarlo exactamente donde quedó.
+
 ---
 
 ## Pendiente: automatizar en CI

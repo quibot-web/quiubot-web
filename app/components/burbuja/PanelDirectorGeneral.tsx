@@ -429,23 +429,52 @@ export default function PanelDirectorGeneral({
     enviarTurno(null, "crear_meta");
   }
 
-  // Después de confirmar un cambio de meta (TarjetaConfirmarCambioMeta):
-  // el PATCH ya dejó el evento real en director_conversaciones del lado
-  // del servidor -- esto solo trae el hilo actualizado para que ese
-  // mensaje y su tarjeta viva aparezcan, sin que el cliente construya
-  // nada por su cuenta.
-  async function refrescarHiloTrasCambioMeta(metaId: string) {
+  // Trae el hilo real del servidor y sincroniza metaActivaId con lo que
+  // diga (incluido null -- si el borrador ya se completó por OTRO
+  // camino, ej. el formulario rápido, esto hace que el flujo de crear
+  // meta "desaparezca" solo: el último mensaje deja de tener pasos/
+  // resumen y pasa a ser el evento real de "meta creada" con su
+  // tarjeta viva, sin ningún estado especial de "salir del flujo" --
+  // es una consecuencia natural de refrescar con datos reales). Se
+  // llama al montar (cubre "volver a abrir la burbuja": el panel se
+  // desmonta/remonta con ella), al recibir quiubot:meta-cambio, y al
+  // recuperar el foco la pestaña.
+  async function refrescarHilo() {
     try {
       const res = await fetch("/api/director/conversacion");
       const data = await res.json();
+      if (!montadoRef.current) return;
       if (Array.isArray(data.mensajes)) setMensajes(data.mensajes);
+      setMetaActivaId(data.metaActiva?.conversacionId ?? null);
     } catch {
-      // El cambio ya se aplicó del lado del servidor -- si esto falla,
-      // el usuario lo ve de todas formas la próxima vez que abra el chat.
+      // Silencioso -- si esto falla, el usuario ve el hilo tal como
+      // estaba, sin romper nada; se reintenta solo en el próximo
+      // disparador (evento, foco, reapertura).
     }
-    window.dispatchEvent(new CustomEvent("quiubot:meta-cambio", { detail: { metaId } }));
-    setSenalIrAlFondo((v) => v + 1);
   }
+
+  const montadoRef = useRef(true);
+  useEffect(() => {
+    montadoRef.current = true;
+    // setTimeout(0) en vez de llamar refrescarHilo() directo acá --
+    // mismo motivo que en los demás efectos de este archivo
+    // (react-hooks/set-state-in-effect).
+    const id = setTimeout(() => refrescarHilo(), 0);
+
+    const alCambiarMeta = () => refrescarHilo();
+    const alCambiarVisibilidad = () => {
+      if (document.visibilityState === "visible") refrescarHilo();
+    };
+    window.addEventListener("quiubot:meta-cambio", alCambiarMeta);
+    document.addEventListener("visibilitychange", alCambiarVisibilidad);
+
+    return () => {
+      montadoRef.current = false;
+      clearTimeout(id);
+      window.removeEventListener("quiubot:meta-cambio", alCambiarMeta);
+      document.removeEventListener("visibilitychange", alCambiarVisibilidad);
+    };
+  }, []);
 
   function colapsarContexto() {
     if (contextoExpandido) setContextoExpandido(false);
@@ -587,7 +616,18 @@ export default function PanelDirectorGeneral({
           )}
 
           {accionesActivas?.filter((a) => a.tipo === "confirmar_cambio_meta").map((a, j) => (
-            <TarjetaConfirmarCambioMeta key={j} accion={a} onHecho={() => refrescarHiloTrasCambioMeta(a.metaId!)} />
+            <TarjetaConfirmarCambioMeta
+              key={j}
+              accion={a}
+              onHecho={() => {
+                // El propio listener de quiubot:meta-cambio de este
+                // componente ya se encarga de refrescarHilo() -- esto
+                // solo emite, para que /metas y el Home también se
+                // actualicen.
+                window.dispatchEvent(new CustomEvent("quiubot:meta-cambio", { detail: { metaId: a.metaId } }));
+                setSenalIrAlFondo((v) => v + 1);
+              }}
+            />
           ))}
 
           {accionesActivas && accionesActivas.filter((a) => a.tipo !== "confirmar_cambio_meta").length > 0 && (

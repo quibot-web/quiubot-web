@@ -145,10 +145,23 @@ describe("POST /api/metas", () => {
     expect(typeof llamada.p_mensaje_meta_creada_otro_borrador).toBe("string");
   });
 
-  it("manda conversacion_id null cuando no viene del cliente (ej. formulario rápido)", async () => {
+  it("manda conversacion_id null cuando no viene del cliente (ej. formulario rápido sin un borrador previo)", async () => {
     rpcMock.mockResolvedValue({ data: { id: "meta-1" }, error: null });
     await POST(req(BODY_VALIDO));
     expect(rpcMock).toHaveBeenCalledWith("crear_meta_completa", expect.objectContaining({ p_conversacion_id: null }));
+  });
+
+  it("formulario rápido con conversacion_id de un borrador del chat (aunque ese borrador nunca llegó a tener tipo): lo manda igual, para que crear_meta_completa cierre ese borrador", async () => {
+    // Este es el caso real que se rompía en staging: "Prefiero llenar
+    // mi meta yo mismo" se tocó muy temprano en la conversación (el
+    // borrador en conversaciones_meta todavía no tenía tipo decidido),
+    // y aun así el formulario debe mandar ese conversacion_id -- la RPC
+    // cierra el borrador por su id, nunca necesita que tenga tipo.
+    rpcMock.mockResolvedValue({ data: { id: "meta-1" }, error: null });
+
+    await POST(req({ ...BODY_VALIDO, conversacion_id: "conv-sin-tipo-todavia" }));
+
+    expect(rpcMock).toHaveBeenCalledWith("crear_meta_completa", expect.objectContaining({ p_conversacion_id: "conv-sin-tipo-todavia" }));
   });
 
   it("traduce el choque con el índice único de meta activa por tipo (23505) a un mensaje claro, 409, sin registrarError", async () => {

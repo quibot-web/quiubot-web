@@ -52,28 +52,46 @@ function CrearMetaContenido() {
   useEffect(() => {
     if (puedeUsarAutopiloto !== true) return;
 
-    if (forzarFormulario) {
-      // setTimeout(0) en vez de llamar setModo() directo acá -- mismo
-      // motivo que en PanelDirectorGeneral (react-hooks/set-state-in-effect).
-      const id = setTimeout(() => setModo("formulario"), 0);
-      return () => clearTimeout(id);
-    }
-
-    // Entrada principal: la conversación con el Director (decisión del
-    // plan) -- el formulario de siempre queda como "Prefiero llenarlo
-    // yo". Si no tiene openai_key conectada, /api/director/conversacion
-    // devuelve requiereApiKey:true y se abre el formulario directo con
-    // el aviso, sin intentar la conversación.
+    // Siempre se consulta /api/director/conversacion, aunque se llegue
+    // con ?formulario=1 -- es la única forma de saber si hay un
+    // borrador activo (y con qué datos) para prellenar el formulario Y
+    // para poder cerrarlo después con conversacion_id (antes, llegar
+    // acá por "Prefiero llenarlo yo" perdía esa conversación entera:
+    // ni se cerraba el borrador ni se prellenaba nada -- regresión real
+    // encontrada en staging).
     fetch("/api/director/conversacion")
       .then((r) => r.json())
       .then((data) => {
         if (data.requiereApiKey) {
-          setAvisoApiKey(true);
+          // El aviso de "conecta tu llave" explica por qué se salta la
+          // conversación -- si el cliente ya eligió el formulario a
+          // propósito (forzarFormulario), ese aviso no aplica.
+          if (!forzarFormulario) setAvisoApiKey(true);
           setModo("formulario");
           return;
         }
+
         setMensajesIniciales(Array.isArray(data.mensajes) ? data.mensajes : []);
         setMetaActivaId(data.metaActiva?.conversacionId ?? null);
+
+        if (forzarFormulario) {
+          const borrador = data.metaActiva?.borrador as
+            | { tipo?: PrefillFormularioRapido["tipo"]; presupuesto_cop?: number; roas_minimo?: number }
+            | undefined;
+          setPrefillFormulario(
+            data.metaActiva
+              ? {
+                  tipo: borrador?.tipo,
+                  presupuestoCop: borrador?.presupuesto_cop,
+                  roasMinimo: borrador?.roas_minimo,
+                  conversacionId: data.metaActiva.conversacionId,
+                }
+              : undefined
+          );
+          setModo("formulario");
+          return;
+        }
+
         setModo("conversacion");
       })
       .catch(() => setModo("formulario"));
