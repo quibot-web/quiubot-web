@@ -87,11 +87,22 @@ create table publicaciones_organicas (
   -- es código (función pura sobre las piezas del calendario, igual que
   -- la variedad semanal), no una restricción de esta tabla -- un CHECK
   -- no puede representar "la parte 2 todavía no existe, pero va a
-  -- crearse en el mismo calendario".
+  -- crearse en el mismo calendario". Que la parte 1 y la parte 2 sean
+  -- del mismo usuario también es código, no una columna ni un CHECK acá
+  -- -- un self-FK no tiene forma de comparar el user_id de la fila que
+  -- apunta contra el de la fila apuntada.
   continua_de_id uuid references publicaciones_organicas(id) on delete set null,
 
   creado_en timestamptz not null default now(),
-  actualizado_en timestamptz not null default now()
+  -- Sin trigger -- confirmado contra el resto del proyecto (trabajos_ia,
+  -- estrategias_jobs, publicarEstrategiaJobs.ts, etc.): actualizado_en
+  -- siempre lo pone el código en cada .update(), nunca un trigger de
+  -- Postgres. Todas las rutas y el RPC de abajo tienen que mandarlo
+  -- explícito (el RPC ya lo hace con now()).
+  actualizado_en timestamptz not null default now(),
+
+  -- Una fila nunca puede ser su propia "parte 2".
+  constraint publicaciones_organicas_continua_de_id_no_self check (continua_de_id is null or continua_de_id <> id)
 );
 
 -- Lectura típica del cron: "piezas listas con programada_para vencida".
@@ -113,7 +124,11 @@ alter table publicaciones_organicas enable row level security;
 -- "publicando" en una sola sentencia con FOR UPDATE SKIP LOCKED, para
 -- que dos corridas del cron (o staging y producción, aunque
 -- PUBLICADOR_ORGANICO_ACTIVO ya lo evita en staging) nunca reclamen la
--- misma pieza dos veces.
+-- misma pieza dos veces. El UPDATE de afuera también filtra
+-- estado = 'lista' (no solo el id que ya vino filtrado del SELECT de
+-- adentro) -- nunca confía en que nada cambió el estado de la fila
+-- entre una cosa y la otra, mismo criterio defensivo que ya usa
+-- cambiar_estado_meta en metas_atomicas.sql.
 -- ============================================================
 create or replace function reclamar_publicaciones_organicas_vencidas(p_limite integer default 10)
 returns setof publicaciones_organicas
@@ -125,13 +140,14 @@ begin
   return query
     update publicaciones_organicas
     set estado = 'publicando', actualizado_en = now()
-    where id in (
-      select id from publicaciones_organicas
-      where estado = 'lista' and programada_para <= now()
-      order by programada_para
-      limit p_limite
-      for update skip locked
-    )
+    where estado = 'lista'
+      and id in (
+        select id from publicaciones_organicas
+        where estado = 'lista' and programada_para <= now()
+        order by programada_para
+        limit p_limite
+        for update skip locked
+      )
     returning *;
 end;
 $$;
