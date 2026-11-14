@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useState, useCallback } from "react";
+import { useRouter } from "next/navigation";
 import { RECETAS_ORGANICAS_INFO, ESTADOS_INFO, labelReceta, lunesDeLaSemana, type PublicacionOrganica } from "@/app/lib/contenido";
 import { hoyBogota, fechaBogota } from "@/app/lib/fechaBogota";
 import type { RecetaOrganicaId } from "@/video/guion.schema";
@@ -22,6 +23,7 @@ function formatoDiaCorto(fechaYMD: string): string {
 }
 
 export default function ContenidoPage() {
+  const router = useRouter();
   const [paso, setPaso] = useState<Paso>("cargando");
   const [semana, setSemana] = useState<string>("");
   const [piezas, setPiezas] = useState<PublicacionOrganica[]>([]);
@@ -131,7 +133,7 @@ export default function ContenidoPage() {
                 <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
                   {piezasDelDia.length === 0 && <div style={{ fontSize: 12, color: "#bbb" }}>Sin piezas</div>}
                   {piezasDelDia.map((p) => (
-                    <TarjetaPieza key={p.id} pieza={p} />
+                    <TarjetaPieza key={p.id} pieza={p} onClick={() => router.push(`/contenido/${p.id}`)} />
                   ))}
                 </div>
               </div>
@@ -154,11 +156,11 @@ export default function ContenidoPage() {
   );
 }
 
-function TarjetaPieza({ pieza }: { pieza: PublicacionOrganica }) {
+function TarjetaPieza({ pieza, onClick }: { pieza: PublicacionOrganica; onClick: () => void }) {
   const estadoInfo = ESTADOS_INFO[pieza.estado];
   const hora = new Date(pieza.programada_para).toLocaleTimeString("es-CO", { hour: "2-digit", minute: "2-digit", timeZone: "America/Bogota" });
   return (
-    <div style={{ borderRadius: 10, border: "1px solid #eee", padding: "8px 10px", background: "#fafafa" }}>
+    <div onClick={onClick} style={{ borderRadius: 10, border: "1px solid #eee", padding: "8px 10px", background: "#fafafa", cursor: "pointer" }}>
       <div style={{ fontSize: 12, fontWeight: 700, color: "#1a1a1a" }}>{labelReceta(pieza.receta_organica)}</div>
       <div style={{ fontSize: 11, color: "#888", marginTop: 2 }}>{hora}</div>
       <div style={{ display: "inline-block", marginTop: 6, fontSize: 10, fontWeight: 700, color: "#fff", background: estadoInfo.color, borderRadius: 999, padding: "2px 8px" }}>

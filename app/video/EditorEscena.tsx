@@ -209,6 +209,17 @@ export default function EditorEscena({
         </>
       )}
 
+      {escena.tipo === "dos_opciones" && (
+        <>
+          <Campo label="Opción A">
+            <input style={estiloCampo} maxLength={30} value={escena.params.opcion_a} onChange={(e) => cambiarParams({ opcion_a: e.target.value })} />
+          </Campo>
+          <Campo label="Opción B">
+            <input style={estiloCampo} maxLength={30} value={escena.params.opcion_b} onChange={(e) => cambiarParams({ opcion_b: e.target.value })} />
+          </Campo>
+        </>
+      )}
+
       {escena.tipo === "cta" && (
         <>
           <span style={{ fontSize: 11, color: "#888" }}>accion: {escena.params.accion} (la fija la receta del objetivo)</span>
@@ -240,6 +251,16 @@ export default function EditorEscena({
           {escena.params.accion === "seguir" && (
             <Campo label="@usuario">
               <input style={estiloCampo} value={escena.params.usuario || ""} onChange={(e) => cambiarParams({ usuario: e.target.value })} />
+            </Campo>
+          )}
+          {escena.params.accion === "comentar" && (
+            <Campo label="Palabra para comentar">
+              <input
+                style={estiloCampo}
+                maxLength={20}
+                value={escena.params.palabra_clave_comentario || ""}
+                onChange={(e) => cambiarParams({ palabra_clave_comentario: e.target.value })}
+              />
             </Campo>
           )}
           <Campo label="Subtexto">
