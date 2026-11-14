@@ -2,9 +2,13 @@
 
 import { useEffect, useState, useCallback } from "react";
 import { useRouter } from "next/navigation";
-import { RECETAS_ORGANICAS_INFO, ESTADOS_INFO, labelReceta, lunesDeLaSemana, type PublicacionOrganica } from "@/app/lib/contenido";
+import { RECETAS_ORGANICAS_INFO, RECETAS_QUE_EXIGEN_MEDIA, ESTADOS_INFO, labelReceta, lunesDeLaSemana, type PublicacionOrganica } from "@/app/lib/contenido";
 import { hoyBogota, fechaBogota } from "@/app/lib/fechaBogota";
+import SelectorAlbum, { type ItemAlbum } from "@/app/components/SelectorAlbum";
+import SelectorProducto, { resolverProductoAlUsar, valorVacioSelectorProducto, type ValorSelectorProducto } from "@/app/components/SelectorProducto";
 import type { RecetaOrganicaId } from "@/video/guion.schema";
+
+const MAX_PIEZAS_POR_REEL = 3;
 
 type Paso = "cargando" | "sin-acceso" | "calendario";
 
@@ -177,18 +181,65 @@ function FormularioAgregarReel({ semana, onCerrar, onCreado }: { semana: string;
   const [receta, setReceta] = useState<RecetaOrganicaId>(RECETAS_ORGANICAS_INFO[0].id);
   const [fecha, setFecha] = useState(semana);
   const [hora, setHora] = useState("12:00");
+  const [productoValor, setProductoValor] = useState<ValorSelectorProducto>(valorVacioSelectorProducto());
+  const [productoValido, setProductoValido] = useState(true);
+  const [errorProducto, setErrorProducto] = useState<string | null>(null);
+  const [piezasElegidas, setPiezasElegidas] = useState<ItemAlbum[]>([]);
+  // Igual que en /video y /estrategia: las fotos que trajo el producto
+  // elegido se pueden reemplazar al cambiar de producto sin tocar lo
+  // que la marca agregó a mano desde el álbum.
+  const [piezasDesdeProducto, setPiezasDesdeProducto] = useState<Set<string>>(new Set());
+  const [mostrarSelectorAlbum, setMostrarSelectorAlbum] = useState(false);
   const [guardando, setGuardando] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
+  const recetaExigeMedia = RECETAS_QUE_EXIGEN_MEDIA.includes(receta);
+  const faltaMediaParaEstaReceta = recetaExigeMedia && piezasElegidas.length === 0;
+
+  function alCambiarProducto(v: ValorSelectorProducto) {
+    setProductoValor(v);
+    setErrorProducto(null);
+    setPiezasElegidas((prev) => {
+      const sinLasDelProductoAnterior = prev.filter((p) => !p.id || !piezasDesdeProducto.has(p.id));
+      const nuevas = v.fotosProducto.map((f) => ({ id: f.id, url_imagen: f.url_imagen, tipo: "imagen", public_id: f.id }));
+      return [...sinLasDelProductoAnterior, ...nuevas].slice(0, MAX_PIEZAS_POR_REEL);
+    });
+    setPiezasDesdeProducto(new Set(v.fotosProducto.map((f) => f.id)));
+  }
+
+  function elegirPiezasDelAlbum(items: ItemAlbum[]) {
+    setPiezasElegidas((prev) => [...prev, ...items].slice(0, MAX_PIEZAS_POR_REEL));
+    setMostrarSelectorAlbum(false);
+  }
+
+  function quitarPieza(id: string | undefined) {
+    setPiezasElegidas((prev) => prev.filter((p) => p.id !== id));
+  }
+
   async function guardar() {
+    if (faltaMediaParaEstaReceta) {
+      setError("Esta receta exige al menos una foto o video del álbum.");
+      return;
+    }
     setGuardando(true);
     setError(null);
     try {
+      const { productoId, error: errorProd } = await resolverProductoAlUsar(productoValor);
+      if (errorProd) {
+        setErrorProducto(errorProd);
+        setGuardando(false);
+        return;
+      }
       const programada_para = `${fecha}T${hora}:00-05:00`;
       const res = await fetch("/api/contenido", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ receta_organica: receta, programada_para }),
+        body: JSON.stringify({
+          receta_organica: receta,
+          programada_para,
+          producto_id: productoId,
+          media_ids: piezasElegidas.map((p) => p.id).filter((id): id is string => !!id),
+        }),
       });
       const data = await res.json();
       if (!res.ok) {
@@ -204,24 +255,68 @@ function FormularioAgregarReel({ semana, onCerrar, onCreado }: { semana: string;
   }
 
   return (
-    <div style={{ position: "fixed", inset: 0, background: "rgba(0,0,0,0.4)", display: "flex", alignItems: "center", justifyContent: "center", zIndex: 20 }}>
-      <div style={{ background: "#fff", borderRadius: 16, padding: 24, width: "min(420px, 90vw)" }}>
+    <div style={{ position: "fixed", inset: 0, background: "rgba(0,0,0,0.4)", display: "flex", alignItems: "center", justifyContent: "center", zIndex: 20, padding: 20, overflowY: "auto" }}>
+      <div style={{ background: "#fff", borderRadius: 16, padding: 24, width: "min(560px, 100%)", maxHeight: "90vh", overflowY: "auto" }}>
         <h2 style={{ fontSize: 16, fontWeight: 800, margin: "0 0 16px", color: "#1a1a1a" }}>Agregar reel</h2>
 
         <label style={etiquetaCampo}>Receta</label>
         <select value={receta} onChange={(e) => setReceta(e.target.value as RecetaOrganicaId)} style={campo}>
-          {RECETAS_ORGANICAS_INFO.map((r) => (
-            <option key={r.id} value={r.id}>
-              {r.label}
-            </option>
-          ))}
+          {RECETAS_ORGANICAS_INFO.map((r) => {
+            const bloqueada = RECETAS_QUE_EXIGEN_MEDIA.includes(r.id) && piezasElegidas.length === 0;
+            return (
+              <option key={r.id} value={r.id} disabled={bloqueada}>
+                {r.label}
+                {bloqueada ? " (elige antes una foto o video)" : ""}
+              </option>
+            );
+          })}
         </select>
 
-        <label style={etiquetaCampo}>Fecha</label>
-        <input type="date" value={fecha} onChange={(e) => setFecha(e.target.value)} style={campo} />
+        <div style={{ display: "flex", gap: 10 }}>
+          <div style={{ flex: 1 }}>
+            <label style={etiquetaCampo}>Fecha</label>
+            <input type="date" value={fecha} onChange={(e) => setFecha(e.target.value)} style={campo} />
+          </div>
+          <div style={{ flex: 1 }}>
+            <label style={etiquetaCampo}>Hora</label>
+            <input type="time" value={hora} onChange={(e) => setHora(e.target.value)} style={campo} />
+          </div>
+        </div>
 
-        <label style={etiquetaCampo}>Hora</label>
-        <input type="time" value={hora} onChange={(e) => setHora(e.target.value)} style={campo} />
+        <label style={etiquetaCampo}>Producto o servicio (opcional)</label>
+        <SelectorProducto valor={productoValor} onCambio={alCambiarProducto} errorGuardado={errorProducto} onValidezCambia={setProductoValido} />
+
+        <label style={{ ...etiquetaCampo, marginTop: 16 }}>
+          Fotos o video del álbum (hasta {MAX_PIEZAS_POR_REEL}){recetaExigeMedia ? " -- obligatorio para esta receta" : ""}
+        </label>
+        <div style={{ display: "flex", gap: 8, flexWrap: "wrap", marginBottom: 8 }}>
+          {piezasElegidas.map((p) => (
+            <div key={p.id} style={{ position: "relative", width: 64, height: 64 }}>
+              {p.tipo === "video" ? (
+                <video src={p.url_imagen} style={{ width: 64, height: 64, borderRadius: 8, objectFit: "cover", background: "#000" }} muted />
+              ) : (
+                // eslint-disable-next-line @next/next/no-img-element
+                <img src={p.url_imagen} alt="" style={{ width: 64, height: 64, borderRadius: 8, objectFit: "cover" }} />
+              )}
+              <button
+                type="button"
+                onClick={() => quitarPieza(p.id)}
+                style={{ position: "absolute", top: -6, right: -6, width: 20, height: 20, borderRadius: "50%", border: "none", background: "#b91c1c", color: "#fff", fontSize: 11, cursor: "pointer" }}
+              >
+                ✕
+              </button>
+            </div>
+          ))}
+          {piezasElegidas.length < MAX_PIEZAS_POR_REEL && (
+            <button
+              type="button"
+              onClick={() => setMostrarSelectorAlbum(true)}
+              style={{ width: 64, height: 64, borderRadius: 8, border: "1.5px dashed #534AB7", background: "#F3F2FE", color: "#534AB7", fontSize: 20, cursor: "pointer" }}
+            >
+              ＋
+            </button>
+          )}
+        </div>
 
         {error && <p style={{ color: "#b91c1c", fontSize: 12, margin: "8px 0 0" }}>{error}</p>}
 
@@ -229,11 +324,22 @@ function FormularioAgregarReel({ semana, onCerrar, onCreado }: { semana: string;
           <button type="button" onClick={onCerrar} style={{ ...botonSecundario, flex: 1 }}>
             Cancelar
           </button>
-          <button type="button" onClick={guardar} disabled={guardando} style={{ ...botonPrimario, flex: 1 }}>
+          <button type="button" onClick={guardar} disabled={guardando || !productoValido} style={{ ...botonPrimario, flex: 1 }}>
             {guardando ? "Guardando…" : "Crear"}
           </button>
         </div>
       </div>
+
+      {mostrarSelectorAlbum && (
+        <SelectorAlbum
+          titulo={`Elige hasta ${MAX_PIEZAS_POR_REEL - piezasElegidas.length} piezas del álbum`}
+          onElegir={() => {}}
+          multiple
+          maxSeleccion={MAX_PIEZAS_POR_REEL - piezasElegidas.length}
+          onElegirVarios={elegirPiezasDelAlbum}
+          onCerrar={() => setMostrarSelectorAlbum(false)}
+        />
+      )}
     </div>
   );
 }

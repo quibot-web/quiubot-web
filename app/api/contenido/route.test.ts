@@ -128,6 +128,23 @@ describe("POST /api/contenido (agregar reel a mano)", () => {
     expect(body.pieza).toEqual(piezaCreadaActual);
   });
 
+  it("guarda media_ids cuando se eligieron piezas del álbum", async () => {
+    await POST(
+      postReq({
+        receta_organica: "producto_en_uso",
+        programada_para: "2026-11-20T15:00:00-05:00",
+        media_ids: ["11111111-1111-4111-8111-111111111111"],
+      })
+    );
+    expect(insertadoCon).toMatchObject({ media_ids: ["11111111-1111-4111-8111-111111111111"] });
+  });
+
+  it("producto_en_uso sin piezas: 400, nunca llega a insertar", async () => {
+    const res = await POST(postReq({ receta_organica: "producto_en_uso", programada_para: "2026-11-20T15:00:00-05:00" }));
+    expect(res.status).toBe(400);
+    expect(insertadoCon).toBeNull();
+  });
+
   it("rechaza una receta_organica que no existe: 400, nunca llega a insertar", async () => {
     const res = await POST(postReq({ receta_organica: "no_existe", programada_para: "2026-11-20T15:00:00-05:00" }));
     expect(res.status).toBe(400);

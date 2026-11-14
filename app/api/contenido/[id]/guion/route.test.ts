@@ -15,6 +15,7 @@ vi.mock("@/lib/rateLimit", () => ({ verificarLimite: (...args: unknown[]) => rat
 let usuarioActual: Record<string, unknown> | null = null;
 let marcaActual: Record<string, unknown> | null = null;
 let piezaActual: Record<string, unknown> | null = null;
+let piezasAlbumActual: Record<string, unknown>[] = [];
 let updatesRealizados: Record<string, unknown>[] = [];
 
 function chainSimple(data: unknown) {
@@ -35,6 +36,15 @@ fromMock.mockImplementation((tabla: unknown) => {
         updatesRealizados.push(valores);
         return { eq: () => ({ eq: async () => ({ error: null }) }) };
       },
+    };
+    return obj;
+  }
+  if (tabla === "album_creativos") {
+    const obj = {
+      select: () => obj,
+      eq: () => obj,
+      in: async () => ({ data: piezasAlbumActual, error: null }),
+      update: () => ({ eq: async () => ({ error: null }) }),
     };
     return obj;
   }
@@ -85,7 +95,8 @@ describe("POST /api/contenido/[id]/guion", () => {
     authMock.mockResolvedValue({ user: { email: "marca@quiubot.com" } });
     usuarioActual = USUARIO_ADMIN;
     marcaActual = MARCA_BASE;
-    piezaActual = { id: "pieza-1", receta_organica: "mito_verdad", estado: "borrador" };
+    piezaActual = { id: "pieza-1", receta_organica: "mito_verdad", estado: "borrador", media_ids: null };
+    piezasAlbumActual = [];
     vi.spyOn(console, "error").mockImplementation(() => {});
   });
 
@@ -142,6 +153,56 @@ describe("POST /api/contenido/[id]/guion", () => {
     expect(res.status).toBe(502);
     expect(fetchMock).toHaveBeenCalledTimes(2); // 1 intento + 1 reintento
     expect(registrarErrorMock).toHaveBeenCalledWith(expect.objectContaining({ origen: "contenido_guion" }));
+    expect(updatesRealizados.length).toBe(0);
+    vi.unstubAllGlobals();
+  });
+
+  it("con media_ids y producto_en_uso: usa producto_hero con la pieza real del álbum", async () => {
+    piezaActual = { id: "pieza-1", receta_organica: "producto_en_uso", estado: "borrador", media_ids: ["demo-1"] };
+    piezasAlbumActual = [{ id: "demo-1", url_imagen: "https://res.cloudinary.com/demo/image/upload/v1/foto.jpg", tipo: "imagen", analisis: { version: 1, tiene_texto: false, es_publicitaria: false, fondo_limpio: true, recuadro_producto: null } }];
+
+    const guionConProducto = {
+      bucle: { texto: "Mira el resultado", abre_en: "e1", cierra_en: "e2", indicador: "espera_final" },
+      escenas: [
+        { id: "e1", bloque: "gancho", tipo: "gancho_texto", duracion_s: 2.2, params: { texto: "¿Necesitas un cambio?", palabra_clave: "cambio" } },
+        { id: "e2", bloque: "producto", tipo: "producto_hero", duracion_s: 5, params: { media_id: "demo-1", nombre: "Resultado real", tratamiento: "completa" } },
+        { id: "e3", bloque: "beneficio", tipo: "beneficios_lista", duracion_s: 5, params: { items: ["Hecho a tu medida", "Dura de verdad"] } },
+        { id: "e4", bloque: "cta", tipo: "cta", duracion_s: 5, params: { accion: "suave", texto_boton: "Conócenos" } },
+      ],
+      caption: "Así quedó.",
+      hashtags: ["#a", "#b", "#c"],
+    };
+    const fetchMock = vi.fn().mockResolvedValue(respuestaOpenAI(guionConProducto));
+    vi.stubGlobal("fetch", fetchMock);
+
+    const res = await POST(req(), contexto());
+    const body = await res.json();
+
+    expect(res.status).toBe(200);
+    expect(body.guion.escenas[1].params.media_id).toBe("demo-1");
+    vi.unstubAllGlobals();
+  });
+
+  it("si la IA inventa un media_id que no está entre las piezas disponibles: se rechaza", async () => {
+    piezaActual = { id: "pieza-1", receta_organica: "producto_en_uso", estado: "borrador", media_ids: ["demo-1"] };
+    piezasAlbumActual = [{ id: "demo-1", url_imagen: "https://res.cloudinary.com/demo/image/upload/v1/foto.jpg", tipo: "imagen", analisis: { version: 1, tiene_texto: false, es_publicitaria: false, fondo_limpio: true, recuadro_producto: null } }];
+
+    const guionConMediaInventado = {
+      bucle: { texto: "Mira el resultado", abre_en: "e1", cierra_en: "e2", indicador: "espera_final" },
+      escenas: [
+        { id: "e1", bloque: "gancho", tipo: "gancho_texto", duracion_s: 2.2, params: { texto: "¿Necesitas un cambio?", palabra_clave: "cambio" } },
+        { id: "e2", bloque: "producto", tipo: "producto_hero", duracion_s: 5, params: { media_id: "no-existe", nombre: "Resultado real", tratamiento: "completa" } },
+        { id: "e3", bloque: "beneficio", tipo: "beneficios_lista", duracion_s: 5, params: { items: ["Hecho a tu medida", "Dura de verdad"] } },
+        { id: "e4", bloque: "cta", tipo: "cta", duracion_s: 5, params: { accion: "suave", texto_boton: "Conócenos" } },
+      ],
+      caption: "Así quedó.",
+      hashtags: ["#a", "#b", "#c"],
+    };
+    const fetchMock = vi.fn().mockResolvedValue(respuestaOpenAI(guionConMediaInventado));
+    vi.stubGlobal("fetch", fetchMock);
+
+    const res = await POST(req(), contexto());
+    expect(res.status).toBe(502);
     expect(updatesRealizados.length).toBe(0);
     vi.unstubAllGlobals();
   });

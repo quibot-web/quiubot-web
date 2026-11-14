@@ -9,6 +9,7 @@ vi.mock("@/auth", () => ({ auth: (...args: unknown[]) => authMock(...args) }));
 
 let usuarioActual: Record<string, unknown> | null = null;
 let piezaActual: Record<string, unknown> | null = null;
+let piezasAlbumActual: Record<string, unknown>[] = [];
 let filasUpdateActual: { id: string }[] | null = [{ id: "pieza-1" }];
 let updatesRealizados: Record<string, unknown>[] = [];
 
@@ -20,6 +21,10 @@ function chainUsuarios(data: unknown) {
 const fromMock = vi.fn();
 fromMock.mockImplementation((tabla: unknown) => {
   if (tabla === "usuarios") return chainUsuarios(usuarioActual);
+  if (tabla === "album_creativos") {
+    const obj = { select: () => obj, eq: () => obj, in: async () => ({ data: piezasAlbumActual, error: null }) };
+    return obj;
+  }
   if (tabla === "publicaciones_organicas") {
     let huboSelectTrasUpdate = false;
     const obj = {
@@ -66,7 +71,8 @@ describe("GET /api/contenido/[id]", () => {
     fromMock.mockClear();
     authMock.mockResolvedValue({ user: { email: "marca@quiubot.com" } });
     usuarioActual = USUARIO_ADMIN;
-    piezaActual = { id: "pieza-1", estado: "borrador", guion: null };
+    piezaActual = { id: "pieza-1", estado: "borrador", guion: null, media_ids: null };
+    piezasAlbumActual = [];
   });
 
   it("sin sesión: 401", async () => {
@@ -81,11 +87,20 @@ describe("GET /api/contenido/[id]", () => {
     expect(res.status).toBe(404);
   });
 
-  it("devuelve la pieza", async () => {
+  it("devuelve la pieza, sin piezas de álbum: medios vacío", async () => {
     const res = await GET(getReq(), contexto());
     const body = await res.json();
     expect(res.status).toBe(200);
     expect(body.pieza).toEqual(piezaActual);
+    expect(body.medios).toEqual({});
+  });
+
+  it("con media_ids: resuelve los medios reales del álbum", async () => {
+    piezaActual = { ...piezaActual, media_ids: ["demo-1"] };
+    piezasAlbumActual = [{ id: "demo-1", url_imagen: "https://res.cloudinary.com/demo/image/upload/v1/foto.jpg", tipo: "imagen" }];
+    const res = await GET(getReq(), contexto());
+    const body = await res.json();
+    expect(body.medios).toEqual({ "demo-1": { url: "https://res.cloudinary.com/demo/image/upload/v1/foto.jpg", tipo: "imagen" } });
   });
 });
 

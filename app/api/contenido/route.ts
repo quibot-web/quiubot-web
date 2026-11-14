@@ -67,7 +67,7 @@ export async function POST(req: NextRequest) {
   if (!resultado.success) {
     return NextResponse.json({ error: "Datos inválidos para crear el reel." }, { status: 400 });
   }
-  const { receta_organica, programada_para, producto_id } = resultado.data;
+  const { receta_organica, programada_para, producto_id, media_ids } = resultado.data;
   const semana = lunesDeLaSemana(fechaBogota(new Date(programada_para)));
 
   const { data: pieza, error: errorInsert } = await supabaseAdmin
@@ -78,6 +78,7 @@ export async function POST(req: NextRequest) {
       receta_organica,
       programada_para,
       producto_id: producto_id ?? null,
+      media_ids: media_ids?.length ? media_ids : null,
       estado: "borrador",
       semana,
     })

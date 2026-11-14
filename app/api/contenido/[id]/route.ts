@@ -30,7 +30,20 @@ export async function GET(req: NextRequest, { params }: { params: Promise<{ id: 
   if (!pieza) {
     return NextResponse.json({ error: "Pieza no encontrada." }, { status: 404 });
   }
-  return NextResponse.json({ pieza: pieza as PublicacionOrganica });
+
+  // Resuelve las piezas del álbum elegidas (commit 4b.2), para que la
+  // revisión pueda mostrar el video/foto real en el player y en el
+  // editor -- mismo contrato {url, tipo} que medios en video/guion.schema.ts.
+  const mediaIds: string[] = Array.isArray(pieza.media_ids) ? pieza.media_ids : [];
+  const medios: Record<string, { url: string; tipo: "imagen" | "video" }> = {};
+  if (mediaIds.length > 0) {
+    const { data: piezasAlbum } = await supabaseAdmin.from("album_creativos").select("id, url_imagen, tipo").eq("user_id", usuario!.id).in("id", mediaIds);
+    for (const p of piezasAlbum ?? []) {
+      medios[p.id] = { url: p.url_imagen, tipo: p.tipo === "video" ? "video" : "imagen" };
+    }
+  }
+
+  return NextResponse.json({ pieza: pieza as PublicacionOrganica, medios });
 }
 
 export async function PATCH(req: NextRequest, { params }: { params: Promise<{ id: string }> }) {

@@ -25,6 +25,10 @@ export interface PublicacionOrganica {
   plataforma: "instagram" | "tiktok";
   receta_organica: RecetaOrganicaId;
   producto_id: string | null;
+  // Fotos o videos del álbum elegidos para esta pieza (hasta 3, commit
+  // 4b.2) -- se resuelven a URL real recién al generar el guion y al
+  // mostrar la revisión, igual que medios en video/guion.schema.ts.
+  media_ids: string[] | null;
   guion: unknown;
   caption: string | null;
   hashtags: string[] | null;
@@ -87,10 +91,21 @@ export function lunesDeLaSemana(fechaYMD: string): string {
   return fechaBogota(lunes);
 }
 
-export const CrearPiezaManualSchema = z.object({
-  receta_organica: z.enum(RECETAS_ORGANICAS_IDS),
-  // offset: true acepta tanto "...Z" como "...-05:00" -- el navegador
-  // manda la hora local de la marca con su propio offset, nunca UTC a mano.
-  programada_para: z.iso.datetime({ offset: true }),
-  producto_id: z.uuid().optional().nullable(),
-});
+// Recetas que no se pueden elegir sin al menos una foto/video del
+// álbum (commit 4b.2, pedido explícito: "producto_en_uso exige al
+// menos una pieza; si no hay, no se puede elegir esa receta").
+export const RECETAS_QUE_EXIGEN_MEDIA: RecetaOrganicaId[] = ["producto_en_uso"];
+
+export const CrearPiezaManualSchema = z
+  .object({
+    receta_organica: z.enum(RECETAS_ORGANICAS_IDS),
+    // offset: true acepta tanto "...Z" como "...-05:00" -- el navegador
+    // manda la hora local de la marca con su propio offset, nunca UTC a mano.
+    programada_para: z.iso.datetime({ offset: true }),
+    producto_id: z.uuid().optional().nullable(),
+    media_ids: z.array(z.uuid()).max(3).optional(),
+  })
+  .refine((v) => !RECETAS_QUE_EXIGEN_MEDIA.includes(v.receta_organica) || (v.media_ids?.length ?? 0) > 0, {
+    message: "Esta receta exige al menos una foto o video del álbum.",
+    path: ["media_ids"],
+  });

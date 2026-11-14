@@ -6,6 +6,7 @@ import { useRouter } from "next/navigation";
 import EditorEscena from "@/app/video/EditorEscena";
 import { labelReceta, type PublicacionOrganica } from "@/app/lib/contenido";
 import type { Guion, Escena } from "@/video/guion.schema";
+import type { MediosResueltos } from "@/video/escenas/tipos";
 import { duracionEnCuadros } from "@/video/Composicion";
 
 const VistaPrevia = dynamic(() => import("@/app/video/VistaPrevia"), { ssr: false });
@@ -17,6 +18,7 @@ export default function RevisionPiezaPage({ params }: { params: Promise<{ id: st
   const router = useRouter();
   const [paso, setPaso] = useState<Paso>("cargando");
   const [pieza, setPieza] = useState<PublicacionOrganica | null>(null);
+  const [medios, setMedios] = useState<MediosResueltos>({});
   const [guion, setGuion] = useState<Guion | null>(null);
   const [caption, setCaption] = useState("");
   const [hashtagsTexto, setHashtagsTexto] = useState("");
@@ -34,6 +36,7 @@ export default function RevisionPiezaPage({ params }: { params: Promise<{ id: st
     const data = await res.json();
     const p = data.pieza as PublicacionOrganica;
     setPieza(p);
+    setMedios((data.medios as MediosResueltos) ?? {});
     setGuion((p.guion as Guion | null) ?? null);
     setCaption(p.caption || "");
     setHashtagsTexto((p.hashtags || []).join(" "));
@@ -168,7 +171,13 @@ export default function RevisionPiezaPage({ params }: { params: Promise<{ id: st
                 </button>
               </div>
               {guion.escenas.map((escena, i) => (
-                <EditorEscena key={escena.id} escena={escena} piezas={[]} onCambiar={(nueva) => cambiarEscena(i, nueva)} onElegirPieza={() => {}} />
+                <EditorEscena
+                  key={escena.id}
+                  escena={escena}
+                  piezas={Object.entries(medios).map(([mid, m]) => ({ id: mid, url_imagen: m.url, tipo: m.tipo }))}
+                  onCambiar={(nueva) => cambiarEscena(i, nueva)}
+                  onElegirPieza={() => {}}
+                />
               ))}
 
               <div style={{ background: "#fff", borderRadius: 14, border: "1px solid #e5e5e5", padding: 16, marginTop: 10 }}>
@@ -199,7 +208,7 @@ export default function RevisionPiezaPage({ params }: { params: Promise<{ id: st
             </div>
 
             <div style={{ position: "sticky", top: 24 }}>
-              <VistaPrevia guion={guion} medios={{}} pistaUrl={null} mostrarZonaSegura={false} />
+              <VistaPrevia guion={guion} medios={medios} pistaUrl={null} mostrarZonaSegura={false} />
               <p style={{ fontSize: 11, color: "#888", marginTop: 8 }}>{(duracionEnCuadros(guion) / guion.fps).toFixed(1)}s</p>
             </div>
           </div>

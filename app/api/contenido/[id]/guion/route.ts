@@ -4,18 +4,21 @@ import { supabaseAdmin } from "@/lib/supabase";
 import { desencriptarSiHaceFalta } from "@/lib/crypto";
 import { verificarLimite } from "@/lib/rateLimit";
 import { registrarError } from "@/lib/registrarError";
-import { GuionSchema, type Guion } from "@/video/guion.schema";
+import { GuionSchema, idsDeMediaUsados, type Guion } from "@/video/guion.schema";
 import { construirTemaDesdeAdn } from "@/video/tema";
 import { RECETAS_ORGANICAS, validarContraRecetaOrganica } from "@/video/recetas/organico";
-import { construirPromptGuionOrganico } from "@/video/promptGuionOrganico";
+import { construirPromptGuionOrganico, type EntradaGuionOrganico } from "@/video/promptGuionOrganico";
+import type { PiezaDisponible } from "@/video/promptGuion";
 import { detectarFrasesDescargo, recopilarTextosEscenas } from "@/video/reglasCopy";
+import { AnalisisPiezaSchema, type AnalisisPieza } from "@/app/lib/analisisPieza";
+import { analizarPiezaConOpenAI } from "@/app/lib/analizarPiezaImagen";
 import type { RecetaOrganicaId } from "@/video/guion.schema";
 
 // Genera (o regenera) el guion de una pieza orgánica -- commit 4b,
 // pantalla de revisión. Mismo modelo y mismo patrón de un reintento
-// que /api/video/guion; a diferencia de esa ruta, hoy no recibe fotos
-// del álbum (producto_hero queda para cuando el formulario de
-// "Agregar reel" las pida, igual que el calendario del Director).
+// que /api/video/guion. Commit 4b.2: ya resuelve las fotos/videos del
+// álbum elegidos en "Agregar reel" (pieza.media_ids), igual que esa
+// ruta, para que producto_en_uso pueda usar producto_hero.
 const MODELO_GUION = "gpt-5.6-sol";
 const TIMEOUT_OPENAI_MS = 60_000;
 const MAX_REINTENTOS = 1;
@@ -95,7 +98,7 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
 
   const { data: pieza } = await supabaseAdmin
     .from("publicaciones_organicas")
-    .select("id, receta_organica, estado")
+    .select("id, receta_organica, estado, media_ids")
     .eq("id", id)
     .eq("user_id", usuario.id)
     .maybeSingle();
@@ -105,6 +108,48 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
   }
   if (pieza.estado !== "borrador") {
     return NextResponse.json({ error: `Esta pieza está en estado "${pieza.estado}", no se le puede generar guion ahora.` }, { status: 400 });
+  }
+
+  // Resuelve las piezas del álbum elegidas (si las hay) -- mismo
+  // patrón exacto que /api/video/guion: analiza las que todavía no
+  // tengan análisis en caché, para que el prompt sepa si cada una
+  // tiene texto impreso (tratamiento permitido) antes de pedir el guion.
+  const idsPiezas: string[] = Array.isArray(pieza.media_ids) ? pieza.media_ids : [];
+  const piezasDisponibles: PiezaDisponible[] = [];
+  const analisisPiezas: Record<string, AnalisisPieza> = {};
+
+  if (idsPiezas.length > 0) {
+    const { data: piezasAlbum, error: errorPiezas } = await supabaseAdmin
+      .from("album_creativos")
+      .select("id, url_imagen, tipo, analisis")
+      .eq("user_id", usuario.id)
+      .in("id", idsPiezas);
+
+    if (errorPiezas || !piezasAlbum || piezasAlbum.length !== idsPiezas.length) {
+      return NextResponse.json({ error: "Alguna de las piezas elegidas del álbum ya no existe." }, { status: 400 });
+    }
+
+    for (const piezaAlbum of piezasAlbum) {
+      const tipo: "imagen" | "video" = piezaAlbum.tipo === "video" ? "video" : "imagen";
+      piezasDisponibles.push({ id: piezaAlbum.id, tipo });
+
+      const analisisCache = AnalisisPiezaSchema.safeParse(piezaAlbum.analisis);
+      if (analisisCache.success) {
+        analisisPiezas[piezaAlbum.id] = analisisCache.data;
+        continue;
+      }
+      if (tipo === "imagen") {
+        try {
+          const analisisNuevo = await analizarPiezaConOpenAI(apiKeyUsuario, piezaAlbum.url_imagen);
+          analisisPiezas[piezaAlbum.id] = analisisNuevo;
+          await supabaseAdmin.from("album_creativos").update({ analisis: analisisNuevo, analisis_en: new Date().toISOString() }).eq("id", piezaAlbum.id);
+        } catch {
+          // Si el análisis falla, el prompt simplemente la trata como
+          // "podría tener texto" (ver seccionPiezas) -- no bloquea la
+          // generación del guion por esto.
+        }
+      }
+    }
   }
 
   const { data: marca } = await supabaseAdmin
@@ -129,13 +174,15 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
   const receta = RECETAS_ORGANICAS[recetaId];
   const duracionS = DURACION_POR_DEFECTO_S[recetaId];
 
-  const entrada = {
+  const entrada: EntradaGuionOrganico = {
     recetaId,
     receta,
     duracionS,
     infoAdicionalMarca,
     adnTitular: adnMarca?.titular?.trim() || null,
     adnFraseCorta: adnMarca?.frase_corta?.trim() || null,
+    piezas: piezasDisponibles,
+    analisisPiezas,
   };
 
   interface Intento {
@@ -178,6 +225,7 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
       musica: { pista_id: null, volumen: 0.35 },
       escenas: crudoObj?.escenas,
       publicacion: { caption: crudoObj?.caption, hashtags: crudoObj?.hashtags },
+      analisisPiezas: Object.keys(analisisPiezas).length > 0 ? analisisPiezas : undefined,
     };
 
     const resultado = GuionSchema.safeParse(candidato);
@@ -187,11 +235,16 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
       return { ok: false, errores };
     }
 
-    const erroresReceta = validarContraRecetaOrganica(resultado.data, receta, false);
+    const erroresReceta = validarContraRecetaOrganica(resultado.data, receta, piezasDisponibles.length > 0);
+
+    const idsUsados = idsDeMediaUsados(resultado.data.escenas);
+    const idsValidos = new Set(piezasDisponibles.map((p) => p.id));
+    const erroresMedia = idsUsados.filter((idUsado) => !idsValidos.has(idUsado)).map((idUsado) => `media_id "${idUsado}" no está entre las piezas disponibles.`);
+
     const textosEscenas = recopilarTextosEscenas(resultado.data.escenas);
     const erroresCopy = detectarFrasesDescargo(textosEscenas).map((m) => `copy tímido: ${m}`);
 
-    const erroresTotales = [...erroresReceta, ...erroresCopy];
+    const erroresTotales = [...erroresReceta, ...erroresMedia, ...erroresCopy];
     intentosRegistrados.push({ errores: erroresTotales, crudo });
     if (erroresTotales.length > 0) {
       return { ok: false, errores: erroresTotales };

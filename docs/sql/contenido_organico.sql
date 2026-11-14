@@ -159,6 +159,16 @@ notify pgrst, 'reload schema';
 
 
 -- ============================================================
+-- Commit 4b.2 -- fotos/producto en "Agregar reel". Columna nueva, se
+-- corre sola (no afecta lo de arriba, que ya corrió). "if not exists"
+-- por si esto se corre dos veces por error.
+-- ============================================================
+alter table publicaciones_organicas add column if not exists media_ids uuid[];
+
+notify pgrst, 'reload schema';
+
+
+-- ============================================================
 -- ============================================================
 -- ROLLBACK -- correr SOLO si algo sale mal y hay que deshacer todo lo
 -- de arriba. NUNCA correr esto junto con lo de arriba en la misma
@@ -169,4 +179,8 @@ notify pgrst, 'reload schema';
 
 -- drop function if exists reclamar_publicaciones_organicas_vencidas(integer);
 -- drop table if exists publicaciones_organicas;
+-- notify pgrst, 'reload schema';
+
+-- Para deshacer SOLO el commit 4b.2 (media_ids), sin tocar el resto:
+-- alter table publicaciones_organicas drop column if exists media_ids;
 -- notify pgrst, 'reload schema';

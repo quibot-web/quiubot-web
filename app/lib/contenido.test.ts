@@ -43,4 +43,23 @@ describe("CrearPiezaManualSchema", () => {
     const r = CrearPiezaManualSchema.safeParse({ receta_organica: "consejos_numerados", programada_para: "no es una fecha" });
     expect(r.success).toBe(false);
   });
+
+  it("producto_en_uso sin ninguna pieza del álbum: rechazada", () => {
+    const r = CrearPiezaManualSchema.safeParse({ receta_organica: "producto_en_uso", programada_para: "2026-11-20T15:00:00-05:00" });
+    expect(r.success).toBe(false);
+  });
+
+  it("producto_en_uso con al menos una pieza: aceptada", () => {
+    const r = CrearPiezaManualSchema.safeParse({
+      receta_organica: "producto_en_uso",
+      programada_para: "2026-11-20T15:00:00-05:00",
+      media_ids: ["11111111-1111-4111-8111-111111111111"],
+    });
+    expect(r.success).toBe(true);
+  });
+
+  it("una receta que no exige media, sin piezas: sigue aceptada", () => {
+    const r = CrearPiezaManualSchema.safeParse({ receta_organica: "mito_verdad", programada_para: "2026-11-20T15:00:00-05:00" });
+    expect(r.success).toBe(true);
+  });
 });
