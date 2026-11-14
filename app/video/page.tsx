@@ -12,6 +12,7 @@ import { GuionSchema, type Guion, type ObjetivoVideo, type Escena } from "@/vide
 import type { MediosResueltos } from "@/video/escenas/tipos";
 import { RECETAS } from "@/video/recetas";
 import EditorEscena from "./EditorEscena";
+import PruebaRenderNavegador from "./PruebaRenderNavegador";
 
 const VistaPrevia = dynamic(() => import("./VistaPrevia"), { ssr: false });
 
@@ -548,6 +549,7 @@ export default function VideoNuevoPage() {
                 Ver zona segura
               </label>
               <VistaPrevia guion={guion} medios={medios} pistaUrl={pistaUrl} mostrarZonaSegura={mostrarZonaSegura} />
+              <PruebaRenderNavegador guion={guion} medios={medios} pistaUrl={pistaUrl} mostrarZonaSegura={mostrarZonaSegura} />
             </div>
           </div>
         )}

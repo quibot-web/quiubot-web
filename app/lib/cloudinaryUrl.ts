@@ -7,6 +7,25 @@ export function urlOptimizadaCloudinary(url: string, anchoMaximo: number): strin
   return url.replace("/upload/", `/upload/f_auto,q_auto,w_${anchoMaximo}/`);
 }
 
+// Para VIDEO que un consumidor automático va a decodificar él mismo
+// (@remotion/media en video/, más adelante el publicador de Reels) --
+// nunca f_auto. Probado contra un video real: con f_auto, Cloudinary le
+// puede entregar VP9 a un cliente tipo Chrome aunque la URL termine en
+// ".mp4", y WebCodecs/Mediabunny lo rechaza ("Unsupported codec vp9 for
+// format mp4") aunque el navegador normal SÍ sabe reproducir VP9 -- el
+// error no es de Cloudinary ni de CORS (ya manda
+// access-control-allow-origin: *), es la negociación de f_auto eligiendo
+// un códec que el decodificador de bajo nivel no acepta en ese
+// contenedor. f_mp4,vc_h264 fuerza siempre el mismo códec, igual que
+// f_jpg en urlReducidaParaIA() para las fotos que recibe la IA: un
+// consumidor automático necesita un formato fijo y conocido, no "el
+// mejor para quien lo pida". Mismo motivo por el que el publicador de
+// Instagram (Fase O1 de contenido orgánico) también debe pedir el video
+// con esta función, nunca con urlOptimizadaCloudinary.
+export function urlVideoCompatible(url: string, anchoMaximo: number): string {
+  return url.replace("/upload/", `/upload/f_mp4,vc_h264,q_auto,w_${anchoMaximo}/`);
+}
+
 // Fondo difuminado resuelto por Cloudinary (e_blur), no con filter:blur()
 // de CSS -- un blur gaussiano de radio grande sobre una imagen de pantalla
 // completa es carísimo para Chrome Headless si se repite en CADA cuadro
@@ -16,6 +35,13 @@ export function urlOptimizadaCloudinary(url: string, anchoMaximo: number): strin
 // más resolución).
 export function urlFondoDifuminado(url: string, anchoMaximo = 480): string {
   return url.replace("/upload/", `/upload/f_auto,q_auto,e_blur:1500,w_${anchoMaximo}/`);
+}
+
+// Mismo fondo difuminado, para cuando la pieza es un VIDEO -- mismo
+// motivo que urlVideoCompatible: nunca f_auto para algo que decodifica
+// un consumidor automático.
+export function urlFondoDifuminadoVideo(url: string, anchoMaximo = 480): string {
+  return url.replace("/upload/", `/upload/f_mp4,vc_h264,q_auto,e_blur:1500,w_${anchoMaximo}/`);
 }
 
 // Para convertir a base64 una foto ya subida (álbum/catálogo) antes de

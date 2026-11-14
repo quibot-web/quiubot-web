@@ -17,8 +17,10 @@
   },
   "dependencies": {
     "@remotion/fonts": "4.0.540",
+    "@remotion/media": "4.0.540",
     "@remotion/player": "4.0.540",
     "@remotion/transitions": "4.0.540",
+    "@remotion/web-renderer": "4.0.540",
     "@supabase/supabase-js": "^2.108.2",
     "bcryptjs": "^3.0.3",
     "cloudinary": "^2.10.0",

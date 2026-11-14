@@ -1,6 +1,7 @@
-import { AbsoluteFill, Img, OffthreadVideo, interpolate, spring, useCurrentFrame, useVideoConfig } from "remotion";
+import { AbsoluteFill, Img, interpolate, spring, useCurrentFrame, useVideoConfig } from "remotion";
+import { Video } from "@remotion/media";
 // Relativo, no "@/..." -- ver el comentario en video/guion.schema.ts.
-import { urlOptimizadaCloudinary, urlRecorteVertical } from "../../app/lib/cloudinaryUrl";
+import { urlRecorteVertical, urlVideoCompatible } from "../../app/lib/cloudinaryUrl";
 import { colorMasContraste, colorTextoSobre } from "../tema";
 import { FondoMarca } from "../capas/FondoMarca";
 import { MediaCelular, MediaTarjeta } from "../capas/TratamientoMedia";
@@ -49,7 +50,7 @@ export function GanchoTexto({ escena, tema, medios }: PropsEscena<"gancho_texto"
         (esCompleta ? (
           <AbsoluteFill>
             {media.tipo === "video" ? (
-              <OffthreadVideo src={urlOptimizadaCloudinary(media.url, 1080)} muted style={{ width: "100%", height: "100%", objectFit: "cover" }} />
+              <Video src={urlVideoCompatible(media.url, 1080)} muted style={{ width: "100%", height: "100%", objectFit: "cover" }} />
             ) : (
               <Img src={urlRecorteVertical(media.url)} style={{ width: "100%", height: "100%", objectFit: "cover" }} />
             )}
