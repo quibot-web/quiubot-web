@@ -2,8 +2,10 @@
 // mockeados -- nunca contra la base real ni contra Cloudinary de
 // verdad. Cubre: solo admin, credenciales de Cloudinary configuradas,
 // estado válido para recibir el video, éxito (álbum + pieza
-// actualizada con actualizado_en), y fallo de la subida (pieza pasa a
-// error con tipo_error "subida", nunca se deja en un estado intermedio).
+// actualizada con actualizado_en), reintento sin re-render (1er fallo
+// no marca error, 2do sí), la carrera perdida contra otra pestaña
+// (borra de Cloudinary, nunca crea la pieza del álbum), y el fallo de
+// Cloudinary en sí.
 import { describe, it, expect, vi, beforeEach } from "vitest";
 import { NextRequest } from "next/server";
 
@@ -11,30 +13,28 @@ const authMock = vi.fn();
 vi.mock("@/auth", () => ({ auth: (...args: unknown[]) => authMock(...args) }));
 
 const uploadMock = vi.fn();
+const destroyMock = vi.fn();
 vi.mock("cloudinary", () => ({
   v2: {
     config: vi.fn(),
-    uploader: { upload: (...args: unknown[]) => uploadMock(...args) },
+    uploader: {
+      upload: (...args: unknown[]) => uploadMock(...args),
+      destroy: (...args: unknown[]) => destroyMock(...args),
+    },
   },
 }));
 
 let usuarioActual: Record<string, unknown> | null = null;
-let piezaActual: { id: string; estado: string } | null = null;
-let insertAlbumCon: Record<string, unknown> | null = null;
+let piezaActual: { id: string; estado: string; intentos: number } | null = null;
+let filasReclamadasActual: { id: string }[] | null = [{ id: "pieza-1" }];
+let errorClaimActual: { message: string } | null = null;
 let errorInsertAlbum: { message: string } | null = null;
-let updateFinalCon: Record<string, unknown> | null = null;
+let updatesRealizados: Record<string, unknown>[] = [];
 
 function chainUsuarios(data: unknown) {
   const obj = { select: () => obj, eq: () => obj, single: async () => ({ data, error: null }) };
   return obj;
 }
-
-type CadenaPiezas = {
-  select: () => CadenaPiezas;
-  eq: () => CadenaPiezas;
-  maybeSingle: () => Promise<{ data: unknown }>;
-  update: (valores: Record<string, unknown>) => CadenaPiezas;
-};
 
 type CadenaAlbum = {
   insert: (valores: Record<string, unknown>) => CadenaAlbum;
@@ -46,13 +46,28 @@ const fromMock = vi.fn();
 fromMock.mockImplementation((tabla: unknown) => {
   if (tabla === "usuarios") return chainUsuarios(usuarioActual);
   if (tabla === "publicaciones_organicas") {
-    const obj: CadenaPiezas = {
-      select: () => obj,
-      eq: () => obj,
-      maybeSingle: async () => ({ data: piezaActual }),
-      update: (valores) => {
-        updateFinalCon = valores;
+    // select("id, estado, intentos").eq().eq().maybeSingle() (lectura
+    // inicial) vs. update({...}).eq().eq()[.in()][.select("id")]
+    // (retry-failure/claim/album_id-final) -- un solo objeto encadenable
+    // que decide su resolución según si alguien llamó select() después
+    // de update() (el claim) o no (fire-and-forget, como hace el código
+    // real en los otros dos updates).
+    let huboSelectTrasUpdate = false;
+    const obj = {
+      select: () => {
+        huboSelectTrasUpdate = true;
         return obj;
+      },
+      eq: () => obj,
+      in: () => obj,
+      maybeSingle: async () => ({ data: piezaActual }),
+      update: (valores: Record<string, unknown>) => {
+        huboSelectTrasUpdate = false;
+        updatesRealizados.push(valores);
+        return obj;
+      },
+      then: (resolve: (v: { data: unknown; error: unknown }) => void) => {
+        resolve(huboSelectTrasUpdate ? { data: filasReclamadasActual, error: errorClaimActual } : { data: null, error: null });
       },
     };
     return obj;
@@ -60,7 +75,7 @@ fromMock.mockImplementation((tabla: unknown) => {
   if (tabla === "album_creativos") {
     const obj: CadenaAlbum = {
       insert: (valores) => {
-        insertAlbumCon = valores;
+        updatesRealizados.push({ __insertAlbum: true, ...valores });
         return obj;
       },
       select: () => obj,
@@ -92,17 +107,23 @@ function contexto(id = "pieza-1") {
   return { params: Promise.resolve({ id }) };
 }
 
+function updateQueTocaCampo(campo: string) {
+  return updatesRealizados.find((u) => campo in u);
+}
+
 describe("POST /api/contenido/[id]/video-listo", () => {
   beforeEach(() => {
     fromMock.mockClear();
     uploadMock.mockReset();
+    destroyMock.mockReset().mockResolvedValue({});
     registrarErrorMock.mockReset();
     authMock.mockResolvedValue({ user: { email: "marca@quiubot.com" } });
     usuarioActual = USUARIO_ADMIN;
-    piezaActual = { id: "pieza-1", estado: "renderizando" };
-    insertAlbumCon = null;
+    piezaActual = { id: "pieza-1", estado: "renderizando", intentos: 0 };
+    filasReclamadasActual = [{ id: "pieza-1" }];
+    errorClaimActual = null;
     errorInsertAlbum = null;
-    updateFinalCon = null;
+    updatesRealizados = [];
     vi.spyOn(console, "error").mockImplementation(() => {});
   });
 
@@ -131,7 +152,7 @@ describe("POST /api/contenido/[id]/video-listo", () => {
   });
 
   it("pieza en un estado que no acepta video (ej. ya 'lista'): 400, nunca sube nada", async () => {
-    piezaActual = { id: "pieza-1", estado: "lista" };
+    piezaActual = { id: "pieza-1", estado: "lista", intentos: 0 };
     const res = await POST(reqConArchivo(), contexto());
     expect(res.status).toBe(400);
     expect(uploadMock).not.toHaveBeenCalled();
@@ -143,7 +164,7 @@ describe("POST /api/contenido/[id]/video-listo", () => {
     expect(res.status).toBe(400);
   });
 
-  it("éxito: sube a Cloudinary, crea la pieza del álbum y actualiza la publicación con actualizado_en", async () => {
+  it("éxito: sube a Cloudinary, reclama la pieza, crea el álbum y guarda el album_id", async () => {
     uploadMock.mockResolvedValue({ secure_url: "https://res.cloudinary.com/demo/video/upload/v1/reel.mp4", public_id: "reel-1" });
 
     const res = await POST(reqConArchivo(), contexto());
@@ -151,23 +172,49 @@ describe("POST /api/contenido/[id]/video-listo", () => {
 
     expect(res.status).toBe(200);
     expect(body.url_video).toBe("https://res.cloudinary.com/demo/video/upload/v1/reel.mp4");
-    expect(insertAlbumCon).toMatchObject({ user_id: "user-1", url_imagen: "https://res.cloudinary.com/demo/video/upload/v1/reel.mp4", public_id: "reel-1", tipo: "video" });
-    expect(updateFinalCon).toMatchObject({
-      estado: "lista",
-      url_video: "https://res.cloudinary.com/demo/video/upload/v1/reel.mp4",
-      cloudinary_public_id: "reel-1",
-      album_id: "album-1",
-    });
-    expect(typeof (updateFinalCon as Record<string, unknown>).actualizado_en).toBe("string");
+    expect(updateQueTocaCampo("__insertAlbum")).toMatchObject({ user_id: "user-1", url_imagen: expect.any(String), public_id: "reel-1", tipo: "video" });
+    expect(updateQueTocaCampo("estado")).toMatchObject({ estado: "lista", url_video: expect.any(String), cloudinary_public_id: "reel-1" });
+    expect(updateQueTocaCampo("album_id")).toMatchObject({ album_id: "album-1" });
+    for (const u of updatesRealizados) {
+      if (!("__insertAlbum" in u)) expect(typeof u.actualizado_en).toBe("string");
+    }
+    expect(destroyMock).not.toHaveBeenCalled();
   });
 
-  it("si Cloudinary falla, la pieza pasa a error con tipo_error 'subida' y se registra el error", async () => {
+  it("primer fallo de Cloudinary: NO pasa a error, cuenta el intento, es reintentable", async () => {
     uploadMock.mockRejectedValue(new Error("Cloudinary caído"));
 
     const res = await POST(reqConArchivo(), contexto());
+    const body = await res.json();
+
     expect(res.status).toBe(503);
+    expect(body.reintentable).toBe(true);
+    expect(registrarErrorMock).not.toHaveBeenCalled();
+    expect(updatesRealizados[0]).toMatchObject({ intentos: 1 });
+    expect(updatesRealizados[0]).not.toHaveProperty("estado");
+  });
+
+  it("segundo fallo seguido de Cloudinary: ahí sí pasa a error", async () => {
+    piezaActual = { id: "pieza-1", estado: "renderizando", intentos: 1 };
+    uploadMock.mockRejectedValue(new Error("Cloudinary caído otra vez"));
+
+    const res = await POST(reqConArchivo(), contexto());
+    const body = await res.json();
+
+    expect(res.status).toBe(503);
+    expect(body.reintentable).toBe(false);
     expect(registrarErrorMock).toHaveBeenCalledWith(expect.objectContaining({ origen: "contenido_video_listo" }));
-    expect(updateFinalCon).toMatchObject({ estado: "error", tipo_error: "subida" });
-    expect(typeof (updateFinalCon as Record<string, unknown>).actualizado_en).toBe("string");
+    expect(updatesRealizados[0]).toMatchObject({ intentos: 2, estado: "error", tipo_error: "subida" });
+  });
+
+  it("carrera perdida contra otra pestaña: no crea la pieza del álbum y borra el archivo de Cloudinary", async () => {
+    uploadMock.mockResolvedValue({ secure_url: "https://res.cloudinary.com/demo/video/upload/v1/reel.mp4", public_id: "reel-1" });
+    filasReclamadasActual = [];
+
+    const res = await POST(reqConArchivo(), contexto());
+
+    expect(res.status).toBe(409);
+    expect(destroyMock).toHaveBeenCalledWith("reel-1", { resource_type: "video" });
+    expect(updateQueTocaCampo("__insertAlbum")).toBeUndefined();
   });
 });
