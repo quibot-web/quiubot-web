@@ -166,6 +166,52 @@ describe("PATCH /api/contenido/[id] -- iniciar_render", () => {
   });
 });
 
+describe("PATCH /api/contenido/[id] -- reprogramar (arrastrar en el calendario)", () => {
+  beforeEach(() => {
+    fromMock.mockClear();
+    authMock.mockResolvedValue({ user: { email: "marca@quiubot.com" } });
+    usuarioActual = USUARIO_ADMIN;
+    filasUpdateActual = [{ id: "pieza-1" }];
+    updatesRealizados = [];
+    piezaActual = { id: "pieza-1", estado: "aprobada" };
+  });
+
+  function isoEnElFuturo(horas: number): string {
+    return new Date(Date.now() + horas * 60 * 60 * 1000).toISOString();
+  }
+  function isoEnElPasado(horas: number): string {
+    return new Date(Date.now() - horas * 60 * 60 * 1000).toISOString();
+  }
+
+  it("fecha futura y estado reprogramable: mueve la pieza y recalcula la semana", async () => {
+    const nuevaFecha = isoEnElFuturo(72);
+    const res = await PATCH(patchReq({ accion: "reprogramar", programada_para: nuevaFecha }), contexto());
+    const body = await res.json();
+    expect(res.status).toBe(200);
+    expect(body.ok).toBe(true);
+    expect(updatesRealizados[0]).toMatchObject({ programada_para: nuevaFecha });
+  });
+
+  it("fecha pasada: 400, nunca llega a actualizar", async () => {
+    const res = await PATCH(patchReq({ accion: "reprogramar", programada_para: isoEnElPasado(24) }), contexto());
+    expect(res.status).toBe(400);
+    expect(updatesRealizados.length).toBe(0);
+  });
+
+  it("pieza ya publicada: 400, nunca se puede arrastrar", async () => {
+    piezaActual = { id: "pieza-1", estado: "publicada" };
+    const res = await PATCH(patchReq({ accion: "reprogramar", programada_para: isoEnElFuturo(24) }), contexto());
+    expect(res.status).toBe(400);
+    expect(updatesRealizados.length).toBe(0);
+  });
+
+  it("otra pestaña cambió el estado mientras tanto (0 filas afectadas): 409", async () => {
+    filasUpdateActual = [];
+    const res = await PATCH(patchReq({ accion: "reprogramar", programada_para: isoEnElFuturo(24) }), contexto());
+    expect(res.status).toBe(409);
+  });
+});
+
 describe("PATCH /api/contenido/[id] -- editar", () => {
   beforeEach(() => {
     fromMock.mockClear();

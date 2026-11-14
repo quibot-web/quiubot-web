@@ -117,3 +117,15 @@ export function urlPistaMusical(cloudinaryName: string, publicId: string): strin
 export function urlRecorteVertical(url: string): string {
   return url.replace("/upload/", "/upload/c_fill,g_auto,ar_9:16,w_1080,q_auto/");
 }
+
+// Miniatura 9:16 para las tarjetas del calendario de /contenido
+// (rediseño estilo Meta Business Suite/Metricool, sección 2 del plan)
+// -- combina el truco de urlPortadaVideo (so_1 + extensión a .jpg,
+// para un frame fijo de un video) con el recorte de urlRecorteVertical
+// (c_fill,g_auto,ar_9:16), pero con un ancho chico (es una miniatura de
+// lista, no el video final) y q_auto. Ancho por defecto pensado para
+// una tarjeta de ~90-140px en el calendario.
+export function urlMiniaturaReel(url: string, anchoMaximo = 240): string {
+  const conExtensionJpg = url.replace(/\.[a-zA-Z0-9]+(\?.*)?$/, ".jpg$1");
+  return conExtensionJpg.replace("/upload/", `/upload/so_1,c_fill,g_auto,ar_9:16,w_${anchoMaximo},q_auto/`);
+}

@@ -3,7 +3,7 @@
 import { describe, it, expect, vi, beforeEach } from "vitest";
 import { NextRequest } from "next/server";
 import { lunesDeLaSemana } from "@/app/lib/contenido";
-import { fechaBogota } from "@/app/lib/fechaBogota";
+import { fechaBogota, inicioDiaBogota, finDiaBogota } from "@/app/lib/fechaBogota";
 
 // Relativa a "ahora" (nunca una fecha fija como "2026-11-20") -- esta
 // prueba tiene que seguir pasando sin importar qué día se corra de
@@ -32,10 +32,14 @@ function chainUsuarios(data: unknown) {
 type CadenaPiezas = {
   select: () => CadenaPiezas;
   eq: () => CadenaPiezas;
+  gte: (campo: string, valor: string) => CadenaPiezas;
+  lte: (campo: string, valor: string) => CadenaPiezas;
   order: () => Promise<{ data: unknown; error: unknown }>;
   insert: (valores: Record<string, unknown>) => CadenaPiezas;
   single: () => Promise<{ data: unknown; error: unknown }>;
 };
+
+let filtrosRangoActual: { gte?: string; lte?: string } = {};
 
 const fromMock = vi.fn();
 fromMock.mockImplementation((tabla: unknown) => {
@@ -44,6 +48,14 @@ fromMock.mockImplementation((tabla: unknown) => {
     const obj: CadenaPiezas = {
       select: () => obj,
       eq: () => obj,
+      gte: (_campo, valor) => {
+        filtrosRangoActual.gte = valor;
+        return obj;
+      },
+      lte: (_campo, valor) => {
+        filtrosRangoActual.lte = valor;
+        return obj;
+      },
       order: async () => ({ data: piezasSemanaActual, error: null }),
       insert: (valores) => {
         insertadoCon = valores;
@@ -83,6 +95,7 @@ describe("GET /api/contenido", () => {
     authMock.mockResolvedValue({ user: { email: "marca@quiubot.com" } });
     usuarioActual = USUARIO_ADMIN;
     piezasSemanaActual = [{ id: "pieza-1", estado: "borrador" }];
+    filtrosRangoActual = {};
     vi.spyOn(console, "error").mockImplementation(() => {});
   });
 
@@ -110,6 +123,16 @@ describe("GET /api/contenido", () => {
     const res = await GET(getReq("2026-11-11")); // miércoles
     const body = await res.json();
     expect(body.semana).toBe("2026-11-09");
+  });
+
+  it("?desde=&hasta= (vista de mes): filtra por rango real, no por semana", async () => {
+    const url = "http://localhost/api/contenido?desde=2026-11-02&hasta=2026-12-06";
+    const res = await GET(new NextRequest(url));
+    const body = await res.json();
+    expect(res.status).toBe(200);
+    expect(body.piezas).toEqual(piezasSemanaActual);
+    expect(filtrosRangoActual.gte).toBe(inicioDiaBogota("2026-11-02").toISOString());
+    expect(filtrosRangoActual.lte).toBe(finDiaBogota("2026-12-06").toISOString());
   });
 });
 

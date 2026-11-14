@@ -2,8 +2,20 @@
 
 import { useEffect, useState, useCallback } from "react";
 import { useRouter } from "next/navigation";
-import { RECETAS_ORGANICAS_INFO, RECETAS_QUE_EXIGEN_MEDIA, ESTADOS_INFO, labelReceta, lunesDeLaSemana, esFechaFutura, type PublicacionOrganica } from "@/app/lib/contenido";
+import {
+  RECETAS_ORGANICAS_INFO,
+  RECETAS_QUE_EXIGEN_MEDIA,
+  ESTADOS_INFO,
+  ESTADOS_NO_REPROGRAMABLES,
+  colorPuntoEstado,
+  labelReceta,
+  lunesDeLaSemana,
+  esFechaFutura,
+  type PublicacionOrganica,
+} from "@/app/lib/contenido";
 import { hoyBogota, fechaBogota } from "@/app/lib/fechaBogota";
+import { urlMiniaturaReel } from "@/app/lib/cloudinaryUrl";
+import { construirTemaDesdeAdn, colorTextoSobre, type AdnMarcaParaTema } from "@/video/tema";
 import SelectorAlbum, { type ItemAlbum } from "@/app/components/SelectorAlbum";
 import SelectorProducto, { resolverProductoAlUsar, valorVacioSelectorProducto, type ValorSelectorProducto } from "@/app/components/SelectorProducto";
 import ColaDeRender from "./ColaDeRender";
@@ -12,8 +24,11 @@ import type { RecetaOrganicaId } from "@/video/guion.schema";
 const MAX_PIEZAS_POR_REEL = 3;
 
 type Paso = "cargando" | "sin-acceso" | "calendario";
+type Vista = "semana" | "mes";
 
 const DIAS_SEMANA = ["Lunes", "Martes", "Miércoles", "Jueves", "Viernes", "Sábado", "Domingo"];
+const DIAS_SEMANA_CORTO = ["Lun", "Mar", "Mié", "Jue", "Vie", "Sáb", "Dom"];
+const NOMBRES_MES = ["enero", "febrero", "marzo", "abril", "mayo", "junio", "julio", "agosto", "septiembre", "octubre", "noviembre", "diciembre"];
 
 function sumarDias(fechaYMD: string, dias: number): string {
   const [a, m, d] = fechaYMD.split("-").map(Number);
@@ -27,31 +42,94 @@ function formatoDiaCorto(fechaYMD: string): string {
   return `${d}/${m}`;
 }
 
+function primerDiaMes(mesYM: string): string {
+  return `${mesYM}-01`;
+}
+
+function ultimoDiaMes(mesYM: string): string {
+  const [a, m] = mesYM.split("-").map(Number);
+  // Día 0 del mes siguiente = último día de este mes.
+  return new Date(Date.UTC(a, m, 0)).toISOString().slice(0, 10);
+}
+
+function sumarMeses(mesYM: string, delta: number): string {
+  const [a, m] = mesYM.split("-").map(Number);
+  const fecha = new Date(Date.UTC(a, m - 1 + delta, 1));
+  return `${fecha.getUTCFullYear()}-${String(fecha.getUTCMonth() + 1).padStart(2, "0")}`;
+}
+
+function labelMes(mesYM: string): string {
+  const [a, m] = mesYM.split("-").map(Number);
+  return `${NOMBRES_MES[m - 1]} ${a}`;
+}
+
+// Cuadrícula de semanas (lunes a domingo) que cubre todo el mes --
+// igual que cualquier calendario tipo Metricool/Meta Business Suite,
+// puede empezar en el mes anterior y terminar en el siguiente.
+function gridDelMes(mesYM: string): string[][] {
+  const inicio = lunesDeLaSemana(primerDiaMes(mesYM));
+  const fin = sumarDias(lunesDeLaSemana(ultimoDiaMes(mesYM)), 6);
+  const dias: string[] = [];
+  let actual = inicio;
+  while (actual <= fin) {
+    dias.push(actual);
+    actual = sumarDias(actual, 1);
+  }
+  const semanas: string[][] = [];
+  for (let i = 0; i < dias.length; i += 7) semanas.push(dias.slice(i, i + 7));
+  return semanas;
+}
+
+function useEsMobile(): boolean {
+  const [esMobile, setEsMobile] = useState(() => (typeof window !== "undefined" ? window.matchMedia("(max-width: 700px)").matches : false));
+  useEffect(() => {
+    const mq = window.matchMedia("(max-width: 700px)");
+    const listener = (e: MediaQueryListEvent) => setEsMobile(e.matches);
+    mq.addEventListener("change", listener);
+    return () => mq.removeEventListener("change", listener);
+  }, []);
+  return esMobile;
+}
+
 export default function ContenidoPage() {
   const router = useRouter();
+  const esMobile = useEsMobile();
   const [paso, setPaso] = useState<Paso>("cargando");
-  const [semana, setSemana] = useState<string>("");
+  const [vista, setVista] = useState<Vista>("semana");
+  const [semana, setSemana] = useState<string>(() => lunesDeLaSemana(hoyBogota()));
+  const [mes, setMes] = useState<string>(() => hoyBogota().slice(0, 7));
   const [piezas, setPiezas] = useState<PublicacionOrganica[]>([]);
-  const [cargandoSemana, setCargandoSemana] = useState(false);
+  const [cargandoDatos, setCargandoDatos] = useState(false);
+  const [adnMarca, setAdnMarca] = useState<AdnMarcaParaTema | null>(null);
   const [mostrarFormulario, setMostrarFormulario] = useState(false);
+  const [fechaFormulario, setFechaFormulario] = useState<string>(hoyBogota());
+  const [arrastrandoId, setArrastrandoId] = useState<string | null>(null);
   const [errorMsg, setErrorMsg] = useState<string | null>(null);
 
-  const cargarSemana = useCallback(async (lunes: string) => {
-    setCargandoSemana(true);
+  const tema = construirTemaDesdeAdn(adnMarca);
+
+  const cargarDatos = useCallback(async (vistaActual: Vista, semanaActual: string, mesActual: string) => {
+    setCargandoDatos(true);
     setErrorMsg(null);
     try {
-      const res = await fetch(`/api/contenido?semana=${lunes}`);
+      let url: string;
+      if (vistaActual === "semana") {
+        url = `/api/contenido?semana=${semanaActual}`;
+      } else {
+        const grid = gridDelMes(mesActual);
+        url = `/api/contenido?desde=${grid[0][0]}&hasta=${grid[grid.length - 1][6]}`;
+      }
+      const res = await fetch(url);
       const data = await res.json();
       if (!res.ok) {
         setErrorMsg(data.error || "No se pudo cargar el calendario.");
         return;
       }
-      setSemana(data.semana);
       setPiezas(data.piezas || []);
     } catch {
       setErrorMsg("No se pudo cargar el calendario.");
     } finally {
-      setCargandoSemana(false);
+      setCargandoDatos(false);
     }
   }, []);
 
@@ -64,101 +142,241 @@ export default function ContenidoPage() {
           setPaso("sin-acceso");
           return;
         }
-        const lunesHoy = lunesDeLaSemana(hoyBogota());
-        await cargarSemana(lunesHoy);
+        fetch("/api/marca-adn")
+          .then((r) => r.json())
+          .then((d) => setAdnMarca(d.adn_marca ?? null))
+          .catch(() => {});
+        await cargarDatos(vista, semana, mes);
         setPaso("calendario");
       } catch {
         setPaso("sin-acceso");
       }
     })();
-  }, [cargarSemana]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
-  if (paso === "cargando") {
-    return <PantallaCentro texto="Cargando…" />;
+  const refrescar = useCallback(() => cargarDatos(vista, semana, mes), [cargarDatos, vista, semana, mes]);
+
+  function cambiarVista(nueva: Vista) {
+    setVista(nueva);
+    cargarDatos(nueva, semana, mes);
+  }
+  function irASemana(nuevaSemana: string) {
+    setSemana(nuevaSemana);
+    cargarDatos("semana", nuevaSemana, mes);
+  }
+  function irAMes(nuevoMes: string) {
+    setMes(nuevoMes);
+    cargarDatos("mes", semana, nuevoMes);
   }
 
-  if (paso === "sin-acceso") {
-    return <PantallaCentro texto="No tienes acceso a esta sección." />;
+  async function reprogramarPieza(id: string, nuevaFechaYMD: string) {
+    const pieza = piezas.find((p) => p.id === id);
+    if (!pieza) return;
+    // Conserva la hora original, solo cambia el día -- misma convención
+    // de offset de Bogotá que usa el formulario de crear.
+    const horaOriginal = new Date(pieza.programada_para).toLocaleTimeString("en-GB", {
+      hour: "2-digit",
+      minute: "2-digit",
+      second: "2-digit",
+      hour12: false,
+      timeZone: "America/Bogota",
+    });
+    const nuevaISO = `${nuevaFechaYMD}T${horaOriginal}-05:00`;
+    if (!esFechaFutura(nuevaISO)) {
+      setErrorMsg("No puedes mover un reel a una fecha u hora que ya pasó.");
+      return;
+    }
+    try {
+      const res = await fetch(`/api/contenido/${id}`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ accion: "reprogramar", programada_para: nuevaISO }),
+      });
+      const data = await res.json();
+      if (!res.ok) {
+        setErrorMsg(data.error || "No se pudo mover el reel.");
+        return;
+      }
+      refrescar();
+    } catch {
+      setErrorMsg("No se pudo mover el reel.");
+    }
   }
 
-  const dias = Array.from({ length: 7 }, (_, i) => sumarDias(semana, i));
+  function abrirFormulario(fecha: string) {
+    setFechaFormulario(fecha);
+    setMostrarFormulario(true);
+  }
+
+  if (paso === "cargando") return <PantallaCentro texto="Cargando…" />;
+  if (paso === "sin-acceso") return <PantallaCentro texto="No tienes acceso a esta sección." />;
+
+  const piezasPorDia = (fecha: string) => piezas.filter((p) => fechaBogota(new Date(p.programada_para)) === fecha);
+  const hoy = hoyBogota();
+
+  const resumen = {
+    total: piezas.length,
+    listos: piezas.filter((p) => p.estado === "lista").length,
+    publicados: piezas.filter((p) => p.estado === "publicada").length,
+    porAprobar: piezas.filter((p) => p.estado === "borrador").length,
+  };
+
+  const fechaBaseGenerica = vista === "semana" ? semana : primerDiaMes(mes);
+  const fechaInicialGenerica = fechaBaseGenerica < hoy ? hoy : fechaBaseGenerica;
+
+  const diasSemana = Array.from({ length: 7 }, (_, i) => sumarDias(semana, i));
+  const semanasMes = vista === "mes" ? gridDelMes(mes) : [];
+
+  // En móvil, tanto semana como mes se muestran como una lista vertical
+  // de días (una columna), en vez de la cuadrícula -- la cuadrícula de
+  // 7 columnas no cabe en una pantalla angosta.
+  const diasParaListaMobile = vista === "semana" ? diasSemana : semanasMes.flat();
 
   return (
     <div style={{ minHeight: "100vh", background: "#f9f9f8", fontFamily: "system-ui, sans-serif", padding: "24px 20px" }}>
       <div style={{ maxWidth: 1100, margin: "0 auto" }}>
-        <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 20, flexWrap: "wrap", gap: 12 }}>
+        <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 16, flexWrap: "wrap", gap: 12 }}>
           <div>
             <h1 style={{ fontSize: 22, fontWeight: 800, color: "#1a1a1a", margin: 0 }}>Contenido orgánico</h1>
             <p style={{ fontSize: 13, color: "#666", margin: "4px 0 0" }}>
-              Semana del {formatoDiaCorto(dias[0])} al {formatoDiaCorto(dias[6])}
+              {vista === "semana" ? `Semana del ${formatoDiaCorto(diasSemana[0])} al ${formatoDiaCorto(diasSemana[6])}` : labelMes(mes)}
             </p>
           </div>
-          <div style={{ display: "flex", gap: 8 }}>
-            <button type="button" onClick={() => cargarSemana(sumarDias(semana, -7))} style={botonSecundario} disabled={cargandoSemana}>
-              ← Semana anterior
+          <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
+            <div style={{ display: "flex", border: "1px solid #534AB7", borderRadius: 10, overflow: "hidden" }}>
+              <button type="button" onClick={() => cambiarVista("semana")} style={botonVista(vista === "semana")}>
+                Semana
+              </button>
+              <button type="button" onClick={() => cambiarVista("mes")} style={botonVista(vista === "mes")}>
+                Mes
+              </button>
+            </div>
+            <button
+              type="button"
+              onClick={() => (vista === "semana" ? irASemana(sumarDias(semana, -7)) : irAMes(sumarMeses(mes, -1)))}
+              style={botonSecundario}
+              disabled={cargandoDatos}
+            >
+              ← Anterior
             </button>
-            <button type="button" onClick={() => cargarSemana(lunesDeLaSemana(hoyBogota()))} style={botonSecundario} disabled={cargandoSemana}>
+            <button
+              type="button"
+              onClick={() => (vista === "semana" ? irASemana(lunesDeLaSemana(hoy)) : irAMes(hoy.slice(0, 7)))}
+              style={botonSecundario}
+              disabled={cargandoDatos}
+            >
               Hoy
             </button>
-            <button type="button" onClick={() => cargarSemana(sumarDias(semana, 7))} style={botonSecundario} disabled={cargandoSemana}>
-              Semana siguiente →
+            <button
+              type="button"
+              onClick={() => (vista === "semana" ? irASemana(sumarDias(semana, 7)) : irAMes(sumarMeses(mes, 1)))}
+              style={botonSecundario}
+              disabled={cargandoDatos}
+            >
+              Siguiente →
             </button>
           </div>
         </div>
 
-        <div style={{ display: "flex", gap: 10, marginBottom: 20, flexWrap: "wrap" }}>
-          <button type="button" style={botonPrimario} onClick={() => setMostrarFormulario(true)}>
+        <div style={{ display: "flex", gap: 10, marginBottom: 12, flexWrap: "wrap", alignItems: "center" }}>
+          <button type="button" style={botonPrimario} onClick={() => abrirFormulario(fechaInicialGenerica)}>
             ＋ Agregar reel
           </button>
           <button type="button" style={{ ...botonSecundario, opacity: 0.6, cursor: "not-allowed" }} disabled title="Disponible pronto -- el Director todavía no arma el calendario solo.">
             Pedir propuesta al Director (próximamente)
           </button>
-          <button type="button" style={botonSecundario} onClick={() => cargarSemana(semana)} disabled={cargandoSemana}>
+          <button type="button" style={botonSecundario} onClick={refrescar} disabled={cargandoDatos}>
             Preparar mis videos
           </button>
+          <span style={{ fontSize: 12, color: "#666", marginLeft: "auto" }}>
+            {resumen.total} reels · {resumen.listos} listos · {resumen.publicados} publicados · {resumen.porAprobar} por aprobar
+          </span>
         </div>
 
         {errorMsg && <p style={{ color: "#b91c1c", fontSize: 13, marginBottom: 16 }}>{errorMsg}</p>}
 
-        <ColaDeRender piezasAprobadas={piezas.filter((p) => p.estado === "aprobada")} onPiezaLista={() => cargarSemana(semana)} />
+        <ColaDeRender piezasAprobadas={piezas.filter((p) => p.estado === "aprobada")} onPiezaLista={refrescar} />
 
-        <div style={{ display: "grid", gridTemplateColumns: "repeat(7, minmax(140px, 1fr))", gap: 12, overflowX: "auto" }}>
-          {dias.map((fecha, i) => {
-            const esHoy = fecha === hoyBogota();
-            const piezasDelDia = piezas.filter((p) => fechaBogota(new Date(p.programada_para)) === fecha);
-            return (
-              <div
+        {esMobile ? (
+          <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
+            {diasParaListaMobile.map((fecha) => (
+              <DiaCelda
                 key={fecha}
-                style={{
-                  background: "#fff",
-                  borderRadius: 14,
-                  border: esHoy ? "2px solid #534AB7" : "1px solid #e5e5e5",
-                  padding: 12,
-                  minHeight: 180,
-                }}
-              >
-                <div style={{ fontSize: 12, fontWeight: 700, color: esHoy ? "#534AB7" : "#666", marginBottom: 10 }}>
-                  {DIAS_SEMANA[i]} {formatoDiaCorto(fecha)}
+                fecha={fecha}
+                piezasDelDia={piezasPorDia(fecha)}
+                esHoy={fecha === hoy}
+                esPasado={fecha < hoy}
+                tema={tema}
+                compacta={false}
+                tituloDia={`${DIAS_SEMANA[new Date(fecha + "T12:00:00Z").getUTCDay() === 0 ? 6 : new Date(fecha + "T12:00:00Z").getUTCDay() - 1]} ${formatoDiaCorto(fecha)}`}
+                onClickPieza={(id) => router.push(`/contenido/${id}`)}
+                onAgregar={abrirFormulario}
+                onDropDia={(f) => reprogramarPieza(arrastrandoId!, f)}
+                onDragStartPieza={setArrastrandoId}
+              />
+            ))}
+          </div>
+        ) : vista === "semana" ? (
+          <div style={{ display: "grid", gridTemplateColumns: "repeat(7, minmax(130px, 1fr))", gap: 12 }}>
+            {diasSemana.map((fecha, i) => (
+              <DiaCelda
+                key={fecha}
+                fecha={fecha}
+                piezasDelDia={piezasPorDia(fecha)}
+                esHoy={fecha === hoy}
+                esPasado={fecha < hoy}
+                tema={tema}
+                compacta={false}
+                tituloDia={`${DIAS_SEMANA[i]} ${formatoDiaCorto(fecha)}`}
+                onClickPieza={(id) => router.push(`/contenido/${id}`)}
+                onAgregar={abrirFormulario}
+                onDropDia={(f) => reprogramarPieza(arrastrandoId!, f)}
+                onDragStartPieza={setArrastrandoId}
+              />
+            ))}
+          </div>
+        ) : (
+          <div>
+            <div style={{ display: "grid", gridTemplateColumns: "repeat(7, 1fr)", gap: 6, marginBottom: 6 }}>
+              {DIAS_SEMANA_CORTO.map((d) => (
+                <div key={d} style={{ fontSize: 11, fontWeight: 700, color: "#999", textAlign: "center" }}>
+                  {d}
                 </div>
-                <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
-                  {piezasDelDia.length === 0 && <div style={{ fontSize: 12, color: "#bbb" }}>Sin piezas</div>}
-                  {piezasDelDia.map((p) => (
-                    <TarjetaPieza key={p.id} pieza={p} onClick={() => router.push(`/contenido/${p.id}`)} />
-                  ))}
-                </div>
+              ))}
+            </div>
+            {semanasMes.map((semanaFilas, i) => (
+              <div key={i} style={{ display: "grid", gridTemplateColumns: "repeat(7, 1fr)", gap: 6, marginBottom: 6 }}>
+                {semanaFilas.map((fecha) => (
+                  <DiaCelda
+                    key={fecha}
+                    fecha={fecha}
+                    piezasDelDia={piezasPorDia(fecha)}
+                    esHoy={fecha === hoy}
+                    esPasado={fecha < hoy}
+                    tema={tema}
+                    compacta
+                    atenuadaFueraDeMes={fecha.slice(0, 7) !== mes}
+                    tituloDia={fecha.slice(8, 10)}
+                    onClickPieza={(id) => router.push(`/contenido/${id}`)}
+                    onAgregar={abrirFormulario}
+                    onDropDia={(f) => reprogramarPieza(arrastrandoId!, f)}
+                    onDragStartPieza={setArrastrandoId}
+                  />
+                ))}
               </div>
-            );
-          })}
-        </div>
+            ))}
+          </div>
+        )}
       </div>
 
       {mostrarFormulario && (
         <FormularioAgregarReel
-          semana={semana}
+          fechaInicial={fechaFormulario}
           onCerrar={() => setMostrarFormulario(false)}
           onCreado={() => {
             setMostrarFormulario(false);
-            cargarSemana(semana);
+            refrescar();
           }}
         />
       )}
@@ -166,28 +384,160 @@ export default function ContenidoPage() {
   );
 }
 
-function TarjetaPieza({ pieza, onClick }: { pieza: PublicacionOrganica; onClick: () => void }) {
-  const estadoInfo = ESTADOS_INFO[pieza.estado];
-  const hora = new Date(pieza.programada_para).toLocaleTimeString("es-CO", { hour: "2-digit", minute: "2-digit", timeZone: "America/Bogota" });
+function DiaCelda({
+  fecha,
+  piezasDelDia,
+  esHoy,
+  esPasado,
+  tema,
+  compacta,
+  atenuadaFueraDeMes,
+  tituloDia,
+  onClickPieza,
+  onAgregar,
+  onDropDia,
+  onDragStartPieza,
+}: {
+  fecha: string;
+  piezasDelDia: PublicacionOrganica[];
+  esHoy: boolean;
+  esPasado: boolean;
+  tema: ReturnType<typeof construirTemaDesdeAdn>;
+  compacta: boolean;
+  atenuadaFueraDeMes?: boolean;
+  tituloDia: string;
+  onClickPieza: (id: string) => void;
+  onAgregar: (fecha: string) => void;
+  onDropDia: (fecha: string) => void;
+  onDragStartPieza: (id: string) => void;
+}) {
+  const [sobreDrop, setSobreDrop] = useState(false);
   return (
-    <div onClick={onClick} style={{ borderRadius: 10, border: "1px solid #eee", padding: "8px 10px", background: "#fafafa", cursor: "pointer" }}>
-      <div style={{ fontSize: 12, fontWeight: 700, color: "#1a1a1a" }}>{labelReceta(pieza.receta_organica)}</div>
-      <div style={{ fontSize: 11, color: "#888", marginTop: 2 }}>{hora}</div>
-      <div style={{ display: "inline-block", marginTop: 6, fontSize: 10, fontWeight: 700, color: "#fff", background: estadoInfo.color, borderRadius: 999, padding: "2px 8px" }}>
-        {estadoInfo.label}
+    <div
+      onDragOver={(e) => {
+        if (esPasado) return;
+        e.preventDefault();
+        setSobreDrop(true);
+      }}
+      onDragLeave={() => setSobreDrop(false)}
+      onDrop={(e) => {
+        e.preventDefault();
+        setSobreDrop(false);
+        if (!esPasado) onDropDia(fecha);
+      }}
+      style={{
+        background: esPasado ? "#f2f2f0" : "#fff",
+        opacity: esPasado ? 0.55 : atenuadaFueraDeMes ? 0.5 : 1,
+        borderRadius: compacta ? 10 : 14,
+        border: esHoy ? "2px solid #534AB7" : sobreDrop ? "2px dashed #534AB7" : "1px solid #e5e5e5",
+        padding: compacta ? 6 : 12,
+        minHeight: compacta ? 76 : 190,
+        display: "flex",
+        flexDirection: "column",
+        gap: 6,
+      }}
+    >
+      <div style={{ fontSize: compacta ? 11 : 12, fontWeight: 700, color: esHoy ? "#534AB7" : "#666" }}>{tituloDia}</div>
+      <div style={{ display: "flex", flexDirection: compacta ? "row" : "column", flexWrap: compacta ? "wrap" : "nowrap", gap: compacta ? 3 : 8, flex: 1 }}>
+        {!compacta && piezasDelDia.length === 0 && <div style={{ fontSize: 12, color: "#bbb" }}>Sin piezas</div>}
+        {piezasDelDia.map((p) => (
+          <TarjetaPieza
+            key={p.id}
+            pieza={p}
+            tema={tema}
+            compacta={compacta}
+            draggable={!ESTADOS_NO_REPROGRAMABLES.includes(p.estado)}
+            onDragStart={() => onDragStartPieza(p.id)}
+            onClick={() => onClickPieza(p.id)}
+          />
+        ))}
       </div>
-      {pieza.receta_organica === "serie_partes" && !pieza.continua_de_id && (
-        <div style={{ fontSize: 10, color: "#C8893F", marginTop: 4, fontWeight: 600 }}>⚠ La parte 1 promete una parte 2</div>
+      {!esPasado && (
+        <button
+          type="button"
+          onClick={() => onAgregar(fecha)}
+          style={{
+            alignSelf: compacta ? "center" : "stretch",
+            padding: compacta ? "2px 6px" : "6px 0",
+            borderRadius: 8,
+            border: "1.5px dashed #534AB7",
+            background: "#F3F2FE",
+            color: "#534AB7",
+            fontSize: compacta ? 12 : 13,
+            fontWeight: 700,
+            cursor: "pointer",
+          }}
+        >
+          ＋
+        </button>
       )}
     </div>
   );
 }
 
-function FormularioAgregarReel({ semana, onCerrar, onCreado }: { semana: string; onCerrar: () => void; onCreado: () => void }) {
+function TarjetaPieza({
+  pieza,
+  tema,
+  compacta,
+  draggable,
+  onDragStart,
+  onClick,
+}: {
+  pieza: PublicacionOrganica;
+  tema: ReturnType<typeof construirTemaDesdeAdn>;
+  compacta: boolean;
+  draggable: boolean;
+  onDragStart: () => void;
+  onClick: () => void;
+}) {
+  const dot = colorPuntoEstado(pieza.estado);
+  const hora = new Date(pieza.programada_para).toLocaleTimeString("es-CO", { hour: "2-digit", minute: "2-digit", timeZone: "America/Bogota" });
+  const tieneVideo = !!pieza.url_video;
+  const colorTexto = colorTextoSobre(tema.color_primario);
+
+  return (
+    <div
+      draggable={draggable}
+      onDragStart={draggable ? onDragStart : undefined}
+      onClick={onClick}
+      title={`${labelReceta(pieza.receta_organica)} · ${hora} · ${ESTADOS_INFO[pieza.estado].label}`}
+      style={{
+        position: "relative",
+        width: compacta ? 32 : "100%",
+        height: compacta ? 56 : 160,
+        borderRadius: compacta ? 6 : 10,
+        overflow: "hidden",
+        cursor: draggable ? "grab" : "pointer",
+        background: tieneVideo ? "#111" : tema.color_primario,
+        flexShrink: 0,
+      }}
+    >
+      {tieneVideo ? (
+        // eslint-disable-next-line @next/next/no-img-element
+        <img src={urlMiniaturaReel(pieza.url_video!)} alt="" style={{ width: "100%", height: "100%", objectFit: "cover", display: "block" }} />
+      ) : (
+        !compacta && (
+          <div style={{ position: "absolute", inset: 0, display: "flex", alignItems: "center", justifyContent: "center", padding: 6, textAlign: "center" }}>
+            <span style={{ fontSize: 11, fontWeight: 700, color: colorTexto, lineHeight: 1.2 }}>{labelReceta(pieza.receta_organica)}</span>
+          </div>
+        )
+      )}
+      <div style={{ position: "absolute", top: 4, right: 4, width: 9, height: 9, borderRadius: "50%", background: dot, border: "1.5px solid #fff" }} />
+      {!compacta && (
+        <div style={{ position: "absolute", bottom: 0, left: 0, right: 0, background: "linear-gradient(transparent, rgba(0,0,0,0.65))", padding: "16px 6px 5px" }}>
+          <div style={{ fontSize: 10, color: "#fff", fontWeight: 700 }}>{hora}</div>
+          {pieza.receta_organica === "serie_partes" && !pieza.continua_de_id && (
+            <div style={{ fontSize: 9, color: "#FFD27A", fontWeight: 700 }}>⚠ promete parte 2</div>
+          )}
+        </div>
+      )}
+    </div>
+  );
+}
+
+function FormularioAgregarReel({ fechaInicial, onCerrar, onCreado }: { fechaInicial: string; onCerrar: () => void; onCreado: () => void }) {
   const [receta, setReceta] = useState<RecetaOrganicaId>(RECETAS_ORGANICAS_INFO[0].id);
-  // Si se abrió desde una semana ya pasada, arranca en hoy -- nunca en
-  // un día que el input ya no va a dejar ni mostrar bien (min=hoy).
-  const [fecha, setFecha] = useState(semana < hoyBogota() ? hoyBogota() : semana);
+  const [fecha, setFecha] = useState(fechaInicial);
   const [hora, setHora] = useState("12:00");
   const [productoValor, setProductoValor] = useState<ValorSelectorProducto>(valorVacioSelectorProducto());
   const [productoValido, setProductoValido] = useState(true);
@@ -362,6 +712,18 @@ function PantallaCentro({ texto }: { texto: string }) {
       {texto}
     </div>
   );
+}
+
+function botonVista(activo: boolean): React.CSSProperties {
+  return {
+    padding: "8px 14px",
+    border: "none",
+    background: activo ? "#534AB7" : "#fff",
+    color: activo ? "#fff" : "#534AB7",
+    fontSize: 13,
+    fontWeight: 700,
+    cursor: "pointer",
+  };
 }
 
 const botonPrimario: React.CSSProperties = {

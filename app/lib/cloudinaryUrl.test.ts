@@ -3,7 +3,7 @@
 // (ver estrategiasJobs.ts) tiene el tope de tamaño y el formato fijo
 // esperados.
 import { describe, it, expect } from "vitest";
-import { urlReducidaParaIA, urlVideoCompatible, urlFondoDifuminadoVideo } from "./cloudinaryUrl";
+import { urlReducidaParaIA, urlVideoCompatible, urlFondoDifuminadoVideo, urlMiniaturaReel } from "./cloudinaryUrl";
 
 describe("urlReducidaParaIA", () => {
   it("inserta el tope de tamaño (1600, sin agrandar), calidad automática y formato jpg fijo", () => {
@@ -36,5 +36,20 @@ describe("urlFondoDifuminadoVideo", () => {
     const url = urlFondoDifuminadoVideo("https://res.cloudinary.com/demo/video/upload/v1/pieza.mp4");
     expect(url).toBe("https://res.cloudinary.com/demo/video/upload/f_mp4,vc_h264,q_auto,e_blur:1500,w_480/v1/pieza.mp4");
     expect(url).not.toContain("f_auto");
+  });
+});
+
+// Miniatura de las tarjetas del calendario de /contenido (rediseño,
+// sección 2 del plan) -- un frame fijo (so_1) recortado a 9:16, con un
+// ancho chico porque es solo para la lista, no el video final.
+describe("urlMiniaturaReel", () => {
+  it("frame fijo, recorte 9:16 y extensión .jpg, con el ancho pedido", () => {
+    const url = urlMiniaturaReel("https://res.cloudinary.com/demo/video/upload/v1/reel.mp4", 180);
+    expect(url).toBe("https://res.cloudinary.com/demo/video/upload/so_1,c_fill,g_auto,ar_9:16,w_180,q_auto/v1/reel.jpg");
+  });
+
+  it("ancho por defecto 240 cuando no se pasa", () => {
+    const url = urlMiniaturaReel("https://res.cloudinary.com/demo/video/upload/v1/reel.mp4");
+    expect(url).toContain("w_240");
   });
 });

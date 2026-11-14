@@ -77,6 +77,26 @@ export const ESTADOS_INFO: Record<EstadoContenido, { label: string; color: strin
   cancelada: { label: "Cancelada", color: "#999" },
 };
 
+// Una vez publicada (o publicándose) ya no se puede arrastrar a otro
+// día en el calendario -- el recorrido con Instagram ya arrancó o
+// terminó. Compartido entre la API (PATCH .../reprogramar) y la UI
+// (decide si una tarjeta es draggable).
+export const ESTADOS_NO_REPROGRAMABLES: EstadoContenido[] = ["publicada", "publicando", "procesando"];
+
+// Punto de color del calendario (rediseño estilo Meta Business Suite/
+// Metricool, sección 2 del plan) -- agrupa por progreso, no 1 color
+// por estado como ESTADOS_INFO.color: gris=sin arrancar,
+// amarillo=trabajando, azul=listo para publicar, verde=publicada,
+// rojo=necesita atención. Deliberadamente distinto de ESTADOS_INFO
+// (que sigue siendo 1 color por estado, para textos/badges).
+export function colorPuntoEstado(estado: EstadoContenido): string {
+  if (estado === "borrador" || estado === "generando" || estado === "cancelada") return "#999";
+  if (estado === "aprobada" || estado === "renderizando" || estado === "publicando" || estado === "procesando") return "#D9A82B";
+  if (estado === "lista") return "#2F6FE4";
+  if (estado === "publicada") return "#2E9E6B";
+  return "#B91C1C"; // error, vencida
+}
+
 // Lunes de la semana (Bogotá) que contiene fechaYMD -- mismo criterio
 // que diasEntre()/hoyBogota(): todo en fechas de calendario, sin tocar
 // la hora salvo para calcular el día de la semana real.

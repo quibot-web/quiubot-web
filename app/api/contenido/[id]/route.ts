@@ -2,7 +2,8 @@ import { auth } from "@/auth";
 import { NextRequest, NextResponse } from "next/server";
 import { supabaseAdmin } from "@/lib/supabase";
 import { GuionSchema } from "@/video/guion.schema";
-import type { PublicacionOrganica } from "@/app/lib/contenido";
+import { ESTADOS_NO_REPROGRAMABLES, esFechaFutura, lunesDeLaSemana, type EstadoContenido, type PublicacionOrganica } from "@/app/lib/contenido";
+import { fechaBogota } from "@/app/lib/fechaBogota";
 
 // Detalle de una pieza (commit 4b, pantalla de revisión) + "Aprobar".
 // Solo admin, igual que el resto del plan.
@@ -104,6 +105,47 @@ export async function PATCH(req: NextRequest, { params }: { params: Promise<{ id
       return NextResponse.json({ error: "Esta pieza ya se está renderizando (u otra pestaña la tomó)." }, { status: 409 });
     }
     return NextResponse.json({ ok: true });
+  }
+
+  if (cuerpo?.accion === "reprogramar") {
+    // Arrastrar y soltar en el calendario (sección 2 del plan) -- solo
+    // cambia programada_para/semana, nunca el estado. Mismo
+    // esFechaFutura que al crear: nunca se puede soltar en el pasado.
+    const nuevaFecha = typeof cuerpo.programada_para === "string" ? cuerpo.programada_para : null;
+    if (!nuevaFecha || !esFechaFutura(nuevaFecha)) {
+      return NextResponse.json({ error: "La fecha y hora deben ser futuras." }, { status: 400 });
+    }
+
+    const { data: piezaActual } = await supabaseAdmin
+      .from("publicaciones_organicas")
+      .select("id, estado")
+      .eq("id", id)
+      .eq("user_id", usuario!.id)
+      .maybeSingle();
+
+    if (!piezaActual) {
+      return NextResponse.json({ error: "Pieza no encontrada." }, { status: 404 });
+    }
+    if (ESTADOS_NO_REPROGRAMABLES.includes(piezaActual.estado as EstadoContenido)) {
+      return NextResponse.json({ error: `Esta pieza está en estado "${piezaActual.estado}", no se puede reprogramar.` }, { status: 400 });
+    }
+
+    const semana = lunesDeLaSemana(fechaBogota(new Date(nuevaFecha)));
+    const { data: filas, error: errorUpdate } = await supabaseAdmin
+      .from("publicaciones_organicas")
+      .update({ programada_para: nuevaFecha, semana, actualizado_en: new Date().toISOString() })
+      .eq("id", id)
+      .eq("user_id", usuario!.id)
+      .eq("estado", piezaActual.estado)
+      .select("id");
+
+    if (errorUpdate) {
+      return NextResponse.json({ error: "No se pudo reprogramar en este momento." }, { status: 503 });
+    }
+    if (!filas || filas.length === 0) {
+      return NextResponse.json({ error: "Esta pieza se actualizó desde otra pestaña, intenta de nuevo." }, { status: 409 });
+    }
+    return NextResponse.json({ ok: true, semana });
   }
 
   if (cuerpo?.accion !== "aprobar") {

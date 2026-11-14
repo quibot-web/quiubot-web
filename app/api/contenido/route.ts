@@ -3,7 +3,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { supabaseAdmin } from "@/lib/supabase";
 import { registrarError } from "@/lib/registrarError";
 import { CrearPiezaManualSchema, lunesDeLaSemana, type PublicacionOrganica } from "@/app/lib/contenido";
-import { fechaBogota, hoyBogota } from "@/app/lib/fechaBogota";
+import { fechaBogota, hoyBogota, inicioDiaBogota, finDiaBogota } from "@/app/lib/fechaBogota";
 
 // Calendario semanal de /contenido (commit 4a, ver
 // docs/diseno/plan_contenido_organico.md sección 2). Solo admin, igual
@@ -26,15 +26,26 @@ export async function GET(req: NextRequest) {
   const { usuario, error } = await usuarioAdminOFalla(emailBusqueda);
   if (error) return error;
 
-  const semanaParam = req.nextUrl.searchParams.get("semana");
-  const semana = semanaParam ? lunesDeLaSemana(semanaParam) : lunesDeLaSemana(hoyBogota());
+  // Vista de mes (rediseño, sección 2 del plan): la cuadrícula de un
+  // mes no se alinea con el campo "semana" (una grilla de 6 semanas
+  // puede empezar en el mes anterior), así que ahí se filtra por rango
+  // real de programada_para en vez de por semana exacta. La vista de
+  // semana sigue usando ?semana= como antes.
+  const desdeParam = req.nextUrl.searchParams.get("desde");
+  const hastaParam = req.nextUrl.searchParams.get("hasta");
 
-  const { data: piezas, error: errorLectura } = await supabaseAdmin
-    .from("publicaciones_organicas")
-    .select("*")
-    .eq("user_id", usuario!.id)
-    .eq("semana", semana)
-    .order("programada_para", { ascending: true });
+  let consulta = supabaseAdmin.from("publicaciones_organicas").select("*").eq("user_id", usuario!.id);
+  let semana = "";
+
+  if (desdeParam && hastaParam) {
+    consulta = consulta.gte("programada_para", inicioDiaBogota(desdeParam).toISOString()).lte("programada_para", finDiaBogota(hastaParam).toISOString());
+  } else {
+    const semanaParam = req.nextUrl.searchParams.get("semana");
+    semana = semanaParam ? lunesDeLaSemana(semanaParam) : lunesDeLaSemana(hoyBogota());
+    consulta = consulta.eq("semana", semana);
+  }
+
+  const { data: piezas, error: errorLectura } = await consulta.order("programada_para", { ascending: true });
 
   if (errorLectura) {
     console.error("Error leyendo el calendario de /contenido:", errorLectura);
