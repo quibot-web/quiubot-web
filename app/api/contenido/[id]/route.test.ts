@@ -10,6 +10,7 @@ vi.mock("@/auth", () => ({ auth: (...args: unknown[]) => authMock(...args) }));
 let usuarioActual: Record<string, unknown> | null = null;
 let piezaActual: Record<string, unknown> | null = null;
 let piezasAlbumActual: Record<string, unknown>[] = [];
+let marcaInfoActual: Record<string, unknown> | null = { info_adicional: "Vendemos ropa deportiva hecha a mano para mujeres." };
 let filasUpdateActual: { id: string }[] | null = [{ id: "pieza-1" }];
 let updatesRealizados: Record<string, unknown>[] = [];
 
@@ -21,6 +22,10 @@ function chainUsuarios(data: unknown) {
 const fromMock = vi.fn();
 fromMock.mockImplementation((tabla: unknown) => {
   if (tabla === "usuarios") return chainUsuarios(usuarioActual);
+  if (tabla === "marcas") {
+    const obj = { select: () => obj, eq: () => obj, maybeSingle: async () => ({ data: marcaInfoActual }) };
+    return obj;
+  }
   if (tabla === "album_creativos") {
     const obj = { select: () => obj, eq: () => obj, in: async () => ({ data: piezasAlbumActual, error: null }) };
     return obj;
@@ -73,6 +78,7 @@ describe("GET /api/contenido/[id]", () => {
     usuarioActual = USUARIO_ADMIN;
     piezaActual = { id: "pieza-1", estado: "borrador", guion: null, media_ids: null };
     piezasAlbumActual = [];
+    marcaInfoActual = { info_adicional: "Vendemos ropa deportiva hecha a mano para mujeres." };
   });
 
   it("sin sesión: 401", async () => {
@@ -101,6 +107,19 @@ describe("GET /api/contenido/[id]", () => {
     const res = await GET(getReq(), contexto());
     const body = await res.json();
     expect(body.medios).toEqual({ "demo-1": { url: "https://res.cloudinary.com/demo/image/upload/v1/foto.jpg", tipo: "imagen" } });
+  });
+
+  it("con info_adicional real: avisoInfoIncompleta es false", async () => {
+    const res = await GET(getReq(), contexto());
+    const body = await res.json();
+    expect(body.avisoInfoIncompleta).toBe(false);
+  });
+
+  it("sin info_adicional (solo catálogo, caso real pedido): avisoInfoIncompleta es true", async () => {
+    marcaInfoActual = { info_adicional: null };
+    const res = await GET(getReq(), contexto());
+    const body = await res.json();
+    expect(body.avisoInfoIncompleta).toBe(true);
   });
 });
 

@@ -4,7 +4,7 @@ import { supabaseAdmin } from "@/lib/supabase";
 import { desencriptarSiHaceFalta } from "@/lib/crypto";
 import { verificarLimite } from "@/lib/rateLimit";
 import { registrarError } from "@/lib/registrarError";
-import { GANCHO_TIPOS_ORGANICO, GuionSchema, idsDeMediaUsados, type Guion } from "@/video/guion.schema";
+import { GuionSchema, idsDeMediaUsados, type Guion } from "@/video/guion.schema";
 import { construirTemaDesdeAdn } from "@/video/tema";
 import { RECETAS_ORGANICAS, validarContraRecetaOrganica } from "@/video/recetas/organico";
 import {
@@ -19,6 +19,7 @@ import { detectarFrasesDescargo, detectarFrasesVacias, detectarVerdadTibia, reco
 import { AnalisisPiezaSchema, type AnalisisPieza } from "@/app/lib/analisisPieza";
 import { analizarPiezaConOpenAI } from "@/app/lib/analizarPiezaImagen";
 import { ajustarDuracionesProporcional, limpiarHashtags } from "@/video/arreglosAutomaticosGuion";
+import { elegirGanchoTipoMenosUsado } from "@/app/lib/contenido";
 import type { RecetaOrganicaId } from "@/video/guion.schema";
 
 // Genera (o regenera) el guion de una pieza orgánica -- commit 4b,
@@ -119,7 +120,7 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
 
   const { data: pieza } = await supabaseAdmin
     .from("publicaciones_organicas")
-    .select("id, receta_organica, estado, media_ids, semana, tema")
+    .select("id, receta_organica, estado, media_ids, semana, tema, gancho_tipo")
     .eq("id", id)
     .eq("user_id", usuario.id)
     .maybeSingle();
@@ -217,22 +218,23 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
   const receta = RECETAS_ORGANICAS[recetaId];
   const duracionS = DURACION_POR_DEFECTO_S[recetaId];
 
-  // Variedad semanal de ganchos (pedido explícito): cuenta cuántas
-  // veces se usó cada tipo de gancho en OTRAS piezas de esta misma
-  // semana que ya tienen guion, para no repetir un tipo más de 2 veces.
-  const { data: piezasSemana } = await supabaseAdmin
-    .from("publicaciones_organicas")
-    .select("id, guion")
-    .eq("user_id", usuario.id)
-    .eq("semana", pieza.semana)
-    .neq("id", id)
-    .not("guion", "is", null);
-  const conteoGancho = new Map<string, number>();
-  for (const p of piezasSemana ?? []) {
-    const tipo = (p.guion as { gancho_tipo?: string } | null)?.gancho_tipo;
-    if (tipo) conteoGancho.set(tipo, (conteoGancho.get(tipo) ?? 0) + 1);
+  // Tipo de gancho -- lo asigna el código al CREAR la pieza (ver
+  // POST /api/contenido), nunca lo elige la IA acá: dejado a su
+  // criterio, el modelo repetía el mismo tipo varias veces en la misma
+  // semana. Respaldo por si la pieza es de antes de este cambio (sin
+  // gancho_tipo todavía): se asigna ahora, con el mismo criterio de
+  // rotación, y se guarda para que quede fijo de aquí en adelante.
+  let ganchoTipoAsignado = pieza.gancho_tipo as string | null;
+  if (!ganchoTipoAsignado) {
+    const { data: piezasSemana } = await supabaseAdmin
+      .from("publicaciones_organicas")
+      .select("gancho_tipo")
+      .eq("user_id", usuario.id)
+      .eq("semana", pieza.semana)
+      .neq("id", id);
+    ganchoTipoAsignado = elegirGanchoTipoMenosUsado((piezasSemana ?? []).map((p) => p.gancho_tipo as string | null));
+    await supabaseAdmin.from("publicaciones_organicas").update({ gancho_tipo: ganchoTipoAsignado }).eq("id", id);
   }
-  const tiposGanchoBloqueados = GANCHO_TIPOS_ORGANICO.filter((t) => (conteoGancho.get(t) ?? 0) >= 2);
 
   const entrada: EntradaGuionOrganico = {
     recetaId,
@@ -243,7 +245,7 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
     adnFraseCorta: adnMarca?.frase_corta?.trim() || null,
     productos,
     tema: (pieza.tema as string | null) ?? null,
-    tiposGanchoBloqueados: [...tiposGanchoBloqueados],
+    ganchoTipoAsignado: ganchoTipoAsignado as EntradaGuionOrganico["ganchoTipoAsignado"],
     piezas: piezasDisponibles,
     analisisPiezas,
   };
@@ -289,7 +291,9 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
       fps: 30 as const,
       uso: "organico" as const,
       receta_organica: recetaId,
-      gancho_tipo: crudoObj?.gancho_tipo,
+      // Nunca de crudoObj -- el tipo lo decide el código (ver arriba),
+      // la IA solo escribe el gancho en ese estilo.
+      gancho_tipo: ganchoTipoAsignado,
       duracion_objetivo_s: duracionS,
       bucle: crudoObj?.bucle,
       tema,
@@ -317,12 +321,8 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
     const erroresVacios = detectarFrasesVacias(textosEscenas).map((m) => `copy abstracto: ${m}`);
     // Solo mito_verdad -- no es una regla general de COPY QUE VENDE.
     const erroresVerdadTibia = recetaId === "mito_verdad" ? detectarVerdadTibia(textosEscenas).map((m) => `verdad tibia: ${m}`) : [];
-    const erroresGanchoVariedad =
-      resultado.data.gancho_tipo && tiposGanchoBloqueados.includes(resultado.data.gancho_tipo)
-        ? [`El tipo de gancho "${resultado.data.gancho_tipo}" ya se usó 2 veces esta semana -- elige otro tipo.`]
-        : [];
 
-    const erroresTotales = [...erroresReceta, ...erroresMedia, ...erroresCopy, ...erroresVacios, ...erroresVerdadTibia, ...erroresGanchoVariedad];
+    const erroresTotales = [...erroresReceta, ...erroresMedia, ...erroresCopy, ...erroresVacios, ...erroresVerdadTibia];
     intentosRegistrados.push({ errores: erroresTotales, crudo });
     if (erroresTotales.length > 0) {
       return { ok: false, errores: erroresTotales };

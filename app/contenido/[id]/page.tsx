@@ -27,6 +27,7 @@ export default function RevisionPiezaPage({ params }: { params: Promise<{ id: st
   const [aprobando, setAprobando] = useState(false);
   const [tema, setTema] = useState("");
   const [guardandoTema, setGuardandoTema] = useState(false);
+  const [avisoInfoIncompleta, setAvisoInfoIncompleta] = useState(false);
   const [errorMsg, setErrorMsg] = useState<string | null>(null);
   // Guardado explícito (no solo "ya pasó el gate de arriba") para que,
   // el día que esta pantalla se abra a clientes, la distinción
@@ -49,6 +50,7 @@ export default function RevisionPiezaPage({ params }: { params: Promise<{ id: st
     setCaption(p.caption || "");
     setHashtagsTexto((p.hashtags || []).join(" "));
     setTema(p.tema || "");
+    setAvisoInfoIncompleta(!!data.avisoInfoIncompleta);
     setPaso("revision");
   }, [id]);
 
@@ -182,6 +184,12 @@ export default function RevisionPiezaPage({ params }: { params: Promise<{ id: st
         </p>
 
         {errorMsg && <p style={{ color: "#b91c1c", fontSize: 13, marginBottom: 16, whiteSpace: "pre-line" }}>{errorMsg}</p>}
+
+        {guion && avisoInfoIncompleta && (
+          <p style={{ background: "#FEF6E7", border: "1px solid #F0C36D", borderRadius: 10, padding: "10px 14px", fontSize: 13, color: "#8A6416", marginBottom: 16 }}>
+            Tus reels serán más útiles si completas &ldquo;Lo que deben saber&rdquo; en Mi marca.
+          </p>
+        )}
 
         {!guion && (
           <div style={{ background: "#fff", borderRadius: 14, border: "1px solid #e5e5e5", padding: 24, textAlign: "center" }}>

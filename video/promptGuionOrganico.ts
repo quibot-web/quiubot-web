@@ -4,7 +4,7 @@
 // producción -- las reglas son distintas (valor, no venta; agrega
 // caption/hashtags) aunque la estructura de salida se parezca.
 import type { AnalisisPieza } from "../app/lib/analisisPieza";
-import { GANCHO_TIPOS_ORGANICO, type GanchoTipoOrganico, type RecetaOrganicaId } from "./guion.schema";
+import type { GanchoTipoOrganico, RecetaOrganicaId } from "./guion.schema";
 import type { RecetaOrganica } from "./recetas/organico/tipos";
 import { COPY_QUE_VENDE } from "./reglasCopy";
 import type { PiezaDisponible } from "./promptGuion";
@@ -37,10 +37,12 @@ export interface EntradaGuionOrganico {
   // si viene, el guion tiene que tratar ESE tema, no cualquier tema
   // genérico de la receta. Lo llenará el Director en el commit 7.
   tema: string | null;
-  // Tipos de gancho ya usados 2+ veces esta semana (variedad semanal,
-  // ver app/api/contenido/[id]/guion/route.ts) -- la IA no debe
-  // repetirlos.
-  tiposGanchoBloqueados: GanchoTipoOrganico[];
+  // Tipo de gancho ya decidido por el código al CREAR la pieza (rota
+  // los 6 tipos dentro de la semana, ver elegirGanchoTipoMenosUsado en
+  // app/lib/contenido.ts) -- la IA NO elige el tipo, solo escribe el
+  // gancho en ese estilo. Pedido explícito: dejado a su criterio, el
+  // modelo repetía el mismo tipo varias veces en la misma semana.
+  ganchoTipoAsignado: GanchoTipoOrganico;
   // Commit 4b.2: fotos/videos del álbum elegidos en "Agregar reel"
   // (hasta 3). Vacío si la pieza no eligió ninguna -- producto_en_uso
   // exige al menos una (ver RECETAS_QUE_EXIGEN_MEDIA en app/lib/contenido.ts).
@@ -54,9 +56,12 @@ export interface EntradaGuionOrganico {
 // contenido adivinando. Ver también el aviso en /contenido (UI).
 export const AVISO_SIN_CONTEXTO_NEGOCIO = "Completa Mi marca (qué vendes y a quién) para crear contenido.";
 
+export function infoAdicionalEsSuficiente(infoAdicionalMarca: string | null): boolean {
+  return (infoAdicionalMarca?.trim().length ?? 0) >= 15;
+}
+
 export function hayContextoDeNegocioSuficiente(infoAdicionalMarca: string | null, productos: ProductoResumenNegocio[]): boolean {
-  const infoReal = (infoAdicionalMarca?.trim().length ?? 0) >= 15;
-  return infoReal || productos.length > 0;
+  return infoAdicionalEsSuficiente(infoAdicionalMarca) || productos.length > 0;
 }
 
 // Mismo truco que video/promptGuion.ts para los objetivos de valor: solo
@@ -82,14 +87,8 @@ const GANCHO_TIPOS_DESC: Record<GanchoTipoOrganico, string> = {
   nadie_te_dice_que: 'un secreto o algo que "nadie te dice" sobre el tema',
 };
 
-function seccionGancho(bloqueados: GanchoTipoOrganico[]): string {
-  const disponibles = GANCHO_TIPOS_ORGANICO.filter((t) => !bloqueados.includes(t));
-  const lista = GANCHO_TIPOS_ORGANICO.map((t) => `- "${t}": ${GANCHO_TIPOS_DESC[t]}`).join("\n");
-  const aviso =
-    bloqueados.length > 0
-      ? `\nYa se usaron 2 veces esta semana -- NO los seas: ${bloqueados.join(", ")}. Elige uno de estos: ${disponibles.join(", ")}.`
-      : "";
-  return `TIPO DE GANCHO -- elige UNO para el gancho de esta pieza y decláralo tal cual en el campo "gancho_tipo" del JSON final (para que no se repita el mismo tipo toda la semana):\n${lista}${aviso}`;
+function seccionGancho(asignado: GanchoTipoOrganico): string {
+  return `TIPO DE GANCHO ASIGNADO PARA ESTA PIEZA (ya decidido por el código para que varíe a lo largo de la semana -- no lo cambies ni elijas otro): el gancho tiene que ser de tipo "${asignado}" -- ${GANCHO_TIPOS_DESC[asignado]}. Escribe el gancho en ese estilo.`;
 }
 
 function seccionNegocio(infoAdicionalMarca: string | null, productos: ProductoResumenNegocio[]): string {
@@ -202,12 +201,12 @@ export function construirPromptGuionOrganico(entrada: EntradaGuionOrganico, erro
     seccionNegocio(entrada.infoAdicionalMarca, entrada.productos),
     entrada.tema ? `TEMA PEDIDO PARA ESTA PIEZA (tienes que tratar justo esto, no cambies de tema): "${entrada.tema}"` : null,
     seccionReceta(entrada),
-    seccionGancho(entrada.tiposGanchoBloqueados),
+    seccionGancho(entrada.ganchoTipoAsignado),
     `VOZ DE MARCA (tono y estilo, NO son datos del negocio):\n- Titular del ADN: ${entrada.adnTitular || "(sin dato)"}\n- Frase corta de marca: ${entrada.adnFraseCorta || "(sin dato)"}`,
     seccionPiezas(entrada.piezas, entrada.analisisPiezas),
     REFERENCIA_ESCENAS,
     `Además del guion, escribe el caption para Instagram: "caption" (máx. 2200 caracteres, el gancho en la primera línea) y "hashtags" (entre 3 y 8, en español, del rubro real de este negocio -- el de QUÉ HACE ESTE NEGOCIO, nunca el que creas por el nombre -- cada uno empezando con #).`,
-    `Responde ÚNICAMENTE con este JSON, sin texto adicional ni backticks ni comentarios:\n{"gancho_tipo": "...", "bucle": {"texto": "...", "abre_en": "e1", "cierra_en": "eN", "indicador": "..."}, "escenas": [ {"id": "e1", "bloque": "...", "tipo": "...", "duracion_s": 0, "params": {...}} , ... ], "caption": "...", "hashtags": ["#...", "#..."]}`,
+    `Responde ÚNICAMENTE con este JSON, sin texto adicional ni backticks ni comentarios (sin el campo "gancho_tipo" -- ya está decidido, no hace falta que lo repitas):\n{"bucle": {"texto": "...", "abre_en": "e1", "cierra_en": "eN", "indicador": "..."}, "escenas": [ {"id": "e1", "bloque": "...", "tipo": "...", "duracion_s": 0, "params": {...}} , ... ], "caption": "...", "hashtags": ["#...", "#..."]}`,
   ].filter((parte): parte is string => !!parte);
 
   if (erroresPrevios && erroresPrevios.length > 0) {

@@ -4,6 +4,7 @@ import { supabaseAdmin } from "@/lib/supabase";
 import { GuionSchema } from "@/video/guion.schema";
 import { ESTADOS_NO_REPROGRAMABLES, esFechaFutura, lunesDeLaSemana, type EstadoContenido, type PublicacionOrganica } from "@/app/lib/contenido";
 import { fechaBogota } from "@/app/lib/fechaBogota";
+import { infoAdicionalEsSuficiente } from "@/video/promptGuionOrganico";
 
 // Detalle de una pieza (commit 4b, pantalla de revisión) + "Aprobar".
 // Solo admin, igual que el resto del plan.
@@ -44,7 +45,16 @@ export async function GET(req: NextRequest, { params }: { params: Promise<{ id: 
     }
   }
 
-  return NextResponse.json({ pieza: pieza as PublicacionOrganica, medios });
+  // Aviso de contenido pobre (pedido explícito, revisión de calidad):
+  // si la marca no tiene "Lo que deben saber" lleno, el guion se puede
+  // generar igual con solo el catálogo, pero la revisión avisa que el
+  // contenido sería mejor con ese dato -- se recalcula en vivo en cada
+  // GET (no queda pegado a un guion viejo), así que si luego lo
+  // completan en Mi marca, el aviso desaparece solo.
+  const { data: marcaInfo } = await supabaseAdmin.from("marcas").select("info_adicional").eq("email", emailBusqueda).maybeSingle();
+  const avisoInfoIncompleta = !infoAdicionalEsSuficiente((marcaInfo?.info_adicional as string | null) ?? null);
+
+  return NextResponse.json({ pieza: pieza as PublicacionOrganica, medios, avisoInfoIncompleta });
 }
 
 export async function PATCH(req: NextRequest, { params }: { params: Promise<{ id: string }> }) {

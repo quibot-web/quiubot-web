@@ -180,6 +180,18 @@ notify pgrst, 'reload schema';
 
 
 -- ============================================================
+-- Ajuste tras revisión de calidad -- el tipo de gancho ya no lo elige
+-- la IA (se le podía ir la mano repitiendo el mismo tipo), lo asigna
+-- el código al CREAR la pieza (rotando los 6 tipos dentro de la
+-- semana, nunca más de 2 veces el mismo) y el guion lo respeta.
+-- Columna nueva, se corre sola.
+-- ============================================================
+alter table publicaciones_organicas add column if not exists gancho_tipo text;
+
+notify pgrst, 'reload schema';
+
+
+-- ============================================================
 -- ============================================================
 -- ROLLBACK -- correr SOLO si algo sale mal y hay que deshacer todo lo
 -- de arriba. NUNCA correr esto junto con lo de arriba en la misma
@@ -198,4 +210,8 @@ notify pgrst, 'reload schema';
 
 -- Para deshacer SOLO el campo "tema", sin tocar el resto:
 -- alter table publicaciones_organicas drop column if exists tema;
+-- notify pgrst, 'reload schema';
+
+-- Para deshacer SOLO "gancho_tipo", sin tocar el resto:
+-- alter table publicaciones_organicas drop column if exists gancho_tipo;
 -- notify pgrst, 'reload schema';

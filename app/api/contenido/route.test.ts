@@ -20,6 +20,7 @@ vi.mock("@/auth", () => ({ auth: (...args: unknown[]) => authMock(...args) }));
 
 let usuarioActual: Record<string, unknown> | null = null;
 let piezasSemanaActual: Record<string, unknown>[] = [];
+let ganchoTipoPiezasSemanaActual: Record<string, unknown>[] = [];
 let piezaCreadaActual: Record<string, unknown> | null = null;
 let errorInsertActual: { message: string } | null = null;
 let insertadoCon: Record<string, unknown> | null = null;
@@ -37,6 +38,7 @@ type CadenaPiezas = {
   order: () => Promise<{ data: unknown; error: unknown }>;
   insert: (valores: Record<string, unknown>) => CadenaPiezas;
   single: () => Promise<{ data: unknown; error: unknown }>;
+  then: (resolve: (v: { data: unknown; error: unknown }) => void) => void;
 };
 
 let filtrosRangoActual: { gte?: string; lte?: string } = {};
@@ -62,6 +64,9 @@ fromMock.mockImplementation((tabla: unknown) => {
         return obj;
       },
       single: async () => (errorInsertActual ? { data: null, error: errorInsertActual } : { data: piezaCreadaActual, error: null }),
+      // Query de gancho_tipo de la semana (sin order ni single): se
+      // resuelve como array al hacer await directo de la cadena.
+      then: (resolve: (v: { data: unknown; error: unknown }) => void) => resolve({ data: ganchoTipoPiezasSemanaActual, error: null }),
     };
     return obj;
   }
@@ -145,6 +150,7 @@ describe("POST /api/contenido (agregar reel a mano)", () => {
     insertadoCon = null;
     errorInsertActual = null;
     piezaCreadaActual = { id: "pieza-nueva", estado: "borrador" };
+    ganchoTipoPiezasSemanaActual = [];
     vi.spyOn(console, "error").mockImplementation(() => {});
   });
 
@@ -173,6 +179,18 @@ describe("POST /api/contenido (agregar reel a mano)", () => {
       })
     );
     expect(insertadoCon).toMatchObject({ media_ids: ["11111111-1111-4111-8111-111111111111"] });
+  });
+
+  it("sin otras piezas esa semana: asigna el primer tipo de gancho de la lista fija", async () => {
+    await POST(postReq({ receta_organica: "mito_verdad", programada_para: isoEnElFuturo(48) }));
+    expect(insertadoCon).toMatchObject({ gancho_tipo: "pregunta" });
+  });
+
+  it("con otras piezas de la misma semana: asigna el tipo que menos se repitió (asignado por el código, no por la IA)", async () => {
+    ganchoTipoPiezasSemanaActual = [{ gancho_tipo: "pregunta" }, { gancho_tipo: "pregunta" }, { gancho_tipo: "error_comun" }];
+    await POST(postReq({ receta_organica: "mito_verdad", programada_para: isoEnElFuturo(48) }));
+    expect(insertadoCon?.gancho_tipo).not.toBe("pregunta");
+    expect(insertadoCon?.gancho_tipo).not.toBe("error_comun");
   });
 
   it("guarda el tema cuando se manda", async () => {

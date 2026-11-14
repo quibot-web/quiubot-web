@@ -2,7 +2,7 @@ import { auth } from "@/auth";
 import { NextRequest, NextResponse } from "next/server";
 import { supabaseAdmin } from "@/lib/supabase";
 import { registrarError } from "@/lib/registrarError";
-import { CrearPiezaManualSchema, lunesDeLaSemana, type PublicacionOrganica } from "@/app/lib/contenido";
+import { CrearPiezaManualSchema, elegirGanchoTipoMenosUsado, lunesDeLaSemana, type PublicacionOrganica } from "@/app/lib/contenido";
 import { fechaBogota, hoyBogota, inicioDiaBogota, finDiaBogota } from "@/app/lib/fechaBogota";
 
 // Calendario semanal de /contenido (commit 4a, ver
@@ -81,11 +81,19 @@ export async function POST(req: NextRequest) {
   const { receta_organica, programada_para, producto_id, media_ids, tema } = resultado.data;
   const semana = lunesDeLaSemana(fechaBogota(new Date(programada_para)));
 
+  // Tipo de gancho asignado por el código, no por la IA (pedido
+  // explícito): rota los 6 tipos dentro de la semana, eligiendo el que
+  // menos se haya usado entre las piezas YA creadas de esa misma
+  // semana -- así nunca depende del orden en que se generen los guiones.
+  const { data: piezasSemana } = await supabaseAdmin.from("publicaciones_organicas").select("gancho_tipo").eq("user_id", usuario!.id).eq("semana", semana);
+  const ganchoTipo = elegirGanchoTipoMenosUsado((piezasSemana ?? []).map((p) => p.gancho_tipo as string | null));
+
   const { data: pieza, error: errorInsert } = await supabaseAdmin
     .from("publicaciones_organicas")
     .insert({
       user_id: usuario!.id,
       tema: tema?.trim() || null,
+      gancho_tipo: ganchoTipo,
       plataforma: "instagram",
       receta_organica,
       programada_para,

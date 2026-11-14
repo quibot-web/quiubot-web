@@ -5,7 +5,7 @@
 // incluida la fecha/hora futura (caso real: una pieza quedó
 // programada para un día que ya había pasado).
 import { describe, it, expect } from "vitest";
-import { lunesDeLaSemana, labelReceta, formatoFechaLarga, esFechaFutura, CrearPiezaManualSchema } from "./contenido";
+import { lunesDeLaSemana, labelReceta, formatoFechaLarga, esFechaFutura, elegirGanchoTipoMenosUsado, CrearPiezaManualSchema } from "./contenido";
 
 // Relativas a "ahora" (no fechas fijas como "2026-11-20") -- estas
 // pruebas tienen que seguir pasando sin importar qué día se corran de
@@ -127,5 +127,28 @@ describe("CrearPiezaManualSchema", () => {
       tema: "x".repeat(201),
     });
     expect(r.success).toBe(false);
+  });
+});
+
+describe("elegirGanchoTipoMenosUsado", () => {
+  it("semana vacía: elige el primero de la lista fija (empate, determinista)", () => {
+    expect(elegirGanchoTipoMenosUsado([])).toBe("pregunta");
+  });
+
+  it("elige el tipo que menos se repitió, no el primero", () => {
+    // "pregunta" ya se usó 2 veces, "error_comun" 1 vez, el resto 0 --
+    // con empate entre varios en 0, gana el primero de la lista fija.
+    const resultado = elegirGanchoTipoMenosUsado(["pregunta", "pregunta", "error_comun"]);
+    expect(resultado).not.toBe("pregunta");
+    expect(resultado).not.toBe("error_comun");
+  });
+
+  it("ignora valores null/undefined/inválidos sin romperse", () => {
+    expect(elegirGanchoTipoMenosUsado([null, undefined, "no_es_un_tipo", "pregunta"])).not.toBe("pregunta");
+  });
+
+  it("si los 6 tipos ya se usaron igual de veces, elige el primero de la lista fija", () => {
+    const todos = ["pregunta", "dato_sorprendente", "error_comun", "afirmacion_fuerte", "antes_despues", "nadie_te_dice_que"];
+    expect(elegirGanchoTipoMenosUsado(todos)).toBe("pregunta");
   });
 });

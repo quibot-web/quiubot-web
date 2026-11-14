@@ -1,5 +1,5 @@
 import { z } from "zod";
-import { RECETAS_ORGANICAS_IDS, type RecetaOrganicaId } from "@/video/guion.schema";
+import { GANCHO_TIPOS_ORGANICO, RECETAS_ORGANICAS_IDS, type GanchoTipoOrganico, type RecetaOrganicaId } from "@/video/guion.schema";
 import { fechaBogota, inicioDiaBogota } from "@/app/lib/fechaBogota";
 
 // Fase O1, contenido orgánico -- ver docs/diseno/plan_contenido_organico.md.
@@ -34,6 +34,11 @@ export interface PublicacionOrganica {
   // revisión antes de generar el guion. Lo llenará el Director en el
   // commit 7.
   tema: string | null;
+  // Asignado por el código al CREAR la pieza (ver
+  // elegirGanchoTipoMenosUsado), nunca elegido por la IA -- pedido
+  // explícito tras ver que, dejado a su criterio, el modelo repetía el
+  // mismo tipo de gancho varias veces en la misma semana.
+  gancho_tipo: GanchoTipoOrganico | null;
   guion: unknown;
   caption: string | null;
   hashtags: string[] | null;
@@ -81,6 +86,34 @@ export const ESTADOS_INFO: Record<EstadoContenido, { label: string; color: strin
   vencida: { label: "Vencida", color: "#B91C1C" },
   cancelada: { label: "Cancelada", color: "#999" },
 };
+
+// Tipo de gancho para la próxima pieza orgánica de una semana --
+// rotación real, no al azar: cuenta cuántas veces aparece cada tipo en
+// las piezas YA creadas esa semana (tiposYaUsados, incluye null/undefined
+// de piezas sin asignar, se ignoran) y devuelve el que menos se repitió;
+// empate se rompe por el orden fijo de GANCHO_TIPOS_ORGANICO, para que
+// el resultado sea determinista. Pedido explícito: el tipo se decide al
+// CREAR la pieza (no al generar el guion), para que nunca dependa de en
+// qué orden se generen los guiones.
+export function elegirGanchoTipoMenosUsado(tiposYaUsados: (string | null | undefined)[]): GanchoTipoOrganico {
+  const conteo = new Map<GanchoTipoOrganico, number>();
+  for (const t of GANCHO_TIPOS_ORGANICO) conteo.set(t, 0);
+  for (const t of tiposYaUsados) {
+    if (t && (GANCHO_TIPOS_ORGANICO as readonly string[]).includes(t)) {
+      conteo.set(t as GanchoTipoOrganico, (conteo.get(t as GanchoTipoOrganico) ?? 0) + 1);
+    }
+  }
+  let elegido: GanchoTipoOrganico = GANCHO_TIPOS_ORGANICO[0];
+  let menorConteo = conteo.get(elegido)!;
+  for (const t of GANCHO_TIPOS_ORGANICO) {
+    const c = conteo.get(t)!;
+    if (c < menorConteo) {
+      elegido = t;
+      menorConteo = c;
+    }
+  }
+  return elegido;
+}
 
 // Una vez publicada (o publicándose) ya no se puede arrastrar a otro
 // día en el calendario -- el recorrido con Instagram ya arrancó o
