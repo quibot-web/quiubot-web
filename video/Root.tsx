@@ -10,6 +10,12 @@ import { fixtureTraficoMensajes } from "./fixtures/traficoMensajes";
 import { fixtureReconocimiento } from "./fixtures/reconocimiento";
 import { fixtureSeguidoresInstagram } from "./fixtures/seguidores";
 import { fixtureRetargeting } from "./fixtures/retargeting";
+import { fixtureConsejosNumerados } from "./fixtures/organico/consejosNumerados";
+import { fixtureMitoVerdad } from "./fixtures/organico/mitoVerdad";
+import { fixtureProductoEnUso } from "./fixtures/organico/productoEnUso";
+import { fixtureSeriePartes } from "./fixtures/organico/seriePartes";
+import { fixturePreguntaComunidad } from "./fixtures/organico/preguntaComunidad";
+import { fixtureDetrasDeMarca } from "./fixtures/organico/detrasDeMarca";
 
 // Placeholder para "demo-1" (data URI, sin archivos nuevos en public/):
 // solo para ver en Studio cómo se comporta producto_hero y el gancho con
@@ -46,6 +52,13 @@ const FIXTURES: { id: string; guion: Guion; mostrarZonaSegura?: boolean }[] = [
   { id: "reconocimiento", guion: fixtureReconocimiento },
   { id: "seguidores-instagram", guion: fixtureSeguidoresInstagram },
   { id: "retargeting", guion: fixtureRetargeting },
+  // Fase O1, contenido orgánico -- un ejemplo por receta de video/recetas/organico/.
+  { id: "organico-consejos-numerados", guion: fixtureConsejosNumerados },
+  { id: "organico-mito-verdad", guion: fixtureMitoVerdad },
+  { id: "organico-producto-en-uso", guion: fixtureProductoEnUso },
+  { id: "organico-serie-partes", guion: fixtureSeriePartes },
+  { id: "organico-pregunta-comunidad", guion: fixturePreguntaComunidad },
+  { id: "organico-detras-de-marca", guion: fixtureDetrasDeMarca },
 ];
 
 // La duración de los fixtures de arriba se conoce de antemano (están

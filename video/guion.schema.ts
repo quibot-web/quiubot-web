@@ -24,7 +24,29 @@ export const OBJETIVOS_VIDEO = [
 
 export type ObjetivoVideo = (typeof OBJETIVOS_VIDEO)[number];
 
-export const ACCIONES_CTA = ["whatsapp", "web", "formulario", "seguir", "suave"] as const;
+// Ids de recetas orgánicas (video/recetas/organico/, Fase O1 de
+// contenido orgánico -- ver docs/diseno/plan_contenido_organico.md
+// sección 3). A diferencia de OBJETIVOS_VIDEO, no están atados a
+// ninguna tabla real de Supabase: son internos a video/, no hay un
+// "objetivos_config" de recetas orgánicas.
+export const RECETAS_ORGANICAS_IDS = [
+  "consejos_numerados",
+  "mito_verdad",
+  "producto_en_uso",
+  "serie_partes",
+  "pregunta_comunidad",
+  "detras_de_marca",
+] as const;
+
+export type RecetaOrganicaId = (typeof RECETAS_ORGANICAS_IDS)[number];
+
+export const USOS_GUION = ["anuncio", "organico"] as const;
+export type UsoGuion = (typeof USOS_GUION)[number];
+
+// "comentar" es nuevo (Fase O1): caja de comentario que escribe una
+// palabra, para automatizaciones de "comentario a mensaje" -- ver
+// ParamsCta más abajo para su campo propio.
+export const ACCIONES_CTA = ["whatsapp", "web", "formulario", "seguir", "suave", "comentar"] as const;
 export type AccionCta = (typeof ACCIONES_CTA)[number];
 
 export const BLOQUES = ["gancho", "problema", "producto", "beneficio", "valor", "oferta", "objecion", "marca", "cta"] as const;
@@ -117,6 +139,15 @@ const ParamsObjecionRespuesta = z.object({
   respuesta: z.string().max(40),
 });
 
+// "Elige A o B" -- la única receta orgánica (pregunta_comunidad) que no
+// calza con ningún tipo de escena existente. Bloque "valor" (ver
+// BLOQUES), nunca uno nuevo -- las dos opciones son el desarrollo de la
+// pregunta que ya abrió el gancho, no un bloque distinto.
+const ParamsDosOpciones = z.object({
+  opcion_a: z.string().max(30),
+  opcion_b: z.string().max(30),
+});
+
 const ParamsCta = z
   .object({
     accion: z.enum(ACCIONES_CTA),
@@ -127,6 +158,10 @@ const ParamsCta = z
       .regex(/^@/, "usuario debe empezar con @")
       .optional(),
     subtexto: z.string().max(40).optional(),
+    // Solo accion "comentar" -- la palabra que se le pide escribir en el
+    // comentario (ej. "QUIERO"), para automatizaciones de "comentario a
+    // mensaje". Opcional: sin ella, la escena cae a una palabra genérica.
+    palabra_clave_comentario: z.string().max(20).optional(),
   })
   .superRefine((v, ctx) => {
     if (v.mensajes && v.accion !== "whatsapp") {
@@ -134,6 +169,9 @@ const ParamsCta = z
     }
     if (v.usuario && v.accion !== "seguir") {
       ctx.addIssue({ code: "custom", message: "usuario solo aplica a accion 'seguir'", path: ["usuario"] });
+    }
+    if (v.palabra_clave_comentario && v.accion !== "comentar") {
+      ctx.addIssue({ code: "custom", message: "palabra_clave_comentario solo aplica a accion 'comentar'", path: ["palabra_clave_comentario"] });
     }
   });
 
@@ -156,6 +194,7 @@ export const EscenaSchema = z.discriminatedUnion("tipo", [
   z.object({ ...EscenaBase, tipo: z.literal("revelacion_marca"), params: ParamsRevelacionMarca }),
   z.object({ ...EscenaBase, tipo: z.literal("oferta_precio"), params: ParamsOfertaPrecio }),
   z.object({ ...EscenaBase, tipo: z.literal("objecion_respuesta"), params: ParamsObjecionRespuesta }),
+  z.object({ ...EscenaBase, tipo: z.literal("dos_opciones"), params: ParamsDosOpciones }),
   z.object({ ...EscenaBase, tipo: z.literal("cta"), params: ParamsCta }),
 ]);
 
@@ -189,13 +228,33 @@ const Musica = z.object({
   volumen: z.number().min(0).max(1),
 });
 
+// Caption + hashtags para publicar el reel -- solo con uso "organico"
+// (ver GuionSchema.superRefine). Límite de caption de Instagram:
+// 2.200 caracteres. hashtags entre 3 y 8, criterio editorial del plan
+// (sección 3), no un límite real de la plataforma.
+const Publicacion = z.object({
+  caption: z.string().min(1).max(2200),
+  hashtags: z.array(z.string().min(1).max(40)).min(3).max(8),
+});
+
 export const GuionSchema = z
   .object({
     version: z.literal(1),
     formato: z.literal("9x16"),
     fps: z.literal(30),
-    objetivo: z.enum(OBJETIVOS_VIDEO),
-    duracion_objetivo_s: z.number().min(4).max(25),
+    // Sin "uso", se trata como "anuncio" (compatibilidad con guiones
+    // guardados antes de que este campo existiera).
+    uso: z.enum(USOS_GUION).default("anuncio"),
+    // Uno de los dos es obligatorio según "uso" -- se valida en el
+    // superRefine de abajo, no acá (zod no puede cruzar campos en la
+    // forma del objeto solo).
+    objetivo: z.enum(OBJETIVOS_VIDEO).optional(),
+    receta_organica: z.enum(RECETAS_ORGANICAS_IDS).optional(),
+    publicacion: Publicacion.optional(),
+    // 25 alcanzaba para las recetas de anuncio (ninguna pasa de 20s) --
+    // las recetas orgánicas llegan a 30s (consejos_numerados,
+    // serie_partes, detras_de_marca).
+    duracion_objetivo_s: z.number().min(4).max(30),
     bucle: Bucle,
     tema: Tema,
     musica: Musica,
@@ -207,11 +266,22 @@ export const GuionSchema = z
     // de render de la Fase 1b).
     analisisPiezas: z.record(z.string(), AnalisisPiezaSchema).optional(),
   })
-  // Invariantes que no dependen de la receta del objetivo -- las que sí
-  // dependen (orden de bloques, rango de duracion, escenas obligatorias
-  // por objetivo) se validan aparte en video/recetas/ (paso 3).
+  // Invariantes que no dependen de la receta del objetivo/orgánica --
+  // las que sí dependen (orden de bloques, rango de duracion, escenas
+  // obligatorias) se validan aparte en video/recetas/ (anuncio) o
+  // video/recetas/organico/ (orgánico).
   .superRefine((guion, ctx) => {
     const { escenas, bucle } = guion;
+
+    if (guion.uso === "anuncio") {
+      if (!guion.objetivo) ctx.addIssue({ code: "custom", message: "uso 'anuncio' exige el campo objetivo", path: ["objetivo"] });
+      if (guion.receta_organica) ctx.addIssue({ code: "custom", message: "receta_organica solo aplica a uso 'organico'", path: ["receta_organica"] });
+      if (guion.publicacion) ctx.addIssue({ code: "custom", message: "publicacion solo aplica a uso 'organico'", path: ["publicacion"] });
+    } else {
+      if (!guion.receta_organica) ctx.addIssue({ code: "custom", message: "uso 'organico' exige el campo receta_organica", path: ["receta_organica"] });
+      if (!guion.publicacion) ctx.addIssue({ code: "custom", message: "uso 'organico' exige el campo publicacion (caption + hashtags)", path: ["publicacion"] });
+      if (guion.objetivo) ctx.addIssue({ code: "custom", message: "objetivo solo aplica a uso 'anuncio'", path: ["objetivo"] });
+    }
 
     const primera = escenas[0];
     if (primera.bloque !== "gancho") {

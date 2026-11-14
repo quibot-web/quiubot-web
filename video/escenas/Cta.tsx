@@ -295,6 +295,57 @@ function CtaSuave({ escena, tema }: PropsEscena<"cta">) {
   );
 }
 
+const PALABRA_COMENTAR_RESPALDO = "QUIERO";
+
+// Caja de comentario tipo Instagram, con la palabra clave
+// "escribiéndose" letra por letra -- el mismo gesto que se le pide hacer
+// de verdad al espectador. Nueva (Fase O1, contenido orgánico): junto
+// con "comentar" en ACCIONES_CTA, es para automatizaciones de
+// "comentario a mensaje" que la marca configure, o simplemente para
+// pedir opinión.
+function CtaComentar({ escena, tema }: PropsEscena<"cta">) {
+  const frame = useCurrentFrame();
+  const { fps } = useVideoConfig();
+  const { texto_boton, palabra_clave_comentario, subtexto } = escena.params;
+  const palabra = palabra_clave_comentario || PALABRA_COMENTAR_RESPALDO;
+  const progreso = spring({ frame, fps, config: { damping: 12 } });
+  const colorTexto = colorTextoSobre(tema.color_primario);
+  const cuadroInicioEscritura = fps * 0.4;
+  const letrasVisibles = Math.floor(
+    interpolate(frame, [cuadroInicioEscritura, cuadroInicioEscritura + fps * 0.8], [0, palabra.length], {
+      extrapolateLeft: "clamp",
+      extrapolateRight: "clamp",
+    })
+  );
+  const terminoDeEscribir = letrasVisibles >= palabra.length;
+
+  return (
+    <AbsoluteFill style={{ justifyContent: "center", alignItems: "center", padding: "0 8%" }}>
+      <div style={{ fontSize: 54, fontWeight: 800, color: colorTexto, textAlign: "center", marginBottom: 32, opacity: progreso }}>{texto_boton}</div>
+      <div
+        style={{
+          width: "90%",
+          background: "rgba(255,255,255,0.95)",
+          borderRadius: 999,
+          padding: "22px 36px",
+          display: "flex",
+          alignItems: "center",
+          gap: 16,
+          opacity: progreso,
+          transform: `scale(${progreso})`,
+        }}
+      >
+        <span style={{ fontSize: 40 }}>💬</span>
+        <span style={{ fontSize: 42, fontWeight: 800, color: "#111" }}>
+          {palabra.slice(0, letrasVisibles)}
+          <span style={{ opacity: terminoDeEscribir ? 0 : 1 }}>|</span>
+        </span>
+      </div>
+      {subtexto && <div style={{ fontSize: 30, color: colorTexto, marginTop: 24, opacity: progreso }}>{subtexto}</div>}
+    </AbsoluteFill>
+  );
+}
+
 export function Cta(props: PropsEscena<"cta">) {
   const { tema, escena } = props;
   return (
@@ -305,6 +356,7 @@ export function Cta(props: PropsEscena<"cta">) {
       {escena.params.accion === "formulario" && <CtaFormulario {...props} />}
       {escena.params.accion === "seguir" && <CtaSeguir {...props} />}
       {escena.params.accion === "suave" && <CtaSuave {...props} />}
+      {escena.params.accion === "comentar" && <CtaComentar {...props} />}
     </AbsoluteFill>
   );
 }

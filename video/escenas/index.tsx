@@ -11,6 +11,7 @@ import { ListaNumerada } from "./ListaNumerada";
 import { RevelacionMarca } from "./RevelacionMarca";
 import { OfertaPrecio } from "./OfertaPrecio";
 import { ObjecionRespuesta } from "./ObjecionRespuesta";
+import { DosOpciones } from "./DosOpciones";
 import { Cta } from "./Cta";
 
 export function renderizarEscena(
@@ -36,6 +37,8 @@ export function renderizarEscena(
       return <OfertaPrecio escena={escena} tema={tema} medios={medios} />;
     case "objecion_respuesta":
       return <ObjecionRespuesta escena={escena} tema={tema} medios={medios} />;
+    case "dos_opciones":
+      return <DosOpciones escena={escena} tema={tema} medios={medios} />;
     case "cta":
       return <Cta escena={escena} tema={tema} medios={medios} />;
   }
