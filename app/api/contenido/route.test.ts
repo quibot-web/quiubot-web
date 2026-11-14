@@ -2,6 +2,18 @@
 // Supabase mockeado -- nunca contra la base real.
 import { describe, it, expect, vi, beforeEach } from "vitest";
 import { NextRequest } from "next/server";
+import { lunesDeLaSemana } from "@/app/lib/contenido";
+import { fechaBogota } from "@/app/lib/fechaBogota";
+
+// Relativa a "ahora" (nunca una fecha fija como "2026-11-20") -- esta
+// prueba tiene que seguir pasando sin importar qué día se corra de
+// verdad, por la validación nueva de "la fecha/hora deben ser futuras".
+function isoEnElFuturo(horas: number): string {
+  return new Date(Date.now() + horas * 60 * 60 * 1000).toISOString();
+}
+function isoEnElPasado(horas: number): string {
+  return new Date(Date.now() - horas * 60 * 60 * 1000).toISOString();
+}
 
 const authMock = vi.fn();
 vi.mock("@/auth", () => ({ auth: (...args: unknown[]) => authMock(...args) }));
@@ -114,7 +126,8 @@ describe("POST /api/contenido (agregar reel a mano)", () => {
   });
 
   it("crea la pieza en borrador con la semana calculada de programada_para", async () => {
-    const res = await POST(postReq({ receta_organica: "mito_verdad", programada_para: "2026-11-20T15:00:00-05:00" }));
+    const programadaPara = isoEnElFuturo(48);
+    const res = await POST(postReq({ receta_organica: "mito_verdad", programada_para: programadaPara }));
     const body = await res.json();
 
     expect(res.status).toBe(201);
@@ -123,7 +136,7 @@ describe("POST /api/contenido (agregar reel a mano)", () => {
       plataforma: "instagram",
       receta_organica: "mito_verdad",
       estado: "borrador",
-      semana: "2026-11-16", // lunes de esa semana
+      semana: lunesDeLaSemana(fechaBogota(new Date(programadaPara))),
     });
     expect(body.pieza).toEqual(piezaCreadaActual);
   });
@@ -132,7 +145,7 @@ describe("POST /api/contenido (agregar reel a mano)", () => {
     await POST(
       postReq({
         receta_organica: "producto_en_uso",
-        programada_para: "2026-11-20T15:00:00-05:00",
+        programada_para: isoEnElFuturo(48),
         media_ids: ["11111111-1111-4111-8111-111111111111"],
       })
     );
@@ -140,20 +153,26 @@ describe("POST /api/contenido (agregar reel a mano)", () => {
   });
 
   it("producto_en_uso sin piezas: 400, nunca llega a insertar", async () => {
-    const res = await POST(postReq({ receta_organica: "producto_en_uso", programada_para: "2026-11-20T15:00:00-05:00" }));
+    const res = await POST(postReq({ receta_organica: "producto_en_uso", programada_para: isoEnElFuturo(48) }));
     expect(res.status).toBe(400);
     expect(insertadoCon).toBeNull();
   });
 
   it("rechaza una receta_organica que no existe: 400, nunca llega a insertar", async () => {
-    const res = await POST(postReq({ receta_organica: "no_existe", programada_para: "2026-11-20T15:00:00-05:00" }));
+    const res = await POST(postReq({ receta_organica: "no_existe", programada_para: isoEnElFuturo(48) }));
+    expect(res.status).toBe(400);
+    expect(insertadoCon).toBeNull();
+  });
+
+  it("rechaza una fecha/hora ya pasada: 400, nunca llega a insertar (caso real que motivó esto)", async () => {
+    const res = await POST(postReq({ receta_organica: "mito_verdad", programada_para: isoEnElPasado(5 * 24) }));
     expect(res.status).toBe(400);
     expect(insertadoCon).toBeNull();
   });
 
   it("si Supabase falla al insertar: 503 y se registra el error", async () => {
     errorInsertActual = { message: "boom" };
-    const res = await POST(postReq({ receta_organica: "mito_verdad", programada_para: "2026-11-20T15:00:00-05:00" }));
+    const res = await POST(postReq({ receta_organica: "mito_verdad", programada_para: isoEnElFuturo(48) }));
     expect(res.status).toBe(503);
     expect(registrarErrorMock).toHaveBeenCalledWith(expect.objectContaining({ origen: "contenido_calendario" }));
   });

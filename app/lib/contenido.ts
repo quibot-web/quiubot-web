@@ -96,6 +96,17 @@ export function lunesDeLaSemana(fechaYMD: string): string {
 // menos una pieza; si no hay, no se puede elegir esa receta").
 export const RECETAS_QUE_EXIGEN_MEDIA: RecetaOrganicaId[] = ["producto_en_uso"];
 
+// "programada_para" nunca puede quedar en el pasado -- ni fecha ni
+// hora (pedido explícito tras un caso real: una pieza quedó programada
+// para un día que ya había pasado). Comparación por instante real
+// (epoch), no por fecha de calendario -- "hoy pero hace 2 horas"
+// también debe rechazarse. Se usa tanto al crear como al reprogramar
+// (PATCH, sección 2 del calendario).
+export function esFechaFutura(iso: string): boolean {
+  const fecha = new Date(iso);
+  return !Number.isNaN(fecha.getTime()) && fecha.getTime() > Date.now();
+}
+
 export const CrearPiezaManualSchema = z
   .object({
     receta_organica: z.enum(RECETAS_ORGANICAS_IDS),
@@ -105,7 +116,25 @@ export const CrearPiezaManualSchema = z
     producto_id: z.uuid().optional().nullable(),
     media_ids: z.array(z.uuid()).max(3).optional(),
   })
-  .refine((v) => !RECETAS_QUE_EXIGEN_MEDIA.includes(v.receta_organica) || (v.media_ids?.length ?? 0) > 0, {
-    message: "Esta receta exige al menos una foto o video del álbum.",
-    path: ["media_ids"],
+  .superRefine((v, ctx) => {
+    if (RECETAS_QUE_EXIGEN_MEDIA.includes(v.receta_organica) && (v.media_ids?.length ?? 0) === 0) {
+      ctx.addIssue({ code: "custom", message: "Esta receta exige al menos una foto o video del álbum.", path: ["media_ids"] });
+    }
+    if (!esFechaFutura(v.programada_para)) {
+      ctx.addIssue({ code: "custom", message: "La fecha y hora deben ser futuras.", path: ["programada_para"] });
+    }
   });
+
+// "dom 9 nov · 12:00 p. m." -- formato largo pedido explícitamente.
+// Intl ya da "lun, 9 de nov" (con coma y "de") y "12:00 p. m." por
+// separado -- se toman los tres valores sueltos (weekday/day/month) de
+// formatToParts y se arma el molde a mano, en vez de pelear con las
+// opciones de Intl para sacarle la coma y el "de". Siempre en hora de
+// Bogotá, igual que el resto de video/ y app/lib/fechaBogota.ts.
+export function formatoFechaLarga(iso: string): string {
+  const fecha = new Date(iso);
+  const partesFecha = new Intl.DateTimeFormat("es-CO", { timeZone: "America/Bogota", weekday: "short", day: "numeric", month: "short" }).formatToParts(fecha);
+  const obtener = (tipo: string) => partesFecha.find((p) => p.type === tipo)?.value ?? "";
+  const hora = fecha.toLocaleTimeString("es-CO", { timeZone: "America/Bogota", hour: "numeric", minute: "2-digit", hour12: true });
+  return `${obtener("weekday")} ${obtener("day")} ${obtener("month")} · ${hora}`;
+}

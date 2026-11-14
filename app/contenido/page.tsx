@@ -2,7 +2,7 @@
 
 import { useEffect, useState, useCallback } from "react";
 import { useRouter } from "next/navigation";
-import { RECETAS_ORGANICAS_INFO, RECETAS_QUE_EXIGEN_MEDIA, ESTADOS_INFO, labelReceta, lunesDeLaSemana, type PublicacionOrganica } from "@/app/lib/contenido";
+import { RECETAS_ORGANICAS_INFO, RECETAS_QUE_EXIGEN_MEDIA, ESTADOS_INFO, labelReceta, lunesDeLaSemana, esFechaFutura, type PublicacionOrganica } from "@/app/lib/contenido";
 import { hoyBogota, fechaBogota } from "@/app/lib/fechaBogota";
 import SelectorAlbum, { type ItemAlbum } from "@/app/components/SelectorAlbum";
 import SelectorProducto, { resolverProductoAlUsar, valorVacioSelectorProducto, type ValorSelectorProducto } from "@/app/components/SelectorProducto";
@@ -185,7 +185,9 @@ function TarjetaPieza({ pieza, onClick }: { pieza: PublicacionOrganica; onClick:
 
 function FormularioAgregarReel({ semana, onCerrar, onCreado }: { semana: string; onCerrar: () => void; onCreado: () => void }) {
   const [receta, setReceta] = useState<RecetaOrganicaId>(RECETAS_ORGANICAS_INFO[0].id);
-  const [fecha, setFecha] = useState(semana);
+  // Si se abrió desde una semana ya pasada, arranca en hoy -- nunca en
+  // un día que el input ya no va a dejar ni mostrar bien (min=hoy).
+  const [fecha, setFecha] = useState(semana < hoyBogota() ? hoyBogota() : semana);
   const [hora, setHora] = useState("12:00");
   const [productoValor, setProductoValor] = useState<ValorSelectorProducto>(valorVacioSelectorProducto());
   const [productoValido, setProductoValido] = useState(true);
@@ -227,6 +229,11 @@ function FormularioAgregarReel({ semana, onCerrar, onCreado }: { semana: string;
       setError("Esta receta exige al menos una foto o video del álbum.");
       return;
     }
+    const programada_para = `${fecha}T${hora}:00-05:00`;
+    if (!esFechaFutura(programada_para)) {
+      setError("La fecha y hora deben ser futuras -- esta ya pasó.");
+      return;
+    }
     setGuardando(true);
     setError(null);
     try {
@@ -236,7 +243,6 @@ function FormularioAgregarReel({ semana, onCerrar, onCreado }: { semana: string;
         setGuardando(false);
         return;
       }
-      const programada_para = `${fecha}T${hora}:00-05:00`;
       const res = await fetch("/api/contenido", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
@@ -281,7 +287,7 @@ function FormularioAgregarReel({ semana, onCerrar, onCreado }: { semana: string;
         <div style={{ display: "flex", gap: 10 }}>
           <div style={{ flex: 1 }}>
             <label style={etiquetaCampo}>Fecha</label>
-            <input type="date" value={fecha} onChange={(e) => setFecha(e.target.value)} style={campo} />
+            <input type="date" min={hoyBogota()} value={fecha} onChange={(e) => setFecha(e.target.value)} style={campo} />
           </div>
           <div style={{ flex: 1 }}>
             <label style={etiquetaCampo}>Hora</label>

@@ -4,7 +4,7 @@ import { useEffect, useState, useCallback, use } from "react";
 import dynamic from "next/dynamic";
 import { useRouter } from "next/navigation";
 import EditorEscena from "@/app/video/EditorEscena";
-import { labelReceta, type PublicacionOrganica } from "@/app/lib/contenido";
+import { labelReceta, formatoFechaLarga, type PublicacionOrganica } from "@/app/lib/contenido";
 import type { Guion, Escena } from "@/video/guion.schema";
 import type { MediosResueltos } from "@/video/escenas/tipos";
 import { duracionEnCuadros } from "@/video/Composicion";
@@ -148,7 +148,7 @@ export default function RevisionPiezaPage({ params }: { params: Promise<{ id: st
 
         <h1 style={{ fontSize: 20, fontWeight: 800, color: "#1a1a1a", margin: "0 0 4px" }}>{labelReceta(pieza.receta_organica)}</h1>
         <p style={{ fontSize: 13, color: "#666", margin: "0 0 20px" }}>
-          Programada para {new Date(pieza.programada_para).toLocaleString("es-CO", { timeZone: "America/Bogota" })}
+          Programada para {formatoFechaLarga(pieza.programada_para)}
         </p>
 
         {errorMsg && <p style={{ color: "#b91c1c", fontSize: 13, marginBottom: 16 }}>{errorMsg}</p>}

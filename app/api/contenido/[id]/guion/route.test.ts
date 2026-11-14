@@ -157,6 +157,22 @@ describe("POST /api/contenido/[id]/guion", () => {
     vi.unstubAllGlobals();
   });
 
+  it("créditos de OpenAI agotados: mensaje claro, no el genérico (caso real del 14 nov 2026)", async () => {
+    const fetchMock = vi.fn().mockResolvedValue({
+      ok: false,
+      status: 429,
+      text: async () =>
+        JSON.stringify({ error: { message: "You have no credits remaining.", type: "insufficient_quota", code: "credit_balance_exhausted" } }),
+    });
+    vi.stubGlobal("fetch", fetchMock);
+
+    const res = await POST(req(), contexto());
+    const body = await res.json();
+    expect(res.status).toBe(503);
+    expect(body.error).toContain("no tiene créditos");
+    vi.unstubAllGlobals();
+  });
+
   it("con media_ids y producto_en_uso: usa producto_hero con la pieza real del álbum", async () => {
     piezaActual = { id: "pieza-1", receta_organica: "producto_en_uso", estado: "borrador", media_ids: ["demo-1"] };
     piezasAlbumActual = [{ id: "demo-1", url_imagen: "https://res.cloudinary.com/demo/image/upload/v1/foto.jpg", tipo: "imagen", analisis: { version: 1, tiene_texto: false, es_publicitaria: false, fondo_limpio: true, recuadro_producto: null } }];

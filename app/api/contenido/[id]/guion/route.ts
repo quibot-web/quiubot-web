@@ -294,14 +294,27 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
     return NextResponse.json({ guion: resultado.guion });
   } catch (err) {
     console.error("Error generando guion orgánico:", err);
+    const detalle = String(err);
     registrarError({
       origen: "contenido_guion",
       userId: usuario.id,
       email: emailBusqueda,
       paso: "llamada_openai",
       errorMensaje: "No se pudo generar el guion con IA.",
-      detalleTecnico: String(err),
+      detalleTecnico: detalle,
     });
+
+    // Caso real (14 nov 2026): el mensaje genérico de abajo no decía
+    // nada de la causa real (créditos de OpenAI agotados), así que
+    // revisar el error se volvió "ir a buscar en registrarError" en
+    // vez de verlo directo en la pantalla.
+    if (/insufficient_quota|credit_balance_exhausted/.test(detalle)) {
+      return NextResponse.json(
+        { error: "Tu cuenta de OpenAI no tiene créditos. Agrega saldo en platform.openai.com y vuelve a intentar." },
+        { status: 503 }
+      );
+    }
+
     return NextResponse.json({ error: "No se pudo generar el guion en este momento. Intenta de nuevo." }, { status: 503 });
   }
 }
