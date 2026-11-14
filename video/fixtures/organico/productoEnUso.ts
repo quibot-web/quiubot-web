@@ -8,6 +8,7 @@ export const fixtureProductoEnUso = GuionSchema.parse({
   fps: 30,
   uso: "organico",
   receta_organica: "producto_en_uso",
+  gancho_tipo: "antes_despues",
   duracion_objetivo_s: 18,
   bucle: { texto: "Mira cómo quedó", abre_en: "e1", cierra_en: "e2", indicador: "espera_final" },
   tema: {

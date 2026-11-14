@@ -8,6 +8,7 @@ export const fixtureMitoVerdad = GuionSchema.parse({
   fps: 30,
   uso: "organico",
   receta_organica: "mito_verdad",
+  gancho_tipo: "error_comun",
   duracion_objetivo_s: 17,
   bucle: { texto: "¿De verdad hay que pintar antes de lijar?", abre_en: "e1", cierra_en: "e3", indicador: "espera_final" },
   tema: {

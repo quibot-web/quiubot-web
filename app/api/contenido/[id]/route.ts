@@ -84,6 +84,25 @@ export async function PATCH(req: NextRequest, { params }: { params: Promise<{ id
     return NextResponse.json({ ok: true });
   }
 
+  if (cuerpo?.accion === "tema") {
+    // Tema puntual de la pieza (ej. "por qué tus anuncios no traen
+    // mensajes") -- editable en la revisión antes de generar el guion,
+    // mismo guard que "editar" (solo mientras sigue en borrador).
+    const tema = typeof cuerpo.tema === "string" ? cuerpo.tema.trim().slice(0, 200) || null : null;
+
+    const { error: errorUpdate } = await supabaseAdmin
+      .from("publicaciones_organicas")
+      .update({ tema, actualizado_en: new Date().toISOString() })
+      .eq("id", id)
+      .eq("user_id", usuario!.id)
+      .eq("estado", "borrador");
+
+    if (errorUpdate) {
+      return NextResponse.json({ error: "No se pudo guardar el tema." }, { status: 503 });
+    }
+    return NextResponse.json({ ok: true, tema });
+  }
+
   if (cuerpo?.accion === "iniciar_render") {
     // Claim atómico -- commit 4c: apenas se aprueba una pieza entra
     // sola a la cola, así que dos pestañas (o la misma recargada)

@@ -43,6 +43,21 @@ export type RecetaOrganicaId = (typeof RECETAS_ORGANICAS_IDS)[number];
 export const USOS_GUION = ["anuncio", "organico"] as const;
 export type UsoGuion = (typeof USOS_GUION)[number];
 
+// Tipos de gancho para contenido orgánico (pedido explícito tras ver
+// ganchos repetitivos en la revisión de calidad) -- la IA tiene que
+// declarar cuál usó, para que el código pueda exigir variedad real
+// dentro de la misma semana (ver app/api/contenido/[id]/guion/route.ts),
+// en vez de confiar en que "no repitas" en el prompt sea suficiente.
+export const GANCHO_TIPOS_ORGANICO = [
+  "pregunta",
+  "dato_sorprendente",
+  "error_comun",
+  "afirmacion_fuerte",
+  "antes_despues",
+  "nadie_te_dice_que",
+] as const;
+export type GanchoTipoOrganico = (typeof GANCHO_TIPOS_ORGANICO)[number];
+
 // "comentar" es nuevo (Fase O1): caja de comentario que escribe una
 // palabra, para automatizaciones de "comentario a mensaje" -- ver
 // ParamsCta más abajo para su campo propio.
@@ -251,6 +266,8 @@ export const GuionSchema = z
     objetivo: z.enum(OBJETIVOS_VIDEO).optional(),
     receta_organica: z.enum(RECETAS_ORGANICAS_IDS).optional(),
     publicacion: Publicacion.optional(),
+    // Solo uso "organico" -- ver GANCHO_TIPOS_ORGANICO más arriba.
+    gancho_tipo: z.enum(GANCHO_TIPOS_ORGANICO).optional(),
     // 25 alcanzaba para las recetas de anuncio (ninguna pasa de 20s) --
     // las recetas orgánicas llegan a 30s (consejos_numerados,
     // serie_partes, detras_de_marca).
@@ -277,9 +294,11 @@ export const GuionSchema = z
       if (!guion.objetivo) ctx.addIssue({ code: "custom", message: "uso 'anuncio' exige el campo objetivo", path: ["objetivo"] });
       if (guion.receta_organica) ctx.addIssue({ code: "custom", message: "receta_organica solo aplica a uso 'organico'", path: ["receta_organica"] });
       if (guion.publicacion) ctx.addIssue({ code: "custom", message: "publicacion solo aplica a uso 'organico'", path: ["publicacion"] });
+      if (guion.gancho_tipo) ctx.addIssue({ code: "custom", message: "gancho_tipo solo aplica a uso 'organico'", path: ["gancho_tipo"] });
     } else {
       if (!guion.receta_organica) ctx.addIssue({ code: "custom", message: "uso 'organico' exige el campo receta_organica", path: ["receta_organica"] });
       if (!guion.publicacion) ctx.addIssue({ code: "custom", message: "uso 'organico' exige el campo publicacion (caption + hashtags)", path: ["publicacion"] });
+      if (!guion.gancho_tipo) ctx.addIssue({ code: "custom", message: "uso 'organico' exige el campo gancho_tipo", path: ["gancho_tipo"] });
       if (guion.objetivo) ctx.addIssue({ code: "custom", message: "objetivo solo aplica a uso 'anuncio'", path: ["objetivo"] });
     }
 

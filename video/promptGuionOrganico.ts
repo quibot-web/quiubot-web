@@ -4,10 +4,19 @@
 // producción -- las reglas son distintas (valor, no venta; agrega
 // caption/hashtags) aunque la estructura de salida se parezca.
 import type { AnalisisPieza } from "../app/lib/analisisPieza";
-import type { RecetaOrganicaId } from "./guion.schema";
+import { GANCHO_TIPOS_ORGANICO, type GanchoTipoOrganico, type RecetaOrganicaId } from "./guion.schema";
 import type { RecetaOrganica } from "./recetas/organico/tipos";
 import { COPY_QUE_VENDE } from "./reglasCopy";
 import type { PiezaDisponible } from "./promptGuion";
+
+// Resumen de un producto/servicio del catálogo (app/lib/productos.ts)
+// -- solo los campos que describen QUÉ es, nunca más (ver seccionNegocio).
+export interface ProductoResumenNegocio {
+  nombre: string;
+  tipo: "producto" | "servicio";
+  destacar: string | null;
+  precio_cop: number | null;
+}
 
 export interface EntradaGuionOrganico {
   recetaId: RecetaOrganicaId;
@@ -16,6 +25,22 @@ export interface EntradaGuionOrganico {
   infoAdicionalMarca: string | null;
   adnTitular: string | null;
   adnFraseCorta: string | null;
+  // Catálogo real del negocio (app/lib/productos.ts) -- junto con
+  // infoAdicionalMarca, es la ÚNICA fuente permitida de "qué vende y a
+  // quién" este negocio (ver seccionNegocio/hayContextoDeNegocioSuficiente
+  // más abajo). Caso real que motivó esto: la IA asumió que "Quiubot"
+  // era un chatbot por el nombre, cuando es una plataforma de
+  // publicidad en Meta con un equipo de IA para pymes.
+  productos: ProductoResumenNegocio[];
+  // Tema puntual pedido para esta pieza (campo opcional en "Agregar
+  // reel"/revisión, ej. "por qué tus anuncios no traen mensajes") --
+  // si viene, el guion tiene que tratar ESE tema, no cualquier tema
+  // genérico de la receta. Lo llenará el Director en el commit 7.
+  tema: string | null;
+  // Tipos de gancho ya usados 2+ veces esta semana (variedad semanal,
+  // ver app/api/contenido/[id]/guion/route.ts) -- la IA no debe
+  // repetirlos.
+  tiposGanchoBloqueados: GanchoTipoOrganico[];
   // Commit 4b.2: fotos/videos del álbum elegidos en "Agregar reel"
   // (hasta 3). Vacío si la pieza no eligió ninguna -- producto_en_uso
   // exige al menos una (ver RECETAS_QUE_EXIGEN_MEDIA en app/lib/contenido.ts).
@@ -23,11 +48,68 @@ export interface EntradaGuionOrganico {
   analisisPiezas: Record<string, AnalisisPieza>;
 }
 
+// Umbral mínimo para considerar que info_adicional dice algo real (no
+// una palabra suelta) -- si no hay ni eso ni un solo producto en el
+// catálogo, no hay con qué saber qué vende el negocio: no se genera
+// contenido adivinando. Ver también el aviso en /contenido (UI).
+export const AVISO_SIN_CONTEXTO_NEGOCIO = "Completa Mi marca (qué vendes y a quién) para crear contenido.";
+
+export function hayContextoDeNegocioSuficiente(infoAdicionalMarca: string | null, productos: ProductoResumenNegocio[]): boolean {
+  const infoReal = (infoAdicionalMarca?.trim().length ?? 0) >= 15;
+  return infoReal || productos.length > 0;
+}
+
 // Mismo truco que video/promptGuion.ts para los objetivos de valor: solo
 // la parte de "prohibido"/"no inventar" de COPY QUE VENDE, nunca la
 // parte de "escribe para que actúe ya" -- el contenido orgánico SIEMPRE
 // es valor, nunca venta (ver la nota del plan, sección 1).
 const COPY_SOLO_PROHIBIDO = `${COPY_QUE_VENDE.split("\n").slice(0, 1).join("\n")}\n(Este es contenido ORGÁNICO, no un anuncio: el enfoque es VALOR -- un consejo, un dato, una conversación o algo de la marca. Nunca pidas comprar, nunca menciones precios ni ofertas. Igual aplican las frases prohibidas de más abajo: nunca inventes datos ni los dejes en duda.)`;
+
+// Caso real que motivó esta regla (revisión de calidad, nov 2026): un
+// guion de producto_en_uso decía "una forma más clara" / "una ruta
+// clara" en vez de algo específico -- pasaba el zod (son solo strings
+// cortos) pero no decía nada real. Ninguna librería puede detectar
+// "vaguedad" en general, así que esto detecta frases concretas ya
+// vistas, no reemplaza la regla del prompt.
+const REGLA_CONCRETO = `CONCRETO, NO ABSTRACTO: cada escena tiene que decir algo específico y útil -- una acción puntual, un ejemplo real, un paso concreto o un resultado medible. PROHIBIDAS las frases de relleno sin contenido real, como "una forma más clara", "una ruta clara", "descubre más", "la mejor opción", "la solución ideal", "experiencia única". Si no podrías señalar con el dedo lo que esa frase describe, no la escribas.`;
+
+const GANCHO_TIPOS_DESC: Record<GanchoTipoOrganico, string> = {
+  pregunta: "una pregunta directa que el espectador ya se está haciendo",
+  dato_sorprendente: "un dato o hecho que sorprende, sin inventar cifras -- solo si es real (viene de QUÉ HACE ESTE NEGOCIO o es conocimiento general del rubro)",
+  error_comun: "un error común que comete la gente en este rubro",
+  afirmacion_fuerte: "una afirmación tajante y directa, sin signo de pregunta",
+  antes_despues: "el contraste entre un antes incómodo y un después mejor",
+  nadie_te_dice_que: 'un secreto o algo que "nadie te dice" sobre el tema',
+};
+
+function seccionGancho(bloqueados: GanchoTipoOrganico[]): string {
+  const disponibles = GANCHO_TIPOS_ORGANICO.filter((t) => !bloqueados.includes(t));
+  const lista = GANCHO_TIPOS_ORGANICO.map((t) => `- "${t}": ${GANCHO_TIPOS_DESC[t]}`).join("\n");
+  const aviso =
+    bloqueados.length > 0
+      ? `\nYa se usaron 2 veces esta semana -- NO los seas: ${bloqueados.join(", ")}. Elige uno de estos: ${disponibles.join(", ")}.`
+      : "";
+  return `TIPO DE GANCHO -- elige UNO para el gancho de esta pieza y decláralo tal cual en el campo "gancho_tipo" del JSON final (para que no se repita el mismo tipo toda la semana):\n${lista}${aviso}`;
+}
+
+function seccionNegocio(infoAdicionalMarca: string | null, productos: ProductoResumenNegocio[]): string {
+  const lineaProductos =
+    productos.length > 0
+      ? productos
+          .map((p) => {
+            const precio = p.precio_cop ? ` ($${p.precio_cop.toLocaleString("es-CO")})` : "";
+            const destacar = p.destacar ? ` -- ${p.destacar}` : "";
+            return `- ${p.nombre} (${p.tipo})${precio}${destacar}`;
+          })
+          .join("\n")
+      : "(sin productos/servicios cargados en el catálogo)";
+
+  return [
+    `QUÉ HACE ESTE NEGOCIO -- ÚNICA fuente real de qué vende y a quién le vende. PROHIBIDO deducir, inventar, ampliar o contradecir esto: NUNCA asumas el rubro, el público o qué hace el negocio por el nombre de la marca, el logo o el estilo visual (caso real: no asumas que una marca llamada "Quiubot" es un chatbot solo por el nombre -- Quiubot es una plataforma de publicidad en Meta con un equipo de IA para pymes, y eso se sabe por este bloque, nunca por el nombre). Si un dato no aparece acá, no existe para este guion.`,
+    `Descripción del negocio ("Lo que deben saber" en Mi marca): ${infoAdicionalMarca || "(sin descripción)"}`,
+    `Catálogo de productos/servicios activos:\n${lineaProductos}`,
+  ].join("\n");
+}
 
 const REFERENCIA_ESCENAS = `TIPOS DE ESCENA Y SUS "params" (respeta los límites de caracteres AL PIE DE LA LETRA -- el código los rechaza si se pasan, aunque sea por 1 carácter):
 - gancho_texto: {texto (<=60 car.), palabra_clave (palabra o frase corta DENTRO de texto), sticker? (<=14 car.)}
@@ -81,6 +163,16 @@ function seccionReceta(entrada: EntradaGuionOrganico): string {
     );
   }
   if (receta.ganchoUsaProductoDeFondo) lineas.push(`- Esta receta exige al menos una escena "producto_hero" con una de las piezas disponibles.`);
+  if (entrada.recetaId === "mito_verdad") {
+    lineas.push(
+      `- La respuesta de cada "objecion_respuesta" tiene que ser FIRME y enseñar la verdad con seguridad -- PROHIBIDO sonar dudoso: nunca uses "no necesariamente", "depende", "puede que" ni nada parecido. Afirma la verdad tal cual, sin matices.`
+    );
+  }
+  if (entrada.recetaId === "producto_en_uso") {
+    lineas.push(
+      `- Esta receta tiene que mostrar el PASO A PASO real de cómo se usa el producto/servicio (al menos 2 momentos concretos del uso) y terminar en el RESULTADO concreto que da -- usa SOLO lo que está en "QUÉ HACE ESTE NEGOCIO" (descripción + catálogo), nunca inventes un uso, una función o un resultado que no esté ahí.`
+    );
+  }
   return lineas.join("\n");
 }
 
@@ -106,14 +198,17 @@ export function construirPromptGuionOrganico(entrada: EntradaGuionOrganico, erro
     `Eres el guionista de contenido orgánico de Quiubot. Escribes el guion de un reel corto (formato 9:16, sin voz) para Instagram. Español colombiano, tuteo, frases cortas y directas.`,
     `Estructura obligatoria: gancho (abre una pregunta, promesa o dato) -> bucle abierto -> desarrollo -> cierre del bucle -> cta.`,
     COPY_SOLO_PROHIBIDO,
+    REGLA_CONCRETO,
+    seccionNegocio(entrada.infoAdicionalMarca, entrada.productos),
+    entrada.tema ? `TEMA PEDIDO PARA ESTA PIEZA (tienes que tratar justo esto, no cambies de tema): "${entrada.tema}"` : null,
     seccionReceta(entrada),
-    `MARCA:\n- Titular del ADN: ${entrada.adnTitular || "(sin dato)"}\n- Frase corta de marca: ${entrada.adnFraseCorta || "(sin dato)"}`,
-    `INFO DE LA MARCA (datos generales del negocio, "Lo que deben saber" en Mi marca -- único dato real permitido además del rubro): ${entrada.infoAdicionalMarca || "(nada adicional)"}`,
+    seccionGancho(entrada.tiposGanchoBloqueados),
+    `VOZ DE MARCA (tono y estilo, NO son datos del negocio):\n- Titular del ADN: ${entrada.adnTitular || "(sin dato)"}\n- Frase corta de marca: ${entrada.adnFraseCorta || "(sin dato)"}`,
     seccionPiezas(entrada.piezas, entrada.analisisPiezas),
     REFERENCIA_ESCENAS,
-    `Además del guion, escribe el caption para Instagram: "caption" (máx. 2200 caracteres, el gancho en la primera línea) y "hashtags" (entre 3 y 8, en español, del rubro de la marca, cada uno empezando con #).`,
-    `Responde ÚNICAMENTE con este JSON, sin texto adicional ni backticks ni comentarios:\n{"bucle": {"texto": "...", "abre_en": "e1", "cierra_en": "eN", "indicador": "..."}, "escenas": [ {"id": "e1", "bloque": "...", "tipo": "...", "duracion_s": 0, "params": {...}} , ... ], "caption": "...", "hashtags": ["#...", "#..."]}`,
-  ];
+    `Además del guion, escribe el caption para Instagram: "caption" (máx. 2200 caracteres, el gancho en la primera línea) y "hashtags" (entre 3 y 8, en español, del rubro real de este negocio -- el de QUÉ HACE ESTE NEGOCIO, nunca el que creas por el nombre -- cada uno empezando con #).`,
+    `Responde ÚNICAMENTE con este JSON, sin texto adicional ni backticks ni comentarios:\n{"gancho_tipo": "...", "bucle": {"texto": "...", "abre_en": "e1", "cierra_en": "eN", "indicador": "..."}, "escenas": [ {"id": "e1", "bloque": "...", "tipo": "...", "duracion_s": 0, "params": {...}} , ... ], "caption": "...", "hashtags": ["#...", "#..."]}`,
+  ].filter((parte): parte is string => !!parte);
 
   if (erroresPrevios && erroresPrevios.length > 0) {
     partes.push(

@@ -9,6 +9,7 @@ export const fixtureSeriePartes = GuionSchema.parse({
   fps: 30,
   uso: "organico",
   receta_organica: "serie_partes",
+  gancho_tipo: "dato_sorprendente",
   duracion_objetivo_s: 18,
   bucle: { texto: "Parte 1 de 3: cómo elegir tu primera soldadora", abre_en: "e1", cierra_en: "e2", indicador: "contador" },
   tema: {

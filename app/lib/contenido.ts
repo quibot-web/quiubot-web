@@ -29,6 +29,11 @@ export interface PublicacionOrganica {
   // 4b.2) -- se resuelven a URL real recién al generar el guion y al
   // mostrar la revisión, igual que medios en video/guion.schema.ts.
   media_ids: string[] | null;
+  // Tema puntual pedido para esta pieza (ej. "por qué tus anuncios no
+  // traen mensajes") -- opcional, editable en "Agregar reel" y en la
+  // revisión antes de generar el guion. Lo llenará el Director en el
+  // commit 7.
+  tema: string | null;
   guion: unknown;
   caption: string | null;
   hashtags: string[] | null;
@@ -135,6 +140,7 @@ export const CrearPiezaManualSchema = z
     programada_para: z.iso.datetime({ offset: true }),
     producto_id: z.uuid().optional().nullable(),
     media_ids: z.array(z.uuid()).max(3).optional(),
+    tema: z.string().trim().max(200).optional().nullable(),
   })
   .superRefine((v, ctx) => {
     if (RECETAS_QUE_EXIGEN_MEDIA.includes(v.receta_organica) && (v.media_ids?.length ?? 0) === 0) {

@@ -212,6 +212,29 @@ describe("PATCH /api/contenido/[id] -- reprogramar (arrastrar en el calendario)"
   });
 });
 
+describe("PATCH /api/contenido/[id] -- tema", () => {
+  beforeEach(() => {
+    fromMock.mockClear();
+    authMock.mockResolvedValue({ user: { email: "marca@quiubot.com" } });
+    usuarioActual = USUARIO_ADMIN;
+    updatesRealizados = [];
+  });
+
+  it("guarda el tema mientras la pieza sigue en borrador", async () => {
+    const res = await PATCH(patchReq({ accion: "tema", tema: "por qué tus anuncios no traen mensajes" }), contexto());
+    const body = await res.json();
+    expect(res.status).toBe(200);
+    expect(body.ok).toBe(true);
+    expect(updatesRealizados[0]).toMatchObject({ tema: "por qué tus anuncios no traen mensajes" });
+  });
+
+  it("tema vacío: lo guarda como null", async () => {
+    const res = await PATCH(patchReq({ accion: "tema", tema: "   " }), contexto());
+    expect(res.status).toBe(200);
+    expect(updatesRealizados[0]).toMatchObject({ tema: null });
+  });
+});
+
 describe("PATCH /api/contenido/[id] -- editar", () => {
   beforeEach(() => {
     fromMock.mockClear();

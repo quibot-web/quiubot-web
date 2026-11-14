@@ -104,4 +104,28 @@ describe("CrearPiezaManualSchema", () => {
     const r = CrearPiezaManualSchema.safeParse({ receta_organica: "mito_verdad", programada_para: isoEnElFuturo(48) });
     expect(r.success).toBe(true);
   });
+
+  it("acepta un tema opcional", () => {
+    const r = CrearPiezaManualSchema.safeParse({
+      receta_organica: "mito_verdad",
+      programada_para: isoEnElFuturo(48),
+      tema: "por qué tus anuncios no traen mensajes",
+    });
+    expect(r.success).toBe(true);
+    if (r.success) expect(r.data.tema).toBe("por qué tus anuncios no traen mensajes");
+  });
+
+  it("sin tema: sigue aceptada (es opcional)", () => {
+    const r = CrearPiezaManualSchema.safeParse({ receta_organica: "mito_verdad", programada_para: isoEnElFuturo(48) });
+    expect(r.success).toBe(true);
+  });
+
+  it("rechaza un tema de más de 200 caracteres", () => {
+    const r = CrearPiezaManualSchema.safeParse({
+      receta_organica: "mito_verdad",
+      programada_para: isoEnElFuturo(48),
+      tema: "x".repeat(201),
+    });
+    expect(r.success).toBe(false);
+  });
 });

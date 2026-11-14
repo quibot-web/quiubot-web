@@ -9,6 +9,7 @@ export const fixtureConsejosNumerados = GuionSchema.parse({
   fps: 30,
   uso: "organico",
   receta_organica: "consejos_numerados",
+  gancho_tipo: "pregunta",
   duracion_objetivo_s: 17,
   bucle: { texto: "3 consejos para que tu pan dure más fresco", abre_en: "e1", cierra_en: "e2", indicador: "contador" },
   tema: {

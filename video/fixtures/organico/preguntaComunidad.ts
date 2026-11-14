@@ -8,6 +8,7 @@ export const fixturePreguntaComunidad = GuionSchema.parse({
   fps: 30,
   uso: "organico",
   receta_organica: "pregunta_comunidad",
+  gancho_tipo: "pregunta",
   duracion_objetivo_s: 14,
   bucle: { texto: "¿Café o té en las mañanas?", abre_en: "e1", cierra_en: "e2", indicador: "espera_final" },
   tema: {

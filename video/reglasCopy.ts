@@ -122,3 +122,40 @@ export function detectarFrasesDescargo(textos: string[]): string[] {
   const unido = normalizar(textos.join(" \n "));
   return DESCARGOS.filter(([re]) => re.test(unido)).map(([, motivo]) => motivo);
 }
+
+// Frases de relleno sin contenido real -- caso real que motivó esto
+// (revisión de calidad de contenido orgánico, nov 2026): un guion de
+// producto_en_uso decía "una forma más clara" y "una ruta clara" en
+// vez de decir algo específico. No hay forma genérica de detectar
+// "vaguedad" con una regex, así que esto solo atrapa frases concretas
+// ya vistas -- la regla real vive en el prompt (REGLA_CONCRETO en
+// video/promptGuionOrganico.ts), esto es un segundo filtro.
+const FRASES_VACIAS: Descargo[] = [
+  [/una forma (mas )?clara/, 'dice "una forma (más) clara" sin decir cuál'],
+  [/una ruta clara/, 'dice "una ruta clara" sin decir cuál'],
+  [/descubre mas/, 'dice "descubre más" sin decir qué'],
+  [/la mejor opcion/, 'dice "la mejor opción" sin decir por qué'],
+  [/la solucion ideal/, 'dice "la solución ideal" sin decir cuál es'],
+  [/experiencia unica/, 'dice "experiencia única" sin decir en qué consiste'],
+];
+
+export function detectarFrasesVacias(textos: string[]): string[] {
+  const unido = normalizar(textos.join(" \n "));
+  return FRASES_VACIAS.filter(([re]) => re.test(unido)).map(([, motivo]) => motivo);
+}
+
+// Solo para la receta mito_verdad (pedido explícito, no es una regla
+// general de COPY QUE VENDE): la respuesta que desmiente el mito tiene
+// que enseñar la verdad con firmeza, no sonar dudosa. Caso real: un
+// guion respondía "No necesariamente: puede apoyar" en vez de afirmar
+// la verdad.
+const VERDAD_TIBIA: Descargo[] = [
+  [/no necesariamente/, 'dice "no necesariamente" -- la verdad debe afirmarse, no matizarse'],
+  [/\bdepende\b/, 'dice "depende" -- la verdad debe afirmarse, no matizarse'],
+  [/puede que/, 'dice "puede que" -- la verdad debe afirmarse, no matizarse'],
+];
+
+export function detectarVerdadTibia(textos: string[]): string[] {
+  const unido = normalizar(textos.join(" \n "));
+  return VERDAD_TIBIA.filter(([re]) => re.test(unido)).map(([, motivo]) => motivo);
+}

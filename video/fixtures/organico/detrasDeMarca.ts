@@ -9,6 +9,7 @@ export const fixtureDetrasDeMarca = GuionSchema.parse({
   fps: 30,
   uso: "organico",
   receta_organica: "detras_de_marca",
+  gancho_tipo: "nadie_te_dice_que",
   duracion_objetivo_s: 18,
   bucle: { texto: "Por qué empezamos este negocio", abre_en: "e1", cierra_en: "e3", indicador: "espera_final" },
   tema: {

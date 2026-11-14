@@ -169,6 +169,17 @@ notify pgrst, 'reload schema';
 
 
 -- ============================================================
+-- Commit tras revisión de calidad -- campo "tema" opcional por pieza
+-- (ej. "por qué tus anuncios no traen mensajes"), editable en "Agregar
+-- reel" y en la revisión antes de generar el guion. Lo llenará el
+-- Director en el commit 7. Columna nueva, se corre sola.
+-- ============================================================
+alter table publicaciones_organicas add column if not exists tema text;
+
+notify pgrst, 'reload schema';
+
+
+-- ============================================================
 -- ============================================================
 -- ROLLBACK -- correr SOLO si algo sale mal y hay que deshacer todo lo
 -- de arriba. NUNCA correr esto junto con lo de arriba en la misma
@@ -183,4 +194,8 @@ notify pgrst, 'reload schema';
 
 -- Para deshacer SOLO el commit 4b.2 (media_ids), sin tocar el resto:
 -- alter table publicaciones_organicas drop column if exists media_ids;
+-- notify pgrst, 'reload schema';
+
+-- Para deshacer SOLO el campo "tema", sin tocar el resto:
+-- alter table publicaciones_organicas drop column if exists tema;
 -- notify pgrst, 'reload schema';

@@ -25,6 +25,8 @@ export default function RevisionPiezaPage({ params }: { params: Promise<{ id: st
   const [generando, setGenerando] = useState(false);
   const [guardando, setGuardando] = useState(false);
   const [aprobando, setAprobando] = useState(false);
+  const [tema, setTema] = useState("");
+  const [guardandoTema, setGuardandoTema] = useState(false);
   const [errorMsg, setErrorMsg] = useState<string | null>(null);
   // Guardado explícito (no solo "ya pasó el gate de arriba") para que,
   // el día que esta pantalla se abra a clientes, la distinción
@@ -46,6 +48,7 @@ export default function RevisionPiezaPage({ params }: { params: Promise<{ id: st
     setGuion((p.guion as Guion | null) ?? null);
     setCaption(p.caption || "");
     setHashtagsTexto((p.hashtags || []).join(" "));
+    setTema(p.tema || "");
     setPaso("revision");
   }, [id]);
 
@@ -90,6 +93,19 @@ export default function RevisionPiezaPage({ params }: { params: Promise<{ id: st
       setErrorMsg("No se pudo generar el guion.");
     } finally {
       setGenerando(false);
+    }
+  }
+
+  async function guardarTema() {
+    setGuardandoTema(true);
+    try {
+      await fetch(`/api/contenido/${id}`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ accion: "tema", tema }),
+      });
+    } finally {
+      setGuardandoTema(false);
     }
   }
 
@@ -169,7 +185,19 @@ export default function RevisionPiezaPage({ params }: { params: Promise<{ id: st
 
         {!guion && (
           <div style={{ background: "#fff", borderRadius: 14, border: "1px solid #e5e5e5", padding: 24, textAlign: "center" }}>
-            <p style={{ fontSize: 14, color: "#666", marginBottom: 16 }}>Esta pieza todavía no tiene guion.</p>
+            <p style={{ fontSize: 14, color: "#666", marginBottom: 12 }}>Esta pieza todavía no tiene guion.</p>
+            <div style={{ textAlign: "left", maxWidth: 420, margin: "0 auto 16px" }}>
+              <label style={{ display: "block", fontSize: 12, fontWeight: 700, color: "#444", marginBottom: 6 }}>Tema (opcional)</label>
+              <input
+                value={tema}
+                onChange={(e) => setTema(e.target.value)}
+                onBlur={guardarTema}
+                maxLength={200}
+                placeholder='Ej. "por qué tus anuncios no traen mensajes"'
+                disabled={guardandoTema}
+                style={{ width: "100%", padding: 10, borderRadius: 8, border: "1px solid #ddd", fontSize: 13, fontFamily: "inherit" }}
+              />
+            </div>
             <button type="button" onClick={generarGuion} disabled={generando} style={botonPrimario}>
               {generando ? "Generando…" : "Generar guion"}
             </button>

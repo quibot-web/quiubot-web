@@ -548,6 +548,7 @@ function FormularioAgregarReel({ fechaInicial, onCerrar, onCreado }: { fechaInic
   // que la marca agregó a mano desde el álbum.
   const [piezasDesdeProducto, setPiezasDesdeProducto] = useState<Set<string>>(new Set());
   const [mostrarSelectorAlbum, setMostrarSelectorAlbum] = useState(false);
+  const [tema, setTema] = useState("");
   const [guardando, setGuardando] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
@@ -601,6 +602,7 @@ function FormularioAgregarReel({ fechaInicial, onCerrar, onCreado }: { fechaInic
           programada_para,
           producto_id: productoId,
           media_ids: piezasElegidas.map((p) => p.id).filter((id): id is string => !!id),
+          tema: tema.trim() || null,
         }),
       });
       const data = await res.json();
@@ -644,6 +646,15 @@ function FormularioAgregarReel({ fechaInicial, onCerrar, onCreado }: { fechaInic
             <input type="time" value={hora} onChange={(e) => setHora(e.target.value)} style={campo} />
           </div>
         </div>
+
+        <label style={etiquetaCampo}>Tema (opcional)</label>
+        <input
+          value={tema}
+          onChange={(e) => setTema(e.target.value)}
+          maxLength={200}
+          placeholder='Ej. "por qué tus anuncios no traen mensajes"'
+          style={campo}
+        />
 
         <label style={etiquetaCampo}>Producto o servicio (opcional)</label>
         <SelectorProducto valor={productoValor} onCambio={alCambiarProducto} errorGuardado={errorProducto} onValidezCambia={setProductoValido} />

@@ -175,6 +175,16 @@ describe("POST /api/contenido (agregar reel a mano)", () => {
     expect(insertadoCon).toMatchObject({ media_ids: ["11111111-1111-4111-8111-111111111111"] });
   });
 
+  it("guarda el tema cuando se manda", async () => {
+    await POST(postReq({ receta_organica: "mito_verdad", programada_para: isoEnElFuturo(48), tema: "por qué tus anuncios no traen mensajes" }));
+    expect(insertadoCon).toMatchObject({ tema: "por qué tus anuncios no traen mensajes" });
+  });
+
+  it("sin tema: lo guarda como null", async () => {
+    await POST(postReq({ receta_organica: "mito_verdad", programada_para: isoEnElFuturo(48) }));
+    expect(insertadoCon).toMatchObject({ tema: null });
+  });
+
   it("producto_en_uso sin piezas: 400, nunca llega a insertar", async () => {
     const res = await POST(postReq({ receta_organica: "producto_en_uso", programada_para: isoEnElFuturo(48) }));
     expect(res.status).toBe(400);
