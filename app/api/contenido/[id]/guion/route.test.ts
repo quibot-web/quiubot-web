@@ -144,16 +144,57 @@ describe("POST /api/contenido/[id]/guion", () => {
     vi.unstubAllGlobals();
   });
 
-  it("primer intento inválido (falta la escena cta): reintenta una vez y si sigue mal, 502", async () => {
+  it("primer intento inválido (falta la escena cta): reintenta una vez y si sigue mal, 502 con resumenErrores", async () => {
     const guionRoto = { ...GUION_VALIDO_CRUDO, escenas: GUION_VALIDO_CRUDO.escenas.slice(0, 1) };
     const fetchMock = vi.fn().mockResolvedValue(respuestaOpenAI(guionRoto));
     vi.stubGlobal("fetch", fetchMock);
 
     const res = await POST(req(), contexto());
+    const body = await res.json();
     expect(res.status).toBe(502);
     expect(fetchMock).toHaveBeenCalledTimes(2); // 1 intento + 1 reintento
     expect(registrarErrorMock).toHaveBeenCalledWith(expect.objectContaining({ origen: "contenido_guion" }));
     expect(updatesRealizados.length).toBe(0);
+    expect(Array.isArray(body.resumenErrores)).toBe(true);
+    expect(body.resumenErrores.length).toBeGreaterThan(0);
+    vi.unstubAllGlobals();
+  });
+
+  it("duraciones muy lejos del objetivo: se reescalan solas y pasa al primer intento, sin gastar reintento (caso real del 14 nov 2026)", async () => {
+    // Todas al mínimo (1.5s) -- suma 6s, muy lejos de los 16s por
+    // defecto de mito_verdad. ajustarDuracionesProporcional debe
+    // reescalarlas (respetando el tope de 2.5s del gancho) para que
+    // quede dentro de +-2s sin que la IA tenga que volver a intentar.
+    const guionDuracionesCortas = {
+      ...GUION_VALIDO_CRUDO,
+      escenas: GUION_VALIDO_CRUDO.escenas.map((e) => ({ ...e, duracion_s: 1.5 })),
+    };
+    const fetchMock = vi.fn().mockResolvedValue(respuestaOpenAI(guionDuracionesCortas));
+    vi.stubGlobal("fetch", fetchMock);
+
+    const res = await POST(req(), contexto());
+    const body = await res.json();
+    expect(res.status).toBe(200);
+    expect(fetchMock).toHaveBeenCalledTimes(1);
+    const suma = body.guion.escenas.reduce((acc: number, e: { duracion_s: number }) => acc + e.duracion_s, 0);
+    expect(Math.abs(suma - 16)).toBeLessThanOrEqual(2);
+    expect(body.guion.escenas[0].duracion_s).toBeLessThanOrEqual(2.5); // el gancho nunca pasa su tope
+    vi.unstubAllGlobals();
+  });
+
+  it("hashtags repetidos y de más: se limpian solos y pasa al primer intento", async () => {
+    const guionHashtagsSucios = {
+      ...GUION_VALIDO_CRUDO,
+      hashtags: ["#Marketing", "marketing", "#MARKETING", "#ventas", "#tips", "#negocio", "#pyme", "#colombia", "#extra1", "#extra2"],
+    };
+    const fetchMock = vi.fn().mockResolvedValue(respuestaOpenAI(guionHashtagsSucios));
+    vi.stubGlobal("fetch", fetchMock);
+
+    const res = await POST(req(), contexto());
+    const body = await res.json();
+    expect(res.status).toBe(200);
+    expect(fetchMock).toHaveBeenCalledTimes(1);
+    expect(body.guion.publicacion.hashtags).toEqual(["#Marketing", "#ventas", "#tips", "#negocio", "#pyme", "#colombia", "#extra1", "#extra2"]);
     vi.unstubAllGlobals();
   });
 

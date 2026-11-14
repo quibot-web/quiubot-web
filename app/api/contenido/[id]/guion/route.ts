@@ -12,6 +12,7 @@ import type { PiezaDisponible } from "@/video/promptGuion";
 import { detectarFrasesDescargo, recopilarTextosEscenas } from "@/video/reglasCopy";
 import { AnalisisPiezaSchema, type AnalisisPieza } from "@/app/lib/analisisPieza";
 import { analizarPiezaConOpenAI } from "@/app/lib/analizarPiezaImagen";
+import { ajustarDuracionesProporcional, limpiarHashtags } from "@/video/arreglosAutomaticosGuion";
 import type { RecetaOrganicaId } from "@/video/guion.schema";
 
 // Genera (o regenera) el guion de una pieza orgánica -- commit 4b,
@@ -22,13 +23,27 @@ import type { RecetaOrganicaId } from "@/video/guion.schema";
 const MODELO_GUION = "gpt-5.6-sol";
 const TIMEOUT_OPENAI_MS = 60_000;
 const MAX_REINTENTOS = 1;
+// Causa real del fallo del 14 nov 2026 ("Consejos numerados" nunca
+// pasaba la validación): estos números se habían elegido sin revisar
+// si son alcanzables de verdad. El gancho mide máximo 2.5s y cualquier
+// otra escena máximo 5s (EscenaBase en guion.schema.ts), y el número de
+// escenas está fijo por receta.bloques (un bloque que no se repite ahí
+// solo puede tener UNA escena) -- así que la suma máxima posible es
+// 2.5 + 5*(bloques.length-1). Con 4 bloques eso da 17.5s, nunca 18s o
+// más. consejos_numerados/serie_partes/detras_de_marca pedían 20s
+// (imposible, por eso fallaban), pregunta_comunidad (solo 3 bloques,
+// máximo 12.5s) pedía 15s (también imposible). mito_verdad y
+// producto_en_uso pedían 18s, alcanzable pero con casi cero margen
+// (17.5s de tope) -- la IA tenía que acertar casi exacto. 16s/10s dejan
+// un margen real (14-17.5s y 8-12.5s respectivamente) para que la IA
+// elija duraciones naturales sin que el guion caiga fuera de rango.
 const DURACION_POR_DEFECTO_S: Record<RecetaOrganicaId, number> = {
-  consejos_numerados: 20,
-  mito_verdad: 18,
-  producto_en_uso: 18,
-  serie_partes: 20,
-  pregunta_comunidad: 15,
-  detras_de_marca: 20,
+  consejos_numerados: 16,
+  mito_verdad: 16,
+  producto_en_uso: 16,
+  serie_partes: 16,
+  pregunta_comunidad: 10,
+  detras_de_marca: 16,
 };
 
 async function llamarOpenAI(apiKey: string, prompt: string): Promise<string> {
@@ -213,6 +228,13 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
     }
 
     const crudoObj = crudo as Record<string, unknown>;
+    // Arreglos triviales antes de validar (pedido explícito): no
+    // cambian el contenido que escribió la IA, solo corrigen números/
+    // duplicados que el código puede resolver con certeza. Si después
+    // de esto el guion sigue sin cuadrar, el reintento con la IA ya
+    // lleva el motivo real (no uno de estos detalles mecánicos).
+    const escenasAjustadas = ajustarDuracionesProporcional(crudoObj?.escenas, duracionS);
+    const hashtagsLimpios = limpiarHashtags(crudoObj?.hashtags);
     const candidato = {
       version: 1 as const,
       formato: "9x16" as const,
@@ -223,8 +245,8 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
       bucle: crudoObj?.bucle,
       tema,
       musica: { pista_id: null, volumen: 0.35 },
-      escenas: crudoObj?.escenas,
-      publicacion: { caption: crudoObj?.caption, hashtags: crudoObj?.hashtags },
+      escenas: escenasAjustadas,
+      publicacion: { caption: crudoObj?.caption, hashtags: hashtagsLimpios ?? crudoObj?.hashtags },
       analisisPiezas: Object.keys(analisisPiezas).length > 0 ? analisisPiezas : undefined,
     };
 
@@ -268,10 +290,15 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
         email: emailBusqueda,
         paso: "validacion_guion",
         errorMensaje: `El guion orgánico no pasó la validación después de ${intentos} intento(s).`,
-        detalleTecnico: resultado.errores.join(" | "),
+        detalleTecnico: intentosRegistrados.map((i, idx) => `intento ${idx + 1}: ${i.errores.join(" | ") || "(sin errores -- no debería pasar)"}`).join(" || "),
       });
+      // resumenErrores: motivos reales del último intento, para que el
+      // admin los vea resumidos en pantalla (pedido explícito) en vez
+      // de tener que ir a buscarlos en el registro de errores -- el
+      // cliente (cuando se abra a clientes) seguiría viendo solo
+      // "error", ya genérico.
       return NextResponse.json(
-        { error: "No se pudo generar un guion válido para esta pieza.", intentos: intentosRegistrados },
+        { error: "No se pudo generar un guion válido para esta pieza.", resumenErrores: resultado.errores },
         { status: 502 }
       );
     }

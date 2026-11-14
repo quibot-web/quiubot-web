@@ -26,6 +26,12 @@ export default function RevisionPiezaPage({ params }: { params: Promise<{ id: st
   const [guardando, setGuardando] = useState(false);
   const [aprobando, setAprobando] = useState(false);
   const [errorMsg, setErrorMsg] = useState<string | null>(null);
+  // Guardado explícito (no solo "ya pasó el gate de arriba") para que,
+  // el día que esta pantalla se abra a clientes, la distinción
+  // admin/cliente de generarGuion() siga siendo correcta sin tener que
+  // recordar tocarla -- hoy esto es admin-only, así que rol siempre es
+  // "admin" acá, pero la rama "else" ya queda lista.
+  const [rol, setRol] = useState<string | null>(null);
 
   const cargar = useCallback(async () => {
     const res = await fetch(`/api/contenido/${id}`);
@@ -52,6 +58,7 @@ export default function RevisionPiezaPage({ params }: { params: Promise<{ id: st
           setPaso("sin-acceso");
           return;
         }
+        setRol(rolData.rol);
         await cargar();
       } catch {
         setPaso("sin-acceso");
@@ -66,7 +73,14 @@ export default function RevisionPiezaPage({ params }: { params: Promise<{ id: st
       const res = await fetch(`/api/contenido/${id}/guion`, { method: "POST" });
       const data = await res.json();
       if (!res.ok) {
-        setErrorMsg(data.error || "No se pudo generar el guion.");
+        // resumenErrores: motivos reales del último intento (pedido
+        // explícito) -- solo para admin. El cliente (cuando exista acá)
+        // sigue viendo nada más que data.error, ya genérico.
+        if (rol === "admin" && Array.isArray(data.resumenErrores) && data.resumenErrores.length > 0) {
+          setErrorMsg(`${data.error || "No se pudo generar un guion válido."}\n${data.resumenErrores.map((e: string) => `• ${e}`).join("\n")}`);
+        } else {
+          setErrorMsg(data.error || "No se pudo generar el guion.");
+        }
         return;
       }
       setGuion(data.guion as Guion);
@@ -151,7 +165,7 @@ export default function RevisionPiezaPage({ params }: { params: Promise<{ id: st
           Programada para {formatoFechaLarga(pieza.programada_para)}
         </p>
 
-        {errorMsg && <p style={{ color: "#b91c1c", fontSize: 13, marginBottom: 16 }}>{errorMsg}</p>}
+        {errorMsg && <p style={{ color: "#b91c1c", fontSize: 13, marginBottom: 16, whiteSpace: "pre-line" }}>{errorMsg}</p>}
 
         {!guion && (
           <div style={{ background: "#fff", borderRadius: 14, border: "1px solid #e5e5e5", padding: 24, textAlign: "center" }}>
