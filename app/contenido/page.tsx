@@ -6,6 +6,7 @@ import { RECETAS_ORGANICAS_INFO, RECETAS_QUE_EXIGEN_MEDIA, ESTADOS_INFO, labelRe
 import { hoyBogota, fechaBogota } from "@/app/lib/fechaBogota";
 import SelectorAlbum, { type ItemAlbum } from "@/app/components/SelectorAlbum";
 import SelectorProducto, { resolverProductoAlUsar, valorVacioSelectorProducto, type ValorSelectorProducto } from "@/app/components/SelectorProducto";
+import ColaDeRender from "./ColaDeRender";
 import type { RecetaOrganicaId } from "@/video/guion.schema";
 
 const MAX_PIEZAS_POR_REEL = 3;
@@ -112,9 +113,14 @@ export default function ContenidoPage() {
           <button type="button" style={{ ...botonSecundario, opacity: 0.6, cursor: "not-allowed" }} disabled title="Disponible pronto -- el Director todavía no arma el calendario solo.">
             Pedir propuesta al Director (próximamente)
           </button>
+          <button type="button" style={botonSecundario} onClick={() => cargarSemana(semana)} disabled={cargandoSemana}>
+            Preparar mis videos
+          </button>
         </div>
 
         {errorMsg && <p style={{ color: "#b91c1c", fontSize: 13, marginBottom: 16 }}>{errorMsg}</p>}
+
+        <ColaDeRender piezasAprobadas={piezas.filter((p) => p.estado === "aprobada")} onPiezaLista={() => cargarSemana(semana)} />
 
         <div style={{ display: "grid", gridTemplateColumns: "repeat(7, minmax(140px, 1fr))", gap: 12, overflowX: "auto" }}>
           {dias.map((fecha, i) => {

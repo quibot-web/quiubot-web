@@ -83,6 +83,29 @@ export async function PATCH(req: NextRequest, { params }: { params: Promise<{ id
     return NextResponse.json({ ok: true });
   }
 
+  if (cuerpo?.accion === "iniciar_render") {
+    // Claim atómico -- commit 4c: apenas se aprueba una pieza entra
+    // sola a la cola, así que dos pestañas (o la misma recargada)
+    // podrían intentar renderizarla al mismo tiempo. Mismo patrón que
+    // el claim de video-listo: si el update no afecta ninguna fila,
+    // alguien ya se la adjudicó.
+    const { data: filas, error: errorUpdate } = await supabaseAdmin
+      .from("publicaciones_organicas")
+      .update({ estado: "renderizando", actualizado_en: new Date().toISOString() })
+      .eq("id", id)
+      .eq("user_id", usuario!.id)
+      .eq("estado", "aprobada")
+      .select("id");
+
+    if (errorUpdate) {
+      return NextResponse.json({ error: "No se pudo iniciar el render en este momento." }, { status: 503 });
+    }
+    if (!filas || filas.length === 0) {
+      return NextResponse.json({ error: "Esta pieza ya se está renderizando (u otra pestaña la tomó)." }, { status: 409 });
+    }
+    return NextResponse.json({ ok: true });
+  }
+
   if (cuerpo?.accion !== "aprobar") {
     return NextResponse.json({ error: "Acción inválida." }, { status: 400 });
   }

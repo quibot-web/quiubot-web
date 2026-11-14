@@ -142,6 +142,30 @@ describe("PATCH /api/contenido/[id] -- aprobar", () => {
   });
 });
 
+describe("PATCH /api/contenido/[id] -- iniciar_render", () => {
+  beforeEach(() => {
+    fromMock.mockClear();
+    authMock.mockResolvedValue({ user: { email: "marca@quiubot.com" } });
+    usuarioActual = USUARIO_ADMIN;
+    filasUpdateActual = [{ id: "pieza-1" }];
+    updatesRealizados = [];
+  });
+
+  it("aprobada: pasa a renderizando", async () => {
+    const res = await PATCH(patchReq({ accion: "iniciar_render" }), contexto());
+    const body = await res.json();
+    expect(res.status).toBe(200);
+    expect(body.ok).toBe(true);
+    expect(updatesRealizados[0]).toMatchObject({ estado: "renderizando" });
+  });
+
+  it("otra pestaña ya la tomó (0 filas afectadas): 409", async () => {
+    filasUpdateActual = [];
+    const res = await PATCH(patchReq({ accion: "iniciar_render" }), contexto());
+    expect(res.status).toBe(409);
+  });
+});
+
 describe("PATCH /api/contenido/[id] -- editar", () => {
   beforeEach(() => {
     fromMock.mockClear();
