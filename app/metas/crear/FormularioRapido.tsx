@@ -275,6 +275,17 @@ export default function FormularioRapido({
                       : id === "seguidores_instagram" && saludInstagram && !saludInstagram.conectado
                         ? "Necesitas que tu Instagram profesional esté vinculado a tu página de Facebook y autorizado en tu cuenta publicitaria (Meta Business Manager → Cuentas de Instagram → Conectar activos)."
                         : null;
+                // Prueba visible de que instagram_basic trajo datos reales --
+                // antes el conteo de seguidores solo se usaba por dentro
+                // (valor_inicial de la meta), nunca se mostraba en pantalla.
+                const conectadoInstagram =
+                  id === "seguidores_instagram" && saludInstagram?.conectado
+                    ? `Conectado · ${saludInstagram.username ? `@${saludInstagram.username}` : "Instagram"}${
+                        typeof saludInstagram.followers_count === "number"
+                          ? ` · ${saludInstagram.followers_count.toLocaleString("es-CO")} seguidores hoy`
+                          : ""
+                      }`
+                    : null;
                 return (
                   <div key={id}>
                     <button
@@ -293,6 +304,7 @@ export default function FormularioRapido({
                       <span style={{ fontSize: 15, fontWeight: 600, color: "#1a1a1a" }}>{label}</span>
                     </button>
                     {motivo && <p style={{ fontSize: 12, color: "#888", margin: "4px 0 0 4px" }}>{motivo}</p>}
+                    {conectadoInstagram && <p style={{ fontSize: 12, color: "#0F7A3C", margin: "4px 0 0 4px" }}>{conectadoInstagram}</p>}
                   </div>
                 );
               })}
