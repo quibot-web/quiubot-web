@@ -10,10 +10,25 @@ type VideoAlbum = {
 
 type EstadoPublicacion = "inactivo" | "creando" | "procesando" | "publicando" | "listo" | "error";
 
+type ProbeCampos = { instagram_business_account: string | null; connected_instagram_account: string | null; error: string | null };
+
+type ResolucionCuenta =
+  | { encontrada: true; igUserId: string; username: string | null; campo: string; tokenUsado: "usuario" | "pagina" }
+  | { encontrada: false }
+  | { tokenVencido: true };
+
+type DiagnosticoCuenta = {
+  pageId: string;
+  conTokenUsuario: ProbeCampos;
+  conTokenPagina: ProbeCampos | null;
+  resolucion: ResolucionCuenta;
+};
+
 type Diagnostico = {
   meta_config_id: string | null;
   permisos: { permission: string; status: string }[];
   instagram: { conectado: boolean; username: string | null; account_type: string | null } | null;
+  diagnostico_cuenta?: DiagnosticoCuenta | null;
   error?: string;
 };
 
@@ -185,6 +200,50 @@ export default function AdminPublicarInstagramPruebaClient() {
                 ? `@${diagnostico.instagram.username} (${diagnostico.instagram.account_type || "tipo no disponible vía esta conexión"})`
                 : "no conectada"}
             </p>
+
+            {diagnostico.diagnostico_cuenta && (
+              <div style={{ marginTop: 10, marginBottom: 10 }}>
+                <strong>page_id activo:</strong> {diagnostico.diagnostico_cuenta.pageId}
+                <table style={{ width: "100%", marginTop: 6, borderCollapse: "collapse", fontSize: 11 }}>
+                  <thead>
+                    <tr style={{ textAlign: "left", borderBottom: "1px solid #ddd" }}>
+                      <th style={{ padding: "4px 6px" }}>Campo</th>
+                      <th style={{ padding: "4px 6px" }}>Con token de usuario</th>
+                      <th style={{ padding: "4px 6px" }}>Con token de la página</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    <tr>
+                      <td style={{ padding: "4px 6px" }}>instagram_business_account</td>
+                      <td style={{ padding: "4px 6px" }}>{diagnostico.diagnostico_cuenta.conTokenUsuario.instagram_business_account || "—"}</td>
+                      <td style={{ padding: "4px 6px" }}>{diagnostico.diagnostico_cuenta.conTokenPagina?.instagram_business_account || "—"}</td>
+                    </tr>
+                    <tr>
+                      <td style={{ padding: "4px 6px" }}>connected_instagram_account</td>
+                      <td style={{ padding: "4px 6px" }}>{diagnostico.diagnostico_cuenta.conTokenUsuario.connected_instagram_account || "—"}</td>
+                      <td style={{ padding: "4px 6px" }}>{diagnostico.diagnostico_cuenta.conTokenPagina?.connected_instagram_account || "—"}</td>
+                    </tr>
+                  </tbody>
+                </table>
+                {diagnostico.diagnostico_cuenta.conTokenUsuario.error && (
+                  <p style={{ color: "#b91c1c", margin: "6px 0 0" }}>
+                    Error con token de usuario: {diagnostico.diagnostico_cuenta.conTokenUsuario.error}
+                  </p>
+                )}
+                {diagnostico.diagnostico_cuenta.conTokenPagina?.error && (
+                  <p style={{ color: "#b91c1c", margin: "6px 0 0" }}>
+                    Error con token de la página: {diagnostico.diagnostico_cuenta.conTokenPagina.error}
+                  </p>
+                )}
+                <p style={{ margin: "8px 0 0", fontWeight: 600 }}>
+                  {"encontrada" in diagnostico.diagnostico_cuenta.resolucion && diagnostico.diagnostico_cuenta.resolucion.encontrada
+                    ? `Id a usar para publicar: ${diagnostico.diagnostico_cuenta.resolucion.igUserId} (campo ${diagnostico.diagnostico_cuenta.resolucion.campo}, token de ${diagnostico.diagnostico_cuenta.resolucion.tokenUsado})`
+                    : "tokenVencido" in diagnostico.diagnostico_cuenta.resolucion && diagnostico.diagnostico_cuenta.resolucion.tokenVencido
+                      ? "El token de Meta venció -- reconecta."
+                      : "Ningún campo trajo un id todavía -- revisa la tabla de arriba."}
+                </p>
+              </div>
+            )}
 
             {diagnostico.permisos.length > 0 && (
               <div style={{ marginTop: 10 }}>

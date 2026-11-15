@@ -2,6 +2,7 @@ import { auth } from "@/auth";
 import { NextRequest, NextResponse } from "next/server";
 import { supabaseAdmin } from "@/lib/supabase";
 import { esErrorTokenMetaVencido, MENSAJE_META_TOKEN_VENCIDO, ACCION_RECONECTAR_META } from "@/app/lib/metaErrors";
+import { resolverCuentaInstagramDeLaPagina, diagnosticarCuentaInstagramDeLaPagina } from "@/app/lib/metaInstagramSalud";
 
 // Flujo mínimo real de "Publicar en Instagram" -- existe SOLO para
 // sostener el video de revisión de App Review de Meta del permiso
@@ -28,21 +29,17 @@ async function resolverUsuarioAdmin(email: string) {
 }
 
 async function resolverCuentaInstagram(pageId: string, accessToken: string) {
-  const res = await fetch(
-    `https://graph.facebook.com/${GRAPH_API_VERSION}/${pageId}?fields=instagram_business_account{id,username}&access_token=${accessToken}`
-  );
-  const data = await res.json();
-  if (esErrorTokenMetaVencido(data.error)) {
+  const resolucion = await resolverCuentaInstagramDeLaPagina(pageId, accessToken);
+  if ("tokenVencido" in resolucion) {
     return { error: MENSAJE_META_TOKEN_VENCIDO, accion: ACCION_RECONECTAR_META } as const;
   }
-  const ig = data.instagram_business_account;
-  if (!ig?.id) {
+  if (!resolucion.encontrada) {
     return {
       error:
         "Necesitas que tu Instagram profesional esté vinculado a tu página de Facebook (Meta Business Manager → Cuentas de Instagram → Conectar activos) antes de publicar.",
     } as const;
   }
-  return { igUserId: ig.id as string } as const;
+  return { igUserId: resolucion.igUserId } as const;
 }
 
 export async function POST(req: NextRequest) {
@@ -228,19 +225,39 @@ export async function GET() {
     console.error("Error consultando /me/permissions:", err);
   }
 
-  let instagram: { conectado: boolean; username: string | null; account_type: string | null } | null = null;
+  // Diagnóstico crudo pedido explícito tras el error "(#10)": compara
+  // instagram_business_account vs. connected_instagram_account, con el
+  // token de usuario y con el de la página, en vez de asumir cuál de
+  // los 2 campos tiene el id -- ver app/lib/metaInstagramSalud.ts.
+  let diagnosticoCuenta;
   try {
-    const igRes = await fetch(
-      `https://graph.facebook.com/${GRAPH_API_VERSION}/${usuario.meta_page_id}?fields=instagram_business_account{id,username,account_type}&access_token=${usuario.meta_access_token}`
-    );
-    const igData = await igRes.json();
-    const ig = igData?.instagram_business_account;
-    instagram = ig?.id
-      ? { conectado: true, username: ig.username ?? null, account_type: ig.account_type ?? null }
-      : { conectado: false, username: null, account_type: null };
+    diagnosticoCuenta = await diagnosticarCuentaInstagramDeLaPagina(usuario.meta_page_id, usuario.meta_access_token);
   } catch (err) {
-    console.error("Error consultando instagram_business_account para diagnóstico:", err);
+    console.error("Error diagnosticando la cuenta de Instagram:", err);
+    diagnosticoCuenta = null;
   }
 
-  return NextResponse.json({ meta_config_id: metaConfigId, permisos, instagram });
+  let instagram: { conectado: boolean; username: string | null; account_type: string | null } | null = null;
+  const resolucion = diagnosticoCuenta?.resolucion;
+  if (resolucion && "encontrada" in resolucion && resolucion.encontrada) {
+    try {
+      const igRes = await fetch(
+        `https://graph.facebook.com/${GRAPH_API_VERSION}/${resolucion.igUserId}?fields=username,account_type&access_token=${usuario.meta_access_token}`
+      );
+      const igData = await igRes.json();
+      instagram = { conectado: true, username: igData.username ?? resolucion.username, account_type: igData.account_type ?? null };
+    } catch (err) {
+      console.error("Error consultando el nodo de Instagram para diagnóstico:", err);
+      instagram = { conectado: true, username: resolucion.username, account_type: null };
+    }
+  } else {
+    instagram = { conectado: false, username: null, account_type: null };
+  }
+
+  return NextResponse.json({
+    meta_config_id: metaConfigId,
+    permisos,
+    instagram,
+    diagnostico_cuenta: diagnosticoCuenta,
+  });
 }
