@@ -9,7 +9,9 @@ const COLOR_WHATSAPP = "#25D366";
 // completo) -- antes solo crecía a eso cuando el texto era largo; con
 // texto corto quedaba "fit-content" y se veía chico. Ahora el ancho es
 // fijo y lo único que varía con el largo del texto es el tamaño de letra.
-const ANCHO_MAX_PX = 1080 * 0.88 * 0.8;
+// Exportados para la prueba de texto largo (Cta.test.ts) -- el ancho
+// real de diseño, para no duplicar el número mágico en el test.
+export const ANCHO_MAX_PX = 1080 * 0.88 * 0.8;
 const ANCHO_BOTON_PORCENTAJE = `${((ANCHO_MAX_PX / 1080) * 100).toFixed(1)}%`;
 const PADDING_HORIZONTAL_PX = 56;
 const FUENTE_IDEAL = 56;
@@ -38,14 +40,21 @@ function calcularFuenteBoton(texto: string): number {
 // botón se funde con el fondo. Con blanco/casi negro -- el que mejor
 // contraste contra el fondo real -- el botón resalta siempre, sin
 // importar la paleta de marca.
-function BotonGrande({ texto, tema, progreso }: { texto: string; tema: TemaGuion; progreso: number }) {
+//
+// `completo`: cuando el llamador ya envuelve este botón en un
+// contenedor propio con el ancho real fijado (CtaWeb/CtaFormulario, que
+// necesitan ese contenedor para anclar CursorClic), el botón debe llenar
+// ese contenedor al 100% -- nunca repetir el porcentaje de pantalla
+// adentro Y afuera (eso termina angostando el botón al cuadrado del
+// porcentaje). Exportado para la prueba de texto largo (Cta.test.ts).
+export function BotonGrande({ texto, tema, progreso, completo }: { texto: string; tema: TemaGuion; progreso: number; completo?: boolean }) {
   const colorBoton = colorTextoSobre(tema.color_primario);
   const colorTexto = colorTextoSobre(colorBoton);
   const fontSize = calcularFuenteBoton(texto);
   return (
     <div
       style={{
-        width: ANCHO_BOTON_PORCENTAJE,
+        width: completo ? "100%" : ANCHO_BOTON_PORCENTAJE,
         background: colorBoton,
         color: colorTexto,
         borderRadius: 999,
@@ -67,7 +76,8 @@ function BotonGrande({ texto, tema, progreso }: { texto: string; tema: TemaGuion
 // El cursor que "hace clic" en web y formulario -- se ancla al botón
 // mismo (abajo-derecha de su caja real vía position:relative en el
 // contenedor), nunca a un punto adivinado de la pantalla completa.
-function CursorClic({ frame, fps, duracionCuadros }: { frame: number; fps: number; duracionCuadros: number }) {
+// Exportado para la prueba de texto largo (Cta.test.ts).
+export function CursorClic({ frame, fps, duracionCuadros }: { frame: number; fps: number; duracionCuadros: number }) {
   const cuadroClic = Math.round(duracionCuadros * 0.6);
   const llegada = interpolate(frame, [fps * 0.3, cuadroClic], [0, 1], { extrapolateLeft: "clamp", extrapolateRight: "clamp" });
   const clic = spring({ frame: frame - cuadroClic, fps, config: { damping: 6, mass: 0.4 } });
@@ -138,11 +148,18 @@ function CtaWeb({ escena, tema }: PropsEscena<"cta">) {
 
   return (
     <AbsoluteFill style={{ justifyContent: "center", alignItems: "center", padding: "0 8%" }}>
-      {/* display:inline-block para que el contenedor se ajuste al ancho
-          real del botón (que ahora varía con el texto), y el cursor se
-          ancle a su esquina de verdad. */}
-      <div style={{ position: "relative", display: "inline-block" }}>
-        <BotonGrande texto={texto_boton} tema={tema} progreso={progresoBoton} />
+      {/* El contenedor lleva el ancho real (no display:inline-block):
+          un porcentaje de ancho puesto en el BOTÓN cuando su contenedor
+          es un inline-block sin ancho propio es un caso límite de CSS
+          que el navegador no resuelve al 80% esperado -- con texto
+          suficientemente largo ("Siguiendo ✓", caso real encontrado en
+          el reel de referencia de contenido orgánico) el botón terminaba
+          mucho más angosto de lo pedido y el texto se partía a mitad de
+          palabra. Ahora el contenedor YA tiene el ancho real y
+          BotonGrande solo lo llena (completo), así el cursor se sigue
+          anclando a la esquina real del botón sin heredar el bug. */}
+      <div style={{ position: "relative", width: ANCHO_BOTON_PORCENTAJE }}>
+        <BotonGrande texto={texto_boton} tema={tema} progreso={progresoBoton} completo />
         <CursorClic frame={frame} fps={fps} duracionCuadros={duracionCuadros} />
       </div>
       {subtexto && <div style={{ fontSize: 30, color: colorTexto, marginTop: 20, opacity: progresoBoton }}>{subtexto}</div>}
@@ -195,8 +212,9 @@ function CtaFormulario({ escena, tema }: PropsEscena<"cta">) {
         <CampoFormulario etiqueta="Nombre" frame={frame} fps={fps} inicio={0} tema={tema} />
         <CampoFormulario etiqueta="WhatsApp" frame={frame} fps={fps} inicio={fps * 0.5} tema={tema} />
       </div>
-      <div style={{ position: "relative", display: "inline-block" }}>
-        <BotonGrande texto={texto_boton} tema={tema} progreso={progresoBoton} />
+      {/* Mismo arreglo que CtaWeb -- ver el comentario ahí. */}
+      <div style={{ position: "relative", width: ANCHO_BOTON_PORCENTAJE }}>
+        <BotonGrande texto={texto_boton} tema={tema} progreso={progresoBoton} completo />
         {frame >= cuadroBoton && <CursorClic frame={frame - cuadroBoton} fps={fps} duracionCuadros={duracionCuadros - cuadroBoton} />}
       </div>
       {subtexto && <div style={{ fontSize: 30, color: colorTexto, marginTop: 20, opacity: progresoBoton }}>{subtexto}</div>}
