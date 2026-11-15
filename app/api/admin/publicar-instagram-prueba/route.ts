@@ -186,3 +186,61 @@ export async function POST(req: NextRequest) {
 
   return NextResponse.json({ error: "Acción no reconocida." }, { status: 400 });
 }
+
+// GET -- diagnóstico, pedido por Juan José tras el error real "(#10)
+// Application does not have permission for this action" al publicar.
+// Nunca devuelve el token en sí, solo METADATOS sobre la conexión:
+// qué permisos tiene el token guardado (GET /me/permissions -- lo
+// único que de verdad dice si Meta ya le dio Acceso avanzado/estándar
+// a cada permiso, o si ni siquiera está pedido), el META_CONFIG_ID de
+// este ambiente (solo el número, no es secreto -- es público en la URL
+// de /api/meta/conectar) y el tipo de cuenta de Instagram vinculada.
+export async function GET() {
+  const session = await auth();
+  if (!session?.user?.email) {
+    return NextResponse.json({ error: "No autorizado" }, { status: 401 });
+  }
+
+  const usuario = await resolverUsuarioAdmin(session.user.email);
+  if (!usuario) {
+    return NextResponse.json({ error: "Usuario no encontrado" }, { status: 404 });
+  }
+  if (usuario.rol !== "admin") {
+    return NextResponse.json({ error: "No autorizado" }, { status: 403 });
+  }
+
+  const metaConfigId = process.env.META_CONFIG_ID || null;
+
+  if (!usuario.meta_page_id || !usuario.meta_access_token) {
+    return NextResponse.json({ meta_config_id: metaConfigId, permisos: [], instagram: null, error: "Conecta tu cuenta de Meta primero." });
+  }
+
+  let permisos: { permission: string; status: string }[] = [];
+  try {
+    const permisosRes = await fetch(
+      `https://graph.facebook.com/${GRAPH_API_VERSION}/me/permissions?access_token=${usuario.meta_access_token}`
+    );
+    const permisosData = await permisosRes.json();
+    if (Array.isArray(permisosData?.data)) {
+      permisos = permisosData.data.map((p: { permission: string; status: string }) => ({ permission: p.permission, status: p.status }));
+    }
+  } catch (err) {
+    console.error("Error consultando /me/permissions:", err);
+  }
+
+  let instagram: { conectado: boolean; username: string | null; account_type: string | null } | null = null;
+  try {
+    const igRes = await fetch(
+      `https://graph.facebook.com/${GRAPH_API_VERSION}/${usuario.meta_page_id}?fields=instagram_business_account{id,username,account_type}&access_token=${usuario.meta_access_token}`
+    );
+    const igData = await igRes.json();
+    const ig = igData?.instagram_business_account;
+    instagram = ig?.id
+      ? { conectado: true, username: ig.username ?? null, account_type: ig.account_type ?? null }
+      : { conectado: false, username: null, account_type: null };
+  } catch (err) {
+    console.error("Error consultando instagram_business_account para diagnóstico:", err);
+  }
+
+  return NextResponse.json({ meta_config_id: metaConfigId, permisos, instagram });
+}
