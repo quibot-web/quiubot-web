@@ -237,22 +237,15 @@ export async function GET() {
     diagnosticoCuenta = null;
   }
 
-  let instagram: { conectado: boolean; username: string | null; account_type: string | null } | null = null;
+  // instagram se deriva DIRECTO de diagnosticoCuenta.resolucion -- la
+  // misma fuente de verdad que ya usa publicar (nunca una llamada
+  // aparte que pudiera responder algo distinto, que era como se
+  // explicaba el bug real "dice no conectada aunque publicar funciona").
   const resolucion = diagnosticoCuenta?.resolucion;
-  if (resolucion && "encontrada" in resolucion && resolucion.encontrada) {
-    try {
-      const igRes = await fetch(
-        `https://graph.facebook.com/${GRAPH_API_VERSION}/${resolucion.igUserId}?fields=username,account_type&access_token=${usuario.meta_access_token}`
-      );
-      const igData = await igRes.json();
-      instagram = { conectado: true, username: igData.username ?? resolucion.username, account_type: igData.account_type ?? null };
-    } catch (err) {
-      console.error("Error consultando el nodo de Instagram para diagnóstico:", err);
-      instagram = { conectado: true, username: resolucion.username, account_type: null };
-    }
-  } else {
-    instagram = { conectado: false, username: null, account_type: null };
-  }
+  const instagram =
+    resolucion && "encontrada" in resolucion && resolucion.encontrada
+      ? { conectado: true, igUserId: resolucion.igUserId, username: resolucion.username, account_type: diagnosticoCuenta?.accountType ?? null }
+      : { conectado: false, igUserId: null, username: null, account_type: null };
 
   return NextResponse.json({
     meta_config_id: metaConfigId,
