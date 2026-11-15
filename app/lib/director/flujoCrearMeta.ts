@@ -12,7 +12,7 @@ import { supabaseAdmin } from "@/lib/supabase";
 import { z } from "zod";
 import { llamarDirector } from "@/app/lib/director/llamarDirector";
 import { hoyBogota } from "@/app/lib/fechaBogota";
-import { obtenerSaludInstagram } from "@/app/lib/metaInstagramSalud";
+import { obtenerSaludInstagram, type SaludInstagram } from "@/app/lib/metaInstagramSalud";
 import {
   calcularCostoReferencia,
   calcularRangoResultados,
@@ -42,6 +42,41 @@ type UsuarioParaContextoNegocio = {
 
 const MODELO_DIRECTOR_META = "gpt-4o";
 
+// construirContextoNegocio() corre UNA vez por turno del chat (ver
+// app/api/director/conversacion/route.ts) -- sin esto, cada mensaje
+// del cliente llamaría de nuevo a Meta solo para resolver Instagram,
+// sumando latencia y gastando cuota de la API por nada (página,
+// cuenta publicitaria y píxel NO llaman a Meta: salen de columnas ya
+// cargadas de `usuario`, esto es solo para obtenerSaludInstagram).
+// Caché en memoria por user_id, 10 minutos -- vive mientras el proceso
+// de Node siga corriendo (Coolify, no serverless), se pierde al
+// reiniciar el servidor, lo que es aceptable para una optimización de
+// este tipo. Si el cliente reconecta Instagram a mitad de una
+// conversación, el Director puede tardar hasta 10 min en notarlo --
+// trade-off aceptado explícitamente por Juan José.
+const CACHE_SALUD_INSTAGRAM_TTL_MS = 10 * 60 * 1000;
+const cacheSaludInstagram = new Map<string, { valor: SaludInstagram; expiraEn: number }>();
+
+async function obtenerSaludInstagramCacheada(usuario: UsuarioParaContextoNegocio): Promise<SaludInstagram> {
+  const cacheado = cacheSaludInstagram.get(usuario.id);
+  if (cacheado && cacheado.expiraEn > Date.now()) return cacheado.valor;
+
+  try {
+    const valor = await obtenerSaludInstagram({ meta_page_id: usuario.meta_page_id, meta_access_token: usuario.meta_access_token });
+    cacheSaludInstagram.set(usuario.id, { valor, expiraEn: Date.now() + CACHE_SALUD_INSTAGRAM_TTL_MS });
+    return valor;
+  } catch (err) {
+    // obtenerSaludInstagram ya atrapa sus propios errores de red/Meta y
+    // responde "no conectado" en vez de lanzar -- este catch es la red
+    // de seguridad de todos modos (p. ej. un timeout que se escape de
+    // esa función). El Director sigue funcionando sin este dato, nunca
+    // con un error crudo: simplemente no confirma la conexión de
+    // Instagram en este turno, como si no estuviera conectada.
+    console.error("Error consultando salud de Instagram para el contexto del Director:", err);
+    return { conectado: false, username: null, followers_count: null, tokenVencido: false };
+  }
+}
+
 // ADN + cobertura + meta anterior + conexión real de Meta -- lo que ya
 // sabemos del negocio para no preguntarlo de nuevo (ver
 // promptMetaConversacion.ts). ADN/cobertura/meta anterior venían tal
@@ -67,7 +102,7 @@ export async function construirContextoNegocio(usuario: UsuarioParaContextoNegoc
       .eq("activo", true)
       .order("ultimo_uso_en", { ascending: false, nullsFirst: false })
       .order("creado_en", { ascending: false }),
-    obtenerSaludInstagram({ meta_page_id: usuario.meta_page_id, meta_access_token: usuario.meta_access_token }),
+    obtenerSaludInstagramCacheada(usuario),
   ]);
 
   const adn = (marca?.adn_marca as { titular?: string | null; frase_corta?: string | null } | null) ?? null;

@@ -11,7 +11,13 @@ vi.mock("@/app/lib/director/llamarDirector", () => ({
   llamarDirector: (...args: unknown[]) => llamarDirectorMock(...args),
 }));
 
+const obtenerSaludInstagramMock = vi.fn();
+vi.mock("@/app/lib/metaInstagramSalud", () => ({
+  obtenerSaludInstagram: (...args: unknown[]) => obtenerSaludInstagramMock(...args),
+}));
+
 let borradorGuardado: Record<string, unknown> | null = null;
+const MARCA_MOCK = { adn_marca: null, nombre_marca: "Tienda de Juan", ciudades_cobertura: [], pais_cobertura: "CO", sitio_web: null, whatsapp_numero: null };
 
 vi.mock("@/lib/supabase", () => ({
   supabaseAdmin: {
@@ -35,12 +41,21 @@ vi.mock("@/lib/supabase", () => ({
           }),
         };
       }
+      if (tabla === "marcas") {
+        return { select: () => ({ eq: () => ({ maybeSingle: async () => ({ data: MARCA_MOCK }) }) }) };
+      }
+      if (tabla === "metas") {
+        return { select: () => ({ eq: () => ({ neq: () => ({ order: () => ({ limit: () => ({ maybeSingle: async () => ({ data: null }) }) }) }) }) }) };
+      }
+      if (tabla === "productos") {
+        return { select: () => ({ eq: () => ({ eq: () => ({ order: () => ({ order: async () => ({ data: [] }) }) }) }) }) };
+      }
       throw new Error(`Tabla no mockeada en este test: ${tabla}`);
     },
   },
 }));
 
-import { ejecutarTurnoMeta } from "./flujoCrearMeta";
+import { ejecutarTurnoMeta, construirContextoNegocio } from "./flujoCrearMeta";
 import type { ContextoNegocioDirector } from "./promptMetaConversacion";
 
 const CONTEXTO_BASE: ContextoNegocioDirector = {
@@ -65,6 +80,7 @@ const USUARIO = { id: "user-1", meta_ad_account_id: "act_1", meta_access_token: 
 
 beforeEach(() => {
   llamarDirectorMock.mockReset();
+  obtenerSaludInstagramMock.mockReset();
   borradorGuardado = null;
 });
 
@@ -126,5 +142,54 @@ describe("ejecutarTurnoMeta -- usuario_cta de seguidores_instagram", () => {
 
     const systemPromptEnviado = llamarDirectorMock.mock.calls[0]?.[2] as string;
     expect(systemPromptEnviado).toContain("Instagram conectado: @tiendadejuan");
+  });
+});
+
+// Usuarios con id distinto en cada caso -- la caché de
+// obtenerSaludInstagramCacheada es un Map module-level por user_id, y
+// estos tests comparten el módulo real (solo se mockea
+// obtenerSaludInstagram): usar el mismo id entre tests haría que uno
+// contamine el resultado cacheado del otro.
+describe("construirContextoNegocio -- caché y resiliencia de obtenerSaludInstagram", () => {
+  it("no vuelve a llamar a Meta en una segunda construcción de contexto del mismo usuario (dentro del TTL)", async () => {
+    obtenerSaludInstagramMock.mockResolvedValue({ conectado: true, username: "tiendadejuan", followers_count: 500, tokenVencido: false });
+    const usuario = {
+      id: "user-cache-1",
+      email: "cache1@quiubot.test",
+      meta_page_id: "page-1",
+      meta_access_token: "token-1",
+      meta_page_name: "Página de prueba",
+      meta_ad_account_nombre: "Cuenta de prueba",
+      meta_pixel_id: null,
+      meta_pixel_nombre: null,
+    };
+
+    const primero = await construirContextoNegocio(usuario);
+    const segundo = await construirContextoNegocio(usuario);
+
+    expect(obtenerSaludInstagramMock).toHaveBeenCalledTimes(1);
+    expect(primero.conexionMeta.instagram.username).toBe("tiendadejuan");
+    expect(segundo.conexionMeta.instagram.username).toBe("tiendadejuan");
+  });
+
+  it("si obtenerSaludInstagram falla, el contexto sigue armándose sin ese dato, nunca lanza un error crudo", async () => {
+    obtenerSaludInstagramMock.mockRejectedValue(new Error("fallo de red simulado"));
+    const usuario = {
+      id: "user-resiliente-1",
+      email: "resiliente1@quiubot.test",
+      meta_page_id: "page-2",
+      meta_access_token: "token-2",
+      meta_page_name: "Página de prueba",
+      meta_ad_account_nombre: "Cuenta de prueba",
+      meta_pixel_id: null,
+      meta_pixel_nombre: null,
+    };
+
+    const contexto = await construirContextoNegocio(usuario);
+
+    expect(contexto.conexionMeta.instagram).toEqual({ conectado: false, username: null, seguidores: null });
+    // El resto del contexto (página, cuenta publicitaria) sigue
+    // llegando bien -- un fallo de Meta no debe tumbar todo el turno.
+    expect(contexto.conexionMeta.pagina).toBe("Página de prueba");
   });
 });
