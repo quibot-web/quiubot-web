@@ -2,7 +2,8 @@ import { auth } from "@/auth";
 import { after, NextRequest, NextResponse } from "next/server";
 import { supabaseAdmin } from "@/lib/supabase";
 import { procesarPublicarEstrategia, TIPO_TRABAJO, MENSAJE_SIN_CONFIRMAR } from "@/app/lib/publicarEstrategiaJobs";
-import { esErrorTokenMetaVencido, MENSAJE_META_TOKEN_VENCIDO } from "@/app/lib/metaErrors";
+import { MENSAJE_META_TOKEN_VENCIDO } from "@/app/lib/metaErrors";
+import { resolverCuentaInstagramDeLaPagina } from "@/app/lib/metaInstagramSalud";
 
 // Dispara publicar_estrategia en segundo plano (trabajos_ia, ver
 // app/lib/publicarEstrategiaJobs.ts) en vez de esperar la respuesta de
@@ -53,20 +54,16 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ error: MENSAJE_INSTAGRAM_NO_CONECTADO }, { status: 400 });
     }
     try {
-      const igRes = await fetch(
-        `https://graph.facebook.com/v21.0/${usuario.meta_page_id}?fields=instagram_business_account{id,username}&access_token=${usuario.meta_access_token}`
-      );
-      const igData = await igRes.json();
-      if (esErrorTokenMetaVencido(igData.error)) {
+      const resolucion = await resolverCuentaInstagramDeLaPagina(usuario.meta_page_id, usuario.meta_access_token);
+      if ("tokenVencido" in resolucion) {
         return NextResponse.json({ error: MENSAJE_META_TOKEN_VENCIDO }, { status: 400 });
       }
-      const ig = igData.instagram_business_account;
-      if (!ig?.id || !ig?.username) {
+      if (!resolucion.encontrada || !resolucion.username) {
         return NextResponse.json({ error: MENSAJE_INSTAGRAM_NO_CONECTADO }, { status: 400 });
       }
-      instagram = { id: ig.id, username: ig.username };
+      instagram = { id: resolucion.igUserId, username: resolucion.username };
     } catch (err) {
-      console.error("Error consultando instagram_business_account al publicar:", err);
+      console.error("Error resolviendo la cuenta de Instagram al publicar:", err);
       return NextResponse.json({ error: "No se pudo verificar tu cuenta de Instagram en este momento." }, { status: 500 });
     }
   }
