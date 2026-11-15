@@ -13,6 +13,15 @@
 // de Remotion: BotonGrande/CursorClic son componentes de presentación
 // puros, reciben frame/progreso ya calculados) en un Chromium real con
 // Playwright y mide el layout de verdad.
+//
+// *.navegador.test.ts, fuera de "npm test" (ver vitest.config.ts):
+// lanzar un Chromium real es mucho más lento y variable que el resto
+// de la suite (mockeada, sin red ni DB real) -- en un entorno
+// restringido el arranque del navegador puede pasarse del timeout por
+// defecto de vitest (5s) sin que haya ningún bug real, lo que volvía
+// "npm test" rojo por una causa ajena a la lógica. Corre aparte con
+// "npm run test:navegador". El timeout explícito de 30s (tercer
+// argumento de it) es la red de seguridad dentro de ese script.
 import { describe, expect, it } from "vitest";
 import { renderToStaticMarkup } from "react-dom/server";
 import { chromium } from "playwright";
@@ -60,5 +69,5 @@ describe("BotonGrande dentro del contenedor real de CtaWeb/CtaFormulario", () =>
     } finally {
       await browser.close();
     }
-  });
+  }, 30000);
 });

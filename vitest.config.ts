@@ -16,7 +16,12 @@ export default defineConfig({
   test: {
     environment: "node",
     include: ["**/*.test.ts"],
-    exclude: ["node_modules", ".next"],
+    // *.navegador.test.ts lanza un Chromium real (Playwright) -- mucho
+    // más lento y variable que el resto de la suite (mockeada), y en
+    // entornos restringidos puede pasarse del timeout por defecto sin
+    // que haya ningún bug real. Corre aparte con "npm run test:navegador"
+    // (ver package.json), nunca como parte del "npm test" de todos los días.
+    exclude: ["node_modules", ".next", "**/*.navegador.test.ts"],
     setupFiles: ["./vitest.setup.ts"],
   },
 });

@@ -11,6 +11,7 @@
     "start": "next start",
     "lint": "eslint",
     "test": "vitest run",
+    "test:navegador": "vitest run --config vitest.navegador.config.ts",
     "video:studio": "remotion studio video/Root.tsx",
     "video:verificar": "tsx video/fixtures/verificar.ts",
     "render": "tsx video/render.ts",
