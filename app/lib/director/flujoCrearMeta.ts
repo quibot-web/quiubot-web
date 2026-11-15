@@ -12,6 +12,7 @@ import { supabaseAdmin } from "@/lib/supabase";
 import { z } from "zod";
 import { llamarDirector } from "@/app/lib/director/llamarDirector";
 import { hoyBogota } from "@/app/lib/fechaBogota";
+import { obtenerSaludInstagram } from "@/app/lib/metaInstagramSalud";
 import {
   calcularCostoReferencia,
   calcularRangoResultados,
@@ -24,14 +25,33 @@ import {
 import { BorradorMetaSchema, BorradorMetaListoSchema, PLAZO_DIAS_DEFECTO, type BorradorMeta, type BorradorMetaListo } from "@/app/lib/director/borradorMeta.schema";
 import { construirPromptMetaConversacion, type ContextoNegocioDirector } from "@/app/lib/director/promptMetaConversacion";
 
+// Lo mínimo del usuario que necesita construirContextoNegocio para
+// resolver la conexión real de Meta (mismo subconjunto de campos que
+// ya trae usuario en la ruta real, app/api/director/conversacion/
+// route.ts -- ahí no hace falta un select nuevo).
+type UsuarioParaContextoNegocio = {
+  id: string;
+  email: string;
+  meta_page_id: string | null;
+  meta_access_token: string | null;
+  meta_page_name: string | null;
+  meta_ad_account_nombre: string | null;
+  meta_pixel_id: string | null;
+  meta_pixel_nombre: string | null;
+};
+
 const MODELO_DIRECTOR_META = "gpt-4o";
 
-// ADN + cobertura + meta anterior -- lo que ya sabemos del negocio para
-// no preguntarlo de nuevo (ver promptMetaConversacion.ts). Movido tal
-// cual desde /api/metas/conversacion.
-export async function construirContextoNegocio(usuario: { id: string; email: string }): Promise<ContextoNegocioDirector> {
-  const [{ data: marca }, { data: metaAnterior }, { data: productos }] = await Promise.all([
-    supabaseAdmin.from("marcas").select("adn_marca, nombre_marca, ciudades_cobertura, pais_cobertura").eq("email", usuario.email).maybeSingle(),
+// ADN + cobertura + meta anterior + conexión real de Meta -- lo que ya
+// sabemos del negocio para no preguntarlo de nuevo (ver
+// promptMetaConversacion.ts). ADN/cobertura/meta anterior venían tal
+// cual desde /api/metas/conversacion; conexionMeta se agregó el 18 nov
+// 2026 porque el chat del Director preguntaba el @usuario de Instagram
+// aunque la cuenta YA estuviera conectada -- misma fuente real que usa
+// /metas/crear (obtenerSaludInstagram), nunca un dato aparte.
+export async function construirContextoNegocio(usuario: UsuarioParaContextoNegocio): Promise<ContextoNegocioDirector> {
+  const [{ data: marca }, { data: metaAnterior }, { data: productos }, saludInstagram] = await Promise.all([
+    supabaseAdmin.from("marcas").select("adn_marca, nombre_marca, ciudades_cobertura, pais_cobertura, sitio_web, whatsapp_numero").eq("email", usuario.email).maybeSingle(),
     supabaseAdmin
       .from("metas")
       .select("tipo, cantidad_objetivo, presupuesto_maximo_cop")
@@ -47,6 +67,7 @@ export async function construirContextoNegocio(usuario: { id: string; email: str
       .eq("activo", true)
       .order("ultimo_uso_en", { ascending: false, nullsFirst: false })
       .order("creado_en", { ascending: false }),
+    obtenerSaludInstagram({ meta_page_id: usuario.meta_page_id, meta_access_token: usuario.meta_access_token }),
   ]);
 
   const adn = (marca?.adn_marca as { titular?: string | null; frase_corta?: string | null } | null) ?? null;
@@ -61,6 +82,18 @@ export async function construirContextoNegocio(usuario: { id: string; email: str
       ? `${metaAnterior.cantidad_objetivo} de tipo "${metaAnterior.tipo}" con presupuesto de ${metaAnterior.presupuesto_maximo_cop} COP`
       : null,
     productos: productos ?? [],
+    conexionMeta: {
+      pagina: usuario.meta_page_name,
+      cuentaPublicitaria: usuario.meta_ad_account_nombre,
+      instagram: {
+        conectado: saludInstagram.conectado,
+        username: saludInstagram.username,
+        seguidores: saludInstagram.followers_count,
+      },
+      whatsapp: (marca?.whatsapp_numero as string | null) ?? null,
+      sitioWeb: (marca?.sitio_web as string | null) ?? null,
+      pixel: { conectado: !!usuario.meta_pixel_id, nombre: usuario.meta_pixel_nombre },
+    },
   };
 }
 
@@ -232,6 +265,18 @@ export async function ejecutarTurnoMeta(params: {
 
   const parcial = parseado.data.borrador_parcial ? BorradorMetaSchema.safeParse(parseado.data.borrador_parcial) : null;
   const borradorNuevo: BorradorMeta = { ...borradorActual, ...(parcial?.success ? parcial.data : {}) };
+
+  // Red de seguridad en código, no solo en el prompt -- mismo criterio
+  // que valor_inicial (nunca sale del modelo, siempre de un dato real
+  // de la plataforma): si la meta es de seguidores_instagram y la
+  // cuenta YA está conectada, el @usuario real pisa cualquier cosa que
+  // el modelo haya puesto (o no haya puesto) en usuario_cta. Si no está
+  // conectada, nunca se inventa un usuario -- el prompt es quien le
+  // explica al cliente que falta vincular Instagram.
+  if (borradorNuevo.tipo === "seguidores_instagram" && contextoNegocio.conexionMeta.instagram.conectado && contextoNegocio.conexionMeta.instagram.username) {
+    const username = contextoNegocio.conexionMeta.instagram.username;
+    borradorNuevo.usuario_cta = username.startsWith("@") ? username : `@${username}`;
+  }
 
   let textoDirector = parseado.data.respuesta;
   let opcionesDirector = parseado.data.opciones;

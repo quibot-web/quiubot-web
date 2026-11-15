@@ -14,6 +14,14 @@ const CONTEXTO_BASE: ContextoNegocioDirector = {
   ciudadesCobertura: [],
   metaAnteriorResumen: null,
   productos: [],
+  conexionMeta: {
+    pagina: null,
+    cuentaPublicitaria: null,
+    instagram: { conectado: false, username: null, seguidores: null },
+    whatsapp: null,
+    sitioWeb: null,
+    pixel: { conectado: false, nombre: null },
+  },
 };
 
 const BORRADOR_VACIO: BorradorMeta = {};
@@ -44,5 +52,25 @@ describe("construirPromptMetaConversacion", () => {
   it("instruye explícitamente a nunca inventar nombres de ejemplo", () => {
     const prompt = construirPromptMetaConversacion(CONTEXTO_BASE, BORRADOR_VACIO);
     expect(prompt).toContain("nunca inventes nombres de ejemplo");
+  });
+
+  it("con Instagram conectado, el prompt trae el @usuario y los seguidores reales, nunca una instrucción de pedirlos", () => {
+    const contexto: ContextoNegocioDirector = {
+      ...CONTEXTO_BASE,
+      conexionMeta: {
+        ...CONTEXTO_BASE.conexionMeta,
+        instagram: { conectado: true, username: "tiendadejuan", seguidores: 1234 },
+      },
+    };
+    const prompt = construirPromptMetaConversacion(contexto, BORRADOR_VACIO);
+    expect(prompt).toContain("Instagram conectado: @tiendadejuan, 1.234 seguidores hoy.");
+    expect(prompt).toContain("NUNCA le preguntes su @usuario de Instagram");
+  });
+
+  it("sin Instagram conectado, el prompt trae el aviso de vincular y reconectar, nunca pide inventar un usuario", () => {
+    const prompt = construirPromptMetaConversacion(CONTEXTO_BASE, BORRADOR_VACIO);
+    expect(prompt).toContain("Instagram NO conectado");
+    expect(prompt).toContain("vincular su Instagram profesional a su página de Facebook");
+    expect(prompt).not.toContain("@tiendadejuan");
   });
 });

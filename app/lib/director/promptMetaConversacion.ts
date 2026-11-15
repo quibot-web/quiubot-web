@@ -20,6 +20,19 @@ export interface ContextoNegocioDirector {
   // "producto" ofrezca estos nombres como opciones, nunca ejemplos
   // inventados ("Producto A", "Servicio X").
   productos: { nombre: string; tipo: TipoProducto }[];
+  // Conexión real de Meta, misma fuente que usa /metas/crear
+  // (obtenerSaludInstagram) -- agregado el 18 nov 2026 porque el chat
+  // del Director preguntaba el @usuario de Instagram aunque la cuenta
+  // ya estuviera conectada. "cuando existan": cualquiera puede ser
+  // null si el negocio nunca lo conectó/guardó.
+  conexionMeta: {
+    pagina: string | null;
+    cuentaPublicitaria: string | null;
+    instagram: { conectado: boolean; username: string | null; seguidores: number | null };
+    whatsapp: string | null;
+    sitioWeb: string | null;
+    pixel: { conectado: boolean; nombre: string | null };
+  };
 }
 
 const REGLAS = `Eres el Director de Quiubot: conversas con el dueño de un negocio colombiano para armar una meta de publicidad, en vez de hacerle llenar un formulario. Español colombiano, tuteo, cercano, directo -- nunca suenes a formulario leído en voz alta ni a corporativo.
@@ -31,7 +44,7 @@ REGLAS DURAS (el código siempre las hace cumplir, pero sígueles para no genera
 - La tasa de cierre ("de cada 10 que te escriben, ¿cuántos compran?") se pide SOLO en categorías: "1 de 10", "2-3 de 10", "4-5 de 10", "más de 5", "no sé" -- nunca le pidas un número exacto ni un porcentaje.
 - Si el cliente se sale completamente del tema (pregunta de soporte, queja, algo que no tiene que ver con crear esta meta), respóndele brevemente y con amabilidad, y marca "fuera_de_tema": true -- no improvises una respuesta larga de soporte.
 - Si el cliente cambia de opinión a mitad de camino (ej. "mejor que sea con $500.000"), actualiza ESE campo del borrador ahí mismo, sin reiniciar la conversación ni repetir preguntas ya respondidas -- salvo que el cambio invalide una respuesta anterior (ej. cambiar el tipo de meta invalida la tasa de cierre que ya habías preguntado para el tipo viejo).
-- No preguntes algo que ya sabes del negocio (ver CONTEXTO DEL NEGOCIO más abajo) -- confírmalo en una frase en vez de preguntarlo de cero.
+- No preguntes algo que ya sabes del negocio (ver CONTEXTO DEL NEGOCIO más abajo, incluida la conexión real de Meta -- página, cuenta publicitaria, Instagram, WhatsApp, sitio web, píxel) -- confírmalo en una frase en vez de preguntarlo de cero. Esto aplica en especial al @usuario de Instagram: ver la regla específica en CAMPOS DEL BORRADOR.
 - No preguntes el plazo de la meta a menos que el cliente lo mencione primero -- el código asume 30 días por defecto y lo muestra en el resumen; si el cliente quiere cambiarlo, puede hacerlo ahí.
 - Cuando creas que ya tienes todo lo necesario para ESTE tipo de meta, marca "listo_para_resumen": true. El código decide si de verdad está completo (puede no estarlo) y si el negocio cumple los requisitos para ese tipo de meta -- si algo falta, te va a tocar seguir la conversación con lo que el código responda, así que no pasa nada si te equivocas marcándolo antes de tiempo.`;
 
@@ -50,7 +63,7 @@ CAMPOS DEL BORRADOR ("borrador_parcial" -- solo manda los que cambiaron en este 
 - tasa_cierre_categoria: SOLO para "conversaciones_whatsapp" y "leads" -- uno de "1_de_10", "2_3_de_10", "4_5_de_10", "mas_5_de_10", "no_sabe".
 - presupuesto_cop: cuánto puede invertir en este plazo (número).
 - plazo_dias: solo si el cliente lo menciona explícitamente (número de días).
-- usuario_cta: SOLO para "seguidores_instagram" -- su @usuario de Instagram.
+- usuario_cta: SOLO para "seguidores_instagram". NUNCA le preguntes su @usuario de Instagram -- el CONTEXTO DEL NEGOCIO ya te dice si su cuenta está conectada y, si lo está, cuál es el @usuario real; úsalo directo en borrador_parcial sin preguntar (puedes confirmarlo en una frase, ej. "vamos a usar tu cuenta @elusuario"). Si el contexto dice que Instagram NO está conectado, no pidas ningún usuario -- explícale que necesita vincular su Instagram profesional a su página de Facebook y autorizarlo en su cuenta publicitaria (Meta Business Manager → Cuentas de Instagram → Conectar activos), y no marques "listo_para_resumen" para este tipo hasta que lo conecte.
 - roas_minimo: SOLO para "ventas_web", y solo si el cliente da un número -- cuánto necesita que le devuelva cada peso invertido.`;
 
 function seccionContexto(contexto: ContextoNegocioDirector): string {
@@ -73,6 +86,19 @@ function seccionContexto(contexto: ContextoNegocioDirector): string {
       ? `- Productos y servicios guardados: ${contexto.productos.map((p) => p.nombre).join(", ")}.`
       : `- Todavía no tiene ningún producto o servicio guardado.`
   );
+  const { conexionMeta } = contexto;
+  if (conexionMeta.pagina) lineas.push(`- Página de Facebook conectada: ${conexionMeta.pagina}.`);
+  if (conexionMeta.cuentaPublicitaria) lineas.push(`- Cuenta publicitaria conectada: ${conexionMeta.cuentaPublicitaria}.`);
+  lineas.push(
+    conexionMeta.instagram.conectado
+      ? `- Instagram conectado: ${conexionMeta.instagram.username ? `@${conexionMeta.instagram.username}` : "(sin @usuario)"}${
+          typeof conexionMeta.instagram.seguidores === "number" ? `, ${conexionMeta.instagram.seguidores.toLocaleString("es-CO")} seguidores hoy` : ""
+        }.`
+      : `- Instagram NO conectado -- si la meta es "seguidores_instagram", nunca pidas un @usuario: explica que debe vincular su Instagram profesional a su página de Facebook y autorizarlo en su cuenta publicitaria (Meta Business Manager → Cuentas de Instagram → Conectar activos).`
+  );
+  if (conexionMeta.whatsapp) lineas.push(`- WhatsApp de contacto: ${conexionMeta.whatsapp}.`);
+  if (conexionMeta.sitioWeb) lineas.push(`- Sitio web: ${conexionMeta.sitioWeb}.`);
+  if (conexionMeta.pixel.conectado) lineas.push(`- Píxel de Meta conectado${conexionMeta.pixel.nombre ? `: ${conexionMeta.pixel.nombre}` : ""}.`);
   return lineas.join("\n");
 }
 
