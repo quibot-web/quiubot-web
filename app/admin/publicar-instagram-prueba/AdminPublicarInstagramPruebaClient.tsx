@@ -10,6 +10,13 @@ type VideoAlbum = {
 
 type EstadoPublicacion = "inactivo" | "creando" | "procesando" | "publicando" | "listo" | "error";
 
+type Diagnostico = {
+  meta_config_id: string | null;
+  permisos: { permission: string; status: string }[];
+  instagram: { conectado: boolean; username: string | null; account_type: string | null } | null;
+  error?: string;
+};
+
 const INTERVALO_VERIFICACION_MS = 4000;
 const MAX_INTENTOS_VERIFICACION = 30; // ~2 minutos
 
@@ -23,6 +30,28 @@ export default function AdminPublicarInstagramPruebaClient() {
   const [estado, setEstado] = useState<EstadoPublicacion>("inactivo");
   const [mensaje, setMensaje] = useState<string | null>(null);
   const [permalink, setPermalink] = useState<string | null>(null);
+
+  const [diagnostico, setDiagnostico] = useState<Diagnostico | null>(null);
+  const [cargandoDiagnostico, setCargandoDiagnostico] = useState(true);
+
+  async function cargarDiagnostico() {
+    setCargandoDiagnostico(true);
+    try {
+      const res = await fetch("/api/admin/publicar-instagram-prueba");
+      const data = await res.json();
+      setDiagnostico(res.ok ? data : { meta_config_id: null, permisos: [], instagram: null, error: data.error });
+    } catch {
+      setDiagnostico({ meta_config_id: null, permisos: [], instagram: null, error: "No se pudo conectar con el servidor." });
+    } finally {
+      setCargandoDiagnostico(false);
+    }
+  }
+
+  useEffect(() => {
+    (async () => {
+      await cargarDiagnostico();
+    })();
+  }, []);
 
   useEffect(() => {
     (async () => {
@@ -126,6 +155,52 @@ export default function AdminPublicarInstagramPruebaClient() {
         del álbum. No es el publicador de contenido orgánico (eso sigue en pausa) — publica un
         video a la vez, a mano.
       </p>
+
+      <div style={{ border: "1px solid #e8e8e6", borderRadius: 10, padding: 14, marginBottom: 28, background: "#fafafa" }}>
+        <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 10 }}>
+          <span style={{ fontSize: 12, fontWeight: 700, color: "#534AB7" }}>Diagnóstico de la conexión</span>
+          <button
+            type="button"
+            onClick={cargarDiagnostico}
+            disabled={cargandoDiagnostico}
+            style={{ fontSize: 11, color: "#534AB7", background: "none", border: "none", cursor: "pointer", fontWeight: 600 }}
+          >
+            {cargandoDiagnostico ? "Actualizando..." : "Actualizar"}
+          </button>
+        </div>
+
+        {cargandoDiagnostico && !diagnostico && <p style={{ fontSize: 12, color: "#666" }}>Cargando diagnóstico...</p>}
+
+        {diagnostico && (
+          <div style={{ fontSize: 12, color: "#333", lineHeight: 1.6 }}>
+            <p style={{ margin: "0 0 6px" }}>
+              <strong>META_CONFIG_ID de este ambiente:</strong> {diagnostico.meta_config_id || "no configurado"}
+            </p>
+
+            {diagnostico.error && <p style={{ color: "#b91c1c", margin: "0 0 6px" }}>{diagnostico.error}</p>}
+
+            <p style={{ margin: "0 0 6px" }}>
+              <strong>Cuenta de Instagram vinculada:</strong>{" "}
+              {diagnostico.instagram?.conectado
+                ? `@${diagnostico.instagram.username} (${diagnostico.instagram.account_type || "tipo no disponible vía esta conexión"})`
+                : "no conectada"}
+            </p>
+
+            {diagnostico.permisos.length > 0 && (
+              <div style={{ marginTop: 10 }}>
+                <strong>Permisos del token guardado (/me/permissions, nunca se muestra el token):</strong>
+                <ul style={{ margin: "6px 0 0", paddingLeft: 20 }}>
+                  {diagnostico.permisos.map((p) => (
+                    <li key={p.permission} style={{ color: p.status === "granted" ? "#0F7A3C" : "#b91c1c" }}>
+                      {p.permission}: {p.status === "granted" ? "concedido" : p.status}
+                    </li>
+                  ))}
+                </ul>
+              </div>
+            )}
+          </div>
+        )}
+      </div>
 
       {cargandoVideos && <p style={{ fontSize: 13, color: "#666" }}>Cargando videos del álbum...</p>}
       {errorVideos && <p style={{ fontSize: 13, color: "#b91c1c" }}>{errorVideos}</p>}
