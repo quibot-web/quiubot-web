@@ -16,6 +16,8 @@ import { fixtureProductoEnUso } from "./fixtures/organico/productoEnUso";
 import { fixtureSeriePartes } from "./fixtures/organico/seriePartes";
 import { fixturePreguntaComunidad } from "./fixtures/organico/preguntaComunidad";
 import { fixtureDetrasDeMarca } from "./fixtures/organico/detrasDeMarca";
+import { ReelConsejosNumerados, duracionReelConsejosNumeradosEnCuadros } from "./fixtures/organico/referencia/ReelConsejosNumerados";
+import { ReelMitoVerdad, duracionReelMitoVerdadEnCuadros } from "./fixtures/organico/referencia/ReelMitoVerdad";
 
 // Placeholder para "demo-1" (data URI, sin archivos nuevos en public/):
 // solo para ver en Studio cómo se comporta producto_hero y el gancho con
@@ -96,6 +98,26 @@ function RemotionRoot() {
         height={1920}
         calculateMetadata={calcularMetadataRender}
         defaultProps={{ guion: fixtureReconocimiento, medios: MEDIOS_DEMO, pistaUrl: null }}
+      />
+
+      {/* Fase A del pivote visual (ver el plan) -- reels de referencia
+          hechos a mano, fuera del sistema Guion/Escena a propósito.
+          Sin props: la composición es autocontenida. */}
+      <Composition
+        id="organico-referencia-consejos-numerados"
+        component={ReelConsejosNumerados}
+        durationInFrames={duracionReelConsejosNumeradosEnCuadros()}
+        fps={30}
+        width={1080}
+        height={1920}
+      />
+      <Composition
+        id="organico-referencia-mito-verdad"
+        component={ReelMitoVerdad}
+        durationInFrames={duracionReelMitoVerdadEnCuadros()}
+        fps={30}
+        width={1080}
+        height={1920}
       />
     </>
   );

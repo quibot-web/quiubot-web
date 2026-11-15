@@ -14,6 +14,7 @@
     "video:studio": "remotion studio video/Root.tsx",
     "video:verificar": "tsx video/fixtures/verificar.ts",
     "render": "tsx video/render.ts",
+    "render:referencia": "tsx video/renderReferencia.ts",
     "verificar:esquema": "tsx scripts/verificarEsquema.ts"
   },
   "dependencies": {
