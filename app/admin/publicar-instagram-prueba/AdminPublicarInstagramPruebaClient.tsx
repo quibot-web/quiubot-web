@@ -1,5 +1,6 @@
 "use client";
 import { useEffect, useState } from "react";
+import { urlMiniaturaReel } from "@/app/lib/cloudinaryUrl";
 
 type VideoAlbum = {
   id: string;
@@ -7,6 +8,10 @@ type VideoAlbum = {
   public_id: string;
   creado_en: string;
 };
+
+function formatearFecha(iso: string): string {
+  return new Date(iso).toLocaleDateString("es-CO", { day: "numeric", month: "short", year: "numeric" });
+}
 
 type EstadoPublicacion = "inactivo" | "creando" | "procesando" | "publicando" | "listo" | "error";
 
@@ -27,7 +32,7 @@ type DiagnosticoCuenta = {
 type Diagnostico = {
   meta_config_id: string | null;
   permisos: { permission: string; status: string }[];
-  instagram: { conectado: boolean; username: string | null; account_type: string | null } | null;
+  instagram: { conectado: boolean; igUserId: string | null; username: string | null; account_type: string | null } | null;
   diagnostico_cuenta?: DiagnosticoCuenta | null;
   error?: string;
 };
@@ -154,6 +159,10 @@ export default function AdminPublicarInstagramPruebaClient() {
 
       setPermalink(publicarData.permalink || null);
       setEstado("listo");
+      // Refresca el diagnóstico con el resultado real -- evita quedarse
+      // con una lectura vieja (de antes de reconectar, por ejemplo) justo
+      // cuando ya hay una publicación real para comparar contra ella.
+      await cargarDiagnostico();
     } catch {
       setEstado("error");
       setMensaje("No se pudo conectar con el servidor.");
@@ -163,12 +172,12 @@ export default function AdminPublicarInstagramPruebaClient() {
   return (
     <div style={{ maxWidth: 640, margin: "0 auto", padding: "3rem 1.5rem", fontFamily: "system-ui, sans-serif" }}>
       <h1 style={{ fontSize: 22, fontWeight: 700, color: "#17152B", marginBottom: 4 }}>
-        Publicar en Instagram (prueba, solo admin)
+        Publicar en Instagram (instagram_content_publish)
       </h1>
       <p style={{ fontSize: 13, color: "#999", marginBottom: 28 }}>
-        Flujo mínimo para probar instagram_content_publish de punta a punta con un video real
-        del álbum. No es el publicador de contenido orgánico (eso sigue en pausa) — publica un
-        video a la vez, a mano.
+        Flujo mínimo, solo para administradores, para probar instagram_content_publish de punta
+        a punta con un video real del álbum. No es el publicador de contenido orgánico (eso sigue
+        en pausa) — publica un video a la vez, a mano.
       </p>
 
       <div style={{ border: "1px solid #e8e8e6", borderRadius: 10, padding: 14, marginBottom: 28, background: "#fafafa" }}>
@@ -197,7 +206,7 @@ export default function AdminPublicarInstagramPruebaClient() {
             <p style={{ margin: "0 0 6px" }}>
               <strong>Cuenta de Instagram vinculada:</strong>{" "}
               {diagnostico.instagram?.conectado
-                ? `@${diagnostico.instagram.username} (${diagnostico.instagram.account_type || "tipo no disponible vía esta conexión"})`
+                ? `@${diagnostico.instagram.username} · id ${diagnostico.instagram.igUserId}${diagnostico.instagram.account_type ? ` (${diagnostico.instagram.account_type})` : ""}`
                 : "no conectada"}
             </p>
 
@@ -289,17 +298,24 @@ export default function AdminPublicarInstagramPruebaClient() {
                 checked={videoSeleccionado === video.id}
                 onChange={() => setVideoSeleccionado(video.id)}
               />
-              <video src={video.url_imagen} muted style={{ width: 60, height: 60, objectFit: "cover", borderRadius: 6, background: "#000" }} />
-              <span style={{ fontSize: 12, color: "#333" }}>{video.public_id}</span>
+              <img
+                src={urlMiniaturaReel(video.url_imagen, 80)}
+                alt=""
+                style={{ width: 48, height: 85, objectFit: "cover", borderRadius: 6, background: "#000" }}
+              />
+              <span style={{ fontSize: 12, color: "#333" }}>{formatearFecha(video.creado_en)}</span>
             </label>
           ))}
         </div>
       )}
 
+      <label htmlFor="caption-reel" style={{ display: "block", fontSize: 12, fontWeight: 600, color: "#17152B", marginBottom: 6 }}>
+        Caption del reel (opcional)
+      </label>
       <textarea
+        id="caption-reel"
         value={caption}
         onChange={(e) => setCaption(e.target.value)}
-        placeholder="Caption del reel (opcional)"
         rows={3}
         style={{ width: "100%", padding: 10, borderRadius: 8, border: "1px solid #e8e8e6", fontSize: 13, marginBottom: 16, boxSizing: "border-box" }}
       />
@@ -331,12 +347,14 @@ export default function AdminPublicarInstagramPruebaClient() {
       )}
 
       {estado === "listo" && (
-        <p style={{ fontSize: 13, color: "#0F7A3C", marginTop: 14 }}>
+        <p style={{ fontSize: 14, color: "#0F7A3C", marginTop: 14, fontWeight: 600 }}>
           Publicado.{" "}
-          {permalink && (
-            <a href={permalink} target="_blank" rel="noreferrer" style={{ color: "#534AB7", fontWeight: 600 }}>
-              Ver en Instagram →
+          {permalink ? (
+            <a href={permalink} target="_blank" rel="noreferrer" style={{ color: "#534AB7" }}>
+              Ver el reel en Instagram →
             </a>
+          ) : (
+            "(Meta no devolvió el enlace público todavía.)"
           )}
         </p>
       )}
