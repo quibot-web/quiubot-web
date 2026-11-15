@@ -92,6 +92,21 @@ export function colorMasContraste(candidatos: string[], fondoHex: string, respal
   return mejor;
 }
 
+// 4.5:1 -- el umbral real de WCAG para texto normal (distinto del
+// umbral más relajado que usa app/marca/page.tsx para un adorno
+// decorativo, no texto real). Regla pedida explícitamente para la
+// biblioteca de visuales (Fase O1/Fase B, pivote de contenido orgánico,
+// 15 nov 2026): "el texto de color siempre va sobre un recuadro sólido
+// o con contraste verificado (4.5:1 o más) con lo que tenga detrás" --
+// caso real que lo motivó: un titular en color de alerta/éxito puesto
+// directo sobre el degradado de marca (morado/azul) quedaba con poco
+// contraste en varios tramos del degradado. Cualquier componente nuevo
+// que pinte texto de color sobre algo que no sea un fondo sólido
+// conocido debe llamar esto antes de confiar en la combinación.
+export function contrasteSuficiente(colorTexto: string, colorFondo: string, minimo: number = 4.5): boolean {
+  return contrasteHex(colorTexto, colorFondo) >= minimo;
+}
+
 // rasgos_cortos.tipografia (y tipografia.estilo como respaldo) son texto
 // libre que ya genera n8n para mostrarlo en pantalla ("moderna y limpia",
 // "elegante y clasica") -- no es un enum, así que se clasifica por
