@@ -122,7 +122,9 @@ export default function TerminosPage() {
               estos derechos escribiendo a{" "}
               <a href="mailto:juanjosepalaciosvillarreal@gmail.com" style={linkStyle}>juanjosepalaciosvillarreal@gmail.com</a>. Para el
               detalle del proceso de eliminación, qué datos se borran, y cuánto tarda, consulta nuestra{" "}
-              <a href="/eliminar-datos" style={linkStyle}>página de eliminación de datos</a>.
+              <a href="/eliminar-datos" style={linkStyle}>página de eliminación de datos</a>. Para el detalle
+              completo de finalidades, terceros, derechos y plazos de respuesta, consulta nuestra{" "}
+              <a href="/privacidad" style={linkStyle}>política de privacidad</a>.
             </p>
           </section>
 

@@ -1520,7 +1520,11 @@ export default function BienvenidaExperience() {
 
       <footer>
         <p>© {new Date().getFullYear()} Quiubot. Publicidad con IA para negocios colombianos.</p>
-        <p style={{ marginTop: 6 }}><a href="/terminos">Términos y condiciones</a></p>
+        <p style={{ marginTop: 6 }}>
+          <a href="/terminos">Términos y condiciones</a>
+          {" · "}
+          <a href="/privacidad">Política de privacidad</a>
+        </p>
       </footer>
     </div>
     )}

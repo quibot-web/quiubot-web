@@ -245,7 +245,10 @@ export default function ExperienciaAutopiloto() {
       <footer className="qbc-footer">
         <div className="qbc-footer-inner">
           <span>© {new Date().getFullYear()} Quiubot · Hecho en Cali, para negocios colombianos.</span>
-          <a href="/terminos">Términos y condiciones</a>
+          <span style={{ display: "flex", gap: 16 }}>
+            <a href="/terminos">Términos y condiciones</a>
+            <a href="/privacidad">Política de privacidad</a>
+          </span>
         </div>
       </footer>
 
