@@ -293,7 +293,7 @@ function LoginContent() {
                   <button className="qbl-cta" type="submit" disabled={enviando}>
                     {enviando ? "Creando cuenta..." : "Crear mi cuenta gratis →"}
                   </button>
-                  <p className="qbl-legal">Al crear tu cuenta aceptas los <a href="/terminos">términos y condiciones</a>.</p>
+                  <p className="qbl-legal">Al crear tu cuenta aceptas los <a href="/terminos">términos y condiciones</a> y la <a href="/privacidad">política de privacidad</a>.</p>
                 </form>
               ) : (
                 <form className="qbl-form" onSubmit={handleSubmitIngresar}>
@@ -332,7 +332,7 @@ function LoginContent() {
                   <div className="qbl-fila">
                     <Link href="/olvide-password">Olvidé mi contraseña</Link>
                   </div>
-                  <p className="qbl-legal">Al ingresar aceptas los <a href="/terminos">términos de uso</a>.</p>
+                  <p className="qbl-legal">Al ingresar aceptas los <a href="/terminos">términos de uso</a> y la <a href="/privacidad">política de privacidad</a>.</p>
                 </form>
               )}
             </>
