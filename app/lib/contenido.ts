@@ -60,6 +60,56 @@ export interface PublicacionOrganica {
   actualizado_en: string;
 }
 
+// Mismo nombre de columna real en publicaciones_organicas, en el mismo
+// orden que la interfaz de arriba -- fuente real para
+// `npm run verificar:esquema` (scripts/verificarEsquema.ts, solo
+// lectura contra Supabase). Pedido explícito tras el caso real de
+// "gancho_tipo" (columna usada en el código antes de correr el SQL que
+// la crea -- "No se pudo crear el reel" sin que el error real fuera
+// obvio a simple vista).
+//
+// La comprobación de abajo (_mismasClaves) hace que el build falle si
+// esta lista alguna vez se desincroniza de PublicacionOrganica -- ya
+// sea por olvidar agregar un campo nuevo acá, o por escribir uno que no
+// existe en la interfaz. Nunca confíes en actualizar esto a mano sin
+// que `tsc` lo confirme.
+export const COLUMNAS_PUBLICACIONES_ORGANICAS = [
+  "id",
+  "user_id",
+  "plataforma",
+  "receta_organica",
+  "producto_id",
+  "media_ids",
+  "tema",
+  "gancho_tipo",
+  "guion",
+  "caption",
+  "hashtags",
+  "programada_para",
+  "estado",
+  "generando_desde",
+  "url_video",
+  "cloudinary_public_id",
+  "album_id",
+  "ig_container_id",
+  "ig_media_id",
+  "permalink",
+  "error",
+  "tipo_error",
+  "intentos",
+  "semana",
+  "continua_de_id",
+  "creado_en",
+  "actualizado_en",
+] as const;
+
+type _ClaveColumna = (typeof COLUMNAS_PUBLICACIONES_ORGANICAS)[number];
+type _ClaveInterfaz = keyof PublicacionOrganica;
+// Si falta o sobra una clave en cualquiera de los dos lados, esta línea
+// deja de compilar (nunca se ejecuta, es solo una comprobación de tipos).
+const _mismasClaves: [_ClaveColumna] extends [_ClaveInterfaz] ? ([_ClaveInterfaz] extends [_ClaveColumna] ? true : never) : never = true;
+void _mismasClaves;
+
 export const RECETAS_ORGANICAS_INFO: { id: RecetaOrganicaId; label: string; desc: string }[] = [
   { id: "consejos_numerados", label: "Consejos numerados", desc: "3 consejos útiles del rubro -- valor, no venta." },
   { id: "mito_verdad", label: "Mito o verdad", desc: "Desmentir 1 o 2 mitos del rubro." },

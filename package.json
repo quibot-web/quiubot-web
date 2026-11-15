@@ -13,7 +13,8 @@
     "test": "vitest run",
     "video:studio": "remotion studio video/Root.tsx",
     "video:verificar": "tsx video/fixtures/verificar.ts",
-    "render": "tsx video/render.ts"
+    "render": "tsx video/render.ts",
+    "verificar:esquema": "tsx scripts/verificarEsquema.ts"
   },
   "dependencies": {
     "@remotion/fonts": "4.0.540",
