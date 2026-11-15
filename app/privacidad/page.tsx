@@ -28,7 +28,7 @@ export default function PrivacidadPage() {
             <p>
               Quiubot es un nombre comercial operado por <strong>Juan José Palacios Villarreal</strong>,
               identificado con NIT/RUT <strong>1005870718-0</strong>, con domicilio en{" "}
-              <strong>[DIRECCIÓN COMPLETA — completar]</strong>, Colombia.
+              <strong>Carrera 1 # 78-11, Barrio Pettecuy Etapa 2, Cali, Valle del Cauca</strong>, Colombia.
             </p>
             <p>
               Correo de contacto para asuntos de protección de datos:{" "}
