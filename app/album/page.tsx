@@ -17,6 +17,7 @@ import {
   type ItemAlbum,
 } from "@/app/components/album/AlbumUI";
 import { useAlbumPaginado } from "@/app/components/album/useAlbumPaginado";
+import PublicarInstagramBoton from "@/app/components/album/PublicarInstagramBoton";
 import { urlOptimizadaCloudinary, urlPortadaVideo, urlDescargaCloudinary } from "@/app/lib/cloudinaryUrl";
 
 // Página completa del álbum -- reemplaza a la vieja pestaña "Álbum
@@ -319,6 +320,9 @@ export default function AlbumPage() {
               <p style={{ fontSize: 13, color: COLOR_TEXTO_SUAVE, margin: 0 }}>
                 {detalle.creado_en ? formatearFechaLarga(detalle.creado_en) : ""}
               </p>
+              {detalle.tipo === "video" && detalle.id && (
+                <PublicarInstagramBoton albumId={detalle.id} />
+              )}
               <div style={{ display: "flex", gap: 8, marginTop: "auto" }}>
                 <a
                   href={urlDescargaCloudinary(detalle.url_imagen)}

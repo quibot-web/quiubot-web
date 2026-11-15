@@ -3,11 +3,10 @@ import { redirect } from "next/navigation";
 import { supabaseAdmin } from "@/lib/supabase";
 import AdminPublicarInstagramPruebaClient from "./AdminPublicarInstagramPruebaClient";
 
-// Solo existe para sostener el video de revisión de App Review de Meta
-// del permiso instagram_content_publish -- ver el plan de "Meta App
-// Review" vigente. No es parte de la Fase B de contenido orgánico
-// (en pausa): publica a mano, un video del álbum a la vez, sin
-// calendario ni cron.
+// Solo diagnóstico -- publicar en sí es una función real para
+// cualquier usuario (botón en /album, ver AlbumUI/page.tsx), no algo
+// que se prueba solo acá. Esta pantalla sigue solo-admin porque
+// expone el META_CONFIG_ID y la comparación cruda de campos/tokens.
 export default async function PublicarInstagramPruebaPage() {
   const session = await auth();
   if (!session?.user?.email) {
