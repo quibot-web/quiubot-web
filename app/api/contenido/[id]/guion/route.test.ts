@@ -136,7 +136,7 @@ describe("POST /api/contenido/[id]/guion", () => {
     piezasAlbumActual = [];
     productosActivosActual = [];
     piezasSemanaActual = [];
-    pistasActivasActual = [{ id: "11111111-1111-4111-8111-111111111111", mood: "calida" }];
+    pistasActivasActual = [{ id: "11111111-1111-4111-8111-111111111111", mood: "calida", licencia_url: "https://licencia.real/a" }];
     vi.spyOn(console, "error").mockImplementation(() => {});
   });
 
@@ -215,6 +215,21 @@ describe("POST /api/contenido/[id]/guion", () => {
 
   it("sin pistas musicales activas: pista_id queda null, no rompe la generación (biblioteca vacía, no bug de código)", async () => {
     pistasActivasActual = [];
+    const fetchMock = vi.fn().mockResolvedValue(respuestaOpenAI(GUION_VALIDO_CRUDO));
+    vi.stubGlobal("fetch", fetchMock);
+
+    const res = await POST(req(), contexto());
+    const body = await res.json();
+    expect(res.status).toBe(200);
+    expect(body.guion.musica.pista_id).toBe(null);
+    vi.unstubAllGlobals();
+  });
+
+  it("hay pistas activas pero NINGUNA con licencia (caso real: 0 de 21): pista_id queda null, nunca asigna una sin licencia", async () => {
+    pistasActivasActual = [
+      { id: "11111111-1111-4111-8111-111111111111", mood: "calida", licencia_url: null },
+      { id: "22222222-2222-4222-8222-222222222222", mood: "confiable", licencia_url: null },
+    ];
     const fetchMock = vi.fn().mockResolvedValue(respuestaOpenAI(GUION_VALIDO_CRUDO));
     vi.stubGlobal("fetch", fetchMock);
 

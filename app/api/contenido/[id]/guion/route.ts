@@ -242,7 +242,7 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
   // la pista, así que el código tiene que hacerlo. Si no hay ninguna
   // pista activa, queda en null (Musica.tsx ya maneja "sin pista" sin
   // romperse) -- es un problema de biblioteca vacía, no de código.
-  const { data: pistasDb } = await supabaseAdmin.from("pistas_musicales").select("id, mood").eq("activo", true);
+  const { data: pistasDb } = await supabaseAdmin.from("pistas_musicales").select("id, mood, licencia_url").eq("activo", true);
   const pistaIdElegida = elegirPistaMusicalOrganica(pistasDb ?? []);
 
   const entrada: EntradaGuionOrganico = {

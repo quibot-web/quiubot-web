@@ -12,6 +12,7 @@ let piezaActual: Record<string, unknown> | null = null;
 let piezasAlbumActual: Record<string, unknown>[] = [];
 let marcaInfoActual: Record<string, unknown> | null = { info_adicional: "Vendemos ropa deportiva hecha a mano para mujeres." };
 let pistaActual: Record<string, unknown> | null = null;
+let countPistasConLicenciaActual = 1;
 let filasUpdateActual: { id: string }[] | null = [{ id: "pieza-1" }];
 let updatesRealizados: Record<string, unknown>[] = [];
 
@@ -32,7 +33,13 @@ fromMock.mockImplementation((tabla: unknown) => {
     return obj;
   }
   if (tabla === "pistas_musicales") {
-    const obj = { select: () => obj, eq: () => obj, maybeSingle: async () => ({ data: pistaActual }) };
+    const obj = {
+      select: () => obj,
+      eq: () => obj,
+      not: () => obj,
+      maybeSingle: async () => ({ data: pistaActual }),
+      then: (resolve: (v: { count: number; error: unknown }) => void) => resolve({ count: countPistasConLicenciaActual, error: null }),
+    };
     return obj;
   }
   if (tabla === "publicaciones_organicas") {
@@ -85,6 +92,7 @@ describe("GET /api/contenido/[id]", () => {
     piezasAlbumActual = [];
     marcaInfoActual = { info_adicional: "Vendemos ropa deportiva hecha a mano para mujeres." };
     pistaActual = null;
+    countPistasConLicenciaActual = 1;
   });
 
   it("sin sesión: 401", async () => {
@@ -136,10 +144,33 @@ describe("GET /api/contenido/[id]", () => {
 
   it("guion con pista_id real (caso real: reel publicado en silencio total): resuelve la URL de Cloudinary", async () => {
     piezaActual = { ...piezaActual, guion: { musica: { pista_id: "pista-1", volumen: 0.35 } } };
-    pistaActual = { public_id: "v123/cancion", cloudinary_name: "demo" };
+    pistaActual = { public_id: "v123/cancion", cloudinary_name: "demo", licencia_url: "https://licencia.real/x" };
     const res = await GET(getReq(), contexto());
     const body = await res.json();
     expect(body.pistaUrl).toBe("https://res.cloudinary.com/demo/video/upload/v123/cancion.mp3");
+    expect(body.pistaSinLicencia).toBe(false);
+  });
+
+  it("pista elegida a mano SIN licencia (solo un admin puede hacerlo): pistaSinLicencia es true", async () => {
+    piezaActual = { ...piezaActual, guion: { musica: { pista_id: "pista-1", volumen: 0.35 } } };
+    pistaActual = { public_id: "v123/cancion", cloudinary_name: "demo", licencia_url: null };
+    const res = await GET(getReq(), contexto());
+    const body = await res.json();
+    expect(body.pistaSinLicencia).toBe(true);
+  });
+
+  it("sin pista asignada pero SÍ hay pistas con licencia en la biblioteca: avisoSinMusica es false (fue una elección, no falta de licencias)", async () => {
+    countPistasConLicenciaActual = 3;
+    const res = await GET(getReq(), contexto());
+    const body = await res.json();
+    expect(body.avisoSinMusica).toBe(false);
+  });
+
+  it("sin pista asignada y CERO pistas con licencia en toda la biblioteca (caso real: 0 de 21): avisoSinMusica es true", async () => {
+    countPistasConLicenciaActual = 0;
+    const res = await GET(getReq(), contexto());
+    const body = await res.json();
+    expect(body.avisoSinMusica).toBe(true);
   });
 });
 
@@ -278,6 +309,56 @@ describe("PATCH /api/contenido/[id] -- tema", () => {
     const res = await PATCH(patchReq({ accion: "tema", tema: "   " }), contexto());
     expect(res.status).toBe(200);
     expect(updatesRealizados[0]).toMatchObject({ tema: null });
+  });
+});
+
+describe("PATCH /api/contenido/[id] -- musica (elegir a mano, pedido explícito)", () => {
+  beforeEach(() => {
+    fromMock.mockClear();
+    authMock.mockResolvedValue({ user: { email: "marca@quiubot.com" } });
+    usuarioActual = USUARIO_ADMIN;
+    updatesRealizados = [];
+    piezaActual = { id: "pieza-1", estado: "borrador", guion: fixtureMitoVerdad };
+    pistaActual = { id: "33333333-3333-4333-8333-333333333333" };
+  });
+
+  it("admin elige una pista real: se guarda en guion.musica.pista_id", async () => {
+    const res = await PATCH(patchReq({ accion: "musica", pista_id: "33333333-3333-4333-8333-333333333333" }), contexto());
+    const body = await res.json();
+    expect(res.status).toBe(200);
+    expect(body.ok).toBe(true);
+    expect((updatesRealizados[0].guion as { musica: { pista_id: string } }).musica.pista_id).toBe("33333333-3333-4333-8333-333333333333");
+  });
+
+  it("admin puede elegir una pista SIN licencia (acá no se valida licencia, solo que exista) -- eso lo marca GET como 'solo pruebas'", async () => {
+    const res = await PATCH(patchReq({ accion: "musica", pista_id: "33333333-3333-4333-8333-333333333333" }), contexto());
+    expect(res.status).toBe(200);
+  });
+
+  it("pista_id que no existe: 400, nunca actualiza", async () => {
+    pistaActual = null;
+    const res = await PATCH(patchReq({ accion: "musica", pista_id: "no-existe" }), contexto());
+    expect(res.status).toBe(400);
+    expect(updatesRealizados.length).toBe(0);
+  });
+
+  it("pista_id null: quita la música (vuelve a 'sin música')", async () => {
+    const res = await PATCH(patchReq({ accion: "musica", pista_id: null }), contexto());
+    expect(res.status).toBe(200);
+    expect((updatesRealizados[0].guion as { musica: { pista_id: string | null } }).musica.pista_id).toBe(null);
+  });
+
+  it("pieza sin guion todavía: 400", async () => {
+    piezaActual = { id: "pieza-1", estado: "borrador", guion: null };
+    const res = await PATCH(patchReq({ accion: "musica", pista_id: "33333333-3333-4333-8333-333333333333" }), contexto());
+    expect(res.status).toBe(400);
+  });
+
+  it("pieza que ya no está en borrador: 400, no se puede cambiar la música después de aprobar", async () => {
+    piezaActual = { id: "pieza-1", estado: "aprobada", guion: fixtureMitoVerdad };
+    const res = await PATCH(patchReq({ accion: "musica", pista_id: "33333333-3333-4333-8333-333333333333" }), contexto());
+    expect(res.status).toBe(400);
+    expect(updatesRealizados.length).toBe(0);
   });
 });
 

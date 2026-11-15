@@ -134,15 +134,20 @@ export function idsQuePrometenParte2SinCumplir(piezas: Pick<PublicacionOrganica,
 // musica.pista_id quedaba SIEMPRE en null para contenido orgánico (a
 // diferencia de /video, donde el admin la elige a mano), así que nunca
 // había audio real que sonar, solo la pista AAC vacía que el
-// codificador arma igual. Random entre las pistas activas, excluyendo
-// "urgente" (ese mood es para venta directa, no para contenido de
-// valor) -- si por algún motivo no hay ninguna activa fuera de
-// "urgente", usa cualquiera activa antes que dejar la pieza en
-// silencio.
-export function elegirPistaMusicalOrganica(pistasActivas: { id: string; mood: string }[]): string | null {
-  if (pistasActivas.length === 0) return null;
-  const candidatas = pistasActivas.filter((p) => p.mood !== "urgente");
-  const pool = candidatas.length > 0 ? candidatas : pistasActivas;
+// codificador arma igual. Random entre las pistas activas CON LICENCIA
+// (licencia_url no nulo, pedido explícito tras ese mismo arreglo: la
+// asignación automática nunca puede usar una pista sin licencia, solo
+// un admin eligiéndola a mano para pruebas), excluyendo "urgente" (ese
+// mood es para venta directa, no para contenido de valor) -- si por
+// algún motivo no hay ninguna con licencia fuera de "urgente", usa
+// cualquiera con licencia antes que dejar la pieza en silencio. Si no
+// hay NINGUNA pista con licencia, devuelve null a propósito -- sin
+// música es mejor que una pista sin derechos saliendo publicada.
+export function elegirPistaMusicalOrganica(pistasActivas: { id: string; mood: string; licencia_url: string | null }[]): string | null {
+  const conLicencia = pistasActivas.filter((p) => !!p.licencia_url);
+  if (conLicencia.length === 0) return null;
+  const candidatas = conLicencia.filter((p) => p.mood !== "urgente");
+  const pool = candidatas.length > 0 ? candidatas : conLicencia;
   return pool[Math.floor(Math.random() * pool.length)].id;
 }
 

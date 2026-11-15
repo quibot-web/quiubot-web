@@ -225,26 +225,52 @@ describe("idsQuePrometenParte2SinCumplir", () => {
 });
 
 describe("elegirPistaMusicalOrganica (caso real: reel publicado en silencio total)", () => {
-  it("sin pistas activas: null, nunca revienta", () => {
+  it("sin pistas: null, nunca revienta", () => {
     expect(elegirPistaMusicalOrganica([])).toBe(null);
   });
 
-  it("elige siempre una de las pistas dadas (nunca inventa un id)", () => {
-    const pistas = [{ id: "a", mood: "calida" }, { id: "b", mood: "confiable" }];
+  it("elige siempre una de las pistas CON LICENCIA (nunca inventa un id)", () => {
+    const pistas = [
+      { id: "a", mood: "calida", licencia_url: "https://licencia.real/a" },
+      { id: "b", mood: "confiable", licencia_url: "https://licencia.real/b" },
+    ];
     for (let i = 0; i < 20; i++) {
       expect(["a", "b"]).toContain(elegirPistaMusicalOrganica(pistas));
     }
   });
 
-  it("nunca elige mood 'urgente' si hay otra opción (eso es para venta directa, no contenido de valor)", () => {
-    const pistas = [{ id: "a", mood: "urgente" }, { id: "b", mood: "calida" }];
+  it("nunca elige mood 'urgente' si hay otra opción con licencia (eso es para venta directa, no contenido de valor)", () => {
+    const pistas = [
+      { id: "a", mood: "urgente", licencia_url: "https://licencia.real/a" },
+      { id: "b", mood: "calida", licencia_url: "https://licencia.real/b" },
+    ];
     for (let i = 0; i < 20; i++) {
       expect(elegirPistaMusicalOrganica(pistas)).toBe("b");
     }
   });
 
-  it("si TODAS son 'urgente', usa una de esas antes que dejar la pieza en silencio", () => {
-    const pistas = [{ id: "a", mood: "urgente" }];
+  it("si TODAS son 'urgente' pero tienen licencia, usa una de esas antes que dejar la pieza en silencio", () => {
+    const pistas = [{ id: "a", mood: "urgente", licencia_url: "https://licencia.real/a" }];
     expect(elegirPistaMusicalOrganica(pistas)).toBe("a");
+  });
+
+  it("pedido explícito: nunca elige una pista sin licencia, aunque sea la única disponible -- sin música es mejor que sin derechos", () => {
+    const pistas = [{ id: "a", mood: "calida", licencia_url: null }];
+    expect(elegirPistaMusicalOrganica(pistas)).toBe(null);
+  });
+
+  it("con varias pistas, solo considera las que sí tienen licencia", () => {
+    const pistas = [
+      { id: "sin-licencia", mood: "calida", licencia_url: null },
+      { id: "con-licencia", mood: "calida", licencia_url: "https://licencia.real/x" },
+    ];
+    for (let i = 0; i < 20; i++) {
+      expect(elegirPistaMusicalOrganica(pistas)).toBe("con-licencia");
+    }
+  });
+
+  it("caso real (21 nov 2026): 0 de 21 pistas con licencia -- queda en null, no revienta", () => {
+    const pistas = Array.from({ length: 21 }, (_, i) => ({ id: `p${i}`, mood: "calida", licencia_url: null }));
+    expect(elegirPistaMusicalOrganica(pistas)).toBe(null);
   });
 });

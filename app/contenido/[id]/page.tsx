@@ -30,6 +30,11 @@ export default function RevisionPiezaPage({ params }: { params: Promise<{ id: st
   const [guardandoTema, setGuardandoTema] = useState(false);
   const [avisoInfoIncompleta, setAvisoInfoIncompleta] = useState(false);
   const [textoCopiado, setTextoCopiado] = useState(false);
+  const [pistaUrl, setPistaUrl] = useState<string | null>(null);
+  const [pistaSinLicencia, setPistaSinLicencia] = useState(false);
+  const [avisoSinMusica, setAvisoSinMusica] = useState(false);
+  const [pistasDisponibles, setPistasDisponibles] = useState<{ id: string; nombre: string | null; mood: string; licencia_url: string | null }[]>([]);
+  const [guardandoMusica, setGuardandoMusica] = useState(false);
   const [errorMsg, setErrorMsg] = useState<string | null>(null);
   // Guardado explícito (no solo "ya pasó el gate de arriba") para que,
   // el día que esta pantalla se abra a clientes, la distinción
@@ -53,6 +58,9 @@ export default function RevisionPiezaPage({ params }: { params: Promise<{ id: st
     setHashtagsTexto((p.hashtags || []).join(" "));
     setTema(p.tema || "");
     setAvisoInfoIncompleta(!!data.avisoInfoIncompleta);
+    setPistaUrl((data.pistaUrl as string | null) ?? null);
+    setPistaSinLicencia(!!data.pistaSinLicencia);
+    setAvisoSinMusica(!!data.avisoSinMusica);
     setPaso("revision");
   }, [id]);
 
@@ -66,6 +74,13 @@ export default function RevisionPiezaPage({ params }: { params: Promise<{ id: st
           return;
         }
         setRol(rolData.rol);
+        // Lista de pistas para el selector "elegir música a mano" --
+        // mismo endpoint que ya usa /video, cualquier admin puede verlas
+        // todas (ver lib/accesoMusica.ts).
+        fetch("/api/admin/musica")
+          .then((r) => r.json())
+          .then((d) => setPistasDisponibles(d.pistas ?? []))
+          .catch(() => {});
         await cargar();
       } catch {
         setPaso("sin-acceso");
@@ -110,6 +125,28 @@ export default function RevisionPiezaPage({ params }: { params: Promise<{ id: st
       });
     } finally {
       setGuardandoTema(false);
+    }
+  }
+
+  async function guardarMusica(nuevoPistaId: string | null) {
+    setGuardandoMusica(true);
+    setErrorMsg(null);
+    try {
+      const res = await fetch(`/api/contenido/${id}`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ accion: "musica", pista_id: nuevoPistaId }),
+      });
+      const data = await res.json();
+      if (!res.ok) {
+        setErrorMsg(data.error || "No se pudo guardar la música.");
+        return;
+      }
+      await cargar();
+    } catch {
+      setErrorMsg("No se pudo guardar la música.");
+    } finally {
+      setGuardandoMusica(false);
     }
   }
 
@@ -193,6 +230,18 @@ export default function RevisionPiezaPage({ params }: { params: Promise<{ id: st
           </p>
         )}
 
+        {guion && avisoSinMusica && (
+          <p style={{ background: "#FEF6E7", border: "1px solid #F0C36D", borderRadius: 10, padding: "10px 14px", fontSize: 13, color: "#8A6416", marginBottom: 16 }}>
+            Sin música: no hay pistas con licencia.
+          </p>
+        )}
+
+        {guion && pistaSinLicencia && (
+          <p style={{ background: "#FDECEC", border: "1px solid #E8A0A0", borderRadius: 10, padding: "10px 14px", fontSize: 13, color: "#8A1F1F", fontWeight: 700, marginBottom: 16 }}>
+            ⚠ Solo pruebas, no publicar -- la pista elegida no tiene licencia.
+          </p>
+        )}
+
         {pieza.estado === "lista" && pieza.url_video && (
           <div style={{ background: "#fff", borderRadius: 14, border: "1px solid #e5e5e5", padding: 16, marginBottom: 16, display: "flex", gap: 10, flexWrap: "wrap", alignItems: "center" }}>
             <span style={{ fontSize: 13, color: "#1a1a1a", fontWeight: 700, marginRight: "auto" }}>Video listo -- descárgalo para subirlo a TikTok</span>
@@ -259,6 +308,23 @@ export default function RevisionPiezaPage({ params }: { params: Promise<{ id: st
               ))}
 
               <div style={{ background: "#fff", borderRadius: 14, border: "1px solid #e5e5e5", padding: 16, marginTop: 10 }}>
+                <label style={{ display: "block", fontSize: 12, fontWeight: 700, color: "#444", marginBottom: 6 }}>
+                  Música{pistaSinLicencia ? " -- SOLO PRUEBAS, NO PUBLICAR" : ""}
+                </label>
+                <select
+                  value={guion.musica.pista_id ?? ""}
+                  disabled={guardandoMusica}
+                  onChange={(e) => guardarMusica(e.target.value || null)}
+                  style={{ width: "100%", padding: 10, borderRadius: 8, border: pistaSinLicencia ? "1px solid #E8A0A0" : "1px solid #ddd", fontSize: 13, fontFamily: "inherit", marginBottom: 12 }}
+                >
+                  <option value="">Sin música</option>
+                  {pistasDisponibles.map((p) => (
+                    <option key={p.id} value={p.id}>
+                      {p.nombre || p.id.slice(0, 8)} ({p.mood}){!p.licencia_url ? " -- solo pruebas" : ""}
+                    </option>
+                  ))}
+                </select>
+
                 <label style={{ display: "block", fontSize: 12, fontWeight: 700, color: "#444", marginBottom: 6 }}>Caption</label>
                 <textarea
                   value={caption}
@@ -286,7 +352,7 @@ export default function RevisionPiezaPage({ params }: { params: Promise<{ id: st
             </div>
 
             <div style={{ position: "sticky", top: 24 }}>
-              <VistaPrevia guion={guion} medios={medios} pistaUrl={null} mostrarZonaSegura={false} />
+              <VistaPrevia guion={guion} medios={medios} pistaUrl={pistaUrl} mostrarZonaSegura={false} />
               <p style={{ fontSize: 11, color: "#888", marginTop: 8 }}>{(duracionEnCuadros(guion) / guion.fps).toFixed(1)}s</p>
             </div>
           </div>

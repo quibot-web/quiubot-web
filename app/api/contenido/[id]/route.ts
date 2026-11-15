@@ -58,15 +58,32 @@ export async function GET(req: NextRequest, { params }: { params: Promise<{ id: 
   // Resuelve la pista de música real (mismo patrón que video/render.ts
   // para anuncios) -- causa real de un reel publicado en silencio
   // total: ColaDeRender.tsx mandaba pistaUrl:null siempre, sin importar
-  // qué pista_id tuviera el guion.
+  // qué pista_id tuviera el guion. pistaSinLicencia: solo puede pasar
+  // si un admin la eligió a mano (la asignación automática ya nunca
+  // elige una sin licencia, ver elegirPistaMusicalOrganica) -- la
+  // revisión muestra "Solo pruebas, no publicar" cuando esto es true.
   let pistaUrl: string | null = null;
+  let pistaSinLicencia = false;
   const pistaId = (pieza.guion as { musica?: { pista_id?: string | null } } | null)?.musica?.pista_id;
   if (pistaId) {
-    const { data: pista } = await supabaseAdmin.from("pistas_musicales").select("public_id, cloudinary_name").eq("id", pistaId).maybeSingle();
-    if (pista) pistaUrl = urlPistaMusical(pista.cloudinary_name, pista.public_id);
+    const { data: pista } = await supabaseAdmin.from("pistas_musicales").select("public_id, cloudinary_name, licencia_url").eq("id", pistaId).maybeSingle();
+    if (pista) {
+      pistaUrl = urlPistaMusical(pista.cloudinary_name, pista.public_id);
+      pistaSinLicencia = !pista.licencia_url;
+    }
   }
 
-  return NextResponse.json({ pieza: pieza as PublicacionOrganica, medios, avisoInfoIncompleta, pistaUrl });
+  // Aviso "sin música" (pedido explícito): solo si de verdad no hay
+  // NINGUNA pista con licencia en la biblioteca -- si sí las hay pero
+  // esta pieza quedó sin pista (ej. un admin eligió "sin música" a
+  // mano), no es este aviso, es una elección válida.
+  let avisoSinMusica = false;
+  if (!pistaId) {
+    const { count } = await supabaseAdmin.from("pistas_musicales").select("id", { count: "exact", head: true }).eq("activo", true).not("licencia_url", "is", null);
+    avisoSinMusica = !count;
+  }
+
+  return NextResponse.json({ pieza: pieza as PublicacionOrganica, medios, avisoInfoIncompleta, pistaUrl, pistaSinLicencia, avisoSinMusica });
 }
 
 export async function PATCH(req: NextRequest, { params }: { params: Promise<{ id: string }> }) {
@@ -123,6 +140,56 @@ export async function PATCH(req: NextRequest, { params }: { params: Promise<{ id
       return NextResponse.json({ error: "No se pudo guardar el tema." }, { status: 503 });
     }
     return NextResponse.json({ ok: true, tema });
+  }
+
+  if (cuerpo?.accion === "musica") {
+    // Elegir música a mano (pedido explícito): a diferencia de la
+    // asignación automática (elegirPistaMusicalOrganica, nunca elige
+    // una pista sin licencia), acá el ADMIN sí puede elegir cualquier
+    // pista, con o sin licencia -- para eso existe esta acción aparte.
+    // "Solo pruebas, no publicar" lo muestra la revisión cuando
+    // corresponda (GET ya devuelve pistaSinLicencia); acá solo se
+    // valida que la pista exista de verdad.
+    const pistaId = typeof cuerpo.pista_id === "string" ? cuerpo.pista_id : null;
+
+    if (pistaId) {
+      const { data: pista } = await supabaseAdmin.from("pistas_musicales").select("id").eq("id", pistaId).maybeSingle();
+      if (!pista) {
+        return NextResponse.json({ error: "Esa pista ya no existe." }, { status: 400 });
+      }
+    }
+
+    const { data: piezaActual } = await supabaseAdmin
+      .from("publicaciones_organicas")
+      .select("guion, estado")
+      .eq("id", id)
+      .eq("user_id", usuario!.id)
+      .maybeSingle();
+
+    if (!piezaActual?.guion) {
+      return NextResponse.json({ error: "Esta pieza todavía no tiene guion." }, { status: 400 });
+    }
+    if (piezaActual.estado !== "borrador") {
+      return NextResponse.json({ error: `Esta pieza está en estado "${piezaActual.estado}", no se puede cambiar la música ahora.` }, { status: 400 });
+    }
+
+    const guionConMusicaNueva = { ...(piezaActual.guion as Record<string, unknown>), musica: { ...(piezaActual.guion as { musica?: object }).musica, pista_id: pistaId } };
+    const resultadoGuion = GuionSchema.safeParse(guionConMusicaNueva);
+    if (!resultadoGuion.success) {
+      return NextResponse.json({ error: "No se pudo guardar la música (el guion quedaría inválido)." }, { status: 400 });
+    }
+
+    const { error: errorUpdate } = await supabaseAdmin
+      .from("publicaciones_organicas")
+      .update({ guion: resultadoGuion.data, actualizado_en: new Date().toISOString() })
+      .eq("id", id)
+      .eq("user_id", usuario!.id)
+      .eq("estado", "borrador");
+
+    if (errorUpdate) {
+      return NextResponse.json({ error: "No se pudo guardar la música." }, { status: 503 });
+    }
+    return NextResponse.json({ ok: true });
   }
 
   if (cuerpo?.accion === "iniciar_render") {
