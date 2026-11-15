@@ -13,7 +13,18 @@ const BLANCO = "#FFFFFF";
 // titular completo y quieto ahí. 0.5s dentro de ese límite da margen.
 const SEGUNDOS_LIMITE_ENTRADA = 0.5;
 
-export function GanchoTexto({ escena, tema, medios }: PropsEscena<"gancho_texto">) {
+// Caso real (revisión de calidad): un titular de 60 caracteres (el tope
+// del zod) a 136px fijo envolvía en tantas líneas que tapaba el sticker
+// y el chip del bucle, que viven arriba. Mismo criterio que
+// calcularFuenteBoton en Cta.tsx -- más texto, letra más chica, para
+// acotar cuántas líneas puede llegar a ocupar.
+function calcularFontSizeTitular(texto: string): number {
+  if (texto.length > 45) return 92;
+  if (texto.length > 32) return 112;
+  return 136;
+}
+
+export function GanchoTexto({ escena, tema, medios, uso, medioDeFondo }: PropsEscena<"gancho_texto">) {
   const frame = useCurrentFrame();
   const { fps } = useVideoConfig();
   const { texto, palabra_clave, sticker, media_id, tratamiento } = escena.params;
@@ -24,6 +35,7 @@ export function GanchoTexto({ escena, tema, medios }: PropsEscena<"gancho_texto"
 
   const palabras = texto.split(" ");
   const cuadrosPorPalabra = Math.max(2, Math.floor((fps * SEGUNDOS_LIMITE_ENTRADA) / palabras.length));
+  const fontSizeTitular = calcularFontSizeTitular(texto);
 
   // "completa" pinta foto oscurecida de fondo -> texto blanco con sombra.
   // "tarjeta"/"celular" dejan ver el fondo de marca alrededor -> el texto
@@ -44,7 +56,7 @@ export function GanchoTexto({ escena, tema, medios }: PropsEscena<"gancho_texto"
 
   return (
     <AbsoluteFill>
-      <FondoMarca tema={tema} tono="marca" />
+      <FondoMarca tema={tema} tono="marca" bloque={escena.bloque} organico={uso === "organico"} medioDeFondo={media ? null : medioDeFondo} />
 
       {media &&
         (esCompleta ? (
@@ -66,6 +78,12 @@ export function GanchoTexto({ escena, tema, medios }: PropsEscena<"gancho_texto"
         <div
           style={{
             position: "absolute",
+            // top:14% es el borde real de la zona segura (ZonaSegura.tsx)
+            // -- más arriba se arriesga a quedar tapado por la UI de
+            // Instagram. El overlap real (sticker tapado por un titular
+            // largo que crece desde abajo) se resuelve encogiendo la
+            // letra del titular (calcularFontSizeTitular), no moviendo
+            // el sticker a una zona insegura.
             top: "26%",
             right: "8%",
             background: colorChip,
@@ -98,7 +116,7 @@ export function GanchoTexto({ escena, tema, medios }: PropsEscena<"gancho_texto"
                 style={{
                   opacity: progreso,
                   transform: `translateY(${interpolate(progreso, [0, 1], [30, 0])}px)`,
-                  fontSize: 136,
+                  fontSize: fontSizeTitular,
                   fontWeight: 800,
                   lineHeight: 1.04,
                   color: esClave ? colorTextoChip : colorTextoBase,

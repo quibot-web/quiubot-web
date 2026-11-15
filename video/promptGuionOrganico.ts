@@ -113,7 +113,7 @@ function seccionNegocio(infoAdicionalMarca: string | null, productos: ProductoRe
 const REFERENCIA_ESCENAS = `TIPOS DE ESCENA Y SUS "params" (respeta los límites de caracteres AL PIE DE LA LETRA -- el código los rechaza si se pasan, aunque sea por 1 carácter):
 - gancho_texto: {texto (<=60 car.), palabra_clave (palabra o frase corta DENTRO de texto), sticker? (<=14 car.)}
 - producto_hero: {media_id (obligatorio, de las piezas disponibles), nombre (<=40), etiqueta? (<=20), tratamiento (obligatorio -- ver TRATAMIENTOS)} -- SOLO si hay piezas disponibles y la receta lo permite (producto_en_uso)
-- lista_numerada: {titulo (<=45), items: EXACTAMENTE 3 strings (<=40 c/u) -- siempre 3, ni 2 ni 4}
+- lista_numerada: {titulo (<=45), items: EXACTAMENTE 3 strings (<=40 c/u) -- siempre 3, ni 2 ni 4. El video YA numera cada item con un círculo (1, 2, 3) -- NUNCA antepongas tú un número o algo como "1/3" al texto del item (queda numerado dos veces), escribe directo el contenido: "Desconéctala antes de revisarla", nunca "1/3 Desconéctala antes de revisarla".}
 - beneficios_lista: {titulo? (<=40), items: 2 o 3 strings (<=36 c/u)}
 - revelacion_marca: {frase (<=50), mostrar_logo: true|false}
 - objecion_respuesta: {objecion (<=40), respuesta (<=40)} -- SOLO si la receta lo permite (mito_verdad)

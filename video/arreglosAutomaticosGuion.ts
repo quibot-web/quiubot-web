@@ -57,3 +57,28 @@ export function limpiarHashtags(hashtagsCrudos: unknown): string[] | null {
   }
   return limpios.slice(0, 8);
 }
+
+// El video ya numera cada item de lista_numerada con un círculo (1, 2,
+// 3) -- caso real (revisión de calidad): la IA a veces antepone su
+// propio "1/3 " al texto del item, igual que el contador se numeraba
+// dos veces. Quita ese prefijo si aparece ("1/3 ", "2. ", "3) "), nunca
+// toca el resto del texto. Opera sobre las escenas crudas (antes del
+// zod), solo en escenas tipo "lista_numerada" -- las demás quedan tal
+// cual.
+// "N/M " (contador tipo "1/3") siempre se considera numeración; un
+// dígito suelto solo cuenta como numeración si lo sigue una puntuación
+// real (". " "): ": ") -- así nunca se come un número que de verdad
+// forma parte del consejo (ej. "5 formas de ahorrar" no pierde el "5").
+const PREFIJO_NUMERACION = /^\s*(\d+\s*\/\s*\d+|\d+[.):])\s*/;
+
+export function limpiarNumeracionItemsLista(escenasCrudas: unknown): unknown {
+  if (!Array.isArray(escenasCrudas)) return escenasCrudas;
+  return escenasCrudas.map((e) => {
+    const escena = e as Record<string, unknown> | null;
+    if (!escena || escena.tipo !== "lista_numerada") return e;
+    const params = escena.params as Record<string, unknown> | null;
+    if (!params || !Array.isArray(params.items)) return e;
+    const itemsLimpios = params.items.map((item) => (typeof item === "string" ? item.replace(PREFIJO_NUMERACION, "").trim() : item));
+    return { ...escena, params: { ...params, items: itemsLimpios } };
+  });
+}

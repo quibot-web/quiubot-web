@@ -7,7 +7,7 @@ import { MediaCelular, MediaTarjeta } from "../capas/TratamientoMedia";
 import { colorTextoSobre } from "../tema";
 import type { PropsEscena } from "./tipos";
 
-export function ProductoHero({ escena, tema, medios, analisisPiezas }: PropsEscena<"producto_hero">) {
+export function ProductoHero({ escena, tema, medios, analisisPiezas, uso }: PropsEscena<"producto_hero">) {
   const frame = useCurrentFrame();
   const { fps } = useVideoConfig();
   const { media_id, nombre, etiqueta, tratamiento } = escena.params;
@@ -37,7 +37,7 @@ export function ProductoHero({ escena, tema, medios, analisisPiezas }: PropsEsce
 
   return (
     <AbsoluteFill>
-      <FondoMarca tema={tema} tono="marca" />
+      <FondoMarca tema={tema} tono="marca" bloque={escena.bloque} organico={uso === "organico"} />
 
       {media &&
         (esCompleta ? (

@@ -37,6 +37,12 @@ export default function ColaDeRender({
 }) {
   const [estados, setEstados] = useState<Record<string, EstadoPiezaCola>>({});
   const [procesando, setProcesando] = useState(false);
+  // Commit 4d (avisos): el spike del commit 1 ya midió que un render
+  // real sobrevive congelado sin romperse (~2-4s de atraso, no los
+  // 10s completos) -- esto solo AVISA en vivo cuando la pestaña
+  // realmente pasó a segundo plano mientras se está procesando, en vez
+  // de un texto fijo que no reacciona a lo que está pasando de verdad.
+  const [pestanaOculta, setPestanaOculta] = useState(() => typeof document !== "undefined" && document.visibilityState === "hidden");
   // Medido con el primer render real de esta sesión -- nunca un número
   // fijo (pedido explícito del plan). Antes de tener una medición real
   // no se muestra ningún tiempo estimado.
@@ -78,6 +84,10 @@ export default function ColaDeRender({
         const detalle = await detalleRes.json();
         const guion = detalle.pieza.guion as Guion;
         const medios = (detalle.medios ?? {}) as MediosResueltos;
+        // Causa real de un reel publicado en silencio total: acá
+        // siempre se mandaba null, sin importar qué pista_id tuviera
+        // el guion -- GET /api/contenido/[id] ya resuelve la URL real.
+        const pistaUrl = (detalle.pistaUrl ?? null) as string | null;
 
         const { canRenderMediaOnWeb, renderMediaOnWeb } = await import("@remotion/web-renderer");
         const { Composicion, duracionEnCuadros } = await import("@/video/Composicion");
@@ -99,9 +109,9 @@ export default function ColaDeRender({
             fps: guion.fps,
             width: 1080,
             height: 1920,
-            defaultProps: { guion, medios, pistaUrl: null, mostrarZonaSegura: false },
+            defaultProps: { guion, medios, pistaUrl, mostrarZonaSegura: false },
           },
-          inputProps: { guion, medios, pistaUrl: null, mostrarZonaSegura: false },
+          inputProps: { guion, medios, pistaUrl, mostrarZonaSegura: false },
           container: "mp4",
           videoCodec: "h264",
           audioCodec: "aac",
@@ -161,6 +171,12 @@ export default function ColaDeRender({
     },
     [renderizarYSubir]
   );
+
+  useEffect(() => {
+    const alCambiarVisibilidad = () => setPestanaOculta(document.visibilityState === "hidden");
+    document.addEventListener("visibilitychange", alCambiarVisibilidad);
+    return () => document.removeEventListener("visibilitychange", alCambiarVisibilidad);
+  }, []);
 
   // Apenas aparece una pieza "aprobada" sin procesar, arranca sola --
   // tanto la primera vez (justo después de aprobar, en el calendario)
@@ -232,9 +248,15 @@ export default function ColaDeRender({
           </div>
         );
       })}
-      <p style={{ fontSize: 11, color: "#888", marginTop: 8 }}>
-        Deja esta pestaña abierta en primer plano hasta que termine -- si la minimizas o cambias de pestaña, puede demorar más (no se rompe, solo se hace más lento).
-      </p>
+      {procesando && pestanaOculta ? (
+        <p style={{ fontSize: 12, color: "#8A6416", background: "#FEF6E7", border: "1px solid #F0C36D", borderRadius: 8, padding: "8px 10px", marginTop: 8 }}>
+          🟡 Esta pestaña está en segundo plano -- el render sigue, pero va más lento. Vuelve aquí para que termine antes.
+        </p>
+      ) : (
+        <p style={{ fontSize: 11, color: "#888", marginTop: 8 }}>
+          Deja esta pestaña abierta en primer plano hasta que termine -- si la minimizas o cambias de pestaña, puede demorar más (no se rompe, solo se hace más lento).
+        </p>
+      )}
     </div>
   );
 }

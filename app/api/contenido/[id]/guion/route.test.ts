@@ -19,6 +19,7 @@ let marcaActual: Record<string, unknown> | null = null;
 let piezaActual: Record<string, unknown> | null = null;
 let piezasAlbumActual: Record<string, unknown>[] = [];
 let productosActivosActual: Record<string, unknown>[] = [];
+let pistasActivasActual: Record<string, unknown>[] = [];
 let piezasSemanaActual: Record<string, unknown>[] = [];
 let updatesRealizados: Record<string, unknown>[] = [];
 
@@ -38,6 +39,14 @@ fromMock.mockImplementation((tabla: unknown) => {
       order: () => obj,
       limit: () => obj,
       then: (resolve: (v: { data: unknown; error: unknown }) => void) => resolve({ data: productosActivosActual, error: null }),
+    };
+    return obj;
+  }
+  if (tabla === "pistas_musicales") {
+    const obj = {
+      select: () => obj,
+      eq: () => obj,
+      then: (resolve: (v: { data: unknown; error: unknown }) => void) => resolve({ data: pistasActivasActual, error: null }),
     };
     return obj;
   }
@@ -127,6 +136,7 @@ describe("POST /api/contenido/[id]/guion", () => {
     piezasAlbumActual = [];
     productosActivosActual = [];
     piezasSemanaActual = [];
+    pistasActivasActual = [{ id: "11111111-1111-4111-8111-111111111111", mood: "calida" }];
     vi.spyOn(console, "error").mockImplementation(() => {});
   });
 
@@ -196,7 +206,22 @@ describe("POST /api/contenido/[id]/guion", () => {
     expect(body.guion.uso).toBe("organico");
     expect(body.guion.receta_organica).toBe("mito_verdad");
     expect(body.guion.gancho_tipo).toBe("pregunta");
+    // Caso real: musica.pista_id quedaba SIEMPRE null para orgánico --
+    // el reel salía publicado en silencio total.
+    expect(body.guion.musica.pista_id).toBe("11111111-1111-4111-8111-111111111111");
     expect(updatesRealizados[0]).toMatchObject({ caption: GUION_VALIDO_CRUDO.caption, hashtags: GUION_VALIDO_CRUDO.hashtags });
+    vi.unstubAllGlobals();
+  });
+
+  it("sin pistas musicales activas: pista_id queda null, no rompe la generación (biblioteca vacía, no bug de código)", async () => {
+    pistasActivasActual = [];
+    const fetchMock = vi.fn().mockResolvedValue(respuestaOpenAI(GUION_VALIDO_CRUDO));
+    vi.stubGlobal("fetch", fetchMock);
+
+    const res = await POST(req(), contexto());
+    const body = await res.json();
+    expect(res.status).toBe(200);
+    expect(body.guion.musica.pista_id).toBe(null);
     vi.unstubAllGlobals();
   });
 
@@ -328,6 +353,37 @@ describe("POST /api/contenido/[id]/guion", () => {
     const body = await res.json();
     expect(res.status).toBe(503);
     expect(body.error).toContain("no tiene créditos");
+    vi.unstubAllGlobals();
+  });
+
+  it("lista_numerada con '1/3 ' antepuesto por la IA: se limpia solo, sin gastar reintento (caso real: círculo + número duplicados)", async () => {
+    piezaActual = { ...piezaActual, receta_organica: "consejos_numerados" };
+    const guionConNumeracionDoble = {
+      gancho_tipo: "pregunta",
+      bucle: { texto: "3 trucos para tu pan", abre_en: "e1", cierra_en: "e2", indicador: "contador" },
+      escenas: [
+        { id: "e1", bloque: "gancho", tipo: "gancho_texto", duracion_s: 2.3, params: { texto: "¿Tu pan se pone duro?", palabra_clave: "duro" } },
+        {
+          id: "e2",
+          bloque: "valor",
+          tipo: "lista_numerada",
+          duracion_s: 5,
+          params: { titulo: "3 trucos", items: ["1/3 Guárdalo en bolsa de tela", "2/3 Nunca en la nevera", "3/3 Congélalo en rebanadas"] },
+        },
+        { id: "e3", bloque: "marca", tipo: "revelacion_marca", duracion_s: 5, params: { frase: "Pan fresco siempre", mostrar_logo: true } },
+        { id: "e4", bloque: "cta", tipo: "cta", duracion_s: 4.5, params: { accion: "seguir", texto_boton: "Síguenos", usuario: "@panaderia" } },
+      ],
+      caption: "Trucos de pan.",
+      hashtags: ["#pan", "#tips", "#cocina"],
+    };
+    const fetchMock = vi.fn().mockResolvedValue(respuestaOpenAI(guionConNumeracionDoble));
+    vi.stubGlobal("fetch", fetchMock);
+
+    const res = await POST(req(), contexto());
+    const body = await res.json();
+    expect(res.status).toBe(200);
+    expect(fetchMock).toHaveBeenCalledTimes(1);
+    expect(body.guion.escenas[1].params.items).toEqual(["Guárdalo en bolsa de tela", "Nunca en la nevera", "Congélalo en rebanadas"]);
     vi.unstubAllGlobals();
   });
 

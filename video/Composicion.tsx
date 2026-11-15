@@ -50,11 +50,17 @@ export function duracionEnCuadros(guion: Guion): number {
 export function Composicion({ guion, medios, pistaUrl, mostrarZonaSegura }: PropsComposicion) {
   const { escenas, tema, fps } = guion;
   const familia = familiaDeFuente(tema.fuente);
+  // "Imagen siempre" (organico, revisión de calidad): si la pieza tiene
+  // fotos/video del álbum, la primera disponible se usa de fondo en
+  // CUALQUIER escena que no tenga ya su propia media dedicada --
+  // resuelto una sola vez acá, no por escena, para que todas compartan
+  // la misma pieza real en vez de inventar variedad que no se pidió.
+  const medioDeFondo = guion.uso === "organico" ? (Object.values(medios)[0] ?? null) : null;
 
   const nodosEscenas = escenas.flatMap((escena, i) => {
     const nodos: React.ReactNode[] = [
       <TransitionSeries.Sequence key={escena.id} durationInFrames={Math.round(escena.duracion_s * fps) + CUADROS_TRANSICION}>
-        {renderizarEscena(escena, tema, medios, guion.analisisPiezas)}
+        {renderizarEscena(escena, tema, medios, guion.analisisPiezas, guion.uso, medioDeFondo)}
       </TransitionSeries.Sequence>,
     ];
     if (i < escenas.length - 1) {

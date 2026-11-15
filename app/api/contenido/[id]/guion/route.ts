@@ -18,8 +18,8 @@ import type { PiezaDisponible } from "@/video/promptGuion";
 import { detectarFrasesDescargo, detectarFrasesVacias, detectarVerdadTibia, recopilarTextosEscenas } from "@/video/reglasCopy";
 import { AnalisisPiezaSchema, type AnalisisPieza } from "@/app/lib/analisisPieza";
 import { analizarPiezaConOpenAI } from "@/app/lib/analizarPiezaImagen";
-import { ajustarDuracionesProporcional, limpiarHashtags } from "@/video/arreglosAutomaticosGuion";
-import { elegirGanchoTipoMenosUsado } from "@/app/lib/contenido";
+import { ajustarDuracionesProporcional, limpiarHashtags, limpiarNumeracionItemsLista } from "@/video/arreglosAutomaticosGuion";
+import { elegirGanchoTipoMenosUsado, elegirPistaMusicalOrganica } from "@/app/lib/contenido";
 import type { RecetaOrganicaId } from "@/video/guion.schema";
 
 // Genera (o regenera) el guion de una pieza orgánica -- commit 4b,
@@ -236,6 +236,15 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
     await supabaseAdmin.from("publicaciones_organicas").update({ gancho_tipo: ganchoTipoAsignado }).eq("id", id);
   }
 
+  // Música real -- causa real del reel publicado en silencio total
+  // (ver elegirPistaMusicalOrganica en app/lib/contenido.ts): a
+  // diferencia de /video, acá no hay ningún paso donde un humano elija
+  // la pista, así que el código tiene que hacerlo. Si no hay ninguna
+  // pista activa, queda en null (Musica.tsx ya maneja "sin pista" sin
+  // romperse) -- es un problema de biblioteca vacía, no de código.
+  const { data: pistasDb } = await supabaseAdmin.from("pistas_musicales").select("id, mood").eq("activo", true);
+  const pistaIdElegida = elegirPistaMusicalOrganica(pistasDb ?? []);
+
   const entrada: EntradaGuionOrganico = {
     recetaId,
     receta,
@@ -283,7 +292,8 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
     // duplicados que el código puede resolver con certeza. Si después
     // de esto el guion sigue sin cuadrar, el reintento con la IA ya
     // lleva el motivo real (no uno de estos detalles mecánicos).
-    const escenasAjustadas = ajustarDuracionesProporcional(crudoObj?.escenas, duracionS);
+    const escenasSinNumeracionDoble = limpiarNumeracionItemsLista(crudoObj?.escenas);
+    const escenasAjustadas = ajustarDuracionesProporcional(escenasSinNumeracionDoble, duracionS);
     const hashtagsLimpios = limpiarHashtags(crudoObj?.hashtags);
     const candidato = {
       version: 1 as const,
@@ -297,7 +307,7 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
       duracion_objetivo_s: duracionS,
       bucle: crudoObj?.bucle,
       tema,
-      musica: { pista_id: null, volumen: 0.35 },
+      musica: { pista_id: pistaIdElegida, volumen: 0.35 },
       escenas: escenasAjustadas,
       publicacion: { caption: crudoObj?.caption, hashtags: hashtagsLimpios ?? crudoObj?.hashtags },
       analisisPiezas: Object.keys(analisisPiezas).length > 0 ? analisisPiezas : undefined,

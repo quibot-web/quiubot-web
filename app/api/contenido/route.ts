@@ -2,7 +2,7 @@ import { auth } from "@/auth";
 import { NextRequest, NextResponse } from "next/server";
 import { supabaseAdmin } from "@/lib/supabase";
 import { registrarError } from "@/lib/registrarError";
-import { CrearPiezaManualSchema, elegirGanchoTipoMenosUsado, lunesDeLaSemana, type PublicacionOrganica } from "@/app/lib/contenido";
+import { CrearPiezaManualSchema, ESTADOS_SIN_VIDEO_AUN, elegirGanchoTipoMenosUsado, lunesDeLaSemana, type PublicacionOrganica } from "@/app/lib/contenido";
 import { fechaBogota, hoyBogota, inicioDiaBogota, finDiaBogota } from "@/app/lib/fechaBogota";
 
 // Calendario semanal de /contenido (commit 4a, ver
@@ -25,6 +25,22 @@ export async function GET(req: NextRequest) {
 
   const { usuario, error } = await usuarioAdminOFalla(emailBusqueda);
   if (error) return error;
+
+  // Vencer piezas sin video (commit 4d, "avisos"): si programada_para
+  // ya pasó y la pieza sigue en un estado de antes de tener video real
+  // (ESTADOS_SIN_VIDEO_AUN), se marca "vencida" -- se hace acá, cada
+  // vez que se carga el calendario, en vez de un cron nuevo (todavía
+  // no existe el publicador de Fase O1). "error" y "lista" quedan
+  // afuera a propósito, ver el comentario de ESTADOS_SIN_VIDEO_AUN.
+  const { error: errorVencer } = await supabaseAdmin
+    .from("publicaciones_organicas")
+    .update({ estado: "vencida", actualizado_en: new Date().toISOString() })
+    .eq("user_id", usuario!.id)
+    .in("estado", ESTADOS_SIN_VIDEO_AUN)
+    .lt("programada_para", new Date().toISOString());
+  if (errorVencer) {
+    console.error("No se pudieron vencer piezas sin video:", errorVencer);
+  }
 
   // Vista de mes (rediseño, sección 2 del plan): la cuadrícula de un
   // mes no se alinea con el campo "semana" (una grilla de 6 semanas

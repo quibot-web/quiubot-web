@@ -5,7 +5,17 @@
 // incluida la fecha/hora futura (caso real: una pieza quedó
 // programada para un día que ya había pasado).
 import { describe, it, expect } from "vitest";
-import { lunesDeLaSemana, labelReceta, formatoFechaLarga, esFechaFutura, elegirGanchoTipoMenosUsado, CrearPiezaManualSchema } from "./contenido";
+import {
+  lunesDeLaSemana,
+  labelReceta,
+  formatoFechaLarga,
+  esFechaFutura,
+  elegirGanchoTipoMenosUsado,
+  piezaSinVideoProxima,
+  idsQuePrometenParte2SinCumplir,
+  elegirPistaMusicalOrganica,
+  CrearPiezaManualSchema,
+} from "./contenido";
 
 // Relativas a "ahora" (no fechas fijas como "2026-11-20") -- estas
 // pruebas tienen que seguir pasando sin importar qué día se corran de
@@ -150,5 +160,91 @@ describe("elegirGanchoTipoMenosUsado", () => {
   it("si los 6 tipos ya se usaron igual de veces, elige el primero de la lista fija", () => {
     const todos = ["pregunta", "dato_sorprendente", "error_comun", "afirmacion_fuerte", "antes_despues", "nadie_te_dice_que"];
     expect(elegirGanchoTipoMenosUsado(todos)).toBe("pregunta");
+  });
+});
+
+describe("piezaSinVideoProxima (aviso 2h antes sin video)", () => {
+  const AHORA = new Date("2026-11-14T12:00:00-05:00");
+
+  it("aprobada, falta 1h: true", () => {
+    const pieza = { estado: "aprobada" as const, programada_para: "2026-11-14T13:00:00-05:00" };
+    expect(piezaSinVideoProxima(pieza, AHORA)).toBe(true);
+  });
+
+  it("renderizando, falta 1h: true", () => {
+    const pieza = { estado: "renderizando" as const, programada_para: "2026-11-14T13:00:00-05:00" };
+    expect(piezaSinVideoProxima(pieza, AHORA)).toBe(true);
+  });
+
+  it("falta más de 2h: false", () => {
+    const pieza = { estado: "aprobada" as const, programada_para: "2026-11-14T15:00:00-05:00" };
+    expect(piezaSinVideoProxima(pieza, AHORA)).toBe(false);
+  });
+
+  it("ya pasó la hora: false (eso ya es 'vencida', no este aviso)", () => {
+    const pieza = { estado: "aprobada" as const, programada_para: "2026-11-14T11:00:00-05:00" };
+    expect(piezaSinVideoProxima(pieza, AHORA)).toBe(false);
+  });
+
+  it("ya tiene video (lista): false, sin importar la hora", () => {
+    const pieza = { estado: "lista" as const, programada_para: "2026-11-14T12:30:00-05:00" };
+    expect(piezaSinVideoProxima(pieza, AHORA)).toBe(false);
+  });
+});
+
+describe("idsQuePrometenParte2SinCumplir", () => {
+  it("serie_partes sin ninguna otra pieza que la continúe: promete sin cumplir", () => {
+    const piezas = [{ id: "parte-1", receta_organica: "serie_partes" as const, continua_de_id: null }];
+    expect(idsQuePrometenParte2SinCumplir(piezas)).toEqual(new Set(["parte-1"]));
+  });
+
+  it("serie_partes con su parte 2 en el calendario: no promete nada pendiente", () => {
+    const piezas = [
+      { id: "parte-1", receta_organica: "serie_partes" as const, continua_de_id: null },
+      { id: "parte-2", receta_organica: "serie_partes" as const, continua_de_id: "parte-1" },
+    ];
+    expect(idsQuePrometenParte2SinCumplir(piezas)).toEqual(new Set());
+  });
+
+  it("la propia parte 2 nunca se marca a sí misma (ella es la continuación, no la que promete)", () => {
+    const piezas = [{ id: "parte-2", receta_organica: "serie_partes" as const, continua_de_id: "parte-1-borrada" }];
+    expect(idsQuePrometenParte2SinCumplir(piezas)).toEqual(new Set());
+  });
+
+  it("recetas que no son serie_partes: nunca se marcan", () => {
+    const piezas = [{ id: "otra", receta_organica: "mito_verdad" as const, continua_de_id: null }];
+    expect(idsQuePrometenParte2SinCumplir(piezas)).toEqual(new Set());
+  });
+
+  it("si la parte 2 se cancela/borra del calendario: la parte 1 vuelve a prometer sin cumplir", () => {
+    // Antes (con la parte 2 presente) no prometía nada; al quitarla de
+    // la lista (cancelada/borrada), vuelve a aparecer.
+    const piezas = [{ id: "parte-1", receta_organica: "serie_partes" as const, continua_de_id: null }];
+    expect(idsQuePrometenParte2SinCumplir(piezas)).toEqual(new Set(["parte-1"]));
+  });
+});
+
+describe("elegirPistaMusicalOrganica (caso real: reel publicado en silencio total)", () => {
+  it("sin pistas activas: null, nunca revienta", () => {
+    expect(elegirPistaMusicalOrganica([])).toBe(null);
+  });
+
+  it("elige siempre una de las pistas dadas (nunca inventa un id)", () => {
+    const pistas = [{ id: "a", mood: "calida" }, { id: "b", mood: "confiable" }];
+    for (let i = 0; i < 20; i++) {
+      expect(["a", "b"]).toContain(elegirPistaMusicalOrganica(pistas));
+    }
+  });
+
+  it("nunca elige mood 'urgente' si hay otra opción (eso es para venta directa, no contenido de valor)", () => {
+    const pistas = [{ id: "a", mood: "urgente" }, { id: "b", mood: "calida" }];
+    for (let i = 0; i < 20; i++) {
+      expect(elegirPistaMusicalOrganica(pistas)).toBe("b");
+    }
+  });
+
+  it("si TODAS son 'urgente', usa una de esas antes que dejar la pieza en silencio", () => {
+    const pistas = [{ id: "a", mood: "urgente" }];
+    expect(elegirPistaMusicalOrganica(pistas)).toBe("a");
   });
 });

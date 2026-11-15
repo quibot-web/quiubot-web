@@ -35,6 +35,9 @@ type CadenaPiezas = {
   eq: () => CadenaPiezas;
   gte: (campo: string, valor: string) => CadenaPiezas;
   lte: (campo: string, valor: string) => CadenaPiezas;
+  in: () => CadenaPiezas;
+  lt: () => CadenaPiezas;
+  update: (valores: Record<string, unknown>) => CadenaPiezas;
   order: () => Promise<{ data: unknown; error: unknown }>;
   insert: (valores: Record<string, unknown>) => CadenaPiezas;
   single: () => Promise<{ data: unknown; error: unknown }>;
@@ -42,6 +45,7 @@ type CadenaPiezas = {
 };
 
 let filtrosRangoActual: { gte?: string; lte?: string } = {};
+let vencerUpdateCon: Record<string, unknown> | null = null;
 
 const fromMock = vi.fn();
 fromMock.mockImplementation((tabla: unknown) => {
@@ -56,6 +60,12 @@ fromMock.mockImplementation((tabla: unknown) => {
       },
       lte: (_campo, valor) => {
         filtrosRangoActual.lte = valor;
+        return obj;
+      },
+      in: () => obj,
+      lt: () => obj,
+      update: (valores) => {
+        vencerUpdateCon = valores;
         return obj;
       },
       order: async () => ({ data: piezasSemanaActual, error: null }),
@@ -101,7 +111,13 @@ describe("GET /api/contenido", () => {
     usuarioActual = USUARIO_ADMIN;
     piezasSemanaActual = [{ id: "pieza-1", estado: "borrador" }];
     filtrosRangoActual = {};
+    vencerUpdateCon = null;
     vi.spyOn(console, "error").mockImplementation(() => {});
+  });
+
+  it("vence piezas sin video cuya hora ya pasó, antes de devolver el calendario", async () => {
+    await GET(getReq());
+    expect(vencerUpdateCon).toMatchObject({ estado: "vencida" });
   });
 
   it("sin sesión: 401", async () => {

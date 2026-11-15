@@ -5,6 +5,7 @@ import dynamic from "next/dynamic";
 import { useRouter } from "next/navigation";
 import EditorEscena from "@/app/video/EditorEscena";
 import { labelReceta, formatoFechaLarga, type PublicacionOrganica } from "@/app/lib/contenido";
+import { urlDescargaCloudinary } from "@/app/lib/cloudinaryUrl";
 import type { Guion, Escena } from "@/video/guion.schema";
 import type { MediosResueltos } from "@/video/escenas/tipos";
 import { duracionEnCuadros } from "@/video/Composicion";
@@ -28,6 +29,7 @@ export default function RevisionPiezaPage({ params }: { params: Promise<{ id: st
   const [tema, setTema] = useState("");
   const [guardandoTema, setGuardandoTema] = useState(false);
   const [avisoInfoIncompleta, setAvisoInfoIncompleta] = useState(false);
+  const [textoCopiado, setTextoCopiado] = useState(false);
   const [errorMsg, setErrorMsg] = useState<string | null>(null);
   // Guardado explícito (no solo "ya pasó el gate de arriba") para que,
   // el día que esta pantalla se abra a clientes, la distinción
@@ -189,6 +191,32 @@ export default function RevisionPiezaPage({ params }: { params: Promise<{ id: st
           <p style={{ background: "#FEF6E7", border: "1px solid #F0C36D", borderRadius: 10, padding: "10px 14px", fontSize: 13, color: "#8A6416", marginBottom: 16 }}>
             Tus reels serán más útiles si completas &ldquo;Lo que deben saber&rdquo; en Mi marca.
           </p>
+        )}
+
+        {pieza.estado === "lista" && pieza.url_video && (
+          <div style={{ background: "#fff", borderRadius: 14, border: "1px solid #e5e5e5", padding: 16, marginBottom: 16, display: "flex", gap: 10, flexWrap: "wrap", alignItems: "center" }}>
+            <span style={{ fontSize: 13, color: "#1a1a1a", fontWeight: 700, marginRight: "auto" }}>Video listo -- descárgalo para subirlo a TikTok</span>
+            <a href={urlDescargaCloudinary(pieza.url_video)} download style={{ ...botonSecundario, textDecoration: "none", display: "inline-block" }}>
+              Descargar video
+            </a>
+            <button
+              type="button"
+              style={botonSecundario}
+              onClick={async () => {
+                const texto = `${caption}\n\n${hashtagsTexto}`;
+                try {
+                  await navigator.clipboard.writeText(texto);
+                  setTextoCopiado(true);
+                  setTimeout(() => setTextoCopiado(false), 2000);
+                } catch {
+                  // Sin permiso de portapapeles -- no es crítico, la marca
+                  // puede seleccionar y copiar el caption a mano.
+                }
+              }}
+            >
+              {textoCopiado ? "¡Copiado!" : "Copiar texto para TikTok"}
+            </button>
+          </div>
         )}
 
         {!guion && (

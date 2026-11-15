@@ -3,7 +3,7 @@ import { colorMasContraste, colorTextoSobre } from "../tema";
 import { FondoMarca } from "../capas/FondoMarca";
 import type { PropsEscena } from "./tipos";
 
-export function ObjecionRespuesta({ escena, tema }: PropsEscena<"objecion_respuesta">) {
+export function ObjecionRespuesta({ escena, tema, uso, medioDeFondo }: PropsEscena<"objecion_respuesta">) {
   const frame = useCurrentFrame();
   const { fps } = useVideoConfig();
   const { objecion, respuesta } = escena.params;
@@ -18,7 +18,7 @@ export function ObjecionRespuesta({ escena, tema }: PropsEscena<"objecion_respue
 
   return (
     <AbsoluteFill>
-      <FondoMarca tema={tema} tono="marca" />
+      <FondoMarca tema={tema} tono="marca" bloque={escena.bloque} organico={uso === "organico"} medioDeFondo={medioDeFondo} />
       <AbsoluteFill style={{ justifyContent: "center", padding: "0 8%" }}>
         <div
           style={{

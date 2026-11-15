@@ -1,5 +1,5 @@
 import { AbsoluteFill, Img, interpolate, spring, useCurrentFrame, useVideoConfig } from "remotion";
-import { colorTextoSobre } from "../tema";
+import { colorTextoSobre, respiracion } from "../tema";
 import { FondoMarca } from "../capas/FondoMarca";
 import type { PropsEscena } from "./tipos";
 import type { TemaGuion } from "../tema";
@@ -20,7 +20,12 @@ const FUENTE_MINIMA = 44;
 // texto real sin sumar @remotion/layout-utils, así que esto es una
 // aproximación por cantidad de caracteres (0.68 probado contra
 // "Escríbenos por WhatsApp" y "Pide tu cotización gratis", los textos
-// reales más largos de las recetas).
+// reales más largos de las recetas). Caso real (contenido orgánico,
+// texto más largo que esos dos: "Síguenos para más consejos"): esta
+// aproximación puede seguir quedándose corta incluso en el piso de
+// 44px -- por eso el botón YA NO usa whiteSpace:nowrap (ver
+// BotonGrande): si el cálculo falla, el texto envuelve a una segunda
+// línea DENTRO del botón en vez de salirse de su fondo.
 function calcularFuenteBoton(texto: string): number {
   const anchoAFuenteIdeal = texto.length * FUENTE_IDEAL * 0.68 + PADDING_HORIZONTAL_PX;
   if (anchoAFuenteIdeal <= ANCHO_MAX_PX) return FUENTE_IDEAL;
@@ -48,7 +53,8 @@ function BotonGrande({ texto, tema, progreso }: { texto: string; tema: TemaGuion
         fontSize,
         fontWeight: 800,
         textAlign: "center",
-        whiteSpace: "nowrap",
+        whiteSpace: "normal",
+        wordBreak: "break-word",
         boxShadow: "0 8px 24px rgba(0,0,0,0.25)",
         transform: `scale(${progreso})`,
       }}
@@ -198,7 +204,7 @@ function CtaFormulario({ escena, tema }: PropsEscena<"cta">) {
   );
 }
 
-function CtaSeguir({ escena, tema }: PropsEscena<"cta">) {
+function CtaSeguir({ escena, tema, uso }: PropsEscena<"cta">) {
   const frame = useCurrentFrame();
   const { fps } = useVideoConfig();
   const { texto_boton, usuario, subtexto } = escena.params;
@@ -209,6 +215,7 @@ function CtaSeguir({ escena, tema }: PropsEscena<"cta">) {
   const cuadroPresion = Math.round(duracionCuadros * 0.65);
   const presion = spring({ frame: frame - cuadroPresion, fps, config: { damping: 7, mass: 0.3 } });
   const escalaBoton = 1 - Math.sin(Math.min(presion, 1) * Math.PI) * 0.08;
+  const escalaRespiracion = uso === "organico" ? respiracion(frame, fps) : 1;
 
   return (
     <AbsoluteFill style={{ justifyContent: "center", alignItems: "center", padding: "0 8%" }}>
@@ -224,6 +231,7 @@ function CtaSeguir({ escena, tema }: PropsEscena<"cta">) {
           flexDirection: "column",
           alignItems: "center",
           opacity: progreso,
+          transform: `scale(${escalaRespiracion})`,
         }}
       >
         <div
@@ -256,12 +264,13 @@ function CtaSeguir({ escena, tema }: PropsEscena<"cta">) {
   );
 }
 
-function CtaSuave({ escena, tema }: PropsEscena<"cta">) {
+function CtaSuave({ escena, tema, uso }: PropsEscena<"cta">) {
   const frame = useCurrentFrame();
   const { fps } = useVideoConfig();
   const { texto_boton, subtexto } = escena.params;
   const progreso = spring({ frame, fps, config: { damping: 12 } });
   const colorTexto = colorTextoSobre(tema.color_primario);
+  const escalaRespiracion = uso === "organico" ? respiracion(frame, fps) : 1;
   // La frase grande de marca es subtexto (ej. "Hecho para quien trabaja
   // duro"); texto_boton ("Conócenos") queda chico debajo, sin botón --
   // en "suave" no se pide nada. Sin logo, el nombre de la marca hace de
@@ -284,7 +293,7 @@ function CtaSuave({ escena, tema }: PropsEscena<"cta">) {
             textAlign: "center",
             lineHeight: 1.06,
             opacity: progreso,
-            transform: `translateY(${interpolate(progreso, [0, 1], [20, 0])}px)`,
+            transform: `translateY(${interpolate(progreso, [0, 1], [20, 0])}px) scale(${escalaRespiracion})`,
           }}
         >
           {subtexto}
@@ -303,7 +312,7 @@ const PALABRA_COMENTAR_RESPALDO = "QUIERO";
 // con "comentar" en ACCIONES_CTA, es para automatizaciones de
 // "comentario a mensaje" que la marca configure, o simplemente para
 // pedir opinión.
-function CtaComentar({ escena, tema }: PropsEscena<"cta">) {
+function CtaComentar({ escena, tema, uso }: PropsEscena<"cta">) {
   const frame = useCurrentFrame();
   const { fps } = useVideoConfig();
   const { texto_boton, palabra_clave_comentario, subtexto } = escena.params;
@@ -318,6 +327,11 @@ function CtaComentar({ escena, tema }: PropsEscena<"cta">) {
     })
   );
   const terminoDeEscribir = letrasVisibles >= palabra.length;
+  // El cursor "|" ya no se apaga para siempre al terminar de escribir
+  // -- sigue parpadeando, como un cursor de verdad, en vez de dejar la
+  // caja quieta el resto de la escena.
+  const cursorVisible = terminoDeEscribir ? Math.floor(frame / (fps * 0.5)) % 2 === 0 : true;
+  const escalaRespiracion = uso === "organico" && terminoDeEscribir ? respiracion(frame, fps) : 1;
 
   return (
     <AbsoluteFill style={{ justifyContent: "center", alignItems: "center", padding: "0 8%" }}>
@@ -332,13 +346,13 @@ function CtaComentar({ escena, tema }: PropsEscena<"cta">) {
           alignItems: "center",
           gap: 16,
           opacity: progreso,
-          transform: `scale(${progreso})`,
+          transform: `scale(${Math.min(progreso, 1) * escalaRespiracion})`,
         }}
       >
         <span style={{ fontSize: 40 }}>💬</span>
         <span style={{ fontSize: 42, fontWeight: 800, color: "#111" }}>
           {palabra.slice(0, letrasVisibles)}
-          <span style={{ opacity: terminoDeEscribir ? 0 : 1 }}>|</span>
+          <span style={{ opacity: cursorVisible ? 1 : 0 }}>|</span>
         </span>
       </div>
       {subtexto && <div style={{ fontSize: 30, color: colorTexto, marginTop: 24, opacity: progreso }}>{subtexto}</div>}
@@ -347,10 +361,10 @@ function CtaComentar({ escena, tema }: PropsEscena<"cta">) {
 }
 
 export function Cta(props: PropsEscena<"cta">) {
-  const { tema, escena } = props;
+  const { tema, escena, uso, medioDeFondo } = props;
   return (
     <AbsoluteFill>
-      <FondoMarca tema={tema} tono="marca" />
+      <FondoMarca tema={tema} tono="marca" bloque={escena.bloque} organico={uso === "organico"} medioDeFondo={medioDeFondo} />
       {escena.params.accion === "whatsapp" && <CtaWhatsapp {...props} />}
       {escena.params.accion === "web" && <CtaWeb {...props} />}
       {escena.params.accion === "formulario" && <CtaFormulario {...props} />}

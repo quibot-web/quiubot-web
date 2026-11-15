@@ -1,6 +1,6 @@
 // Relativo, no "@/..." -- ver el comentario en video/guion.schema.ts.
 import type { AnalisisPieza } from "../../app/lib/analisisPieza";
-import type { Escena } from "../guion.schema";
+import type { Escena, UsoGuion } from "../guion.schema";
 import type { TemaGuion } from "../tema";
 
 export type EscenaDe<T extends Escena["tipo"]> = Extract<Escena, { tipo: T }>;
@@ -19,6 +19,15 @@ export interface PropsEscena<T extends Escena["tipo"]> {
   // con media (ProductoHero, GanchoTexto) para el sesgo del zoom hacia
   // recuadro_producto; las demás lo reciben pero lo ignoran.
   analisisPiezas?: Record<string, AnalisisPieza>;
+  // guion.uso, pasado tal cual -- las mejoras de "se siente vacío"
+  // (imagen siempre, arco de color) solo aplican a uso "organico", para
+  // no arriesgar el video de anuncios ya en producción.
+  uso: UsoGuion;
+  // Pieza del álbum para usar de fondo cuando la escena no tiene su
+  // propia media dedicada (todas menos producto_hero y gancho_texto
+  // con media_id propio) -- resuelto una sola vez en Composicion.tsx,
+  // null si no hay ninguna pieza elegida o si uso es "anuncio".
+  medioDeFondo?: MediaResuelto | null;
 }
 
 // Compartido por ListaNumerada.tsx (el dueño del conteo) y

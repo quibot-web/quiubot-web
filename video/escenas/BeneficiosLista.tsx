@@ -4,7 +4,7 @@ import { FondoMarca } from "../capas/FondoMarca";
 import { ZONA_SEGURA } from "../capas/ZonaSegura";
 import type { PropsEscena } from "./tipos";
 
-export function BeneficiosLista({ escena, tema }: PropsEscena<"beneficios_lista">) {
+export function BeneficiosLista({ escena, tema, uso, medioDeFondo }: PropsEscena<"beneficios_lista">) {
   const frame = useCurrentFrame();
   const { fps } = useVideoConfig();
   const { titulo, items } = escena.params;
@@ -14,7 +14,7 @@ export function BeneficiosLista({ escena, tema }: PropsEscena<"beneficios_lista"
 
   return (
     <AbsoluteFill>
-      <FondoMarca tema={tema} tono="marca" />
+      <FondoMarca tema={tema} tono="marca" bloque={escena.bloque} organico={uso === "organico"} medioDeFondo={medioDeFondo} />
       {/* Centrado en la ZONA SEGURA real (entre los márgenes inseguros de
           arriba y abajo), no en el cuadro completo -- con el margen
           inferior tan grande (35%), centrar en el 100% del cuadro deja

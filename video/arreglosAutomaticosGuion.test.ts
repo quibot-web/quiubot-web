@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import { ajustarDuracionesProporcional, limpiarHashtags } from "./arreglosAutomaticosGuion";
+import { ajustarDuracionesProporcional, limpiarHashtags, limpiarNumeracionItemsLista } from "./arreglosAutomaticosGuion";
 
 describe("ajustarDuracionesProporcional", () => {
   it("no toca nada si la suma ya está dentro de los 2s de margen", () => {
@@ -71,5 +71,36 @@ describe("limpiarHashtags", () => {
 
   it("agrega # a un hashtag que llegó sin él", () => {
     expect(limpiarHashtags(["marketing"])).toEqual(["#marketing"]);
+  });
+});
+
+describe("limpiarNumeracionItemsLista (caso real: círculo + '1/3' duplicados)", () => {
+  it("quita el prefijo 'N/M ' de cada item de lista_numerada", () => {
+    const escenas = [
+      { id: "e2", tipo: "lista_numerada", params: { titulo: "x", items: ["1/3 Desconéctala antes de revisarla", "2/3 Limpia rejillas", "3/3 No la uses si huele a quemado"] } },
+    ];
+    const resultado = limpiarNumeracionItemsLista(escenas) as { params: { items: string[] } }[];
+    expect(resultado[0].params.items).toEqual(["Desconéctala antes de revisarla", "Limpia rejillas", "No la uses si huele a quemado"]);
+  });
+
+  it("también quita '1. ' y '1) '", () => {
+    const escenas = [{ id: "e2", tipo: "lista_numerada", params: { items: ["1. Primero esto", "2) Luego esto"] } }];
+    const resultado = limpiarNumeracionItemsLista(escenas) as { params: { items: string[] } }[];
+    expect(resultado[0].params.items).toEqual(["Primero esto", "Luego esto"]);
+  });
+
+  it("no toca items que ya vienen sin numerar", () => {
+    const escenas = [{ id: "e2", tipo: "lista_numerada", params: { items: ["Desconéctala antes de revisarla"] } }];
+    const resultado = limpiarNumeracionItemsLista(escenas) as { params: { items: string[] } }[];
+    expect(resultado[0].params.items).toEqual(["Desconéctala antes de revisarla"]);
+  });
+
+  it("no toca otros tipos de escena", () => {
+    const escenas = [{ id: "e1", tipo: "gancho_texto", params: { texto: "1/3 algo raro" } }];
+    expect(limpiarNumeracionItemsLista(escenas)).toEqual(escenas);
+  });
+
+  it("si no es un array, lo devuelve tal cual", () => {
+    expect(limpiarNumeracionItemsLista(null)).toBe(null);
   });
 });

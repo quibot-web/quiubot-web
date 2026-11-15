@@ -5,6 +5,7 @@ import { GuionSchema } from "@/video/guion.schema";
 import { ESTADOS_NO_REPROGRAMABLES, esFechaFutura, lunesDeLaSemana, type EstadoContenido, type PublicacionOrganica } from "@/app/lib/contenido";
 import { fechaBogota } from "@/app/lib/fechaBogota";
 import { infoAdicionalEsSuficiente } from "@/video/promptGuionOrganico";
+import { urlPistaMusical } from "@/app/lib/cloudinaryUrl";
 
 // Detalle de una pieza (commit 4b, pantalla de revisión) + "Aprobar".
 // Solo admin, igual que el resto del plan.
@@ -54,7 +55,18 @@ export async function GET(req: NextRequest, { params }: { params: Promise<{ id: 
   const { data: marcaInfo } = await supabaseAdmin.from("marcas").select("info_adicional").eq("email", emailBusqueda).maybeSingle();
   const avisoInfoIncompleta = !infoAdicionalEsSuficiente((marcaInfo?.info_adicional as string | null) ?? null);
 
-  return NextResponse.json({ pieza: pieza as PublicacionOrganica, medios, avisoInfoIncompleta });
+  // Resuelve la pista de música real (mismo patrón que video/render.ts
+  // para anuncios) -- causa real de un reel publicado en silencio
+  // total: ColaDeRender.tsx mandaba pistaUrl:null siempre, sin importar
+  // qué pista_id tuviera el guion.
+  let pistaUrl: string | null = null;
+  const pistaId = (pieza.guion as { musica?: { pista_id?: string | null } } | null)?.musica?.pista_id;
+  if (pistaId) {
+    const { data: pista } = await supabaseAdmin.from("pistas_musicales").select("public_id, cloudinary_name").eq("id", pistaId).maybeSingle();
+    if (pista) pistaUrl = urlPistaMusical(pista.cloudinary_name, pista.public_id);
+  }
+
+  return NextResponse.json({ pieza: pieza as PublicacionOrganica, medios, avisoInfoIncompleta, pistaUrl });
 }
 
 export async function PATCH(req: NextRequest, { params }: { params: Promise<{ id: string }> }) {
@@ -160,9 +172,13 @@ export async function PATCH(req: NextRequest, { params }: { params: Promise<{ id
     }
 
     const semana = lunesDeLaSemana(fechaBogota(new Date(nuevaFecha)));
+    // Una pieza "vencida" que se reprograma vuelve a "borrador" --
+    // ya perdió su hora una vez, se revisa de nuevo antes de volver a
+    // aprobarla (el guion/caption que ya tenía, si tenía, no se toca).
+    const nuevoEstado = piezaActual.estado === "vencida" ? "borrador" : piezaActual.estado;
     const { data: filas, error: errorUpdate } = await supabaseAdmin
       .from("publicaciones_organicas")
-      .update({ programada_para: nuevaFecha, semana, actualizado_en: new Date().toISOString() })
+      .update({ programada_para: nuevaFecha, semana, estado: nuevoEstado, actualizado_en: new Date().toISOString() })
       .eq("id", id)
       .eq("user_id", usuario!.id)
       .eq("estado", piezaActual.estado)

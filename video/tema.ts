@@ -34,6 +34,31 @@ function luminanciaRelativa(hex: string): number {
   return 0.2126 * r + 0.7152 * g + 0.0722 * b;
 }
 
+// Mezcla lineal entre dos colores de marca -- usado para el "arco de
+// color" de contenido orgánico (FondoMarca.tsx): el fondo se inclina
+// hacia el secundario a medida que avanza el bloque narrativo (gancho
+// -> desarrollo -> cierre), en vez de quedar fijo primario->secundario
+// toda la pieza. t=0 da hexA, t=1 da hexB.
+export function mezclarColoresHex(hexA: string, hexB: string, t: number): string {
+  const tClamp = Math.max(0, Math.min(1, t));
+  const [rA, gA, bA] = hexARgb(hexA);
+  const [rB, gB, bB] = hexARgb(hexB);
+  const mezclar = (a: number, b: number) => Math.round(a + (b - a) * tClamp);
+  const aHex2 = (n: number) => n.toString(16).padStart(2, "0");
+  return `#${aHex2(mezclar(rA, rB))}${aHex2(mezclar(gA, gB))}${aHex2(mezclar(bA, bB))}`;
+}
+
+// "Ninguna escena queda quieta más de 1.5s... la de marca y la del cta
+// tienen animación continua" (revisión de calidad, contenido orgánico):
+// respiración lenta y sutil (3% de escala, ida y vuelta cada ~2.4s) --
+// nunca tan rápido que se sienta nervioso. Compartida entre Cta.tsx y
+// RevelacionMarca.tsx (las dos escenas que el pedido nombra), sin
+// useCurrentFrame/useVideoConfig propios -- recibe frame/fps para que
+// cada caller decida si la usa (solo en uso "organico").
+export function respiracion(frame: number, fps: number): number {
+  return 1 + Math.sin((frame / fps / 2.4) * Math.PI * 2) * 0.03;
+}
+
 export function contrasteHex(hex1: string, hex2: string): number {
   const l1 = luminanciaRelativa(hex1);
   const l2 = luminanciaRelativa(hex2);

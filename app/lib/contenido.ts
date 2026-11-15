@@ -87,6 +87,65 @@ export const ESTADOS_INFO: Record<EstadoContenido, { label: string; color: strin
   cancelada: { label: "Cancelada", color: "#999" },
 };
 
+// Estados antes de tener video real -- si programada_para ya pasó y
+// la pieza sigue en uno de estos, se marca "vencida" (ver GET
+// /api/contenido). "error" queda afuera a propósito: ya tiene su
+// propio motivo guardado (tipo_error), convertirlo a vencida lo
+// perdería. "lista" también queda afuera: esa ya tiene video, su
+// vencimiento lo maneja el RPC reclamar_publicaciones_organicas_vencidas
+// (pasa a "publicando"), es un camino distinto.
+export const ESTADOS_SIN_VIDEO_AUN: EstadoContenido[] = ["borrador", "generando", "aprobada", "renderizando"];
+
+// Aviso "2h antes sin video" (commit 4d, pedido explícito): la pieza
+// ya está aprobada (o renderizando) pero todavía no tiene el video
+// real, y faltan 2h o menos para su hora -- distinto de "vencida"
+// (esa ya pasó la hora). ahora como parámetro para poder probarlo con
+// una fecha fija, igual que esFechaFutura.
+export function piezaSinVideoProxima(pieza: Pick<PublicacionOrganica, "estado" | "programada_para">, ahora: Date = new Date()): boolean {
+  if (pieza.estado !== "aprobada" && pieza.estado !== "renderizando") return false;
+  const msRestantes = new Date(pieza.programada_para).getTime() - ahora.getTime();
+  return msRestantes > 0 && msRestantes <= 2 * 60 * 60 * 1000;
+}
+
+// "La parte 1 promete una parte 2" (sección 2/9 del plan, pedido
+// explícito de Juan José): antes esto se revisaba mal -- "continua_de_id"
+// se guarda en la PARTE 2 apuntando a la parte 1, nunca al revés, así
+// que mirar "!pieza.continua_de_id" en la propia pieza solo dice "esto
+// no es ya una continuación", no "a esta le falta su continuación".
+// La cuenta real: una pieza serie_partes que NO es continuación de
+// otra (no tiene continua_de_id) "promete parte 2" sin cumplir si
+// ninguna OTRA pieza de las que se están mirando ahora mismo
+// (piezas, el calendario cargado) le apunta con su propio
+// continua_de_id. Pura, se recalcula cada vez que cambia el
+// calendario (aprobar, cancelar, borrar) -- no hace falta guardar nada.
+export function idsQuePrometenParte2SinCumplir(piezas: Pick<PublicacionOrganica, "id" | "receta_organica" | "continua_de_id">[]): Set<string> {
+  const idsConSecuela = new Set(piezas.filter((p) => p.continua_de_id).map((p) => p.continua_de_id as string));
+  const resultado = new Set<string>();
+  for (const p of piezas) {
+    if (p.receta_organica === "serie_partes" && !p.continua_de_id && !idsConSecuela.has(p.id)) {
+      resultado.add(p.id);
+    }
+  }
+  return resultado;
+}
+
+// Pista de música para una pieza orgánica -- causa real de un reel
+// publicado en silencio total (volumedetect: mean y max en -91dB):
+// musica.pista_id quedaba SIEMPRE en null para contenido orgánico (a
+// diferencia de /video, donde el admin la elige a mano), así que nunca
+// había audio real que sonar, solo la pista AAC vacía que el
+// codificador arma igual. Random entre las pistas activas, excluyendo
+// "urgente" (ese mood es para venta directa, no para contenido de
+// valor) -- si por algún motivo no hay ninguna activa fuera de
+// "urgente", usa cualquiera activa antes que dejar la pieza en
+// silencio.
+export function elegirPistaMusicalOrganica(pistasActivas: { id: string; mood: string }[]): string | null {
+  if (pistasActivas.length === 0) return null;
+  const candidatas = pistasActivas.filter((p) => p.mood !== "urgente");
+  const pool = candidatas.length > 0 ? candidatas : pistasActivas;
+  return pool[Math.floor(Math.random() * pool.length)].id;
+}
+
 // Tipo de gancho para la próxima pieza orgánica de una semana --
 // rotación real, no al azar: cuenta cuántas veces aparece cada tipo en
 // las piezas YA creadas esa semana (tiposYaUsados, incluye null/undefined

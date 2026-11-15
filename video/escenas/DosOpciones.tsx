@@ -9,7 +9,7 @@ import type { PropsEscena } from "./tipos";
 // después de la otra, "VS" al centro como separador -- no hay ganador
 // real en el guion (la IA nunca decide cuál es la "correcta"), la
 // respuesta la da el espectador en los comentarios.
-export function DosOpciones({ escena, tema }: PropsEscena<"dos_opciones">) {
+export function DosOpciones({ escena, tema, uso, medioDeFondo }: PropsEscena<"dos_opciones">) {
   const frame = useCurrentFrame();
   const { fps } = useVideoConfig();
   const { opcion_a, opcion_b } = escena.params;
@@ -22,7 +22,7 @@ export function DosOpciones({ escena, tema }: PropsEscena<"dos_opciones">) {
 
   return (
     <AbsoluteFill>
-      <FondoMarca tema={tema} tono="marca" />
+      <FondoMarca tema={tema} tono="marca" bloque={escena.bloque} organico={uso === "organico"} medioDeFondo={medioDeFondo} />
       <AbsoluteFill
         style={{
           justifyContent: "center",

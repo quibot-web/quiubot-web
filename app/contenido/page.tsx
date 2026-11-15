@@ -11,6 +11,8 @@ import {
   labelReceta,
   lunesDeLaSemana,
   esFechaFutura,
+  idsQuePrometenParte2SinCumplir,
+  piezaSinVideoProxima,
   type PublicacionOrganica,
 } from "@/app/lib/contenido";
 import { hoyBogota, fechaBogota } from "@/app/lib/fechaBogota";
@@ -222,6 +224,12 @@ export default function ContenidoPage() {
     porAprobar: piezas.filter((p) => p.estado === "borrador").length,
   };
 
+  // Avisos (commit 4d) -- puros sobre las piezas ya cargadas, se
+  // recalculan solos cada vez que cambia el calendario (aprobar,
+  // cancelar, borrar, reprogramar), sin guardar nada aparte.
+  const idsPrometenParte2 = idsQuePrometenParte2SinCumplir(piezas);
+  const piezasSinVideoProxima = piezas.filter((p) => piezaSinVideoProxima(p));
+
   const fechaBaseGenerica = vista === "semana" ? semana : primerDiaMes(mes);
   const fechaInicialGenerica = fechaBaseGenerica < hoy ? hoy : fechaBaseGenerica;
 
@@ -296,6 +304,12 @@ export default function ContenidoPage() {
 
         {errorMsg && <p style={{ color: "#b91c1c", fontSize: 13, marginBottom: 16 }}>{errorMsg}</p>}
 
+        {piezasSinVideoProxima.length > 0 && (
+          <p style={{ background: "#FEF6E7", border: "1px solid #F0C36D", borderRadius: 10, padding: "10px 14px", fontSize: 13, color: "#8A6416", marginBottom: 16 }}>
+            ⏰ {piezasSinVideoProxima.length} {piezasSinVideoProxima.length === 1 ? "pieza publica" : "piezas publican"} en menos de 2h y todavía no tienen video listo.
+          </p>
+        )}
+
         <ColaDeRender piezasAprobadas={piezas.filter((p) => p.estado === "aprobada")} onPiezaLista={refrescar} />
 
         {esMobile ? (
@@ -310,6 +324,7 @@ export default function ContenidoPage() {
                 tema={tema}
                 compacta={false}
                 tituloDia={`${DIAS_SEMANA[new Date(fecha + "T12:00:00Z").getUTCDay() === 0 ? 6 : new Date(fecha + "T12:00:00Z").getUTCDay() - 1]} ${formatoDiaCorto(fecha)}`}
+                idsPrometenParte2={idsPrometenParte2}
                 onClickPieza={(id) => router.push(`/contenido/${id}`)}
                 onAgregar={abrirFormulario}
                 onDropDia={(f) => reprogramarPieza(arrastrandoId!, f)}
@@ -329,6 +344,7 @@ export default function ContenidoPage() {
                 tema={tema}
                 compacta={false}
                 tituloDia={`${DIAS_SEMANA[i]} ${formatoDiaCorto(fecha)}`}
+                idsPrometenParte2={idsPrometenParte2}
                 onClickPieza={(id) => router.push(`/contenido/${id}`)}
                 onAgregar={abrirFormulario}
                 onDropDia={(f) => reprogramarPieza(arrastrandoId!, f)}
@@ -358,7 +374,8 @@ export default function ContenidoPage() {
                     compacta
                     atenuadaFueraDeMes={fecha.slice(0, 7) !== mes}
                     tituloDia={fecha.slice(8, 10)}
-                    onClickPieza={(id) => router.push(`/contenido/${id}`)}
+                    idsPrometenParte2={idsPrometenParte2}
+                onClickPieza={(id) => router.push(`/contenido/${id}`)}
                     onAgregar={abrirFormulario}
                     onDropDia={(f) => reprogramarPieza(arrastrandoId!, f)}
                     onDragStartPieza={setArrastrandoId}
@@ -393,6 +410,7 @@ function DiaCelda({
   compacta,
   atenuadaFueraDeMes,
   tituloDia,
+  idsPrometenParte2,
   onClickPieza,
   onAgregar,
   onDropDia,
@@ -406,6 +424,7 @@ function DiaCelda({
   compacta: boolean;
   atenuadaFueraDeMes?: boolean;
   tituloDia: string;
+  idsPrometenParte2: Set<string>;
   onClickPieza: (id: string) => void;
   onAgregar: (fecha: string) => void;
   onDropDia: (fecha: string) => void;
@@ -447,6 +466,7 @@ function DiaCelda({
             tema={tema}
             compacta={compacta}
             draggable={!ESTADOS_NO_REPROGRAMABLES.includes(p.estado)}
+            prometeParte2={idsPrometenParte2.has(p.id)}
             onDragStart={() => onDragStartPieza(p.id)}
             onClick={() => onClickPieza(p.id)}
           />
@@ -480,6 +500,7 @@ function TarjetaPieza({
   tema,
   compacta,
   draggable,
+  prometeParte2,
   onDragStart,
   onClick,
 }: {
@@ -487,6 +508,7 @@ function TarjetaPieza({
   tema: ReturnType<typeof construirTemaDesdeAdn>;
   compacta: boolean;
   draggable: boolean;
+  prometeParte2: boolean;
   onDragStart: () => void;
   onClick: () => void;
 }) {
@@ -494,6 +516,7 @@ function TarjetaPieza({
   const hora = new Date(pieza.programada_para).toLocaleTimeString("es-CO", { hour: "2-digit", minute: "2-digit", timeZone: "America/Bogota" });
   const tieneVideo = !!pieza.url_video;
   const colorTexto = colorTextoSobre(tema.color_primario);
+  const sinVideoProximo = piezaSinVideoProxima(pieza);
 
   return (
     <div
@@ -523,12 +546,15 @@ function TarjetaPieza({
         )
       )}
       <div style={{ position: "absolute", top: 4, right: 4, width: 9, height: 9, borderRadius: "50%", background: dot, border: "1.5px solid #fff" }} />
+      {sinVideoProximo && (
+        <div title="Publica en menos de 2h y todavía no tiene video" style={{ position: "absolute", top: 3, left: 3, fontSize: compacta ? 10 : 12 }}>
+          ⏰
+        </div>
+      )}
       {!compacta && (
         <div style={{ position: "absolute", bottom: 0, left: 0, right: 0, background: "linear-gradient(transparent, rgba(0,0,0,0.65))", padding: "16px 6px 5px" }}>
           <div style={{ fontSize: 10, color: "#fff", fontWeight: 700 }}>{hora}</div>
-          {pieza.receta_organica === "serie_partes" && !pieza.continua_de_id && (
-            <div style={{ fontSize: 9, color: "#FFD27A", fontWeight: 700 }}>⚠ promete parte 2</div>
-          )}
+          {prometeParte2 && <div style={{ fontSize: 9, color: "#FFD27A", fontWeight: 700 }}>⚠ promete parte 2</div>}
         </div>
       )}
     </div>

@@ -11,6 +11,7 @@ let usuarioActual: Record<string, unknown> | null = null;
 let piezaActual: Record<string, unknown> | null = null;
 let piezasAlbumActual: Record<string, unknown>[] = [];
 let marcaInfoActual: Record<string, unknown> | null = { info_adicional: "Vendemos ropa deportiva hecha a mano para mujeres." };
+let pistaActual: Record<string, unknown> | null = null;
 let filasUpdateActual: { id: string }[] | null = [{ id: "pieza-1" }];
 let updatesRealizados: Record<string, unknown>[] = [];
 
@@ -28,6 +29,10 @@ fromMock.mockImplementation((tabla: unknown) => {
   }
   if (tabla === "album_creativos") {
     const obj = { select: () => obj, eq: () => obj, in: async () => ({ data: piezasAlbumActual, error: null }) };
+    return obj;
+  }
+  if (tabla === "pistas_musicales") {
+    const obj = { select: () => obj, eq: () => obj, maybeSingle: async () => ({ data: pistaActual }) };
     return obj;
   }
   if (tabla === "publicaciones_organicas") {
@@ -79,6 +84,7 @@ describe("GET /api/contenido/[id]", () => {
     piezaActual = { id: "pieza-1", estado: "borrador", guion: null, media_ids: null };
     piezasAlbumActual = [];
     marcaInfoActual = { info_adicional: "Vendemos ropa deportiva hecha a mano para mujeres." };
+    pistaActual = null;
   });
 
   it("sin sesión: 401", async () => {
@@ -120,6 +126,20 @@ describe("GET /api/contenido/[id]", () => {
     const res = await GET(getReq(), contexto());
     const body = await res.json();
     expect(body.avisoInfoIncompleta).toBe(true);
+  });
+
+  it("guion sin pista_id: pistaUrl es null", async () => {
+    const res = await GET(getReq(), contexto());
+    const body = await res.json();
+    expect(body.pistaUrl).toBe(null);
+  });
+
+  it("guion con pista_id real (caso real: reel publicado en silencio total): resuelve la URL de Cloudinary", async () => {
+    piezaActual = { ...piezaActual, guion: { musica: { pista_id: "pista-1", volumen: 0.35 } } };
+    pistaActual = { public_id: "v123/cancion", cloudinary_name: "demo" };
+    const res = await GET(getReq(), contexto());
+    const body = await res.json();
+    expect(body.pistaUrl).toBe("https://res.cloudinary.com/demo/video/upload/v123/cancion.mp3");
   });
 });
 
@@ -228,6 +248,13 @@ describe("PATCH /api/contenido/[id] -- reprogramar (arrastrar en el calendario)"
     filasUpdateActual = [];
     const res = await PATCH(patchReq({ accion: "reprogramar", programada_para: isoEnElFuturo(24) }), contexto());
     expect(res.status).toBe(409);
+  });
+
+  it("pieza vencida: al reprogramarla vuelve a borrador (se revisa de nuevo antes de aprobar)", async () => {
+    piezaActual = { id: "pieza-1", estado: "vencida" };
+    const res = await PATCH(patchReq({ accion: "reprogramar", programada_para: isoEnElFuturo(24) }), contexto());
+    expect(res.status).toBe(200);
+    expect(updatesRealizados[0]).toMatchObject({ estado: "borrador" });
   });
 });
 
