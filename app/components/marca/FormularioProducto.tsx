@@ -209,7 +209,7 @@ export default function FormularioProducto({
                 </button>
               ))}
             </div>
-            <textarea className="qv-input" rows={3} style={{ resize: "vertical" }} value={destacar} onChange={(e) => setDestacar(e.target.value)} placeholder="Garantía, envío, forma de pago..." maxLength={500} />
+            <textarea className="qv-input" rows={3} style={{ resize: "vertical" }} value={destacar} onChange={(e) => setDestacar(e.target.value)} placeholder="Garantía · envío · forma de pago..." maxLength={500} />
           </div>
 
           <div>

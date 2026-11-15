@@ -6,7 +6,7 @@
 // un producto parecido en vez de crear un duplicado, o crea uno nuevo
 // solo cuando de verdad no hay nada guardado parecido.
 import { describe, it, expect, vi, beforeEach } from "vitest";
-import { resolverProductoAlUsar, valorVacioSelectorProducto, resolverProductoDesdeTexto } from "./SelectorProducto";
+import { resolverProductoAlUsar, valorVacioSelectorProducto, resolverProductoDesdeTexto, dividirEnChipsDestacar } from "./SelectorProducto";
 
 const fetchMock = vi.fn();
 
@@ -116,5 +116,29 @@ describe("resolverProductoDesdeTexto (chat del Director, sin checkbox posible)",
     fetchMock.mockResolvedValue(respuestaError({ error: "boom" }));
     const r = await resolverProductoDesdeTexto("Zapatos Deportivos", null, []);
     expect(r).toEqual({ productoId: null });
+  });
+});
+
+describe("dividirEnChipsDestacar (caso real: burbujas cortadas por comas)", () => {
+  it("separa por '·' (el separador real que usa agregarChipDestacar)", () => {
+    expect(dividirEnChipsDestacar("Garantía 1 año · Envío gratis · Pago contraentrega")).toEqual([
+      "Garantía 1 año",
+      "Envío gratis",
+      "Pago contraentrega",
+    ]);
+  });
+
+  it("NUNCA parte por comas -- una frase con comas internas queda como una sola burbuja (caso real)", () => {
+    expect(dividirEnChipsDestacar("Hecho a mano, con materiales reciclados")).toEqual(["Hecho a mano, con materiales reciclados"]);
+  });
+
+  it("también separa por salto de línea", () => {
+    expect(dividirEnChipsDestacar("Garantía 1 año\nEnvío gratis")).toEqual(["Garantía 1 año", "Envío gratis"]);
+  });
+
+  it("null o vacío: sin burbujas", () => {
+    expect(dividirEnChipsDestacar(null)).toEqual([]);
+    expect(dividirEnChipsDestacar("")).toEqual([]);
+    expect(dividirEnChipsDestacar("   ")).toEqual([]);
   });
 });

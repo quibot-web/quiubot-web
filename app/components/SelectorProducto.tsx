@@ -31,6 +31,19 @@ export function valorVacioSelectorProducto(tipo: TipoProducto = "producto"): Val
   return { productoId: null, tipo, nombre: "", precioCop: null, destacar: null, guardarEnCatalogo: true, actualizarCatalogo: false, fotosProducto: [] };
 }
 
+// Separador real de "qué destacar": "·" (el que usa agregarChipDestacar
+// en FormularioProducto.tsx al armar el texto desde los chips
+// sugeridos), nunca la coma -- caso real reportado: "Hecho a mano, con
+// materiales reciclados" se partía en dos burbujas cortadas a la mitad
+// de la frase porque la coma también cortaba. La coma es puntuación
+// normal dentro de un destacado, no un separador.
+export function dividirEnChipsDestacar(destacar: string | null): string[] {
+  return (destacar || "")
+    .split(/[·\n]/)
+    .map((s) => s.trim())
+    .filter(Boolean);
+}
+
 function textoPrecio(tipo: TipoProducto, precioCop: number | null): string {
   if (precioCop) return new Intl.NumberFormat("es-CO", { style: "currency", currency: "COP", maximumFractionDigits: 0 }).format(precioCop);
   return tipo === "servicio" ? "Precio según el proyecto" : "Sin precio";
@@ -211,10 +224,7 @@ export default function SelectorProducto({
   }
 
   const seEditoAlgo = !!productoActual && (valor.precioCop !== productoActual.precio_cop || (valor.destacar || "") !== (productoActual.destacar || ""));
-  const chipsDestacar = (valor.destacar || "")
-    .split(/[·,\n]/)
-    .map((s) => s.trim())
-    .filter(Boolean);
+  const chipsDestacar = dividirEnChipsDestacar(valor.destacar);
 
   return (
     <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
@@ -383,7 +393,7 @@ export default function SelectorProducto({
         <textarea
           value={valor.destacar ?? ""}
           onChange={(e) => onCambio({ ...valor, destacar: e.target.value })}
-          placeholder="Qué destacar (opcional): garantía, envío, forma de pago..."
+          placeholder="Qué destacar (opcional): garantía · envío · forma de pago..."
           rows={2}
           style={{ width: "100%", boxSizing: "border-box", border: "1.5px solid #e0e0e0", borderRadius: 10, padding: "10px 12px", fontSize: 13, color: "#1a1a1a", resize: "vertical", fontFamily: "inherit" }}
         />
