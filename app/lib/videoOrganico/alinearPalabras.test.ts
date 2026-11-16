@@ -27,11 +27,31 @@ describe("alinearPalabras", () => {
     ]);
   });
 
-  it("palabrasPorEscena trae el tiempo real de cada palabra individual, agrupado por escena", () => {
+  it("palabrasPorEscena trae el tiempo real de cada palabra individual, agrupado por escena (el texto es el de la narración, no el de Whisper)", () => {
     const escenas = [{ id: "e1", narracion: "Hola a todos" }];
     const reales = [palabra("hola", 0, 0.3), palabra("a", 0.3, 0.4), palabra("todos", 0.4, 0.8)];
     const { palabrasPorEscena } = alinearPalabras(escenas, reales);
-    expect(palabrasPorEscena).toEqual([{ escena_id: "e1", palabras: reales }]);
+    expect(palabrasPorEscena).toEqual([{ escena_id: "e1", palabras: [palabra("Hola", 0, 0.3), palabra("a", 0.3, 0.4), palabra("todos", 0.4, 0.8)] }]);
+  });
+
+  it("el texto que se muestra es el de la narración escrita, no la transcripción de Whisper (aunque el tiempo sí sale de Whisper)", () => {
+    // Caso real visto en el spike de ReelAutomatico: Whisper transcribió
+    // "Todos" con mayúscula a mitad de frase (creyó que ahí iba un
+    // punto) -- el subtítulo debe mostrar "todos", como lo escribió la
+    // narración, nunca la adivinanza de Whisper.
+    const escenas = [{ id: "e1", narracion: "Así ganas la confianza, todos los días." }];
+    const reales = [
+      palabra("así", 0, 0.2),
+      palabra("ganas", 0.2, 0.4),
+      palabra("la", 0.4, 0.5),
+      palabra("confianza", 0.5, 0.9),
+      palabra("Todos", 0.9, 1.1),
+      palabra("los", 1.1, 1.2),
+      palabra("días", 1.2, 1.5),
+    ];
+    const { palabrasPorEscena } = alinearPalabras(escenas, reales);
+    expect(palabrasPorEscena[0].palabras.map((p) => p.texto)).toEqual(["Así", "ganas", "la", "confianza,", "todos", "los", "días."]);
+    expect(palabrasPorEscena[0].palabras[4].inicio_s).toBe(0.9);
   });
 
   it("conteo distinto (Whisper fusionó 2 palabras en 1): alinea por similitud, puntaje menor a 1 pero mayor a 0, nunca lanza", () => {

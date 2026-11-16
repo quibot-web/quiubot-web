@@ -292,6 +292,18 @@ const TiempoRenderEscena = z.object({
   fin_s: z.number().min(0),
 });
 
+// El tiempo real de CADA palabra (no solo el inicio/fin de la escena
+// completa) -- se persiste además de tiemposRender para que los
+// subtítulos sincronizados (video/visuales/SubtitulosSincronizados.tsx)
+// se puedan volver a renderizar sin tener que llamar a Whisper otra
+// vez. Mismo shape que PalabraConTiempo de generarVoz.ts (duplicado a
+// propósito -- ver el comentario en video/visuales/index.tsx sobre por
+// qué video/ nunca importa ese archivo).
+const PalabraDeEscena = z.object({
+  escena_id: z.string().min(1),
+  palabras: z.array(z.object({ texto: z.string(), inicio_s: z.number(), fin_s: z.number() })),
+});
+
 export const GuionSchema = z
   .object({
     version: z.literal(1),
@@ -326,11 +338,18 @@ export const GuionSchema = z
     // después de generarVoz()+alinearPalabras() -- ver TiempoRenderEscena
     // arriba. Opcional, no afecta a ningún guion existente.
     tiemposRender: z.array(TiempoRenderEscena).optional(),
+    // Idem, a nivel de cada palabra -- lo necesitan los subtítulos.
+    palabrasPorEscena: z.array(PalabraDeEscena).optional(),
     // Hash de la narración que generó voz_url/tiemposRender (ver
     // app/lib/videoOrganico/hashNarracion.ts) -- si una narracion
     // cambia después, este hash ya no coincide y hay que regenerar
     // antes de renderizar.
     narracionHash: z.string().optional(),
+    // URL de Cloudinary de la narración completa (generarVoz()) --
+    // vive en el guion (no solo en publicaciones_organicas.voz_url)
+    // para que ReelAutomatico.tsx pueda renderizar leyendo SOLO el
+    // guion, igual que ya hace con guion.musica.pista_id.
+    vozUrl: z.string().optional(),
   })
   // Invariantes que no dependen de la receta del objetivo/orgánica --
   // las que sí dependen (orden de bloques, rango de duracion, escenas

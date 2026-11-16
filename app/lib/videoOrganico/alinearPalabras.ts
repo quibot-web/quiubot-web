@@ -41,6 +41,19 @@ function partirEnPalabras(texto: string): string[] {
     .filter((p) => p.length > 0);
 }
 
+// Igual separación, SIN normalizar -- es lo que se muestra en pantalla
+// (SubtitulosSincronizados.tsx). Bug real encontrado al revisar los
+// cuadros del spike de ReelAutomatico: el subtítulo salía con la
+// capitalización/puntuación que Whisper adivinó al transcribir
+// ("Todos" con mayúscula a mitad de frase, porque Whisper decidió que
+// ahí había un punto), no con la que la narración realmente escribió.
+// Whisper es la única fuente de TIEMPO (inicio_s/fin_s); el TEXTO que
+// se ve siempre es el que escribió la narración -- nunca lo que
+// Whisper creyó escuchar.
+function partirEnPalabrasOriginal(texto: string): string[] {
+  return texto.trim().split(/\s+/).filter(Boolean);
+}
+
 // LCS clásico (DP O(n*m), de sobra para una narración de un reel --
 // decenas de palabras, nunca miles) -- devuelve los pares de índices
 // (iEsperada, jReal) que coinciden, en orden, maximizando la cantidad
@@ -76,6 +89,7 @@ function alinearPorSimilitud(esperadas: string[], reales: string[]): Map<number,
 export function alinearPalabras(escenas: EscenaConNarracion[], palabrasReales: PalabraConTiempo[]): ResultadoAlineacion {
   const porEscena = escenas.map((e) => partirEnPalabras(e.narracion));
   const esperadas = porEscena.flat();
+  const originales = escenas.map((e) => partirEnPalabrasOriginal(e.narracion)).flat();
   const reales = palabrasReales.map((p) => normalizarPalabra(p.texto));
 
   if (esperadas.length === 0 || palabrasReales.length === 0) {
@@ -98,9 +112,10 @@ export function alinearPalabras(escenas: EscenaConNarracion[], palabrasReales: P
   // "pares", interpolado linealmente entre los vecinos alineados más
   // cercanos si no (y en los bordes, el tiempo del vecino alineado más
   // cercano, sin extrapolar hacia afuera del audio real).
-  const tiempos: PalabraConTiempo[] = esperadas.map((texto, i) => {
+  const tiempos: PalabraConTiempo[] = esperadas.map((_, i) => {
     const j = pares.get(i);
-    if (j !== undefined) return palabrasReales[j];
+    const texto = originales[i];
+    if (j !== undefined) return { texto, inicio_s: palabrasReales[j].inicio_s, fin_s: palabrasReales[j].fin_s };
     return { texto, inicio_s: NaN, fin_s: NaN };
   });
 

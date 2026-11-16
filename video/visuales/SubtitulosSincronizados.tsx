@@ -4,8 +4,15 @@ import { familiaDeFuente } from "../fuentes";
 
 // Fase B v2.0 (docs/diseno/plan_contenido_organico_fase_b_v2.md,
 // punto 5). Palabra por palabra, dentro de zona segura (14%-65%,
-// video/capas/ZonaSegura.tsx) -- se ancla cerca del límite inferior
-// (55%) para no chocar con ningún visual que ocupe el centro/arriba.
+// video/capas/ZonaSegura.tsx) -- franja FIJA al pie (54%-65%),
+// reservada exclusivamente para esto. "Cerca del límite inferior para
+// no chocar con el visual" (la idea original) no alcanzaba: el visual
+// (CelularChat con colorNumeroGigante, p.ej.) se centraba en su propia
+// tarjeta y esa tarjeta llegaba hasta el mismo 65%, superponiéndose de
+// verdad (visto en los cuadros del spike de ReelAutomatico). Ahora la
+// tarjeta/zona visual termina en 51% (video/visuales/geometria.ts) y
+// esta franja es la única que vive en 54%-65% -- ningún visual debe
+// invadirla.
 //
 // Resaltado SIN depender del color de texto: toda la narración va en
 // blanco sobre un fondo oscuro sólido (ya verificado, blanco pasa
@@ -45,8 +52,8 @@ export function SubtitulosSincronizados({ palabras, tema }: { palabras: PalabraE
   return (
     <AbsoluteFill
       style={{
-        top: "55%",
-        height: "10%",
+        top: "54%",
+        height: "11%",
         display: "flex",
         alignItems: "center",
         justifyContent: "center",
