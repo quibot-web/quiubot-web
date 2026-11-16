@@ -53,8 +53,33 @@ export function validarEdicionDesdeAudio(escenas: Guion["escenas"]): HallazgoEdi
 // genérica, sin saber de recetas) porque esta sí es específica de UNA
 // receta -- se llama aparte, solo para consejos_numerados.
 const ESTRUCTURA_CONSEJOS_NUMERADOS: BloqueGuion[] = ["gancho", "valor", "valor", "valor", "marca", "cta"];
-const PALABRAS_ENUMERACION = /\b(uno|dos|tres|cuatro|primero|segundo|tercero|cuarto)\b/gi;
 const MIN_PALABRAS_CONSEJO_CONCRETO = 5;
+
+// Caso real (16 nov 2026, 2do round de revisión): la regla original
+// contaba CUALQUIER palabra "uno/dos/tres/primero/segundo/tercero" en
+// toda la narracion, sin importar si era un MARCADOR de enumeración o
+// solo un número dentro del consejo -- "Segundo, verifica dos cosas:
+// que la foto sea real..." (un solo consejo real, con "dos cosas"
+// como cantidad) se rechazaba igual que "Uno: elige mensajes. Dos:
+// usa fotos reales. Tres: ..." (3 consejos de verdad enumerados). Un
+// ordinal (primero/segundo/tercero) SIEMPRE cuenta como 1 marcador
+// (puede abrir legítimamente la escena, "Segundo, haz esto"); un
+// número en letras (uno/dos/tres/cuatro) SOLO cuenta si de verdad
+// actúa como encabezado de lista (seguido de ":" o "." -- "Uno:",
+// "Dos."), nunca como cantidad suelta dentro de la frase ("dos
+// cosas", "tres minutos"); "1." "2." "3." (sin el punto decimal de un
+// número como "1.5") también cuentan. Más de 1 marcador en la misma
+// narracion = varios consejos enumerados juntos.
+const MARCADORES_ORDINALES = /\b(primero|segundo|tercero|cuarto)\b/gi;
+const MARCADORES_NUMERO_ENCABEZADO = /\b(uno|dos|tres|cuatro)\s*[:.]/gi;
+const MARCADORES_DIGITO_ENCABEZADO = /\b[1-4]\.(?!\d)/g;
+
+function contarMarcadoresDeConsejo(narracion: string): number {
+  const ordinales = narracion.match(MARCADORES_ORDINALES) ?? [];
+  const numeros = narracion.match(MARCADORES_NUMERO_ENCABEZADO) ?? [];
+  const digitos = narracion.match(MARCADORES_DIGITO_ENCABEZADO) ?? [];
+  return ordinales.length + numeros.length + digitos.length;
+}
 
 export function validarEstructuraConsejosNumeradosAudio(escenas: Guion["escenas"]): HallazgoEdicionAudio[] {
   const hallazgos: HallazgoEdicionAudio[] = [];
@@ -84,17 +109,21 @@ export function validarEstructuraConsejosNumeradosAudio(escenas: Guion["escenas"
 
   for (const escena of escenas.slice(1, 4)) {
     const narracion = escena.narracion ?? "";
-    const coincidencias = narracion.match(PALABRAS_ENUMERACION) ?? [];
-    if (new Set(coincidencias.map((p) => p.toLowerCase())).size >= 2) {
+    const marcadores = contarMarcadoresDeConsejo(narracion);
+    if (marcadores > 1) {
       hallazgos.push({
         escenaId: escena.id,
-        mensaje: `La narracion "${narracion}" parece enumerar varios consejos en una sola escena -- cada escena "valor" es UN solo consejo, nunca una lista.`,
+        // Incluye un ejemplo concreto de cómo corregirlo (pedido
+        // explícito) -- para que el reintento no repita el mismo error
+        // los 3 intentos: la IA necesita ver la FORMA correcta, no solo
+        // que "está mal".
+        mensaje: `La narracion "${narracion}" tiene ${marcadores} marcadores de consejo (ordinales como "primero/segundo/tercero", o enumeraciones como "uno:"/"1.") -- parece enumerar varios consejos en una sola escena. Cada escena "valor" es UN solo consejo: reescríbela con UNA sola acción, sin enumerar más de una (ej. "Responde cada mensaje en menos de un minuto." -- no "Primero responde rápido, segundo revisa el catálogo.").`,
       });
     }
     if (contarPalabras(narracion) < MIN_PALABRAS_CONSEJO_CONCRETO) {
       hallazgos.push({
         escenaId: escena.id,
-        mensaje: `La narracion "${narracion}" es muy corta para ser un consejo concreto y entendible por sí solo (mínimo ${MIN_PALABRAS_CONSEJO_CONCRETO} palabras) -- escribe la acción completa, no un fragmento.`,
+        mensaje: `La narracion "${narracion}" es muy corta para ser un consejo concreto y entendible por sí solo (mínimo ${MIN_PALABRAS_CONSEJO_CONCRETO} palabras) -- escribe la acción completa, no un fragmento (ej. "Responde cada mensaje en menos de un minuto.", no "Responde rápido.").`,
       });
     }
   }

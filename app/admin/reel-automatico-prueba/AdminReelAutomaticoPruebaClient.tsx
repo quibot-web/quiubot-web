@@ -14,6 +14,13 @@ import type { Guion } from "@/video/guion.schema";
 type FaseArnes = "inactivo" | "generando_guion" | "renderizando" | "extrayendo_cuadros" | "control_calidad" | "listo" | "rechazado" | "error";
 
 type HallazgoVision = { cuadro: string; pantalla_vacia: boolean; texto_superpuesto: boolean; contraste_bajo: boolean; nota: string };
+// El cuadro real que vio el modelo, para poder confirmar a simple
+// vista si un hallazgo es real o un falso positivo -- pedido explícito
+// de Juan José tras el caso de "texto_superpuesto" en escena_3_mitad
+// que no se pudo reproducir con un spike: antes de aflojar la
+// definición otra vez hace falta ver el cuadro exacto que la disparó,
+// no solo confiar en la nota en texto del modelo.
+type HallazgoConImagen = HallazgoVision & { dataUrl?: string };
 
 type ResultadoGuion = { guion: Guion; pistaMusicaUrl: string | null; voz: string; puntajeAlineacion: number; intentosGuion: number; seRegeneroPorQC: boolean };
 
@@ -106,6 +113,20 @@ async function audioEstaEnSilencio(blob: Blob): Promise<boolean> {
   }
 }
 
+// Empareja cada hallazgo con el cuadro (dataUrl) que lo originó.
+// control-calidad/route.ts le pide al modelo responder "en el mismo
+// orden" que los cuadros que recibió -- se empareja por posición
+// primero (el caso normal); si por algún motivo la cantidad no
+// coincide, se cae a emparejar por el texto exacto de la etiqueta en
+// vez de asumir una posición que puede estar desalineada.
+function combinarHallazgosConImagenes(hallazgos: HallazgoVision[], cuadros: { etiqueta: string; dataUrl: string }[]): HallazgoConImagen[] {
+  if (hallazgos.length === cuadros.length) {
+    return hallazgos.map((h, i) => ({ ...h, dataUrl: cuadros[i].dataUrl }));
+  }
+  const porEtiqueta = new Map(cuadros.map((c) => [c.etiqueta, c.dataUrl]));
+  return hallazgos.map((h) => ({ ...h, dataUrl: porEtiqueta.get(h.cuadro) }));
+}
+
 // Construye los mensajes de corrección que se le mandan de vuelta a
 // POST /guion (erroresPrevios) cuando el control de calidad rechaza un
 // intento -- mismo texto que ve la IA al reintentar por un fallo de
@@ -123,7 +144,7 @@ export default function AdminReelAutomaticoPruebaClient() {
   const [error, setError] = useState<string | null>(null);
   const [resumenGuion, setResumenGuion] = useState<ResultadoGuion | null>(null);
   const [progresoRender, setProgresoRender] = useState(0);
-  const [hallazgosVision, setHallazgosVision] = useState<HallazgoVision[] | null>(null);
+  const [hallazgosVision, setHallazgosVision] = useState<HallazgoConImagen[] | null>(null);
   const [audioSilencioso, setAudioSilencioso] = useState<boolean | null>(null);
   const [intentoQC, setIntentoQC] = useState(0);
   const urlDescargaRef = useRef<string | null>(null);
@@ -231,7 +252,7 @@ export default function AdminReelAutomaticoPruebaClient() {
           return;
         }
         const hallazgos = dataCalidad.hallazgos as HallazgoVision[];
-        setHallazgosVision(hallazgos);
+        setHallazgosVision(combinarHallazgosConImagenes(hallazgos, cuadros));
 
         const hayProblemaVision = hallazgos.some((h) => h.pantalla_vacia || h.texto_superpuesto || h.contraste_bajo);
         if (!hayProblemaVision && !silencio) {
@@ -310,15 +331,37 @@ export default function AdminReelAutomaticoPruebaClient() {
 
       {hallazgosVision && (
         <div style={{ marginTop: 20, padding: 16, borderRadius: 10, background: fase === "rechazado" ? "#FEF3F2" : "#F0FDF4", fontSize: 13, color: "#333" }}>
-          <p style={{ fontWeight: 700, marginBottom: 8 }}>Control de calidad por visión</p>
-          <ul style={{ paddingLeft: 18 }}>
-            {hallazgosVision.map((h, i) => (
-              <li key={i} style={{ marginBottom: 4 }}>
-                <strong>{h.cuadro}</strong>: {h.pantalla_vacia || h.texto_superpuesto || h.contraste_bajo ? "⚠️ " : "✓ "}
-                {h.nota}
-              </li>
-            ))}
-          </ul>
+          <p style={{ fontWeight: 700, marginBottom: 4 }}>Control de calidad por visión</p>
+          <p style={{ fontSize: 12, color: "#777", marginBottom: 12 }}>
+            El cuadro exacto que vio el modelo va al lado de cada nota -- antes de aflojar la regla por un hallazgo repetido, confirma acá si de verdad se ve el problema o si es un falso positivo.
+          </p>
+          <div style={{ display: "flex", flexDirection: "column", gap: 12 }}>
+            {hallazgosVision.map((h, i) => {
+              const esProblema = h.pantalla_vacia || h.texto_superpuesto || h.contraste_bajo;
+              return (
+                <div key={i} style={{ display: "flex", gap: 12, alignItems: "flex-start" }}>
+                  {h.dataUrl && (
+                    <img
+                      src={h.dataUrl}
+                      alt={h.cuadro}
+                      style={{ width: 72, height: 128, objectFit: "cover", borderRadius: 6, border: esProblema ? "2px solid #B42318" : "1px solid #ddd", flexShrink: 0 }}
+                    />
+                  )}
+                  <div>
+                    <strong>{h.cuadro}</strong>: {esProblema ? "⚠️ " : "✓ "}
+                    {h.nota}
+                    {esProblema && (
+                      <p style={{ fontSize: 11, color: "#777", marginTop: 2 }}>
+                        {h.pantalla_vacia && "pantalla_vacia "}
+                        {h.texto_superpuesto && "texto_superpuesto "}
+                        {h.contraste_bajo && "contraste_bajo"}
+                      </p>
+                    )}
+                  </div>
+                </div>
+              );
+            })}
+          </div>
         </div>
       )}
 

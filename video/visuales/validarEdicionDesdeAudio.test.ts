@@ -174,6 +174,34 @@ describe("validarEstructuraConsejosNumeradosAudio", () => {
     expect(hallazgos.some((h) => h.escenaId === "e2" && h.mensaje.includes("enumerar"))).toBe(true);
   });
 
+  it("caso real (staging, 2do round): 'Segundo, verifica dos cosas' es UN consejo con un número dentro, no una enumeración -- sin hallazgo", () => {
+    const valorConNumeroAdentro = escenaConAudio("e2", "valor", "Segundo, verifica dos cosas: que la foto sea real y represente lo que vendes.", {
+      tipo: "boton_estado",
+      texto: "Verificar foto",
+      texto_activo: "Verificada",
+      eventos: [{ palabra: 0, accion: "aparece" }],
+    });
+    const escenas = [GANCHO_OK, valorConNumeroAdentro, VALOR_2_OK, VALOR_3_OK, MARCA_OK, CTA_OK];
+    const hallazgos = validarEstructuraConsejosNumeradosAudio(escenas);
+    expect(hallazgos.filter((h) => h.escenaId === "e2")).toHaveLength(0);
+  });
+
+  it("caso malo real: 'Uno: elige mensajes. Dos: usa fotos reales. Tres: ...' SÍ enumera 3 consejos de verdad -- hallazgo, con un ejemplo de cómo corregirlo", () => {
+    const valorEnumeradoConDosPuntos = escenaConAudio(
+      "e2",
+      "valor",
+      "Uno: elige mensajes. Dos: usa fotos reales. Tres: pide escribirte por WhatsApp.",
+      { tipo: "contador", desde: 0, hasta: 3, eventos: [{ palabra: 0, accion: "sube" }] }
+    );
+    const escenas = [GANCHO_OK, valorEnumeradoConDosPuntos, VALOR_2_OK, VALOR_3_OK, MARCA_OK, CTA_OK];
+    const hallazgos = validarEstructuraConsejosNumeradosAudio(escenas);
+    const hallazgo = hallazgos.find((h) => h.escenaId === "e2" && h.mensaje.includes("enumerar"));
+    expect(hallazgo).toBeDefined();
+    // El ejemplo de corrección va en el mismo mensaje -- pedido
+    // explícito para que el reintento no repita el mismo error.
+    expect(hallazgo!.mensaje).toContain("ej.");
+  });
+
   it("un consejo demasiado corto para ser concreto ('elige mensajes'): hallazgo de concreción", () => {
     const valorCorto = escenaConAudio("e2", "valor", "Elige mensajes.", {
       tipo: "boton_estado",

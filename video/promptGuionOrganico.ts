@@ -238,6 +238,7 @@ const ESTRUCTURA_CONSEJOS_NUMERADOS_AUDIO = `ESTRUCTURA OBLIGATORIA PARA "consej
 1. "gancho": visual "celular_chat", arranca en 0 ("0 mensajes nuevos" -- sin eventos de notificacion_llega todavía, o como mucho uno bien al final de la narración si el gancho lo pide).
 2, 3, 4. TRES escenas "valor", UNA POR CADA CONSEJO. Cada una:
    - Es UN solo consejo, concreto y accionable, en una frase COMPLETA (ej. "Responde cada mensaje en menos de un minuto" -- nunca un fragmento vago como "elige mensajes" o "sé más rápido" que no se entiende por sí solo).
+   - Preferible (no obligatorio, pero evítalo si puedes): UNA sola acción, no varias cosas que verificar o revisar a la vez -- mejor "Responde cada mensaje en menos de un minuto" que "Verifica que respondas rápido y que uses fotos reales" (eso mezcla 2 acciones en una).
    - Tiene su propio problema->arreglo visual (boton_estado, cursor_clic o contador -- el que mejor MUESTRE ese consejo puntual, nunca el mismo tipo en las 3).
 5. "marca": CIERRA EL BUCLE -- vuelve a visual "celular_chat", el MISMO tipo que el gancho (nunca otro), ahora con eventos que suben el contador (el resultado real de aplicar los 3 consejos).
 6. "cta".`;
