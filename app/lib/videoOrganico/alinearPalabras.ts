@@ -11,7 +11,13 @@ import type { PalabraConTiempo } from "./generarVoz";
 
 export type EscenaConNarracion = { id: string; narracion: string };
 export type TiempoRenderEscena = { escena_id: string; inicio_s: number; fin_s: number };
-export type ResultadoAlineacion = { tiemposRender: TiempoRenderEscena[]; puntaje: number };
+export type PalabrasDeEscena = { escena_id: string; palabras: PalabraConTiempo[] };
+// palabrasPorEscena -- el tiempo real de CADA palabra de la narración
+// de esa escena, no solo el inicio/fin del conjunto (tiemposRender).
+// video/visuales/index.tsx lo necesita para resolver "visual.eventos"
+// (video/visuales/schema.ts), que apunta a una palabra puntual dentro
+// de la narración de su propia escena, nunca a la escena completa.
+export type ResultadoAlineacion = { tiemposRender: TiempoRenderEscena[]; palabrasPorEscena: PalabrasDeEscena[]; puntaje: number };
 
 // Mismo criterio de normalización en los dos lados (lo esperado y lo
 // que transcribió Whisper) -- minúsculas, sin puntuación pegada a la
@@ -73,7 +79,11 @@ export function alinearPalabras(escenas: EscenaConNarracion[], palabrasReales: P
   const reales = palabrasReales.map((p) => normalizarPalabra(p.texto));
 
   if (esperadas.length === 0 || palabrasReales.length === 0) {
-    return { tiemposRender: escenas.map((e) => ({ escena_id: e.id, inicio_s: 0, fin_s: 0 })), puntaje: 0 };
+    return {
+      tiemposRender: escenas.map((e) => ({ escena_id: e.id, inicio_s: 0, fin_s: 0 })),
+      palabrasPorEscena: escenas.map((e) => ({ escena_id: e.id, palabras: [] })),
+      puntaje: 0,
+    };
   }
 
   // Caso normal: el conteo coincide exacto -- asignación 1:1 por
@@ -115,11 +125,13 @@ export function alinearPalabras(escenas: EscenaConNarracion[], palabrasReales: P
   }
 
   const tiemposRender: TiempoRenderEscena[] = [];
+  const palabrasPorEscena: PalabrasDeEscena[] = [];
   let cursor = 0;
   for (let indiceEscena = 0; indiceEscena < escenas.length; indiceEscena++) {
     const cantidad = porEscena[indiceEscena].length;
     const delaEscena = tiempos.slice(cursor, cursor + cantidad);
     cursor += cantidad;
+    palabrasPorEscena.push({ escena_id: escenas[indiceEscena].id, palabras: delaEscena });
     if (delaEscena.length === 0) {
       tiemposRender.push({ escena_id: escenas[indiceEscena].id, inicio_s: 0, fin_s: 0 });
       continue;
@@ -132,5 +144,5 @@ export function alinearPalabras(escenas: EscenaConNarracion[], palabrasReales: P
   }
 
   const puntaje = pares.size / esperadas.length;
-  return { tiemposRender, puntaje };
+  return { tiemposRender, palabrasPorEscena, puntaje };
 }

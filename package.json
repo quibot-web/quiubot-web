@@ -19,8 +19,10 @@
     "verificar:esquema": "tsx scripts/verificarEsquema.ts"
   },
   "dependencies": {
+    "@remotion/captions": "4.0.540",
     "@remotion/fonts": "4.0.540",
     "@remotion/media": "4.0.540",
+    "@remotion/openai-whisper": "4.0.540",
     "@remotion/player": "4.0.540",
     "@remotion/transitions": "4.0.540",
     "@remotion/web-renderer": "4.0.540",

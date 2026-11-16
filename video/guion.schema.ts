@@ -281,6 +281,17 @@ const Publicacion = z.object({
   hashtags: z.array(z.string().min(1).max(40)).min(3).max(8),
 });
 
+// Fase B v2.0 (docs/diseno/plan_contenido_organico_fase_b_v2.md) --
+// calculado por código después de generarVoz()+alinearPalabras(),
+// nunca por la IA. Opcional: solo lo traen los guiones que ya pasaron
+// por la edición desde el audio; el resto (anuncios, las 6 recetas
+// orgánicas de siempre) nunca lo tiene, y nada de lo existente lo lee.
+const TiempoRenderEscena = z.object({
+  escena_id: z.string().min(1),
+  inicio_s: z.number().min(0),
+  fin_s: z.number().min(0),
+});
+
 export const GuionSchema = z
   .object({
     version: z.literal(1),
@@ -311,6 +322,15 @@ export const GuionSchema = z
     // revalidar un guion ya generado (ni al editarlo, ni en el worker
     // de render de la Fase 1b).
     analisisPiezas: z.record(z.string(), AnalisisPiezaSchema).optional(),
+    // Fase B v2.0: tiempos reales por escena, calculados por código
+    // después de generarVoz()+alinearPalabras() -- ver TiempoRenderEscena
+    // arriba. Opcional, no afecta a ningún guion existente.
+    tiemposRender: z.array(TiempoRenderEscena).optional(),
+    // Hash de la narración que generó voz_url/tiemposRender (ver
+    // app/lib/videoOrganico/hashNarracion.ts) -- si una narracion
+    // cambia después, este hash ya no coincide y hay que regenerar
+    // antes de renderizar.
+    narracionHash: z.string().optional(),
   })
   // Invariantes que no dependen de la receta del objetivo/orgánica --
   // las que sí dependen (orden de bloques, rango de duracion, escenas

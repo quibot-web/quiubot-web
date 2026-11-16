@@ -27,6 +27,13 @@ describe("alinearPalabras", () => {
     ]);
   });
 
+  it("palabrasPorEscena trae el tiempo real de cada palabra individual, agrupado por escena", () => {
+    const escenas = [{ id: "e1", narracion: "Hola a todos" }];
+    const reales = [palabra("hola", 0, 0.3), palabra("a", 0.3, 0.4), palabra("todos", 0.4, 0.8)];
+    const { palabrasPorEscena } = alinearPalabras(escenas, reales);
+    expect(palabrasPorEscena).toEqual([{ escena_id: "e1", palabras: reales }]);
+  });
+
   it("conteo distinto (Whisper fusionó 2 palabras en 1): alinea por similitud, puntaje menor a 1 pero mayor a 0, nunca lanza", () => {
     // "muy bien" se transcribió como una sola palabra "muybien" --
     // caso real documentado por la investigación externa (fusiones

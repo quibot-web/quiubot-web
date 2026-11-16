@@ -1,0 +1,90 @@
+import { AbsoluteFill, useCurrentFrame } from "remotion";
+import { colorTextoSobre, contrasteSuficiente, type TemaGuion } from "../tema";
+import { familiaDeFuente } from "../fuentes";
+
+// Fase B v2.0 (docs/diseno/plan_contenido_organico_fase_b_v2.md,
+// punto 5). Palabra por palabra, dentro de zona segura (14%-65%,
+// video/capas/ZonaSegura.tsx) -- se ancla cerca del límite inferior
+// (55%) para no chocar con ningún visual que ocupe el centro/arriba.
+//
+// Resaltado SIN depender del color de texto: toda la narración va en
+// blanco sobre un fondo oscuro sólido (ya verificado, blanco pasa
+// contrasteSuficiente contra cualquier negro semitransparente denso),
+// y la palabra activa gana una cápsula de fondo con el color primario
+// de la marca -- su texto se resuelve con colorTextoSobre(), que ya
+// elige blanco u oscuro según cuál pase mejor contra ESE color
+// puntual. contrasteSuficiente() se llama explícito como segunda
+// verificación (nunca confiar en "debería andar bien" sin medirlo).
+//
+// Tiempo en CUADROS relativos a la escena (no segundos, no absolutos
+// del reel completo) -- quien arma la Composicion ya resuelve esa
+// resta (el Sequence de la escena hace que useCurrentFrame() empiece
+// en 0 para esa escena, mismo criterio que el resto de video/escenas/).
+export type PalabraEnCuadros = { texto: string; inicioCuadro: number; finCuadro: number };
+
+const COLOR_FONDO_SUBTITULO = "rgba(0,0,0,0.65)";
+const COLOR_TEXTO_NORMAL = "#fff";
+
+export function SubtitulosSincronizados({ palabras, tema }: { palabras: PalabraEnCuadros[]; tema: TemaGuion }) {
+  const frame = useCurrentFrame();
+  const colorTextoActivo = colorTextoSobre(tema.color_primario);
+
+  // Segunda verificación explícita (nunca confiar en que
+  // colorTextoSobre() alcanzó el umbral sin medirlo de nuevo acá,
+  // mismo criterio que el resto del molde) -- si por algún motivo el
+  // color primario de la marca no deja un contraste suficiente con
+  // NINGUNO de los 2 candidatos (caso extremo, colores casi iguales),
+  // la cápsula cae a un fondo oscuro genérico en vez de arriesgar
+  // texto illegible.
+  const capsulaActivaOk = contrasteSuficiente(colorTextoActivo, tema.color_primario);
+  const colorCapsulaActiva = capsulaActivaOk ? tema.color_primario : "#15120A";
+  const colorTextoEnCapsula = capsulaActivaOk ? colorTextoActivo : "#fff";
+
+  if (palabras.length === 0) return null;
+
+  return (
+    <AbsoluteFill
+      style={{
+        top: "55%",
+        height: "10%",
+        display: "flex",
+        alignItems: "center",
+        justifyContent: "center",
+        padding: "0 6%",
+      }}
+    >
+      <div
+        style={{
+          display: "flex",
+          flexWrap: "wrap",
+          justifyContent: "center",
+          gap: "0.4em",
+          background: COLOR_FONDO_SUBTITULO,
+          borderRadius: 16,
+          padding: "14px 22px",
+          fontFamily: familiaDeFuente(tema.fuente),
+          fontSize: 38,
+          fontWeight: 800,
+          lineHeight: 1.2,
+        }}
+      >
+        {palabras.map((palabra, i) => {
+          const activa = frame >= palabra.inicioCuadro && frame < palabra.finCuadro;
+          return (
+            <span
+              key={i}
+              style={{
+                color: activa ? colorTextoEnCapsula : COLOR_TEXTO_NORMAL,
+                background: activa ? colorCapsulaActiva : "transparent",
+                borderRadius: activa ? 8 : 0,
+                padding: activa ? "0 0.2em" : 0,
+              }}
+            >
+              {palabra.texto}
+            </span>
+          );
+        })}
+      </div>
+    </AbsoluteFill>
+  );
+}
