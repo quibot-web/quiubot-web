@@ -38,7 +38,7 @@ describe("validarEdicionDesdeAudio", () => {
   it("evento.palabra dentro del rango real de la narracion: sin hallazgos", () => {
     const escena = escenaBase("e1", {
       narracion: "Hola a todos hoy", // 4 palabras, índices 0-3
-      visual: { tipo: "contador", desde: 0, hasta: 3, eventos: [{ palabra: 0, accion: "sube" }, { palabra: 3, accion: "sube" }] },
+      visual: { tipo: "contador", desde: 0, hasta: 3, etiqueta: "mensajes nuevos", eventos: [{ palabra: 0, accion: "sube" }, { palabra: 3, accion: "sube" }] },
     });
     expect(validarEdicionDesdeAudio([escena])).toHaveLength(0);
   });
@@ -46,7 +46,7 @@ describe("validarEdicionDesdeAudio", () => {
   it("evento.palabra fuera de rango (índice 5 en una narracion de 4 palabras): hallazgo con el mensaje exacto", () => {
     const escena = escenaBase("e1", {
       narracion: "Hola a todos hoy",
-      visual: { tipo: "contador", desde: 0, hasta: 3, eventos: [{ palabra: 5, accion: "sube" }] },
+      visual: { tipo: "contador", desde: 0, hasta: 3, etiqueta: "mensajes nuevos", eventos: [{ palabra: 5, accion: "sube" }] },
     });
     const hallazgos = validarEdicionDesdeAudio([escena]);
     expect(hallazgos).toHaveLength(1);
@@ -91,22 +91,26 @@ const GANCHO_OK = escenaConAudio("e1", "gancho", "¿Sabes por qué pierdes clien
   tipo: "celular_chat",
   eventos: [{ palabra: 0, accion: "notificacion_llega" }],
 });
+// Los 3 consejos usan los 3 tipos de 2 estados (problema->arreglo) --
+// pedido explícito (3ra revisión de staging): boton_estado/cursor_clic
+// ya NO valen para escenas "valor" (son de 1 estado, no muestran un
+// antes real). El evento cae pasado el 30% de la narracion (regla
+// nueva: "el cambio de estado está amarrado a la palabra donde se da
+// la solución", nunca en las primeras palabras).
 const VALOR_1_OK = escenaConAudio("e2", "valor", "Responde cada mensaje en menos de un minuto.", {
-  tipo: "boton_estado",
-  texto: "Responder rápido",
-  texto_activo: "¡Hecho!",
-  eventos: [{ palabra: 0, accion: "aparece" }, { palabra: 3, accion: "clic" }],
+  tipo: "anuncio_boton",
+  eventos: [{ palabra: 4, accion: "cambia_estado" }],
 });
 const VALOR_2_OK = escenaConAudio("e3", "valor", "Usa fotos reales de tu negocio, no imágenes genéricas.", {
-  tipo: "cursor_clic",
-  texto_boton: "Subir foto real",
-  eventos: [{ palabra: 0, accion: "aparece" }, { palabra: 4, accion: "clic" }],
+  tipo: "conexion_whatsapp",
+  eventos: [{ palabra: 5, accion: "cambia_estado" }],
 });
 const VALOR_3_OK = escenaConAudio("e4", "valor", "Revisa el avance de tu negocio todos los días.", {
   tipo: "contador",
   desde: 0,
   hasta: 3,
-  eventos: [{ palabra: 0, accion: "sube" }],
+  etiqueta: "días revisados",
+  eventos: [{ palabra: 5, accion: "sube" }],
 });
 const MARCA_OK = escenaConAudio("e5", "marca", "Así ganas la confianza de quien te escribe.", {
   tipo: "celular_chat",
@@ -130,7 +134,7 @@ describe("validarEstructuraConsejosNumeradosAudio", () => {
       "e2",
       "valor",
       "Uno: elige mensajes. Dos: usa fotos reales. Tres: pide escribirte por WhatsApp.",
-      { tipo: "contador", desde: 0, hasta: 3, eventos: [{ palabra: 0, accion: "sube" }] }
+      { tipo: "contador", desde: 0, hasta: 3, etiqueta: "consejos aplicados", eventos: [{ palabra: 0, accion: "sube" }] }
     );
     const escenas = [GANCHO_OK, escenaMergeada, MARCA_OK, CTA_OK];
     const hallazgos = validarEstructuraConsejosNumeradosAudio(escenas);
@@ -143,6 +147,7 @@ describe("validarEstructuraConsejosNumeradosAudio", () => {
       tipo: "contador",
       desde: 0,
       hasta: 1,
+      etiqueta: "mensajes nuevos",
       eventos: [{ palabra: 0, accion: "sube" }],
     });
     const escenas = [ganchoMalo, VALOR_1_OK, VALOR_2_OK, VALOR_3_OK, MARCA_OK, CTA_OK];
@@ -167,6 +172,7 @@ describe("validarEstructuraConsejosNumeradosAudio", () => {
       tipo: "contador",
       desde: 0,
       hasta: 3,
+      etiqueta: "pasos aplicados",
       eventos: [{ palabra: 0, accion: "sube" }],
     });
     const escenas = [GANCHO_OK, valorEnumerado, VALOR_2_OK, VALOR_3_OK, MARCA_OK, CTA_OK];
@@ -175,11 +181,11 @@ describe("validarEstructuraConsejosNumeradosAudio", () => {
   });
 
   it("caso real (staging, 2do round): 'Segundo, verifica dos cosas' es UN consejo con un número dentro, no una enumeración -- sin hallazgo", () => {
+    // 14 palabras (índices 0-13); el cambio de estado va en "real"
+    // (índice 8, pasado el 30%) -- justo donde se da la solución.
     const valorConNumeroAdentro = escenaConAudio("e2", "valor", "Segundo, verifica dos cosas: que la foto sea real y represente lo que vendes.", {
-      tipo: "boton_estado",
-      texto: "Verificar foto",
-      texto_activo: "Verificada",
-      eventos: [{ palabra: 0, accion: "aparece" }],
+      tipo: "anuncio_boton",
+      eventos: [{ palabra: 8, accion: "cambia_estado" }],
     });
     const escenas = [GANCHO_OK, valorConNumeroAdentro, VALOR_2_OK, VALOR_3_OK, MARCA_OK, CTA_OK];
     const hallazgos = validarEstructuraConsejosNumeradosAudio(escenas);
@@ -191,7 +197,7 @@ describe("validarEstructuraConsejosNumeradosAudio", () => {
       "e2",
       "valor",
       "Uno: elige mensajes. Dos: usa fotos reales. Tres: pide escribirte por WhatsApp.",
-      { tipo: "contador", desde: 0, hasta: 3, eventos: [{ palabra: 0, accion: "sube" }] }
+      { tipo: "contador", desde: 0, hasta: 3, etiqueta: "consejos aplicados", eventos: [{ palabra: 0, accion: "sube" }] }
     );
     const escenas = [GANCHO_OK, valorEnumeradoConDosPuntos, VALOR_2_OK, VALOR_3_OK, MARCA_OK, CTA_OK];
     const hallazgos = validarEstructuraConsejosNumeradosAudio(escenas);
@@ -204,13 +210,52 @@ describe("validarEstructuraConsejosNumeradosAudio", () => {
 
   it("un consejo demasiado corto para ser concreto ('elige mensajes'): hallazgo de concreción", () => {
     const valorCorto = escenaConAudio("e2", "valor", "Elige mensajes.", {
-      tipo: "boton_estado",
-      texto: "Mensajes",
-      texto_activo: "Elegido",
-      eventos: [{ palabra: 0, accion: "aparece" }],
+      tipo: "anuncio_boton",
+      eventos: [{ palabra: 1, accion: "cambia_estado" }],
     });
     const escenas = [GANCHO_OK, valorCorto, VALOR_2_OK, VALOR_3_OK, MARCA_OK, CTA_OK];
     const hallazgos = validarEstructuraConsejosNumeradosAudio(escenas);
     expect(hallazgos.some((h) => h.escenaId === "e2" && h.mensaje.includes("muy corta"))).toBe(true);
+  });
+
+  // Caso real (16 nov 2026, 3ra revisión de staging): "Meta: mensajes"
+  // era un botón suelto (boton_estado) sin antes/después real, y un
+  // cursor sin nada que mostrara el problema (cursor_clic) -- "decía,
+  // no mostraba". Ninguno de los 2 cuenta ya como visual de consejo.
+  it("boton_estado en una escena 'valor': hallazgo -- es de 1 estado, no muestra un antes real", () => {
+    const valorConBotonSuelto = escenaConAudio("e2", "valor", "Responde cada mensaje en menos de un minuto.", {
+      tipo: "boton_estado",
+      texto: "Responder rápido",
+      texto_activo: "¡Hecho!",
+      eventos: [{ palabra: 0, accion: "aparece" }, { palabra: 4, accion: "clic" }],
+    });
+    const escenas = [GANCHO_OK, valorConBotonSuelto, VALOR_2_OK, VALOR_3_OK, MARCA_OK, CTA_OK];
+    const hallazgos = validarEstructuraConsejosNumeradosAudio(escenas);
+    expect(hallazgos.some((h) => h.escenaId === "e2" && h.mensaje.includes("2 estados"))).toBe(true);
+  });
+
+  it("cursor_clic en una escena 'valor': mismo hallazgo que boton_estado", () => {
+    const valorConCursorSuelto = escenaConAudio("e3", "valor", "Usa fotos reales de tu negocio, no imágenes genéricas.", {
+      tipo: "cursor_clic",
+      texto_boton: "Subir foto real",
+      eventos: [{ palabra: 0, accion: "aparece" }, { palabra: 5, accion: "clic" }],
+    });
+    const escenas = [GANCHO_OK, VALOR_1_OK, valorConCursorSuelto, VALOR_3_OK, MARCA_OK, CTA_OK];
+    const hallazgos = validarEstructuraConsejosNumeradosAudio(escenas);
+    expect(hallazgos.some((h) => h.escenaId === "e3" && h.mensaje.includes("2 estados"))).toBe(true);
+  });
+
+  it("contador sin etiqueta no compila (el schema la exige) -- con etiqueta, un número de contexto SÍ es válido para 'valor'", () => {
+    expect(validarEstructuraConsejosNumeradosAudio([GANCHO_OK, VALOR_1_OK, VALOR_2_OK, VALOR_3_OK, MARCA_OK, CTA_OK]).filter((h) => h.escenaId === "e4")).toHaveLength(0);
+  });
+
+  it("caso real: el cambio de estado cae en la primera palabra -- nunca se alcanza a mostrar el problema", () => {
+    const valorCambioMuyPronto = escenaConAudio("e2", "valor", "Responde cada mensaje en menos de un minuto.", {
+      tipo: "anuncio_boton",
+      eventos: [{ palabra: 0, accion: "cambia_estado" }],
+    });
+    const escenas = [GANCHO_OK, valorCambioMuyPronto, VALOR_2_OK, VALOR_3_OK, MARCA_OK, CTA_OK];
+    const hallazgos = validarEstructuraConsejosNumeradosAudio(escenas);
+    expect(hallazgos.some((h) => h.escenaId === "e2" && h.mensaje.includes("muy al principio"))).toBe(true);
   });
 });

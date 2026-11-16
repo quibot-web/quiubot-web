@@ -9,7 +9,7 @@ import type { Guion } from "../guion.schema";
 import { familiaDeFuente } from "../fuentes";
 import { FondoMarca } from "../capas/FondoMarca";
 import { CapaLogo } from "../capas/Logo";
-import { CapaBucle } from "../capas/Bucle";
+import { CapaBucleAudio } from "./CapaBucleAudio";
 import { ZonaSegura } from "../capas/ZonaSegura";
 import { CapaVoz } from "./CapaVoz";
 import { CapaMusicaConDucking } from "./CapaMusicaConDucking";
@@ -131,7 +131,7 @@ export function ReelAutomatico({ guion, pistaMusicaUrl, efectos = [], mostrarZon
       <TransitionSeries>{nodosEscenas}</TransitionSeries>
 
       <CapaLogo tema={tema} />
-      <CapaBucle guion={guion} />
+      <CapaBucleAudio guion={guion} />
       {pistaMusicaUrl && (
         <CapaMusicaConDucking url={pistaMusicaUrl} volumenNormal={guion.musica.volumen} volumenConVoz={guion.musica.volumen * 0.3} inicioVoz_s={primeraInicio_s} finVoz_s={ultimaFin_s} />
       )}

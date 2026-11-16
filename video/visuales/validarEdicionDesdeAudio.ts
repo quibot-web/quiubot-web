@@ -55,6 +55,17 @@ export function validarEdicionDesdeAudio(escenas: Guion["escenas"]): HallazgoEdi
 const ESTRUCTURA_CONSEJOS_NUMERADOS: BloqueGuion[] = ["gancho", "valor", "valor", "valor", "marca", "cta"];
 const MIN_PALABRAS_CONSEJO_CONCRETO = 5;
 
+// Únicos tipos de 2 estados (problema->arreglo) de verdad -- boton_estado/
+// cursor_clic quedan afuera a propósito (pedido explícito, 3ra
+// revisión de staging): son UN estado con una acción, no muestran un
+// "antes" real del consejo. celular_chat tampoco entra acá (es el
+// visual del gancho/marca, no de un consejo puntual).
+const TIPOS_VISUAL_VALOR = new Set(["anuncio_boton", "conexion_whatsapp", "respuesta_lenta", "contador"]);
+// El cambio de estado debe caer, como mínimo, a este punto de la
+// narracion (fracción del total de palabras) -- si cae muy al
+// principio, el "problema" nunca llega a mostrarse de verdad.
+const FRACCION_MINIMA_ANTES_DEL_CAMBIO = 0.3;
+
 // Caso real (16 nov 2026, 2do round de revisión): la regla original
 // contaba CUALQUIER palabra "uno/dos/tres/primero/segundo/tercero" en
 // toda la narracion, sin importar si era un MARCADOR de enumeración o
@@ -125,6 +136,33 @@ export function validarEstructuraConsejosNumeradosAudio(escenas: Guion["escenas"
         escenaId: escena.id,
         mensaje: `La narracion "${narracion}" es muy corta para ser un consejo concreto y entendible por sí solo (mínimo ${MIN_PALABRAS_CONSEJO_CONCRETO} palabras) -- escribe la acción completa, no un fragmento (ej. "Responde cada mensaje en menos de un minuto.", no "Responde rápido.").`,
       });
+    }
+
+    // Pedido explícito (16 nov 2026, 3ra revisión de staging): "cada
+    // escena valor usa un visual de 2 estados (problema->arreglo), y
+    // el cambio de estado está amarrado a la palabra donde se da la
+    // solución -- ni botones sueltos ni contadores sin contexto". Caso
+    // real que lo motivó: un botón "Meta: mensajes" sin antes/después,
+    // un cursor sin nada que mostrara el problema, un "2" sin etiqueta
+    // mientras la voz hablaba de fotos reales -- "decía, no mostraba".
+    const visual = escena.visual;
+    if (visual && !TIPOS_VISUAL_VALOR.has(visual.tipo)) {
+      hallazgos.push({
+        escenaId: escena.id,
+        mensaje: `Cada escena "valor" muestra el consejo con un visual de 2 estados (problema->arreglo): ${[...TIPOS_VISUAL_VALOR].join(", ")} -- llegó "${visual.tipo}". Un botón o cursor sueltos no muestran el antes y el después del consejo, cámbialo por uno de esos tipos.`,
+      });
+    } else if (visual) {
+      const totalPalabras = contarPalabras(narracion);
+      // "contador" puede traer varios eventos ("sube" por cada paso) --
+      // el que importa para este chequeo es el ÚLTIMO (el "arreglo",
+      // el valor final); los otros 3 tipos son de un único evento.
+      const cuadroCambioPalabra = Math.max(...eventosDeVisual(visual).map((e) => e.palabra));
+      if (totalPalabras > 0 && cuadroCambioPalabra < Math.ceil(totalPalabras * FRACCION_MINIMA_ANTES_DEL_CAMBIO)) {
+        hallazgos.push({
+          escenaId: escena.id,
+          mensaje: `El cambio de estado (palabra ${cuadroCambioPalabra} de ${totalPalabras}) pasa muy al principio de "${narracion}" -- no alcanza a mostrarse el problema antes del arreglo. Ponlo más cerca de donde la narracion da la solución, no en las primeras palabras.`,
+        });
+      }
     }
   }
 

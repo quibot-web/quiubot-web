@@ -7,6 +7,9 @@ import { CursorClicEventos } from "./CursorClicEventos";
 import { BotonEstado } from "./BotonEstado";
 import { ContadorGigante, valorContadorEnFrame } from "./Contador";
 import { TarjetaSimple } from "./TarjetaSimple";
+import { AnuncioBotonVisual } from "./AnuncioBotonVisual";
+import { ConexionWhatsappVisual } from "./ConexionWhatsappVisual";
+import { RespuestaLentaVisual } from "./RespuestaLentaVisual";
 import { COLOR_ALERTA, COLOR_EXITO } from "./acento";
 import { TARJETA_ALTURA_PORCENTAJE, TARJETA_TOP_PORCENTAJE } from "./geometria";
 
@@ -123,7 +126,7 @@ export function renderizarVisual(visual: Visual, ctx: ContextoVisual) {
       return (
         <ZonaVisual>
           <TarjetaSimple>
-            <ContadorGigante valor={valor} color={colorDeBloque(ctx.bloque)} />
+            <ContadorGigante valor={valor} etiqueta={visual.etiqueta} color={colorDeBloque(ctx.bloque)} />
           </TarjetaSimple>
         </ZonaVisual>
       );
@@ -143,6 +146,25 @@ export function renderizarVisual(visual: Visual, ctx: ContextoVisual) {
           </TarjetaSimple>
         </ZonaVisual>
       );
+    }
+
+    // Los 3 siguientes son de 2 estados (problema->arreglo) y se
+    // posicionan solos (mismo criterio que CelularChat) -- nunca
+    // dentro de ZonaVisual/TarjetaSimple, ya traen su propia tarjeta
+    // (o, en conexion_whatsapp, 2 tarjetas apiladas).
+    case "anuncio_boton": {
+      const cuadroCambia = cuadroDePalabra(visual.eventos[0].palabra, ctx);
+      return <AnuncioBotonVisual frame={ctx.frame} fps={ctx.fps} tema={ctx.tema} cuadroCambia={cuadroCambia} />;
+    }
+
+    case "conexion_whatsapp": {
+      const cuadroCambia = cuadroDePalabra(visual.eventos[0].palabra, ctx);
+      return <ConexionWhatsappVisual frame={ctx.frame} fps={ctx.fps} tema={ctx.tema} cuadroCambia={cuadroCambia} />;
+    }
+
+    case "respuesta_lenta": {
+      const cuadroCambia = cuadroDePalabra(visual.eventos[0].palabra, ctx);
+      return <RespuestaLentaVisual frame={ctx.frame} fps={ctx.fps} cuadroCambia={cuadroCambia} />;
     }
   }
 }

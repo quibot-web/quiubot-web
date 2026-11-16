@@ -8,7 +8,7 @@
 // puramente ilustrativo (ej. "nuevos: 0->3" sin afirmar nada real) o
 // una cifra real que el usuario dio.
 import { interpolate } from "remotion";
-import { TAMANO_FUENTE_CONTADOR_GIGANTE } from "./tamanos";
+import { TAMANO_FUENTE_CONTADOR_GIGANTE, TAMANO_FUENTE_ETIQUETA_CONTADOR_GIGANTE } from "./tamanos";
 
 // Bug real encontrado con una prueba real en navegador (16 nov 2026):
 // interpolate() exige un inputRange ESTRICTAMENTE creciente -- si el
@@ -59,6 +59,16 @@ export function ContadorBadge({ valor, color, colorTexto, tamano = 44 }: { valor
 // de escala que el "NumeroGigante" de CelularChat (fontSize 260) pero
 // para cuando el número es el protagonista solo de la tarjeta, no de
 // un mockup de chat encima.
-export function ContadorGigante({ valor, color }: { valor: number; color: string }) {
-  return <span style={{ fontSize: TAMANO_FUENTE_CONTADOR_GIGANTE, fontWeight: 900, color, lineHeight: 1 }}>{valor}</span>;
+//
+// "etiqueta" es OBLIGATORIA (video/visuales/schema.ts) -- pedido
+// explícito tras la 3ra revisión de staging: un número solo "no
+// muestra" nada, la etiqueta es lo que lo convierte en un dato que se
+// entiende.
+export function ContadorGigante({ valor, etiqueta, color }: { valor: number; etiqueta: string; color: string }) {
+  return (
+    <div style={{ display: "flex", flexDirection: "column", alignItems: "center", gap: 6 }}>
+      <span style={{ fontSize: TAMANO_FUENTE_CONTADOR_GIGANTE, fontWeight: 900, color, lineHeight: 1 }}>{valor}</span>
+      <span style={{ fontSize: TAMANO_FUENTE_ETIQUETA_CONTADOR_GIGANTE, fontWeight: 800, color: "#444" }}>{etiqueta}</span>
+    </div>
+  );
 }
