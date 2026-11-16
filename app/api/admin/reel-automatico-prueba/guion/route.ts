@@ -39,7 +39,11 @@ const TIMEOUT_OPENAI_MS = 60_000;
 const MAX_REINTENTOS = 2;
 const RECETA_ID = "consejos_numerados" as const;
 const DURACION_OBJETIVO_S = 16;
-const VOZ_POR_DEFECTO = "nova";
+// Elegida por Juan José entre 3 muestras reales (cedar/nova/onyx)
+// generadas con generarVoz() -- "cedar" quedó como default del código
+// Y guardada en marcas.voz_tts para Quiubot (esta columna solo pisa el
+// default si una marca puntual pide otra voz distinta).
+const VOZ_POR_DEFECTO = "cedar";
 
 async function llamarOpenAI(apiKey: string, prompt: string): Promise<string> {
   const controller = new AbortController();
