@@ -76,7 +76,14 @@ const CONTEXTO_BASE: ContextoNegocioDirector = {
   },
 };
 
-const USUARIO = { id: "user-1", meta_ad_account_id: "act_1", meta_access_token: "token" };
+const USUARIO = {
+  id: "user-1",
+  email: "usuario1@quiubot.test",
+  meta_ad_account_id: "act_1",
+  meta_access_token: "token",
+  meta_pixel_id: null,
+  meta_page_id: null,
+};
 
 beforeEach(() => {
   llamarDirectorMock.mockReset();
