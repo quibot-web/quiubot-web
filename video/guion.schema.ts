@@ -3,6 +3,7 @@ import { z } from "zod";
 // Remotion (Studio, npm run render, el worker de Fase 1b) no entiende el
 // alias de tsconfig, solo lo resuelve el bundler de Next.
 import { AnalisisPiezaSchema } from "../app/lib/analisisPieza";
+import { VisualSchema } from "./visuales/schema";
 
 // Ids reales de objetivos_config (ver app/lib/metas.ts -- OBJETIVOS_CATALOGO,
 // confirmados contra la tabla objetivos_config). Cada uno tiene su receta en
@@ -83,6 +84,18 @@ const Subtitulo = z.object({
 });
 
 const PRECIO_COP = /^\$[\d.]+$/;
+
+// Conteo de palabras consistente con la normalización que hace
+// generarVoz()/alinearPalabras() antes de mandar el texto a TTS
+// (docs/diseno/plan_contenido_organico_fase_b_v2.md, punto 3) --
+// espacios colapsados, sin saltos de línea. No convierte números a
+// letras acá (eso es una regla del prompt, no algo que esta función
+// pueda inferir de forma segura) -- solo cuenta cuántos "tokens"
+// separados por espacio hay, que es lo que importa para validar que
+// un índice de "evento.palabra" exista de verdad.
+export function contarPalabras(texto: string): number {
+  return texto.trim().split(/\s+/).filter(Boolean).length;
+}
 
 const ParamsGanchoTexto = z.object({
   texto: z.string().min(1).max(60),
@@ -198,6 +211,22 @@ const EscenaBase = {
   // demás escenas ya tienen su propio texto grande en pantalla, uno
   // duplicado encima se siente repetido ("sin subtítulo duplicado").
   subtitulo: Subtitulo.optional(),
+  // Fase B v2.0 (docs/diseno/plan_contenido_organico_fase_b_v2.md) --
+  // solo uso "organico" (exigido en el superRefine de GuionSchema, no
+  // acá, mismo criterio que gancho_tipo/publicacion). "narracion" es
+  // lo que se narra en voz (generarVoz()), de donde además se derivan
+  // los subtítulos sincronizados -- distinto de "subtitulo" arriba,
+  // que es un titular grande y estático, no ligado a audio.
+  // duracion_s se queda como estimación de la IA para el prompt, pero
+  // deja de ser lo que el render usa: el render usa los tiempos reales
+  // por palabra de la narración (ver "visual.eventos" más abajo).
+  narracion: z.string().min(1).max(600).optional(),
+  // "visual" decide qué muestra la escena -- "eventos" amarra el
+  // ritmo visual a palabras concretas de "narracion" (nunca a
+  // segundos, la IA no sabe cuánto dura hablada cada palabra). Se
+  // valida contra la cantidad real de palabras en el superRefine de
+  // GuionSchema, porque necesita leer "narracion" de la MISMA escena.
+  visual: VisualSchema.optional(),
 };
 
 export const EscenaSchema = z.discriminatedUnion("tipo", [
