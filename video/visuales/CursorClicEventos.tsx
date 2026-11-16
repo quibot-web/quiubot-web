@@ -9,8 +9,24 @@
 // adivinar un 60%.
 import { interpolate, spring } from "remotion";
 
+// Bug real encontrado con una prueba real en navegador (16 nov 2026):
+// interpolate() exige un eje de entrada ESTRICTAMENTE creciente --
+// cuadroAparece y cuadroClic vienen de palabras DISTINTAS (visual.eventos,
+// video/visuales/index.tsx), pero esas palabras pueden redondear al
+// MISMO cuadro si quedan muy cerca en el audio real (los tiempos de
+// generarVoz() son en segundos, Math.round() a cuadros) -- ahí
+// Remotion tiraba "inputRange must be strictly monotonically
+// increasing" y tumbaba el render entero. Con el mismo cuadro para
+// "aparece" y "clic" no hay nada que interpolar: el cursor ya llegó
+// en cuanto aparece. Función pura aparte (no solo inline) para poder
+// probarla sin montar el componente.
+export function calcularLlegadaCursor(frame: number, cuadroAparece: number, cuadroClic: number): number {
+  if (cuadroAparece === cuadroClic) return frame >= cuadroAparece ? 1 : 0;
+  return interpolate(frame, [cuadroAparece, cuadroClic], [0, 1], { extrapolateLeft: "clamp", extrapolateRight: "clamp" });
+}
+
 export function CursorClicEventos({ frame, fps, cuadroAparece, cuadroClic }: { frame: number; fps: number; cuadroAparece: number; cuadroClic: number }) {
-  const llegada = interpolate(frame, [cuadroAparece, cuadroClic], [0, 1], { extrapolateLeft: "clamp", extrapolateRight: "clamp" });
+  const llegada = calcularLlegadaCursor(frame, cuadroAparece, cuadroClic);
   const clic = spring({ frame: frame - cuadroClic, fps, config: { damping: 6, mass: 0.4 } });
   const escalaCursor = 1 - Math.sin(Math.min(clic, 1) * Math.PI) * 0.3;
   return (

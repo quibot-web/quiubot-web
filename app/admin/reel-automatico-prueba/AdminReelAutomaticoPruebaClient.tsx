@@ -32,56 +32,155 @@ const LICENCIA_REMOTION = "free-license";
 // completas en total como máximo (1 + 2 reintentos).
 const MAX_REINTENTOS_QC = 2;
 
-// Bug real reportado (staging, 16 nov 2026): el primer cuadro salía
-// negro en el control de calidad. Ningún componente del molde funde
-// desde negro (FondoMarca pinta su degradado desde el cuadro 0, sin
-// fade -- confirmado leyendo el código) -- era la extracción: "onseeked"
-// dispara en cuanto el navegador ACEPTÓ el seek, no cuando el cuadro
-// ya está decodificado y pintado en el buffer que lee drawImage(). Acá
-// se espera además a que el navegador confirme que presentó un cuadro
-// nuevo (requestVideoFrameCallback) antes de capturar.
-function esperarCuadroPresentado(video: HTMLVideoElement): Promise<void> {
-  if (typeof video.requestVideoFrameCallback === "function") {
-    return new Promise((resolve) => video.requestVideoFrameCallback(() => resolve()));
-  }
-  // Navegadores sin esa API (no debería pasar en Chrome, que es el
-  // único soportado hoy para renderMediaOnWeb) -- 2 rAF + un margen
-  // chico es el mejor sustituto sin esa confirmación real.
-  return new Promise((resolve) => requestAnimationFrame(() => requestAnimationFrame(() => setTimeout(resolve, 50))));
-}
+// Bug real reportado (staging, 16 nov 2026): el arnés se quedaba
+// colgado para siempre en "extrayendo cuadros/revisando audio", tanto
+// en Safari como en Chrome (con pestaña oculta o al frente). Causa
+// real: "onseeked"/requestVideoFrameCallback pueden simplemente NUNCA
+// disparar -- los navegadores frenan el decodificador de video y los
+// callbacks de compositor cuando la pestaña pasa a segundo plano, y
+// algunos (Safari) tienen fallas conocidas buscando sobre un <video>
+// de blob que nunca reprodujo nada. Por eso TODA esta sección tiene
+// un tiempo límite explícito en cada paso, con una salida de
+// emergencia que SIEMPRE resuelve (nunca deja la promesa colgada) --
+// ningún paso puede quedarse esperando para siempre.
+const TIMEOUT_METADATA_MS = 10_000;
+const TIMEOUT_SEEK_MS = 5_000;
+const TIMEOUT_RVFC_MS = 1_500;
+const TIMEOUT_CUADRO_TOTAL_MS = 8_000;
+const TIMEOUT_AUDIO_MS = 10_000;
+const TIMEOUT_FASE_CONTROL_CALIDAD_MS = 120_000;
 
-async function extraerCuadrosClave(blob: Blob, duracionS: number, etiquetasYSegundos: { etiqueta: string; segundo: number }[]): Promise<{ etiqueta: string; dataUrl: string }[]> {
-  const url = URL.createObjectURL(blob);
-  const video = document.createElement("video");
-  video.src = url;
-  video.muted = true;
-  await new Promise<void>((resolve, reject) => {
-    video.onloadedmetadata = () => resolve();
-    video.onerror = () => reject(new Error("No se pudo leer el video renderizado para extraer cuadros."));
+function conTimeout<T>(promesa: Promise<T>, ms: number, mensajeTimeout: string): Promise<T> {
+  let timer: ReturnType<typeof setTimeout>;
+  const timeout = new Promise<never>((_, reject) => {
+    timer = setTimeout(() => reject(new Error(mensajeTimeout)), ms);
   });
-
-  const canvas = document.createElement("canvas");
-  canvas.width = video.videoWidth || 1080;
-  canvas.height = video.videoHeight || 1920;
-  const ctx = canvas.getContext("2d");
-  if (!ctx) throw new Error("No se pudo preparar el lienzo para extraer cuadros.");
-
-  const resultados: { etiqueta: string; dataUrl: string }[] = [];
-  for (const { etiqueta, segundo } of etiquetasYSegundos) {
-    const objetivo = Math.min(Math.max(segundo, 0), Math.max(duracionS - 0.05, 0));
-    await new Promise<void>((resolve, reject) => {
-      video.onseeked = () => resolve();
-      video.onerror = () => reject(new Error(`No se pudo buscar el cuadro de "${etiqueta}".`));
-      video.currentTime = objetivo;
-    });
-    await esperarCuadroPresentado(video);
-    ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
-    resultados.push({ etiqueta, dataUrl: canvas.toDataURL("image/jpeg", 0.85) });
-  }
-
-  URL.revokeObjectURL(url);
-  return resultados;
+  return Promise.race([promesa, timeout]).finally(() => clearTimeout(timer)) as Promise<T>;
 }
+
+// Espera un evento del <video> con tiempo límite -- a diferencia de
+// conTimeout(), esto NUNCA rechaza: devuelve false si se agotó el
+// tiempo, para que quien llama decida qué hacer (nunca un throw que
+// tumbe todo el proceso por un solo cuadro).
+function esperarEventoVideo(video: HTMLVideoElement, evento: "loadedmetadata" | "seeked", ms: number): Promise<boolean> {
+  return new Promise((resolve) => {
+    let resuelto = false;
+    function limpiar() {
+      video.removeEventListener(evento, onEvento);
+      clearTimeout(timer);
+    }
+    function onEvento() {
+      if (resuelto) return;
+      resuelto = true;
+      limpiar();
+      resolve(true);
+    }
+    const timer = setTimeout(() => {
+      if (resuelto) return;
+      resuelto = true;
+      limpiar();
+      resolve(false);
+    }, ms);
+    video.addEventListener(evento, onEvento);
+  });
+}
+
+// Confirmación real de que el navegador ya PINTÓ el cuadro nuevo
+// (evita el bug del cuadro negro: "seeked" dispara en cuanto el
+// navegador ACEPTA el seek, no cuando el cuadro ya está decodificado
+// en el buffer que lee drawImage()) -- pero con un tiempo límite
+// corto: en una pestaña oculta, requestVideoFrameCallback puede no
+// responder nunca, y para entonces "seeked" ya disparó -- mejor
+// dibujar un cuadro "probablemente ya listo" que colgarse esperando
+// la confirmación perfecta.
+function esperarCuadroPresentado(video: HTMLVideoElement, ms: number): Promise<boolean> {
+  if (typeof video.requestVideoFrameCallback !== "function") {
+    return new Promise((resolve) => requestAnimationFrame(() => requestAnimationFrame(() => setTimeout(() => resolve(true), 50))));
+  }
+  return new Promise((resolve) => {
+    let resuelto = false;
+    const timer = setTimeout(() => {
+      if (resuelto) return;
+      resuelto = true;
+      resolve(false);
+    }, ms);
+    video.requestVideoFrameCallback(() => {
+      if (resuelto) return;
+      resuelto = true;
+      clearTimeout(timer);
+      resolve(true);
+    });
+  });
+}
+
+async function extraerUnCuadro(video: HTMLVideoElement, canvas: HTMLCanvasElement, ctx: CanvasRenderingContext2D, segundo: number, duracionS: number): Promise<string | null> {
+  const objetivo = Math.min(Math.max(segundo, 0), Math.max(duracionS - 0.05, 0));
+  video.currentTime = objetivo;
+  const buscoATiempo = await esperarEventoVideo(video, "seeked", TIMEOUT_SEEK_MS);
+  if (!buscoATiempo) return null;
+  await esperarCuadroPresentado(video, TIMEOUT_RVFC_MS);
+  try {
+    ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
+    return canvas.toDataURL("image/jpeg", 0.85);
+  } catch {
+    return null;
+  }
+}
+
+// dataUrl: null = "no se pudo extraer este cuadro a tiempo" -- NO es
+// un error que tumbe el proceso (pedido explícito): se marca así y
+// se sigue con el resto. onProgreso informa "cuadro N de M" para que
+// la pantalla nunca se vea colgada sin explicación.
+async function extraerCuadrosClave(
+  blob: Blob,
+  duracionS: number,
+  etiquetasYSegundos: { etiqueta: string; segundo: number }[],
+  onProgreso: (actual: number, total: number) => void
+): Promise<{ etiqueta: string; dataUrl: string | null }[]> {
+  const url = URL.createObjectURL(blob);
+  try {
+    const video = document.createElement("video");
+    video.src = url;
+    video.muted = true;
+    video.preload = "auto";
+
+    const cargoMetadata = await esperarEventoVideo(video, "loadedmetadata", TIMEOUT_METADATA_MS);
+    if (!cargoMetadata) throw new Error("El video renderizado no cargó a tiempo para extraer cuadros.");
+
+    // "Calienta" el decodificador -- mitigación real para navegadores
+    // (Safari en particular) que no resuelven nunca un seek sobre un
+    // <video> de blob que no llegó a reproducir ni un cuadro.
+    await video.play().then(() => video.pause()).catch(() => {});
+
+    const canvas = document.createElement("canvas");
+    canvas.width = video.videoWidth || 1080;
+    canvas.height = video.videoHeight || 1920;
+    const ctx = canvas.getContext("2d");
+    if (!ctx) throw new Error("No se pudo preparar el lienzo para extraer cuadros.");
+
+    const resultados: { etiqueta: string; dataUrl: string | null }[] = [];
+    for (let i = 0; i < etiquetasYSegundos.length; i++) {
+      const { etiqueta, segundo } = etiquetasYSegundos[i];
+      onProgreso(i + 1, etiquetasYSegundos.length);
+      let dataUrl: string | null;
+      try {
+        dataUrl = await conTimeout(extraerUnCuadro(video, canvas, ctx, segundo, duracionS), TIMEOUT_CUADRO_TOTAL_MS, "timeout");
+      } catch {
+        dataUrl = null;
+      }
+      resultados.push({ etiqueta, dataUrl });
+    }
+    return resultados;
+  } finally {
+    URL.revokeObjectURL(url);
+  }
+}
+
+// "no_verificado" (nunca "silencioso" por defecto) si decodeAudioData
+// se cuelga o falla -- no hay forma de distinguir "sí tiene audio"
+// de "no se pudo revisar" sin el dato real, así que nunca se asume
+// lo peor ni lo mejor, se lo dice claro al admin.
+type ResultadoSilencio = "silencioso" | "con_audio" | "no_verificado";
 
 // Silencio real del audio YA MEZCLADO (voz + música + efectos) -- el
 // único de los 2 casos documentados en el plan que se puede medir acá
@@ -89,7 +188,7 @@ async function extraerCuadrosClave(blob: Blob, duracionS: number, etiquetasYSegu
 // archivo final tal cual va a quedar. Umbral generoso (-45dB de RMS)
 // -- lo que importa es detectar "no hay NADA de audio", no afinar el
 // nivel ideal de mezcla.
-async function audioEstaEnSilencio(blob: Blob): Promise<boolean> {
+async function audioEstaEnSilencioInterno(blob: Blob): Promise<ResultadoSilencio> {
   const buffer = await blob.arrayBuffer();
   const AudioContextCtor = window.AudioContext || (window as unknown as { webkitAudioContext: typeof AudioContext }).webkitAudioContext;
   const contexto = new AudioContextCtor();
@@ -104,12 +203,20 @@ async function audioEstaEnSilencio(blob: Blob): Promise<boolean> {
         total += 1;
       }
     }
-    if (total === 0) return true;
+    if (total === 0) return "silencioso";
     const rms = Math.sqrt(sumaCuadrados / total);
     const db = 20 * Math.log10(rms || 1e-10);
-    return db < -45;
+    return db < -45 ? "silencioso" : "con_audio";
   } finally {
     await contexto.close().catch(() => {});
+  }
+}
+
+async function audioEstaEnSilencio(blob: Blob): Promise<ResultadoSilencio> {
+  try {
+    return await conTimeout(audioEstaEnSilencioInterno(blob), TIMEOUT_AUDIO_MS, "timeout");
+  } catch {
+    return "no_verificado";
   }
 }
 
@@ -130,12 +237,15 @@ function combinarHallazgosConImagenes(hallazgos: HallazgoVision[], cuadros: { et
 // Construye los mensajes de corrección que se le mandan de vuelta a
 // POST /guion (erroresPrevios) cuando el control de calidad rechaza un
 // intento -- mismo texto que ve la IA al reintentar por un fallo de
-// validación estructural (ver el comentario en esa ruta).
-function erroresDesdeQC(hallazgos: HallazgoVision[], silencio: boolean): string[] {
+// validación estructural (ver el comentario en esa ruta). "no_verificado"
+// NUNCA se trata como un fallo real (no hay evidencia de que algo esté
+// mal, solo que no se pudo confirmar) -- no dispara un reintento por
+// sí solo.
+function erroresDesdeQC(hallazgos: HallazgoVision[], silencio: ResultadoSilencio): string[] {
   const errores = hallazgos
     .filter((h) => h.pantalla_vacia || h.texto_superpuesto || h.contraste_bajo)
     .map((h) => `El control de calidad (visión) encontró un problema real en el cuadro "${h.cuadro}": ${h.nota}`);
-  if (silencio) errores.push("El audio final mezclado salió en silencio -- revisa que ninguna narracion haya quedado vacía o con un texto raro para la voz.");
+  if (silencio === "silencioso") errores.push("El audio final mezclado salió en silencio -- revisa que ninguna narracion haya quedado vacía o con un texto raro para la voz.");
   return errores;
 }
 
@@ -145,8 +255,13 @@ export default function AdminReelAutomaticoPruebaClient() {
   const [resumenGuion, setResumenGuion] = useState<ResultadoGuion | null>(null);
   const [progresoRender, setProgresoRender] = useState(0);
   const [hallazgosVision, setHallazgosVision] = useState<HallazgoConImagen[] | null>(null);
-  const [audioSilencioso, setAudioSilencioso] = useState<boolean | null>(null);
+  const [audioSilencioso, setAudioSilencioso] = useState<ResultadoSilencio | null>(null);
   const [intentoQC, setIntentoQC] = useState(0);
+  // Texto de progreso DENTRO de "extrayendo_cuadros"/"control_calidad"
+  // -- pedido explícito, para que la pantalla nunca se vea colgada sin
+  // explicación ("Extrayendo cuadro 3 de 8...", "Revisando audio...",
+  // "Consultando al modelo de visión...").
+  const [detalleProgreso, setDetalleProgreso] = useState<string | null>(null);
   const urlDescargaRef = useRef<string | null>(null);
   const [urlDescarga, setUrlDescarga] = useState<string | null>(null);
   // Descarga forzada del ÚLTIMO blob renderizado aunque no haya
@@ -236,26 +351,61 @@ export default function AdminReelAutomaticoPruebaClient() {
           { etiqueta: `escena_${t.escena_id}_inicio`, segundo: t.inicio_s + 0.15 },
           { etiqueta: `escena_${t.escena_id}_mitad`, segundo: (t.inicio_s + t.fin_s) / 2 },
         ]);
-        const [cuadros, silencio] = await Promise.all([extraerCuadrosClave(blob, duracionS, etiquetasYSegundos), audioEstaEnSilencio(blob)]);
-        setAudioSilencioso(silencio);
 
-        setFase("control_calidad");
-        const resCalidad = await fetch("/api/admin/reel-automatico-prueba/control-calidad", {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ cuadros }),
-        });
-        const dataCalidad = await resCalidad.json();
-        if (!resCalidad.ok) {
-          setError(dataCalidad.error || "No se pudo correr el control de calidad.");
-          setFase("error");
-          return;
-        }
-        const hallazgos = dataCalidad.hallazgos as HallazgoVision[];
-        setHallazgosVision(combinarHallazgosConImagenes(hallazgos, cuadros));
+        // Bug real (staging, 16 nov 2026): esta fase entera se quedaba
+        // colgada para siempre. Ahora, aparte de los tiempos límite de
+        // cada paso individual (ver las funciones de arriba), TODA la
+        // fase (extracción + audio + llamada a visión) tiene un tope
+        // final -- si algo imprevisto la cuelga igual, esto la corta
+        // con un mensaje claro en vez de dejar la pantalla sin avisar.
+        // Se devuelve el resultado en vez de mutar variables de afuera
+        // desde el closure -- TypeScript no sigue ese tipo de mutación
+        // para angostar el tipo en el código que viene después.
+        const { hallazgos, silencio } = await conTimeout(
+          (async (): Promise<{ hallazgos: HallazgoVision[]; silencio: ResultadoSilencio }> => {
+            const [cuadrosConFallidos, silencioDetectado] = await Promise.all([
+              extraerCuadrosClave(blob, duracionS, etiquetasYSegundos, (actual, total) => setDetalleProgreso(`Extrayendo cuadro ${actual} de ${total}...`)),
+              (async () => {
+                setDetalleProgreso("Revisando audio...");
+                return audioEstaEnSilencio(blob);
+              })(),
+            ]);
+            setAudioSilencioso(silencioDetectado);
+
+            const cuadrosValidos = cuadrosConFallidos.filter((c): c is { etiqueta: string; dataUrl: string } => c.dataUrl !== null);
+            const etiquetasFallidas = cuadrosConFallidos.filter((c) => c.dataUrl === null).map((c) => c.etiqueta);
+
+            setFase("control_calidad");
+            let hallazgosDetectados: HallazgoVision[] = [];
+            if (cuadrosValidos.length > 0) {
+              setDetalleProgreso("Consultando al modelo de visión...");
+              const resCalidad = await fetch("/api/admin/reel-automatico-prueba/control-calidad", {
+                method: "POST",
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify({ cuadros: cuadrosValidos }),
+              });
+              const dataCalidad = await resCalidad.json();
+              if (!resCalidad.ok) throw new Error(dataCalidad.error || "No se pudo correr el control de calidad.");
+              hallazgosDetectados = dataCalidad.hallazgos as HallazgoVision[];
+            }
+
+            const hallazgosFallidos: HallazgoConImagen[] = etiquetasFallidas.map((etiqueta) => ({
+              cuadro: etiqueta,
+              pantalla_vacia: false,
+              texto_superpuesto: false,
+              contraste_bajo: false,
+              nota: "No se pudo extraer este cuadro a tiempo (no cuenta como error -- no se pudo confirmar si está bien o mal).",
+            }));
+            setHallazgosVision([...combinarHallazgosConImagenes(hallazgosDetectados, cuadrosValidos), ...hallazgosFallidos]);
+
+            return { hallazgos: hallazgosDetectados, silencio: silencioDetectado };
+          })(),
+          TIMEOUT_FASE_CONTROL_CALIDAD_MS,
+          "El control de calidad tardó demasiado (más de 2 minutos) -- revisa la consola del navegador o inténtalo de nuevo."
+        );
 
         const hayProblemaVision = hallazgos.some((h) => h.pantalla_vacia || h.texto_superpuesto || h.contraste_bajo);
-        if (!hayProblemaVision && !silencio) {
+        if (!hayProblemaVision && silencio !== "silencioso") {
           const url = URL.createObjectURL(blob);
           urlDescargaRef.current = url;
           setUrlDescarga(url);
@@ -278,6 +428,8 @@ export default function AdminReelAutomaticoPruebaClient() {
     } catch (err) {
       setError(err instanceof Error ? err.message : "Algo falló generando el reel.");
       setFase("error");
+    } finally {
+      setDetalleProgreso(null);
     }
   }
 
@@ -304,8 +456,7 @@ export default function AdminReelAutomaticoPruebaClient() {
         )}
         {fase === "generando_guion" && <p>Generando guion con narración y visuales (IA) + voz real (TTS/transcripción)...</p>}
         {fase === "renderizando" && <p>Renderizando en el navegador... {progresoRender}%</p>}
-        {fase === "extrayendo_cuadros" && <p>Extrayendo cuadros clave y revisando el audio mezclado...</p>}
-        {fase === "control_calidad" && <p>Control de calidad por visión (gpt-4o)...</p>}
+        {(fase === "extrayendo_cuadros" || fase === "control_calidad") && <p>{detalleProgreso ?? "Preparando el control de calidad..."}</p>}
       </div>
 
       {resumenGuion && (
@@ -325,8 +476,11 @@ export default function AdminReelAutomaticoPruebaClient() {
         </div>
       )}
 
-      {audioSilencioso === true && (
+      {audioSilencioso === "silencioso" && (
         <p style={{ marginTop: 16, color: "#B42318", fontWeight: 700 }}>⚠️ El audio mezclado salió en silencio -- el reel no se entrega.</p>
+      )}
+      {audioSilencioso === "no_verificado" && (
+        <p style={{ marginTop: 16, color: "#966F00", fontWeight: 700 }}>⚠️ No se pudo revisar el audio a tiempo (no es necesariamente un error -- revisa el mp4 a oído si sigues dudando).</p>
       )}
 
       {hallazgosVision && (
