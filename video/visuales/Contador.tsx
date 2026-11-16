@@ -8,6 +8,7 @@
 // puramente ilustrativo (ej. "nuevos: 0->3" sin afirmar nada real) o
 // una cifra real que el usuario dio.
 import { interpolate } from "remotion";
+import { TAMANO_FUENTE_CONTADOR_GIGANTE } from "./tamanos";
 
 // Bug real encontrado con una prueba real en navegador (16 nov 2026):
 // interpolate() exige un inputRange ESTRICTAMENTE creciente -- si el
@@ -46,4 +47,18 @@ export function ContadorBadge({ valor, color, colorTexto, tamano = 44 }: { valor
       {valor}
     </div>
   );
+}
+
+// Bug real encontrado comparando cuadro a cuadro con el reel de
+// referencia aprobado (16 nov 2026): el visual "contador" standalone
+// (video/visuales/index.tsx) usaba ContadorBadge de arriba -- pensado
+// como una insignia CHICA (para meterla dentro del encabezado de
+// CelularChat, tamaño por defecto 44px) -- a tamano=130 fijo en un
+// lienzo de 1080px de ancho, quedaba como un "2" diminuto perdido en
+// medio de fondo vacío. Este es el tratamiento GRANDE, mismo criterio
+// de escala que el "NumeroGigante" de CelularChat (fontSize 260) pero
+// para cuando el número es el protagonista solo de la tarjeta, no de
+// un mockup de chat encima.
+export function ContadorGigante({ valor, color }: { valor: number; color: string }) {
+  return <span style={{ fontSize: TAMANO_FUENTE_CONTADOR_GIGANTE, fontWeight: 900, color, lineHeight: 1 }}>{valor}</span>;
 }

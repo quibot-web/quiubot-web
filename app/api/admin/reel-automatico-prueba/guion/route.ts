@@ -18,6 +18,7 @@ import { ajustarDuracionesProporcional, limpiarHashtags, limpiarNumeracionItemsL
 import { elegirPistaMusicalOrganica } from "@/app/lib/contenido";
 import { urlPistaMusical } from "@/app/lib/cloudinaryUrl";
 import { validarEdicionDesdeAudio, validarEstructuraConsejosNumeradosAudio } from "@/video/visuales/validarEdicionDesdeAudio";
+import { validarGeometriaMinima } from "@/video/visuales/validarGeometriaMinima";
 import { generarVoz } from "@/app/lib/videoOrganico/generarVoz";
 import { alinearPalabras } from "@/app/lib/videoOrganico/alinearPalabras";
 import { calcularHashNarracion } from "@/app/lib/videoOrganico/hashNarracion";
@@ -80,6 +81,23 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ error: "No autorizado" }, { status: 401 });
   }
   const emailBusqueda = session.user.email.trim().toLowerCase();
+
+  // Chequeo de tamaño mínimo (pedido explícito, revisión de staging
+  // del 16 nov 2026: "contador" quedaba como una insignia de 130px en
+  // fondo vacío, subtítulos a 38px) -- regla de CÓDIGO, no de visión:
+  // corre antes de gastar un solo peso en la IA o en generarVoz(), y
+  // antes de renderizar nada. Es un chequeo del MOLDE (constantes de
+  // geometría, no del guion -- nunca cambia por intento), así que si
+  // falla acá, ningún reintento lo va a arreglar -- es un bug de
+  // código que hay que corregir, no algo que la IA pueda escribir
+  // distinto.
+  const hallazgosGeometria = validarGeometriaMinima();
+  if (hallazgosGeometria.length > 0) {
+    return NextResponse.json(
+      { error: "El molde no cumple el tamaño mínimo -- esto es un bug de código, no de la IA.", resumenErrores: hallazgosGeometria.map((h) => `${h.elemento}: ${h.mensaje}`) },
+      { status: 500 }
+    );
+  }
 
   // Reintento dirigido (pedido explícito, plan punto 8): si el cliente
   // ya renderizó un intento anterior y el control de calidad (visión

@@ -5,7 +5,8 @@ import type { Visual } from "./schema";
 import { CelularChat } from "./CelularChat";
 import { CursorClicEventos } from "./CursorClicEventos";
 import { BotonEstado } from "./BotonEstado";
-import { ContadorBadge, valorContadorEnFrame } from "./Contador";
+import { ContadorGigante, valorContadorEnFrame } from "./Contador";
+import { TarjetaSimple } from "./TarjetaSimple";
 import { COLOR_ALERTA, COLOR_EXITO } from "./acento";
 import { TARJETA_ALTURA_PORCENTAJE, TARJETA_TOP_PORCENTAJE } from "./geometria";
 
@@ -105,9 +106,11 @@ export function renderizarVisual(visual: Visual, ctx: ContextoVisual) {
       // -- por eso va como children, nunca como hermano suelto.
       return (
         <ZonaVisual>
-          <BotonEstado texto={visual.texto_boton} tema={ctx.tema} progreso={progreso} activo={activo} colorActivo={colorDeBloque(ctx.bloque)}>
-            <CursorClicEventos frame={ctx.frame} fps={ctx.fps} cuadroAparece={cuadroAparece} cuadroClic={cuadroClic} />
-          </BotonEstado>
+          <TarjetaSimple>
+            <BotonEstado texto={visual.texto_boton} tema={ctx.tema} progreso={progreso} activo={activo} colorActivo={colorDeBloque(ctx.bloque)}>
+              <CursorClicEventos frame={ctx.frame} fps={ctx.fps} cuadroAparece={cuadroAparece} cuadroClic={cuadroClic} />
+            </BotonEstado>
+          </TarjetaSimple>
         </ZonaVisual>
       );
     }
@@ -119,7 +122,9 @@ export function renderizarVisual(visual: Visual, ctx: ContextoVisual) {
       const valor = valorContadorEnFrame(ctx.frame, cuadroInicio, cuadroFin, visual.desde, visual.hasta);
       return (
         <ZonaVisual>
-          <ContadorBadge valor={valor} color={colorDeBloque(ctx.bloque)} colorTexto="#fff" tamano={130} />
+          <TarjetaSimple>
+            <ContadorGigante valor={valor} color={colorDeBloque(ctx.bloque)} />
+          </TarjetaSimple>
         </ZonaVisual>
       );
     }
@@ -133,7 +138,9 @@ export function renderizarVisual(visual: Visual, ctx: ContextoVisual) {
       const activo = cuadroCambia !== null && ctx.frame >= cuadroCambia;
       return (
         <ZonaVisual>
-          <BotonEstado texto={activo ? visual.texto_activo : visual.texto} tema={ctx.tema} progreso={progreso} activo={activo} colorActivo={COLOR_EXITO} />
+          <TarjetaSimple>
+            <BotonEstado texto={activo ? visual.texto_activo : visual.texto} tema={ctx.tema} progreso={progreso} activo={activo} colorActivo={COLOR_EXITO} />
+          </TarjetaSimple>
         </ZonaVisual>
       );
     }

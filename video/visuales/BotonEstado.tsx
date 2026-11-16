@@ -4,11 +4,12 @@
 // EsquinaMarca son del molde del reel de referencia, no de la
 // biblioteca real todavía).
 import { colorTextoSobre, type TemaGuion } from "../tema";
+import { ANCHO_BOTON_PORCENTAJE_NUM, TAMANO_FUENTE_BOTON } from "./tamanos";
 
 // Fórmula exacta copiada del molde aprobado (molde.tsx) -- no un
 // porcentaje redondeado a mano: 88% de la zona segura (ANCHO_MAX_PX
 // real de Cta.tsx) * 80% del ancho real del botón dentro de eso.
-const ANCHO_BOTON_PORCENTAJE = `${(((1080 * 0.88 * 0.8) / 1080) * 100).toFixed(1)}%`;
+const ANCHO_BOTON_PORCENTAJE = `${ANCHO_BOTON_PORCENTAJE_NUM.toFixed(1)}%`;
 
 export function BotonEstado({
   texto,
@@ -40,7 +41,17 @@ export function BotonEstado({
   // la esquina real del botón.
   children?: React.ReactNode;
 }) {
-  const colorBoton = activo ? colorActivo : colorTextoSobre(tema.color_primario);
+  // Bug real encontrado comparando cuadro a cuadro con la referencia
+  // (16 nov 2026): el botón inactivo usaba colorTextoSobre(primario)
+  // como SU PROPIO fondo -- pensado para la época en que flotaba
+  // directo sobre el degradado de marca (ahí ese cálculo daba blanco,
+  // que SÍ se notaba contra el morado). Ahora vive dentro de
+  // TarjetaSimple (fondo blanco, video/visuales/index.tsx) -- un botón
+  // blanco sobre una tarjeta blanca queda invisible. El color de marca
+  // real como fondo (en vez de "lo que contrastaría con" el color de
+  // marca) es correcto en cualquier backdrop, y de paso se ve como un
+  // botón de marca real, no uno genérico blanco/negro.
+  const colorBoton = activo ? colorActivo : tema.color_primario;
   const colorTexto = activo ? "#fff" : colorTextoSobre(colorBoton);
   return (
     <div style={{ position: "relative", width: ANCHO_BOTON_PORCENTAJE }}>
@@ -51,7 +62,7 @@ export function BotonEstado({
           color: colorTexto,
           borderRadius: 999,
           padding: "26px 28px",
-          fontSize: 52,
+          fontSize: TAMANO_FUENTE_BOTON,
           fontWeight: 800,
           textAlign: "center",
           whiteSpace: "normal",

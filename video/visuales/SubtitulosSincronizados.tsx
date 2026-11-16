@@ -1,6 +1,7 @@
 import { AbsoluteFill, useCurrentFrame } from "remotion";
 import { colorTextoSobre, contrasteSuficiente, type TemaGuion } from "../tema";
 import { familiaDeFuente } from "../fuentes";
+import { TAMANO_FUENTE_SUBTITULOS } from "./tamanos";
 
 // Fase B v2.0 (docs/diseno/plan_contenido_organico_fase_b_v2.md,
 // punto 5). Palabra por palabra, dentro de zona segura (14%-65%,
@@ -32,6 +33,37 @@ export type PalabraEnCuadros = { texto: string; inicioCuadro: number; finCuadro:
 const COLOR_FONDO_SUBTITULO = "rgba(0,0,0,0.65)";
 const COLOR_TEXTO_NORMAL = "#fff";
 
+// Bug real reportado (revisión de staging, 16 nov 2026): antes se
+// mostraban TODAS las palabras de la narración de la escena a la vez
+// (hasta 16, por el prompt) -- con una narración larga, eso se veía
+// como "una franja oscura con letra diminuta" porque el texto tenía
+// que envolver a 3-4 líneas para caber. "2 líneas como máximo" exige
+// mostrar solo un TRAMO a la vez (como TikTok/Reels reales), no todo
+// el párrafo -- se reparte en páginas de 4 palabras (conservador: a
+// 44px, 4 palabras normales caben sobradas en 2 líneas incluso si
+// alguna es larga) y se muestra la página que contiene la palabra
+// activa.
+const PALABRAS_POR_PAGINA = 4;
+
+function construirPaginas(palabras: PalabraEnCuadros[]): PalabraEnCuadros[][] {
+  const paginas: PalabraEnCuadros[][] = [];
+  for (let i = 0; i < palabras.length; i += PALABRAS_POR_PAGINA) {
+    paginas.push(palabras.slice(i, i + PALABRAS_POR_PAGINA));
+  }
+  return paginas;
+}
+
+// La página que corresponde al cuadro actual: la última cuya primera
+// palabra ya empezó a sonar -- antes de que la primera palabra de la
+// escena empiece, se queda en la página 0 (nunca una pantalla vacía
+// mientras el visual ya apareció).
+function paginaDeCuadro(paginas: PalabraEnCuadros[][], frame: number): PalabraEnCuadros[] {
+  for (let i = paginas.length - 1; i >= 0; i--) {
+    if (paginas[i][0] && frame >= paginas[i][0].inicioCuadro) return paginas[i];
+  }
+  return paginas[0] ?? [];
+}
+
 export function SubtitulosSincronizados({ palabras, tema }: { palabras: PalabraEnCuadros[]; tema: TemaGuion }) {
   const frame = useCurrentFrame();
   const colorTextoActivo = colorTextoSobre(tema.color_primario);
@@ -48,6 +80,8 @@ export function SubtitulosSincronizados({ palabras, tema }: { palabras: PalabraE
   const colorTextoEnCapsula = capsulaActivaOk ? colorTextoActivo : "#fff";
 
   if (palabras.length === 0) return null;
+  const paginas = construirPaginas(palabras);
+  const palabrasVisibles = paginaDeCuadro(paginas, frame);
 
   return (
     <AbsoluteFill
@@ -70,12 +104,12 @@ export function SubtitulosSincronizados({ palabras, tema }: { palabras: PalabraE
           borderRadius: 16,
           padding: "14px 22px",
           fontFamily: familiaDeFuente(tema.fuente),
-          fontSize: 38,
+          fontSize: TAMANO_FUENTE_SUBTITULOS,
           fontWeight: 800,
           lineHeight: 1.2,
         }}
       >
-        {palabras.map((palabra, i) => {
+        {palabrasVisibles.map((palabra, i) => {
           const activa = frame >= palabra.inicioCuadro && frame < palabra.finCuadro;
           return (
             <span

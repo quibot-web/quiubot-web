@@ -5,6 +5,7 @@ import { AbsoluteFill, Img, interpolate, spring } from "remotion";
 import { respiracion, type TemaGuion } from "../tema";
 import { ContadorBadge } from "./Contador";
 import { TARJETA_ALTURA_PORCENTAJE, TARJETA_ANCHO_PORCENTAJE, TARJETA_TOP_PORCENTAJE } from "./geometria";
+import { TAMANO_FUENTE_MENSAJE, TAMANO_FUENTE_NOTIFICACION, TAMANO_FUENTE_NUMERO_GIGANTE, TAMANO_FUENTE_ETIQUETA_NUMERO_GIGANTE } from "./tamanos";
 
 const COLOR_WHATSAPP = "#25D366";
 
@@ -99,7 +100,7 @@ function BurbujaMensaje({ mensaje, frame, fps }: { mensaje: MensajeChat; frame: 
         color: mensaje.propio ? "#fff" : "#111",
         borderRadius: mensaje.propio ? "22px 22px 6px 22px" : "22px 22px 22px 6px",
         padding: "20px 26px",
-        fontSize: 40,
+        fontSize: TAMANO_FUENTE_MENSAJE,
         fontWeight: 700,
         maxWidth: "88%",
         opacity: progreso,
@@ -130,7 +131,7 @@ function FranjaNotificacion({ cuadroLlegada, frame, fps, compacta }: { cuadroLle
       }}
     >
       <span style={{ fontSize: compacta ? 26 : 42 }}>💬</span>
-      <span style={{ fontSize: compacta ? 22 : 40, fontWeight: 700, color: "#222" }}>Nuevo mensaje de un cliente</span>
+      <span style={{ fontSize: compacta ? 22 : TAMANO_FUENTE_NOTIFICACION, fontWeight: 700, color: "#222" }}>Nuevo mensaje de un cliente</span>
     </div>
   );
 }
@@ -138,8 +139,8 @@ function FranjaNotificacion({ cuadroLlegada, frame, fps, compacta }: { cuadroLle
 function NumeroGigante({ valor, color, opacidad }: { valor: number; color: string; opacidad: number }) {
   return (
     <div style={{ flexGrow: 1, display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", gap: 6, opacity: opacidad }}>
-      <span style={{ fontSize: 260, fontWeight: 900, color, lineHeight: 1 }}>{valor}</span>
-      <span style={{ fontSize: 44, fontWeight: 800, color: "#444" }}>mensajes nuevos</span>
+      <span style={{ fontSize: TAMANO_FUENTE_NUMERO_GIGANTE, fontWeight: 900, color, lineHeight: 1 }}>{valor}</span>
+      <span style={{ fontSize: TAMANO_FUENTE_ETIQUETA_NUMERO_GIGANTE, fontWeight: 800, color: "#444" }}>mensajes nuevos</span>
     </div>
   );
 }
