@@ -15,9 +15,33 @@ type FaseArnes = "inactivo" | "generando_guion" | "renderizando" | "extrayendo_c
 
 type HallazgoVision = { cuadro: string; pantalla_vacia: boolean; texto_superpuesto: boolean; contraste_bajo: boolean; nota: string };
 
-type ResultadoGuion = { guion: Guion; pistaMusicaUrl: string | null; voz: string; puntajeAlineacion: number; intentos: number };
+type ResultadoGuion = { guion: Guion; pistaMusicaUrl: string | null; voz: string; puntajeAlineacion: number; intentosGuion: number; seRegeneroPorQC: boolean };
 
 const LICENCIA_REMOTION = "free-license";
+// Plan punto 8: "si algo falla, se reintenta... hasta 2 veces". Son
+// intentos de CONTROL DE CALIDAD (render + visión + audio), aparte de
+// los intentos de validación estructural que ya corren dentro de cada
+// llamada a /guion (MAX_REINTENTOS en esa ruta) -- 3 corridas
+// completas en total como máximo (1 + 2 reintentos).
+const MAX_REINTENTOS_QC = 2;
+
+// Bug real reportado (staging, 16 nov 2026): el primer cuadro salía
+// negro en el control de calidad. Ningún componente del molde funde
+// desde negro (FondoMarca pinta su degradado desde el cuadro 0, sin
+// fade -- confirmado leyendo el código) -- era la extracción: "onseeked"
+// dispara en cuanto el navegador ACEPTÓ el seek, no cuando el cuadro
+// ya está decodificado y pintado en el buffer que lee drawImage(). Acá
+// se espera además a que el navegador confirme que presentó un cuadro
+// nuevo (requestVideoFrameCallback) antes de capturar.
+function esperarCuadroPresentado(video: HTMLVideoElement): Promise<void> {
+  if (typeof video.requestVideoFrameCallback === "function") {
+    return new Promise((resolve) => video.requestVideoFrameCallback(() => resolve()));
+  }
+  // Navegadores sin esa API (no debería pasar en Chrome, que es el
+  // único soportado hoy para renderMediaOnWeb) -- 2 rAF + un margen
+  // chico es el mejor sustituto sin esa confirmación real.
+  return new Promise((resolve) => requestAnimationFrame(() => requestAnimationFrame(() => setTimeout(resolve, 50))));
+}
 
 async function extraerCuadrosClave(blob: Blob, duracionS: number, etiquetasYSegundos: { etiqueta: string; segundo: number }[]): Promise<{ etiqueta: string; dataUrl: string }[]> {
   const url = URL.createObjectURL(blob);
@@ -43,6 +67,7 @@ async function extraerCuadrosClave(blob: Blob, duracionS: number, etiquetasYSegu
       video.onerror = () => reject(new Error(`No se pudo buscar el cuadro de "${etiqueta}".`));
       video.currentTime = objetivo;
     });
+    await esperarCuadroPresentado(video);
     ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
     resultados.push({ etiqueta, dataUrl: canvas.toDataURL("image/jpeg", 0.85) });
   }
@@ -81,6 +106,18 @@ async function audioEstaEnSilencio(blob: Blob): Promise<boolean> {
   }
 }
 
+// Construye los mensajes de corrección que se le mandan de vuelta a
+// POST /guion (erroresPrevios) cuando el control de calidad rechaza un
+// intento -- mismo texto que ve la IA al reintentar por un fallo de
+// validación estructural (ver el comentario en esa ruta).
+function erroresDesdeQC(hallazgos: HallazgoVision[], silencio: boolean): string[] {
+  const errores = hallazgos
+    .filter((h) => h.pantalla_vacia || h.texto_superpuesto || h.contraste_bajo)
+    .map((h) => `El control de calidad (visión) encontró un problema real en el cuadro "${h.cuadro}": ${h.nota}`);
+  if (silencio) errores.push("El audio final mezclado salió en silencio -- revisa que ninguna narracion haya quedado vacía o con un texto raro para la voz.");
+  return errores;
+}
+
 export default function AdminReelAutomaticoPruebaClient() {
   const [fase, setFase] = useState<FaseArnes>("inactivo");
   const [error, setError] = useState<string | null>(null);
@@ -88,33 +125,37 @@ export default function AdminReelAutomaticoPruebaClient() {
   const [progresoRender, setProgresoRender] = useState(0);
   const [hallazgosVision, setHallazgosVision] = useState<HallazgoVision[] | null>(null);
   const [audioSilencioso, setAudioSilencioso] = useState<boolean | null>(null);
+  const [intentoQC, setIntentoQC] = useState(0);
   const urlDescargaRef = useRef<string | null>(null);
   const [urlDescarga, setUrlDescarga] = useState<string | null>(null);
+  // Descarga forzada del ÚLTIMO blob renderizado aunque no haya
+  // pasado el control de calidad -- pedido explícito: el admin (nunca
+  // el cliente) tiene que poder bajarlo igual para ver qué salió mal.
+  const urlDescargaForzadaRef = useRef<string | null>(null);
+  const [urlDescargaForzada, setUrlDescargaForzada] = useState<string | null>(null);
+
+  function limpiarUrls() {
+    if (urlDescargaRef.current) {
+      URL.revokeObjectURL(urlDescargaRef.current);
+      urlDescargaRef.current = null;
+    }
+    if (urlDescargaForzadaRef.current) {
+      URL.revokeObjectURL(urlDescargaForzadaRef.current);
+      urlDescargaForzadaRef.current = null;
+    }
+    setUrlDescarga(null);
+    setUrlDescargaForzada(null);
+  }
 
   async function correr() {
     setError(null);
     setResumenGuion(null);
     setHallazgosVision(null);
     setAudioSilencioso(null);
-    if (urlDescargaRef.current) {
-      URL.revokeObjectURL(urlDescargaRef.current);
-      urlDescargaRef.current = null;
-      setUrlDescarga(null);
-    }
+    setIntentoQC(0);
+    limpiarUrls();
 
     try {
-      setFase("generando_guion");
-      const resGuion = await fetch("/api/admin/reel-automatico-prueba/guion", { method: "POST" });
-      const dataGuion = await resGuion.json();
-      if (!resGuion.ok) {
-        setError(dataGuion.resumenErrores ? `${dataGuion.error}\n- ${dataGuion.resumenErrores.join("\n- ")}` : dataGuion.error || "No se pudo generar el guion.");
-        setFase("error");
-        return;
-      }
-      const resultado = dataGuion as ResultadoGuion;
-      setResumenGuion(resultado);
-
-      setFase("renderizando");
       const { canRenderMediaOnWeb, renderMediaOnWeb } = await import("@remotion/web-renderer");
       const { ReelAutomatico, duracionReelAutomaticoEnCuadros } = await import("@/video/visuales/ReelAutomatico");
 
@@ -125,59 +166,94 @@ export default function AdminReelAutomaticoPruebaClient() {
         return;
       }
 
-      const guion = resultado.guion;
-      const duracionInFrames = duracionReelAutomaticoEnCuadros(guion);
-      const duracionS = duracionInFrames / guion.fps;
-      const props = { guion, pistaMusicaUrl: resultado.pistaMusicaUrl, efectos: [], mostrarZonaSegura: false };
+      let erroresPrevios: string[] | undefined = undefined;
 
-      const renderizado = await renderMediaOnWeb({
-        composition: { id: "reel-automatico-prueba", component: ReelAutomatico, durationInFrames: duracionInFrames, fps: guion.fps, width: 1080, height: 1920, defaultProps: props },
-        inputProps: props,
-        container: "mp4",
-        videoCodec: "h264",
-        audioCodec: "aac",
-        licenseKey: LICENCIA_REMOTION,
-        onProgress: (p: { progress: number }) => setProgresoRender(Math.round((p.progress ?? 0) * 100)),
-      });
-      const blob = await renderizado.getBlob();
+      for (let intento = 1; intento <= MAX_REINTENTOS_QC + 1; intento++) {
+        setIntentoQC(intento);
 
-      setFase("extrayendo_cuadros");
-      // Un par de cuadros por escena (inicio + mitad) -- suficiente para
-      // que el modelo de visión vea cada visual en marcha, sin mandar
-      // decenas de imágenes por una sola petición.
-      const tiempos = guion.tiemposRender ?? [];
-      const etiquetasYSegundos = tiempos.flatMap((t, i) => [
-        { etiqueta: `escena_${i + 1}_inicio`, segundo: t.inicio_s + 0.15 },
-        { etiqueta: `escena_${i + 1}_mitad`, segundo: (t.inicio_s + t.fin_s) / 2 },
-      ]);
-      const [cuadros, silencio] = await Promise.all([extraerCuadrosClave(blob, duracionS, etiquetasYSegundos), audioEstaEnSilencio(blob)]);
-      setAudioSilencioso(silencio);
+        setFase("generando_guion");
+        const resGuion = await fetch("/api/admin/reel-automatico-prueba/guion", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ erroresPrevios }),
+        });
+        const dataGuion = await resGuion.json();
+        if (!resGuion.ok) {
+          setError(dataGuion.resumenErrores ? `${dataGuion.error}\n- ${dataGuion.resumenErrores.join("\n- ")}` : dataGuion.error || "No se pudo generar el guion.");
+          setFase("error");
+          return;
+        }
+        const resultado = dataGuion as ResultadoGuion;
+        setResumenGuion(resultado);
 
-      setFase("control_calidad");
-      const resCalidad = await fetch("/api/admin/reel-automatico-prueba/control-calidad", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ cuadros }),
-      });
-      const dataCalidad = await resCalidad.json();
-      if (!resCalidad.ok) {
-        setError(dataCalidad.error || "No se pudo correr el control de calidad.");
-        setFase("error");
-        return;
+        setFase("renderizando");
+        setProgresoRender(0);
+        const guion = resultado.guion;
+        const duracionInFrames = duracionReelAutomaticoEnCuadros(guion);
+        const duracionS = duracionInFrames / guion.fps;
+        const props = { guion, pistaMusicaUrl: resultado.pistaMusicaUrl, efectos: [], mostrarZonaSegura: false };
+
+        const renderizado = await renderMediaOnWeb({
+          composition: { id: "reel-automatico-prueba", component: ReelAutomatico, durationInFrames: duracionInFrames, fps: guion.fps, width: 1080, height: 1920, defaultProps: props },
+          inputProps: props,
+          container: "mp4",
+          videoCodec: "h264",
+          audioCodec: "aac",
+          licenseKey: LICENCIA_REMOTION,
+          onProgress: (p: { progress: number }) => setProgresoRender(Math.round((p.progress ?? 0) * 100)),
+        });
+        const blob = await renderizado.getBlob();
+
+        setFase("extrayendo_cuadros");
+        // Un par de cuadros por escena (inicio + mitad), identificados
+        // por el id REAL de la escena (no por posición) -- así un
+        // hallazgo del control de calidad se puede leer de vuelta sin
+        // ambigüedad ("escena_e3_mitad" es la escena "e3", siempre,
+        // nunca "la 3ra en el array de este intento en particular").
+        const tiempos = guion.tiemposRender ?? [];
+        const etiquetasYSegundos = tiempos.flatMap((t) => [
+          { etiqueta: `escena_${t.escena_id}_inicio`, segundo: t.inicio_s + 0.15 },
+          { etiqueta: `escena_${t.escena_id}_mitad`, segundo: (t.inicio_s + t.fin_s) / 2 },
+        ]);
+        const [cuadros, silencio] = await Promise.all([extraerCuadrosClave(blob, duracionS, etiquetasYSegundos), audioEstaEnSilencio(blob)]);
+        setAudioSilencioso(silencio);
+
+        setFase("control_calidad");
+        const resCalidad = await fetch("/api/admin/reel-automatico-prueba/control-calidad", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ cuadros }),
+        });
+        const dataCalidad = await resCalidad.json();
+        if (!resCalidad.ok) {
+          setError(dataCalidad.error || "No se pudo correr el control de calidad.");
+          setFase("error");
+          return;
+        }
+        const hallazgos = dataCalidad.hallazgos as HallazgoVision[];
+        setHallazgosVision(hallazgos);
+
+        const hayProblemaVision = hallazgos.some((h) => h.pantalla_vacia || h.texto_superpuesto || h.contraste_bajo);
+        if (!hayProblemaVision && !silencio) {
+          const url = URL.createObjectURL(blob);
+          urlDescargaRef.current = url;
+          setUrlDescarga(url);
+          setFase("listo");
+          return;
+        }
+
+        if (intento >= MAX_REINTENTOS_QC + 1) {
+          // Se agotaron los reintentos -- nunca se entrega como
+          // aprobado, pero el admin sí puede bajarlo para depurar.
+          const urlForzada = URL.createObjectURL(blob);
+          urlDescargaForzadaRef.current = urlForzada;
+          setUrlDescargaForzada(urlForzada);
+          setFase("rechazado");
+          return;
+        }
+
+        erroresPrevios = erroresDesdeQC(hallazgos, silencio);
       }
-      const hallazgos = dataCalidad.hallazgos as HallazgoVision[];
-      setHallazgosVision(hallazgos);
-
-      const hayProblemaVision = hallazgos.some((h) => h.pantalla_vacia || h.texto_superpuesto || h.contraste_bajo);
-      if (hayProblemaVision || silencio) {
-        setFase("rechazado");
-        return;
-      }
-
-      const url = URL.createObjectURL(blob);
-      urlDescargaRef.current = url;
-      setUrlDescarga(url);
-      setFase("listo");
     } catch (err) {
       setError(err instanceof Error ? err.message : "Algo falló generando el reel.");
       setFase("error");
@@ -200,6 +276,11 @@ export default function AdminReelAutomaticoPruebaClient() {
       </button>
 
       <div style={{ marginTop: 24, fontSize: 13, color: "#444", lineHeight: 1.6 }}>
+        {fase !== "inactivo" && fase !== "error" && (
+          <p style={{ color: "#777", marginBottom: 4 }}>
+            Intento de control de calidad {intentoQC} de {MAX_REINTENTOS_QC + 1}
+          </p>
+        )}
         {fase === "generando_guion" && <p>Generando guion con narración y visuales (IA) + voz real (TTS/transcripción)...</p>}
         {fase === "renderizando" && <p>Renderizando en el navegador... {progresoRender}%</p>}
         {fase === "extrayendo_cuadros" && <p>Extrayendo cuadros clave y revisando el audio mezclado...</p>}
@@ -209,7 +290,10 @@ export default function AdminReelAutomaticoPruebaClient() {
       {resumenGuion && (
         <div style={{ marginTop: 20, padding: 16, borderRadius: 10, background: "#F7F6FB", fontSize: 13, color: "#333" }}>
           <p style={{ fontWeight: 700, marginBottom: 8 }}>Guion generado</p>
-          <p>Voz usada: <strong>{resumenGuion.voz}</strong> -- puntaje de alineación: {resumenGuion.puntajeAlineacion.toFixed(2)} -- intentos: {resumenGuion.intentos}</p>
+          <p>
+            Voz usada: <strong>{resumenGuion.voz}</strong> -- puntaje de alineación: {resumenGuion.puntajeAlineacion.toFixed(2)} -- intentos de guion (validación estructural): {resumenGuion.intentosGuion}
+            {resumenGuion.seRegeneroPorQC && " (regenerado por un control de calidad anterior)"}
+          </p>
           <ul style={{ marginTop: 8, paddingLeft: 18 }}>
             {resumenGuion.guion.escenas.map((e) => (
               <li key={e.id}>
@@ -239,7 +323,23 @@ export default function AdminReelAutomaticoPruebaClient() {
       )}
 
       {fase === "rechazado" && (
-        <p style={{ marginTop: 16, color: "#B42318", fontWeight: 700 }}>El reel no pasó el control de calidad -- no se entrega el mp4. Revisa los hallazgos de arriba.</p>
+        <div style={{ marginTop: 16 }}>
+          <p style={{ color: "#B42318", fontWeight: 700, marginBottom: 8 }}>
+            El reel no pasó el control de calidad después de {MAX_REINTENTOS_QC + 1} intentos -- al cliente NUNCA se le entrega así. Revisa los hallazgos de arriba.
+          </p>
+          {urlDescargaForzada && (
+            <>
+              <a
+                href={urlDescargaForzada}
+                download="reel-automatico-prueba-NO-APROBADO.mp4"
+                style={{ display: "inline-block", padding: "8px 14px", borderRadius: 8, border: "1px solid #B42318", color: "#B42318", fontWeight: 700, textDecoration: "none" }}
+              >
+                Descargar de todos modos (no aprobado)
+              </a>
+              <p style={{ fontSize: 12, color: "#999", marginTop: 6 }}>Solo para depurar como admin -- el último intento renderizado, con los problemas que ya viste arriba.</p>
+            </>
+          )}
+        </div>
       )}
 
       {error && <p style={{ marginTop: 16, color: "#B42318", whiteSpace: "pre-line" }}>{error}</p>}

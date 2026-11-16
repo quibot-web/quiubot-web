@@ -8,7 +8,7 @@
 // los exige cuando se usa a propósito.
 import { describe, it, expect } from "vitest";
 import { GuionSchema, type Guion } from "../guion.schema";
-import { validarEdicionDesdeAudio } from "./validarEdicionDesdeAudio";
+import { validarEdicionDesdeAudio, validarEstructuraConsejosNumeradosAudio } from "./validarEdicionDesdeAudio";
 
 function escenaBase(id: string, overrides: Partial<Guion["escenas"][number]> = {}): Guion["escenas"][number] {
   return {
@@ -77,5 +77,112 @@ describe("validarEdicionDesdeAudio", () => {
     // Y por lo tanto esta misma lista de escenas SÍ dispara hallazgos
     // si se le pide validarEdicionDesdeAudio() a propósito.
     expect(validarEdicionDesdeAudio(guion.escenas).length).toBeGreaterThan(0);
+  });
+});
+
+// Caso real (16 nov 2026, revisión de staging): la IA metió los 3
+// consejos en una sola escena "valor" con un visual "contador" en vez
+// de una escena por consejo -- decir, no mostrar.
+function escenaConAudio(id: string, bloque: Guion["escenas"][number]["bloque"], narracion: string, visual: Guion["escenas"][number]["visual"]): Guion["escenas"][number] {
+  return escenaBase(id, { bloque, narracion, visual });
+}
+
+const GANCHO_OK = escenaConAudio("e1", "gancho", "¿Sabes por qué pierdes clientes sin darte cuenta?", {
+  tipo: "celular_chat",
+  eventos: [{ palabra: 0, accion: "notificacion_llega" }],
+});
+const VALOR_1_OK = escenaConAudio("e2", "valor", "Responde cada mensaje en menos de un minuto.", {
+  tipo: "boton_estado",
+  texto: "Responder rápido",
+  texto_activo: "¡Hecho!",
+  eventos: [{ palabra: 0, accion: "aparece" }, { palabra: 3, accion: "clic" }],
+});
+const VALOR_2_OK = escenaConAudio("e3", "valor", "Usa fotos reales de tu negocio, no imágenes genéricas.", {
+  tipo: "cursor_clic",
+  texto_boton: "Subir foto real",
+  eventos: [{ palabra: 0, accion: "aparece" }, { palabra: 4, accion: "clic" }],
+});
+const VALOR_3_OK = escenaConAudio("e4", "valor", "Revisa el avance de tu negocio todos los días.", {
+  tipo: "contador",
+  desde: 0,
+  hasta: 3,
+  eventos: [{ palabra: 0, accion: "sube" }],
+});
+const MARCA_OK = escenaConAudio("e5", "marca", "Así ganas la confianza de quien te escribe.", {
+  tipo: "celular_chat",
+  eventos: [{ palabra: 0, accion: "notificacion_llega" }, { palabra: 4, accion: "numero_sube" }],
+});
+const CTA_OK = escenaConAudio("e6", "cta", "Síguenos para más consejos como este.", {
+  tipo: "boton_estado",
+  texto: "Seguir",
+  texto_activo: "Siguiendo ✓",
+  eventos: [{ palabra: 0, accion: "aparece" }, { palabra: 5, accion: "clic" }],
+});
+
+describe("validarEstructuraConsejosNumeradosAudio", () => {
+  it("la estructura aprobada (gancho + 3 valor + marca + cta, gancho/marca en celular_chat) no dispara hallazgos", () => {
+    const escenas = [GANCHO_OK, VALOR_1_OK, VALOR_2_OK, VALOR_3_OK, MARCA_OK, CTA_OK];
+    expect(validarEstructuraConsejosNumeradosAudio(escenas)).toHaveLength(0);
+  });
+
+  it("caso real: los 3 consejos metidos en una sola escena 'valor' con un contador -- hallazgo de estructura, no de contenido", () => {
+    const escenaMergeada = escenaConAudio(
+      "e2",
+      "valor",
+      "Uno: elige mensajes. Dos: usa fotos reales. Tres: pide escribirte por WhatsApp.",
+      { tipo: "contador", desde: 0, hasta: 3, eventos: [{ palabra: 0, accion: "sube" }] }
+    );
+    const escenas = [GANCHO_OK, escenaMergeada, MARCA_OK, CTA_OK];
+    const hallazgos = validarEstructuraConsejosNumeradosAudio(escenas);
+    expect(hallazgos).toHaveLength(1);
+    expect(hallazgos[0].mensaje).toContain("exactamente 6 escenas");
+  });
+
+  it("gancho sin celular_chat: hallazgo específico", () => {
+    const ganchoMalo = escenaConAudio("e1", "gancho", "¿Sabes por qué pierdes clientes sin darte cuenta?", {
+      tipo: "contador",
+      desde: 0,
+      hasta: 1,
+      eventos: [{ palabra: 0, accion: "sube" }],
+    });
+    const escenas = [ganchoMalo, VALOR_1_OK, VALOR_2_OK, VALOR_3_OK, MARCA_OK, CTA_OK];
+    const hallazgos = validarEstructuraConsejosNumeradosAudio(escenas);
+    expect(hallazgos.some((h) => h.escenaId === "e1" && h.mensaje.includes("celular_chat"))).toBe(true);
+  });
+
+  it("marca sin reusar celular_chat (no cierra el bucle): hallazgo específico", () => {
+    const marcaMala = escenaConAudio("e5", "marca", "Así ganas la confianza de quien te escribe.", {
+      tipo: "boton_estado",
+      texto: "Confianza",
+      texto_activo: "Lograda",
+      eventos: [{ palabra: 0, accion: "aparece" }],
+    });
+    const escenas = [GANCHO_OK, VALOR_1_OK, VALOR_2_OK, VALOR_3_OK, marcaMala, CTA_OK];
+    const hallazgos = validarEstructuraConsejosNumeradosAudio(escenas);
+    expect(hallazgos.some((h) => h.escenaId === "e5" && h.mensaje.includes("cierra el bucle"))).toBe(true);
+  });
+
+  it("una escena 'valor' que enumera varios consejos (aunque la estructura tenga 6 escenas): hallazgo de enumeración", () => {
+    const valorEnumerado = escenaConAudio("e2", "valor", "Primero responde rápido, segundo usa fotos reales y tercero revisa el avance.", {
+      tipo: "contador",
+      desde: 0,
+      hasta: 3,
+      eventos: [{ palabra: 0, accion: "sube" }],
+    });
+    const escenas = [GANCHO_OK, valorEnumerado, VALOR_2_OK, VALOR_3_OK, MARCA_OK, CTA_OK];
+    const hallazgos = validarEstructuraConsejosNumeradosAudio(escenas);
+    expect(hallazgos.some((h) => h.escenaId === "e2" && h.mensaje.includes("enumerar"))).toBe(true);
+  });
+
+  it("un consejo demasiado corto para ser concreto ('elige mensajes'): hallazgo de concreción", () => {
+    const valorCorto = escenaConAudio("e2", "valor", "Elige mensajes.", {
+      tipo: "boton_estado",
+      texto: "Mensajes",
+      texto_activo: "Elegido",
+      eventos: [{ palabra: 0, accion: "aparece" }],
+    });
+    const escenas = [GANCHO_OK, valorCorto, VALOR_2_OK, VALOR_3_OK, MARCA_OK, CTA_OK];
+    const hallazgos = validarEstructuraConsejosNumeradosAudio(escenas);
+    expect(hallazgos.some((h) => h.escenaId === "e2" && h.mensaje.includes("muy corta"))).toBe(true);
   });
 });

@@ -1,5 +1,5 @@
 import { auth } from "@/auth";
-import { NextResponse } from "next/server";
+import { NextRequest, NextResponse } from "next/server";
 import { supabaseAdmin } from "@/lib/supabase";
 import { desencriptarSiHaceFalta } from "@/lib/crypto";
 import { GuionSchema, idsDeMediaUsados, type Guion } from "@/video/guion.schema";
@@ -7,6 +7,7 @@ import { construirTemaDesdeAdn } from "@/video/tema";
 import { RECETAS_ORGANICAS, validarContraRecetaOrganica } from "@/video/recetas/organico";
 import {
   construirPromptGuionOrganicoConAudio,
+  recetaParaPromptConAudio,
   hayContextoDeNegocioSuficiente,
   AVISO_SIN_CONTEXTO_NEGOCIO,
   type EntradaGuionOrganico,
@@ -16,7 +17,7 @@ import { detectarFrasesDescargo, detectarFrasesVacias, recopilarTextosEscenas } 
 import { ajustarDuracionesProporcional, limpiarHashtags, limpiarNumeracionItemsLista } from "@/video/arreglosAutomaticosGuion";
 import { elegirPistaMusicalOrganica } from "@/app/lib/contenido";
 import { urlPistaMusical } from "@/app/lib/cloudinaryUrl";
-import { validarEdicionDesdeAudio } from "@/video/visuales/validarEdicionDesdeAudio";
+import { validarEdicionDesdeAudio, validarEstructuraConsejosNumeradosAudio } from "@/video/visuales/validarEdicionDesdeAudio";
 import { generarVoz } from "@/app/lib/videoOrganico/generarVoz";
 import { alinearPalabras } from "@/app/lib/videoOrganico/alinearPalabras";
 import { calcularHashNarracion } from "@/app/lib/videoOrganico/hashNarracion";
@@ -73,12 +74,28 @@ async function llamarOpenAI(apiKey: string, prompt: string): Promise<string> {
   }
 }
 
-export async function POST() {
+export async function POST(req: NextRequest) {
   const session = await auth();
   if (!session?.user?.email) {
     return NextResponse.json({ error: "No autorizado" }, { status: 401 });
   }
   const emailBusqueda = session.user.email.trim().toLowerCase();
+
+  // Reintento dirigido (pedido explícito, plan punto 8): si el cliente
+  // ya renderizó un intento anterior y el control de calidad (visión
+  // en el navegador + audio) encontró problemas, manda esos hallazgos
+  // acá como "erroresPrevios" -- se re-arma el guion desde cero (misma
+  // IA, mismos datos de negocio) pero AHORA con esos problemas
+  // explícitos en el prompt, igual que ya hace el reintento por fallo
+  // de validación estructural (ver intentar() más abajo). No es
+  // "regenerar solo la escena que falló" al pie de la letra (eso pedía
+  // reenviarle a la IA el guion completo anterior y confiar en que
+  // toque solo lo indicado, mucho más frágil) -- pedirle de nuevo el
+  // guion completo con la causa real del fallo ya es la misma mecánica
+  // probada que corrige fallos de validación, y acota igual el gasto
+  // real (nunca más de MAX_REINTENTOS intentos por corrida).
+  const cuerpo = await req.json().catch(() => null);
+  const erroresPreviosDelCliente = Array.isArray(cuerpo?.erroresPrevios) ? cuerpo.erroresPrevios.filter((e: unknown): e is string => typeof e === "string") : undefined;
 
   const { data: usuario } = await supabaseAdmin.from("usuarios").select("id, rol, openai_key, cloudinary_name, cloudinary_key, cloudinary_secret").eq("email", emailBusqueda).single();
   if (!usuario) return NextResponse.json({ error: "Usuario no encontrado" }, { status: 404 });
@@ -134,6 +151,15 @@ export async function POST() {
     analisisPiezas: {},
   };
 
+  // Expandida a 6 bloques (gancho + 3×valor + marca + cta) -- la misma
+  // que arma el prompt (recetaParaPromptConAudio(), promptGuionOrganico.ts)
+  // -- para que validarContraRecetaOrganica() no rechace por "fuera de
+  // orden" los 3 "valor" repetidos que esta estructura sí exige. El
+  // mensaje claro de por qué (una escena por consejo, nunca 3 juntas)
+  // viene de validarEstructuraConsejosNumeradosAudio() más abajo, no
+  // de este chequeo genérico.
+  const recetaConAudio = recetaParaPromptConAudio(entrada);
+
   const intentosRegistrados: { errores: string[] }[] = [];
 
   async function intentar(erroresPrevios?: string[]): Promise<{ ok: true; guion: Guion } | { ok: false; errores: string[] }> {
@@ -175,7 +201,7 @@ export async function POST() {
       return { ok: false, errores };
     }
 
-    const erroresReceta = validarContraRecetaOrganica(resultado.data, receta, false);
+    const erroresReceta = validarContraRecetaOrganica(resultado.data, recetaConAudio, false);
     const idsUsados = idsDeMediaUsados(resultado.data.escenas);
     const erroresMedia = idsUsados.map((idUsado) => `media_id "${idUsado}" no está permitido en este guion de prueba (sin piezas del álbum).`);
     const textosEscenas = recopilarTextosEscenas(resultado.data.escenas);
@@ -185,8 +211,13 @@ export async function POST() {
     // (ver video/visuales/validarEdicionDesdeAudio.ts) -- la ruta de
     // siempre no corre esto porque esas 6 recetas no llevan voz.
     const hallazgosAudio = validarEdicionDesdeAudio(resultado.data.escenas).map((h) => `${h.escenaId}: ${h.mensaje}`);
+    // Caso real de staging (16 nov 2026): los 3 consejos metidos en
+    // una sola escena con un "contador" -- decir, no mostrar. Esta
+    // SÍ es específica de consejos_numerados (por eso vive aparte de
+    // validarEdicionDesdeAudio, que es genérica).
+    const hallazgosEstructura = validarEstructuraConsejosNumeradosAudio(resultado.data.escenas).map((h) => `${h.escenaId}: ${h.mensaje}`);
 
-    const erroresTotales = [...erroresReceta, ...erroresMedia, ...erroresCopy, ...erroresVacios, ...hallazgosAudio];
+    const erroresTotales = [...erroresReceta, ...erroresMedia, ...erroresCopy, ...erroresVacios, ...hallazgosAudio, ...hallazgosEstructura];
     intentosRegistrados.push({ errores: erroresTotales });
     if (erroresTotales.length > 0) return { ok: false, errores: erroresTotales };
 
@@ -194,11 +225,16 @@ export async function POST() {
   }
 
   try {
-    let resultado = await intentar();
-    let intentos = 1;
-    while (!resultado.ok && intentos <= MAX_REINTENTOS) {
+    // Si el cliente mandó errores de un intento anterior (control de
+    // calidad por visión/audio sobre un render previo, ver el
+    // comentario de erroresPreviosDelCliente más arriba), la PRIMERA
+    // llamada ya arranca con esos errores en el prompt -- no hace
+    // falta gastar una llamada "a ciegas" primero.
+    let resultado = await intentar(erroresPreviosDelCliente);
+    let intentosGuion = 1;
+    while (!resultado.ok && intentosGuion <= MAX_REINTENTOS) {
       resultado = await intentar(resultado.errores);
-      intentos += 1;
+      intentosGuion += 1;
     }
 
     if (!resultado.ok) {
@@ -228,7 +264,7 @@ export async function POST() {
       vozUrl: audioUrl,
     };
 
-    return NextResponse.json({ guion: guionFinal, pistaMusicaUrl, voz, puntajeAlineacion: puntaje, intentos });
+    return NextResponse.json({ guion: guionFinal, pistaMusicaUrl, voz, puntajeAlineacion: puntaje, intentosGuion, seRegeneroPorQC: !!erroresPreviosDelCliente });
   } catch (err) {
     const detalle = String(err instanceof Error ? err.message : err);
     if (/insufficient_quota|credit_balance_exhausted|no tiene créditos/.test(detalle)) {

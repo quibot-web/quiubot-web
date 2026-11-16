@@ -212,6 +212,36 @@ const SECCION_NARRACION_Y_VISUAL = `NARRACIÓN Y VISUAL POR ESCENA (edición des
 
 ${EVENTOS_POR_VISUAL}`;
 
+// Caso real (16 nov 2026, revisión de staging): con la receta de
+// siempre (gancho -> valor -> marca -> cta, 4 escenas, "valor" es UNA
+// lista_numerada con los 3 consejos como texto), la IA metió los 3
+// consejos de voz en esa misma escena ("Uno: elige mensajes. Dos: usa
+// fotos reales. Tres: pide escribirte por WhatsApp.") con un visual
+// "contador" -- DECIR, no MOSTRAR. La estructura real que funciona (la
+// del reel de referencia aprobado,
+// video/fixtures/organico/referencia/ReelConsejosNumerados.tsx) necesita
+// una escena "valor" POR CADA consejo -- 6 escenas en total, no 4.
+// recetaParaPromptConAudio() expande receta.bloques SOLO para armar
+// este prompt (seccionReceta ya sabe calcular "cuántas escenas" y el
+// rango de duración alcanzable a partir de esa lista, sin que haga
+// falta repetir esa lógica acá) -- la receta real en
+// video/recetas/organico/consejosNumerados.ts queda intacta, la usan
+// las 6 recetas de siempre sin voz.
+export function recetaParaPromptConAudio(entrada: EntradaGuionOrganico): RecetaOrganica {
+  if (entrada.recetaId === "consejos_numerados") {
+    return { ...entrada.receta, bloques: ["gancho", "valor", "valor", "valor", "marca", "cta"] };
+  }
+  return entrada.receta;
+}
+
+const ESTRUCTURA_CONSEJOS_NUMERADOS_AUDIO = `ESTRUCTURA OBLIGATORIA PARA "consejos_numerados" CON VOZ -- EXACTAMENTE 6 escenas, en este orden (nunca menos, nunca los 3 consejos juntos en una sola escena):
+1. "gancho": visual "celular_chat", arranca en 0 ("0 mensajes nuevos" -- sin eventos de notificacion_llega todavía, o como mucho uno bien al final de la narración si el gancho lo pide).
+2, 3, 4. TRES escenas "valor", UNA POR CADA CONSEJO. Cada una:
+   - Es UN solo consejo, concreto y accionable, en una frase COMPLETA (ej. "Responde cada mensaje en menos de un minuto" -- nunca un fragmento vago como "elige mensajes" o "sé más rápido" que no se entiende por sí solo).
+   - Tiene su propio problema->arreglo visual (boton_estado, cursor_clic o contador -- el que mejor MUESTRE ese consejo puntual, nunca el mismo tipo en las 3).
+5. "marca": CIERRA EL BUCLE -- vuelve a visual "celular_chat", el MISMO tipo que el gancho (nunca otro), ahora con eventos que suben el contador (el resultado real de aplicar los 3 consejos).
+6. "cta".`;
+
 export function construirPromptGuionOrganicoConAudio(entrada: EntradaGuionOrganico, erroresPrevios?: string[]): string {
   const partes = [
     `Eres el guionista de contenido orgánico de Quiubot. Escribes el guion de un reel corto (formato 9:16, CON VOZ -- se narra en audio real, no es un reel mudo) para Instagram. Español colombiano, tuteo, frases cortas y directas.`,
@@ -220,7 +250,8 @@ export function construirPromptGuionOrganicoConAudio(entrada: EntradaGuionOrgani
     REGLA_CONCRETO,
     seccionNegocio(entrada.infoAdicionalMarca, entrada.productos),
     entrada.tema ? `TEMA PEDIDO PARA ESTA PIEZA (tienes que tratar justo esto, no cambies de tema): "${entrada.tema}"` : null,
-    seccionReceta(entrada),
+    seccionReceta({ ...entrada, receta: recetaParaPromptConAudio(entrada) }),
+    entrada.recetaId === "consejos_numerados" ? ESTRUCTURA_CONSEJOS_NUMERADOS_AUDIO : null,
     seccionGancho(entrada.ganchoTipoAsignado),
     `VOZ DE MARCA (tono y estilo, NO son datos del negocio):\n- Titular del ADN: ${entrada.adnTitular || "(sin dato)"}\n- Frase corta de marca: ${entrada.adnFraseCorta || "(sin dato)"}`,
     seccionPiezas(entrada.piezas, entrada.analisisPiezas),
