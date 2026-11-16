@@ -192,6 +192,53 @@ function seccionPiezas(piezas: PiezaDisponible[], analisisPiezas: Record<string,
   return `PIEZAS DISPONIBLES DEL ÁLBUM (usa el id EXACTO como media_id en producto_hero, nunca inventes uno ni pongas una URL):\n${lista}`;
 }
 
+// Fase B v2.0 (docs/diseno/plan_contenido_organico_fase_b_v2.md,
+// puntos 1 y 6) -- SOLO para el arnés de prueba del único reel
+// automático (consejos_numerados/Quiubot), nunca para el flujo de
+// siempre (construirPromptGuionOrganico de arriba sigue intacto, las
+// 6 recetas en producción no llevan voz). Reusa las mismas secciones
+// privadas de este archivo (negocio, receta, gancho, piezas,
+// REFERENCIA_ESCENAS) -- solo cambia el encabezado, agrega la sección
+// de narración/visual, y pide esos 2 campos en el JSON de salida.
+const EVENTOS_POR_VISUAL = `TIPOS DE VISUAL (elige UNO por escena, el que mejor "muestre" la idea en vez de solo decirla) y su "eventos" -- cada evento tiene "palabra": el ÍNDICE (empieza en 0) de una palabra DENTRO de la narración de ESA MISMA escena (nunca un segundo, nunca un índice de otra escena -- si la narración de esta escena tiene 10 palabras, los índices válidos son 0 a 9), y "accion", restringida a las de cada tipo. Los eventos deben repartirse a lo largo de TODA la narración (no todos al principio) -- el visual cambia cada 1-2 segundos, nunca se queda estático toda la escena:
+- celular_chat: {"tipo":"celular_chat","eventos":[{"palabra":N,"accion":"notificacion_llega"}|{"palabra":N,"accion":"numero_sube"}, ...]} (1 a 6 eventos) -- celular con notificaciones/mensajes llegando y un número grande que sube. Úsalo para "mensajes/clientes que llegan".
+- cursor_clic: {"tipo":"cursor_clic","texto_boton":"<=28 car.","eventos":[{"palabra":N,"accion":"aparece"},{"palabra":N,"accion":"clic"}]} (exactamente un "aparece" y, casi siempre, un "clic" después) -- un botón con un cursor que lo clickea. Úsalo para UNA acción puntual ("Responder ahora", "Agendar", "Confirmar").
+- contador: {"tipo":"contador","desde":0,"hasta":N (entero positivo, SIEMPRE ilustrativo -- ej. cuántos pasos/trucos hay en la lista -- NUNCA una cifra de resultado real de Quiubot),"eventos":[{"palabra":N,"accion":"sube"}, ...]} (1 a 4 eventos) -- número grande que sube de "desde" a "hasta". Úsalo para contar pasos/trucos/elementos.
+- boton_estado: {"tipo":"boton_estado","texto":"<=28 car.","texto_activo":"<=28 car.","eventos":[{"palabra":N,"accion":"aparece"},{"palabra":N,"accion":"clic"|"cambia_estado"}, ...]} (1 a 4 eventos) -- botón que cambia de texto/estado (ej. "Pendiente" -> "¡Hecho!"). Úsalo para un cambio de estado/progreso.`;
+
+const SECCION_NARRACION_Y_VISUAL = `NARRACIÓN Y VISUAL POR ESCENA (edición desde el audio -- este reel SÍ lleva voz): cada escena, ADEMÁS de sus "params" de siempre, lleva dos campos nuevos:
+- "narracion": el texto que se narra en VOZ (distinto del texto grande en pantalla -- es lo que se ESCUCHA). Entre 7 y 16 palabras por escena (unos 3 a 6 segundos hablados a ritmo natural), frases cortas, UNA idea por escena. Nunca dígitos (números en letras: "tres", nunca "3"). El gancho (primera escena) tiene que tener su palabra más fuerte en la PRIMERA palabra -- nunca un arranque lento tipo "en Quiubot...".
+- "visual": el visual que ACOMPAÑA esa narración (ver tipos abajo) -- elige el que mejor la MUESTRE en vez de solo decirla.
+
+${EVENTOS_POR_VISUAL}`;
+
+export function construirPromptGuionOrganicoConAudio(entrada: EntradaGuionOrganico, erroresPrevios?: string[]): string {
+  const partes = [
+    `Eres el guionista de contenido orgánico de Quiubot. Escribes el guion de un reel corto (formato 9:16, CON VOZ -- se narra en audio real, no es un reel mudo) para Instagram. Español colombiano, tuteo, frases cortas y directas.`,
+    `Estructura obligatoria: gancho (abre una pregunta, promesa o dato) -> bucle abierto -> desarrollo -> cierre del bucle -> cta.`,
+    COPY_SOLO_PROHIBIDO,
+    REGLA_CONCRETO,
+    seccionNegocio(entrada.infoAdicionalMarca, entrada.productos),
+    entrada.tema ? `TEMA PEDIDO PARA ESTA PIEZA (tienes que tratar justo esto, no cambies de tema): "${entrada.tema}"` : null,
+    seccionReceta(entrada),
+    seccionGancho(entrada.ganchoTipoAsignado),
+    `VOZ DE MARCA (tono y estilo, NO son datos del negocio):\n- Titular del ADN: ${entrada.adnTitular || "(sin dato)"}\n- Frase corta de marca: ${entrada.adnFraseCorta || "(sin dato)"}`,
+    seccionPiezas(entrada.piezas, entrada.analisisPiezas),
+    REFERENCIA_ESCENAS,
+    SECCION_NARRACION_Y_VISUAL,
+    `Además del guion, escribe el caption para Instagram: "caption" (máx. 2200 caracteres, el gancho en la primera línea) y "hashtags" (entre 3 y 8, en español, del rubro real de este negocio -- el de QUÉ HACE ESTE NEGOCIO, nunca el que creas por el nombre -- cada uno empezando con #).`,
+    `Responde ÚNICAMENTE con este JSON, sin texto adicional ni backticks ni comentarios (sin el campo "gancho_tipo" -- ya está decidido). Cada escena lleva "narracion" y "visual" ADEMÁS de "id","bloque","tipo","duracion_s","params":\n{"bucle": {"texto": "...", "abre_en": "e1", "cierra_en": "eN", "indicador": "..."}, "escenas": [ {"id": "e1", "bloque": "...", "tipo": "...", "duracion_s": 0, "params": {...}, "narracion": "...", "visual": {"tipo": "...", "eventos": [...]}} , ... ], "caption": "...", "hashtags": ["#...", "#..."]}`,
+  ].filter((parte): parte is string => !!parte);
+
+  if (erroresPrevios && erroresPrevios.length > 0) {
+    partes.push(
+      `El guion anterior NO pasó la validación. Corrige exactamente esto y vuelve a responder con el JSON completo:\n${erroresPrevios.map((e) => `- ${e}`).join("\n")}`
+    );
+  }
+
+  return partes.join("\n\n");
+}
+
 export function construirPromptGuionOrganico(entrada: EntradaGuionOrganico, erroresPrevios?: string[]): string {
   const partes = [
     `Eres el guionista de contenido orgánico de Quiubot. Escribes el guion de un reel corto (formato 9:16, sin voz) para Instagram. Español colombiano, tuteo, frases cortas y directas.`,
