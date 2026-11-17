@@ -53,6 +53,12 @@ export interface PublicacionOrganica {
   permalink: string | null;
   error: string | null;
   tipo_error: string | null;
+  // Resultado del control de calidad (paso 3 de la integración de
+  // Fase B v2.0): {crudo} mientras se genera (para poder recompactar
+  // sin IA), {aprobado, forzado?, hallazgos?, publicarIgual?} tras
+  // render+QC. aprobado===false con estado "lista" es "forzado, no
+  // aprobado" -- nunca se trata como una aprobación real.
+  control_calidad: { aprobado?: boolean; forzado?: boolean; hallazgos?: unknown[]; publicarIgual?: boolean; crudo?: unknown; forzarSinCalidad?: boolean } | null;
   intentos: number;
   semana: string;
   continua_de_id: string | null;
@@ -96,6 +102,7 @@ export const COLUMNAS_PUBLICACIONES_ORGANICAS = [
   "permalink",
   "error",
   "tipo_error",
+  "control_calidad",
   "intentos",
   "semana",
   "continua_de_id",

@@ -289,6 +289,45 @@ export default function RevisionPiezaPage({ params }: { params: Promise<{ id: st
           </p>
         )}
 
+        {pieza.estado === "error" && pieza.tipo_error === "calidad" && (
+          <div style={{ background: "#FDECEC", border: "1px solid #E8A0A0", borderRadius: 14, padding: 16, marginBottom: 16 }}>
+            <p style={{ fontSize: 13, color: "#8A1F1F", fontWeight: 700, margin: "0 0 8px" }}>El control de calidad rechazó este reel.</p>
+            {Array.isArray(pieza.control_calidad?.hallazgos) && (
+              <ul style={{ fontSize: 12, color: "#8A1F1F", margin: "0 0 10px", paddingLeft: 18 }}>
+                {(pieza.control_calidad!.hallazgos as string[]).map((h, i) => (
+                  <li key={i}>{h}</li>
+                ))}
+              </ul>
+            )}
+            <button
+              type="button"
+              style={{ ...botonSecundario, borderColor: "#8A1F1F", color: "#8A1F1F" }}
+              onClick={async () => {
+                await fetch(`/api/contenido/${id}`, { method: "PATCH", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ accion: "forzar_sin_calidad" }) });
+                await cargar();
+              }}
+            >
+              Forzar de todos modos
+            </button>
+          </div>
+        )}
+
+        {pieza.estado === "lista" && pieza.control_calidad?.aprobado === false && !pieza.control_calidad?.publicarIgual && (
+          <div style={{ background: "#FEF6E7", border: "1px solid #F0C36D", borderRadius: 14, padding: 16, marginBottom: 16, display: "flex", gap: 10, alignItems: "center", flexWrap: "wrap" }}>
+            <span style={{ fontSize: 13, color: "#8A6416", fontWeight: 700, flex: 1 }}>Lista, no aprobada: requiere confirmación -- el control de calidad no pasó y esta pieza se forzó.</span>
+            <button
+              type="button"
+              style={botonPrimario}
+              onClick={async () => {
+                await fetch(`/api/contenido/${id}`, { method: "PATCH", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ accion: "publicar_igual" }) });
+                await cargar();
+              }}
+            >
+              Publicar de todos modos
+            </button>
+          </div>
+        )}
+
         {pieza.estado === "lista" && pieza.url_video && (
           <div style={{ background: "#fff", borderRadius: 14, border: "1px solid #e5e5e5", padding: 16, marginBottom: 16, display: "flex", gap: 10, flexWrap: "wrap", alignItems: "center" }}>
             <span style={{ fontSize: 13, color: "#1a1a1a", fontWeight: 700, marginRight: "auto" }}>Video listo -- descárgalo para subirlo a TikTok</span>

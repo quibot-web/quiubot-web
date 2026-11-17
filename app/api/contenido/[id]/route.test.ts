@@ -285,6 +285,79 @@ describe("PATCH /api/contenido/[id] -- regenerar_voz", () => {
   });
 });
 
+describe("PATCH /api/contenido/[id] -- guardar_calidad", () => {
+  beforeEach(() => {
+    fromMock.mockClear();
+    authMock.mockResolvedValue({ user: { email: "marca@quiubot.com" } });
+    usuarioActual = USUARIO_ADMIN;
+    filasUpdateActual = [{ id: "pieza-1" }];
+    updatesRealizados = [];
+    piezaActual = { id: "pieza-1", estado: "renderizando", guion: fixtureMitoVerdad, control_calidad: null };
+  });
+
+  it("solo mientras está renderizando: 400 si no", async () => {
+    piezaActual = { ...piezaActual, estado: "aprobada" };
+    const res = await PATCH(patchReq({ accion: "guardar_calidad", control_calidad: { aprobado: true } }), contexto());
+    expect(res.status).toBe(400);
+    expect(updatesRealizados.length).toBe(0);
+  });
+
+  it("guarda control_calidad sin cambiar de estado (recompactación a mitad de camino)", async () => {
+    const res = await PATCH(patchReq({ accion: "guardar_calidad", guion: fixtureMitoVerdad }), contexto());
+    expect(res.status).toBe(200);
+    expect(updatesRealizados[0]).not.toMatchObject({ estado: expect.anything() });
+  });
+
+  it("estado:'error' pasa a error con tipo_error='calidad' y guarda los hallazgos", async () => {
+    const res = await PATCH(patchReq({ accion: "guardar_calidad", estado: "error", control_calidad: { aprobado: false, hallazgos: ["x"] } }), contexto());
+    expect(res.status).toBe(200);
+    expect(updatesRealizados[0]).toMatchObject({ estado: "error", tipo_error: "calidad", control_calidad: { aprobado: false, hallazgos: ["x"] } });
+  });
+});
+
+describe("PATCH /api/contenido/[id] -- forzar_sin_calidad / publicar_igual (nunca auto-publicable sin confirmar)", () => {
+  beforeEach(() => {
+    fromMock.mockClear();
+    authMock.mockResolvedValue({ user: { email: "marca@quiubot.com" } });
+    usuarioActual = USUARIO_ADMIN;
+    filasUpdateActual = [{ id: "pieza-1" }];
+    updatesRealizados = [];
+  });
+
+  it("forzar_sin_calidad solo desde estado 'error'", async () => {
+    piezaActual = { id: "pieza-1", estado: "aprobada", control_calidad: null };
+    const res = await PATCH(patchReq({ accion: "forzar_sin_calidad" }), contexto());
+    expect(res.status).toBe(400);
+  });
+
+  it("forzar_sin_calidad: vuelve a 'aprobada' con forzarSinCalidad:true (ColaDeRender se lo salta la próxima vuelta)", async () => {
+    piezaActual = { id: "pieza-1", estado: "error", control_calidad: { aprobado: false, hallazgos: ["x"] } };
+    const res = await PATCH(patchReq({ accion: "forzar_sin_calidad" }), contexto());
+    expect(res.status).toBe(200);
+    expect(updatesRealizados[0]).toMatchObject({ estado: "aprobada", control_calidad: { aprobado: false, hallazgos: ["x"], forzarSinCalidad: true } });
+  });
+
+  it("publicar_igual: rechaza si la pieza NO está marcada como forzada/no aprobada (ya está aprobada normal, no necesita esto)", async () => {
+    piezaActual = { id: "pieza-1", estado: "lista", control_calidad: { aprobado: true } };
+    const res = await PATCH(patchReq({ accion: "publicar_igual" }), contexto());
+    expect(res.status).toBe(400);
+    expect(updatesRealizados.length).toBe(0);
+  });
+
+  it("publicar_igual: pieza forzada y 'lista' -- recién ACÁ queda con publicarIgual:true (antes de este botón, el cron del paso 4 nunca la tomaría)", async () => {
+    piezaActual = { id: "pieza-1", estado: "lista", control_calidad: { aprobado: false, forzado: true, hallazgos: ["x"] } };
+    const res = await PATCH(patchReq({ accion: "publicar_igual" }), contexto());
+    expect(res.status).toBe(200);
+    expect(updatesRealizados[0]).toMatchObject({ control_calidad: { aprobado: false, forzado: true, hallazgos: ["x"], publicarIgual: true } });
+  });
+
+  it("publicar_igual: solo mientras está 'lista'", async () => {
+    piezaActual = { id: "pieza-1", estado: "renderizando", control_calidad: { aprobado: false } };
+    const res = await PATCH(patchReq({ accion: "publicar_igual" }), contexto());
+    expect(res.status).toBe(400);
+  });
+});
+
 describe("PATCH /api/contenido/[id] -- iniciar_render", () => {
   beforeEach(() => {
     fromMock.mockClear();

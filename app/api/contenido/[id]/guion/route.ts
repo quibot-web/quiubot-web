@@ -343,6 +343,13 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
           caption: resultado.guion.publicacion?.caption ?? null,
           hashtags: resultado.guion.publicacion?.hashtags ?? null,
           voz_url: resultado.guion.vozUrl ?? null,
+          // "crudo" (palabras de Whisper + silencios reales ANTES de
+          // compactar) se guarda acá para que paso 3 (ColaDeRender)
+          // pueda recompactar la MISMA voz si el control de calidad
+          // encuentra solo un problema de pausas -- nunca se
+          // interpreta acá, es el mismo dato que el arnés admin ya
+          // usa en memoria (ver generarGuionConVoz.ts).
+          control_calidad: resultado.crudo ? { crudo: resultado.crudo } : null,
           actualizado_en: new Date().toISOString(),
         })
         .eq("id", id)

@@ -4,6 +4,17 @@ import { useEffect, useRef, useState, useCallback } from "react";
 import type { PublicacionOrganica } from "@/app/lib/contenido";
 import type { Guion } from "@/video/guion.schema";
 import type { MediosResueltos } from "@/video/escenas/tipos";
+import {
+  conTimeout,
+  extraerCuadrosClave,
+  audioEstaEnSilencio,
+  encontrarSilenciosLargos,
+  erroresDesdeQC,
+  esSoloProblemaDePausas,
+  limitesDeRecompactacion,
+} from "@/app/lib/videoOrganico/controlCalidadCliente";
+
+const TIMEOUT_FASE_CONTROL_CALIDAD_MS = 120_000;
 
 // Commit 4c del plan -- render en cola y subida. Vive en el calendario
 // (no en la revisión): "apenas se aprueba una pieza, entra sola a la
@@ -14,7 +25,7 @@ import type { MediosResueltos } from "@/video/escenas/tipos";
 // confirmó que el render en sí sobrevive bien a que la pestaña se
 // minimice/congele, pero igual solo un render corre por vez acá).
 
-type FaseCola = "esperando" | "renderizando" | "subiendo" | "reintentar_subida" | "lista" | "error";
+type FaseCola = "esperando" | "renderizando" | "control_calidad" | "subiendo" | "reintentar_subida" | "lista" | "error";
 
 interface EstadoPiezaCola {
   fase: FaseCola;
@@ -67,6 +78,60 @@ export default function ColaDeRender({
     }
   }
 
+  type ResultadoControlCalidad =
+    | { tipo: "aprobado" }
+    | { tipo: "recompactado"; guion: Guion }
+    | { tipo: "rechazado"; hallazgos: unknown[] };
+
+  // Mismo control de calidad que el arnés admin (código + silencio
+  // real del audio ya mezclado + visión) -- un único intento de
+  // recompactación (límites más estrictos sobre la MISMA voz, sin IA
+  // ni generarVoz) si lo único que falló fue un silencio largo. Nunca
+  // se queda colgado: TIMEOUT_FASE_CONTROL_CALIDAD_MS en el llamador.
+  async function correrControlDeCalidad(piezaId: string, blob: Blob, guionActual: Guion, crudo: unknown): Promise<ResultadoControlCalidad> {
+    const duracionS = guionActual.escenas.reduce((acc, e) => acc + e.duracion_s, 0);
+    const etiquetasYSegundos = [
+      { etiqueta: "inicio", segundo: 0.1 },
+      { etiqueta: "mitad", segundo: duracionS / 2 },
+      { etiqueta: "final", segundo: Math.max(duracionS - 0.2, 0) },
+    ];
+    const cuadros = await extraerCuadrosClave(blob, duracionS, etiquetasYSegundos, () => {});
+    const cuadrosConImagen = cuadros.filter((c): c is { etiqueta: string; dataUrl: string } => typeof c.dataUrl === "string");
+
+    const [silencio, silenciosLargos, visionRes] = await Promise.all([
+      audioEstaEnSilencio(blob),
+      encontrarSilenciosLargos(blob),
+      cuadrosConImagen.length > 0
+        ? fetch("/api/admin/reel-automatico-prueba/control-calidad", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ cuadros: cuadrosConImagen }),
+          })
+            .then((r) => (r.ok ? r.json() : { hallazgos: [] }))
+            .catch(() => ({ hallazgos: [] }))
+        : Promise.resolve({ hallazgos: [] }),
+    ]);
+    const hallazgos = (visionRes.hallazgos ?? []) as Parameters<typeof erroresDesdeQC>[0];
+
+    const errores = erroresDesdeQC(hallazgos, silencio, silenciosLargos);
+    if (errores.length === 0) return { tipo: "aprobado" };
+
+    if (esSoloProblemaDePausas(hallazgos, silencio, silenciosLargos) && crudo) {
+      const limites = limitesDeRecompactacion(1);
+      const resRecompactar = await fetch("/api/admin/reel-automatico-prueba/recompactar", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ guion: guionActual, crudo, ...limites }),
+      }).catch(() => null);
+      if (resRecompactar?.ok) {
+        const data = await resRecompactar.json();
+        return { tipo: "recompactado", guion: data.guion as Guion };
+      }
+    }
+
+    return { tipo: "rechazado", hallazgos: errores };
+  }
+
   const renderizarYSubir = useCallback(
     async (pieza: PublicacionOrganica) => {
       // Claim atómico -- si otra pestaña ya la tomó, se salta sin error.
@@ -82,15 +147,16 @@ export default function ColaDeRender({
       try {
         const detalleRes = await fetch(`/api/contenido/${pieza.id}`);
         const detalle = await detalleRes.json();
-        const guion = detalle.pieza.guion as Guion;
+        let guion = detalle.pieza.guion as Guion;
         const medios = (detalle.medios ?? {}) as MediosResueltos;
         // Causa real de un reel publicado en silencio total: acá
         // siempre se mandaba null, sin importar qué pista_id tuviera
         // el guion -- GET /api/contenido/[id] ya resuelve la URL real.
         const pistaUrl = (detalle.pistaUrl ?? null) as string | null;
+        const esPiezaConVoz = !!guion.vozUrl;
+        const controlCalidadActual = detalle.pieza.control_calidad as { crudo?: unknown; forzarSinCalidad?: boolean } | null;
 
         const { canRenderMediaOnWeb, renderMediaOnWeb } = await import("@remotion/web-renderer");
-        const { Composicion, duracionEnCuadros } = await import("@/video/Composicion");
 
         const check = await canRenderMediaOnWeb({ width: 1080, height: 1920, container: "mp4", videoCodec: "h264", audioCodec: "aac" });
         if (!check.canRender) {
@@ -98,30 +164,86 @@ export default function ColaDeRender({
           return;
         }
 
-        const duracionS = guion.escenas.reduce((acc, e) => acc + e.duracion_s, 0);
-        const inicio = performance.now();
+        async function renderizarConGuion(guionARenderizar: Guion): Promise<{ blob: Blob; duracionS: number }> {
+          let component: React.ComponentType<Record<string, unknown>>;
+          let durationInFrames: number;
+          let defaultProps: Record<string, unknown>;
+          let duracionS: number;
+          if (esPiezaConVoz) {
+            const { ReelAutomatico, duracionReelAutomaticoEnCuadros } = await import("@/video/visuales/ReelAutomatico");
+            component = ReelAutomatico as unknown as React.ComponentType<Record<string, unknown>>;
+            durationInFrames = duracionReelAutomaticoEnCuadros(guionARenderizar);
+            defaultProps = { guion: guionARenderizar, pistaMusicaUrl: pistaUrl, mostrarZonaSegura: false };
+            duracionS = guionARenderizar.escenas.reduce((acc, e) => acc + e.duracion_s, 0);
+          } else {
+            const { Composicion, duracionEnCuadros } = await import("@/video/Composicion");
+            component = Composicion as unknown as React.ComponentType<Record<string, unknown>>;
+            durationInFrames = duracionEnCuadros(guionARenderizar);
+            defaultProps = { guion: guionARenderizar, medios, pistaUrl, mostrarZonaSegura: false };
+            duracionS = guionARenderizar.escenas.reduce((acc, e) => acc + e.duracion_s, 0);
+          }
+          const inicio = performance.now();
+          const resultado = await renderMediaOnWeb({
+            composition: { id: `cola-${pieza.id}`, component, durationInFrames, fps: guionARenderizar.fps, width: 1080, height: 1920, defaultProps },
+            inputProps: defaultProps,
+            container: "mp4",
+            videoCodec: "h264",
+            audioCodec: "aac",
+            licenseKey: LICENCIA_REMOTION,
+            onProgress: (p: { progress: number }) => actualizarEstado(pieza.id, { progreso: Math.round((p.progress ?? 0) * 100) }),
+          });
+          const blob = await resultado.getBlob();
+          const segundosReales = (performance.now() - inicio) / 1000;
+          setSegundosPorSegundoDeVideo(segundosReales / Math.max(duracionS, 1));
+          return { blob, duracionS };
+        }
 
-        const resultado = await renderMediaOnWeb({
-          composition: {
-            id: `cola-${pieza.id}`,
-            component: Composicion,
-            durationInFrames: duracionEnCuadros(guion),
-            fps: guion.fps,
-            width: 1080,
-            height: 1920,
-            defaultProps: { guion, medios, pistaUrl, mostrarZonaSegura: false },
-          },
-          inputProps: { guion, medios, pistaUrl, mostrarZonaSegura: false },
-          container: "mp4",
-          videoCodec: "h264",
-          audioCodec: "aac",
-          licenseKey: LICENCIA_REMOTION,
-          onProgress: (p: { progress: number }) => actualizarEstado(pieza.id, { progreso: Math.round((p.progress ?? 0) * 100) }),
-        });
+        let { blob } = await renderizarConGuion(guion);
 
-        const blob = await resultado.getBlob();
-        const segundosReales = (performance.now() - inicio) / 1000;
-        setSegundosPorSegundoDeVideo(segundosReales / Math.max(duracionS, 1));
+        // Paso 3 del plan de integración: mismo control de calidad
+        // (código + silencio real + visión) que ya prueba el arnés
+        // admin, antes de subir al álbum. "forzarSinCalidad" (ver
+        // PATCH "forzar_sin_calidad") salta este gate a propósito --
+        // nunca se trata como una aprobación real, control_calidad
+        // queda con aprobado:false de todos modos.
+        if (esPiezaConVoz && !controlCalidadActual?.forzarSinCalidad) {
+          actualizarEstado(pieza.id, { fase: "control_calidad" });
+          const resultadoQC = await conTimeout(
+            correrControlDeCalidad(pieza.id, blob, guion, controlCalidadActual?.crudo),
+            TIMEOUT_FASE_CONTROL_CALIDAD_MS,
+            "El control de calidad tardó demasiado."
+          );
+
+          if (resultadoQC.tipo === "recompactado") {
+            guion = resultadoQC.guion;
+            await fetch(`/api/contenido/${pieza.id}`, {
+              method: "PATCH",
+              headers: { "Content-Type": "application/json" },
+              body: JSON.stringify({ accion: "guardar_calidad", guion }),
+            });
+            blob = (await renderizarConGuion(guion)).blob;
+          } else if (resultadoQC.tipo === "rechazado") {
+            await fetch(`/api/contenido/${pieza.id}`, {
+              method: "PATCH",
+              headers: { "Content-Type": "application/json" },
+              body: JSON.stringify({ accion: "guardar_calidad", estado: "error", control_calidad: { aprobado: false, forzado: false, hallazgos: resultadoQC.hallazgos } }),
+            });
+            actualizarEstado(pieza.id, { fase: "error", errorMsg: "El control de calidad rechazó este reel -- revísalo en la pieza." });
+            return;
+          } else {
+            await fetch(`/api/contenido/${pieza.id}`, {
+              method: "PATCH",
+              headers: { "Content-Type": "application/json" },
+              body: JSON.stringify({ accion: "guardar_calidad", control_calidad: { aprobado: true } }),
+            });
+          }
+        } else if (esPiezaConVoz) {
+          await fetch(`/api/contenido/${pieza.id}`, {
+            method: "PATCH",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ accion: "guardar_calidad", control_calidad: { ...controlCalidadActual, aprobado: false, forzado: true } }),
+          });
+        }
 
         actualizarEstado(pieza.id, { fase: "subiendo", progreso: 100 });
         const resultadoSubida = await subirBlob(pieza.id, blob);
@@ -225,6 +347,7 @@ export default function ColaDeRender({
               <span>{pieza ? pieza.receta_organica : id}</span>
               <span>
                 {estado.fase === "renderizando" && `Renderizando… ${estado.progreso}%`}
+                {estado.fase === "control_calidad" && "Control de calidad…"}
                 {estado.fase === "subiendo" && "Subiendo…"}
                 {estado.fase === "reintentar_subida" && "No se pudo subir"}
                 {estado.fase === "error" && (estado.errorMsg || "Error")}

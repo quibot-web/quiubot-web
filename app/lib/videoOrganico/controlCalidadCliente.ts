@@ -1,0 +1,239 @@
+import { silenciosLargosDesdeNivelesDb, type SilencioLargo } from "./encontrarSilenciosLargos";
+
+// Extraído de app/admin/reel-automatico-prueba/AdminReelAutomaticoPruebaClient.tsx
+// (paso 3 de la integración a /contenido, plan en memoria
+// plan_integracion_contenido_organico_fase_b_v2) -- esta cadena de
+// control de calidad (extracción de cuadros con tiempos límite reales,
+// silencio del audio ya mezclado, clasificación pausas-vs-contenido)
+// ya se probó en staging durante varias rondas reales. Esta es esa
+// MISMA implementación, sin cambios de comportamiento, para que tanto
+// el arnés admin como ColaDeRender.tsx (/contenido real) la llamen una
+// sola vez.
+
+export type HallazgoVision = { cuadro: string; pantalla_vacia: boolean; texto_superpuesto: boolean; contraste_bajo: boolean; nota: string };
+export type HallazgoConImagen = HallazgoVision & { dataUrl?: string };
+
+const TIMEOUT_METADATA_MS = 10_000;
+const TIMEOUT_SEEK_MS = 5_000;
+const TIMEOUT_RVFC_MS = 1_500;
+const TIMEOUT_CUADRO_TOTAL_MS = 8_000;
+const TIMEOUT_AUDIO_MS = 10_000;
+
+export function conTimeout<T>(promesa: Promise<T>, ms: number, mensajeTimeout: string): Promise<T> {
+  let timer: ReturnType<typeof setTimeout>;
+  const timeout = new Promise<never>((_, reject) => {
+    timer = setTimeout(() => reject(new Error(mensajeTimeout)), ms);
+  });
+  return Promise.race([promesa, timeout]).finally(() => clearTimeout(timer)) as Promise<T>;
+}
+
+function esperarEventoVideo(video: HTMLVideoElement, evento: "loadedmetadata" | "seeked", ms: number): Promise<boolean> {
+  return new Promise((resolve) => {
+    let resuelto = false;
+    function limpiar() {
+      video.removeEventListener(evento, onEvento);
+      clearTimeout(timer);
+    }
+    function onEvento() {
+      if (resuelto) return;
+      resuelto = true;
+      limpiar();
+      resolve(true);
+    }
+    const timer = setTimeout(() => {
+      if (resuelto) return;
+      resuelto = true;
+      limpiar();
+      resolve(false);
+    }, ms);
+    video.addEventListener(evento, onEvento);
+  });
+}
+
+function esperarCuadroPresentado(video: HTMLVideoElement, ms: number): Promise<boolean> {
+  if (typeof video.requestVideoFrameCallback !== "function") {
+    return new Promise((resolve) => requestAnimationFrame(() => requestAnimationFrame(() => setTimeout(() => resolve(true), 50))));
+  }
+  return new Promise((resolve) => {
+    let resuelto = false;
+    const timer = setTimeout(() => {
+      if (resuelto) return;
+      resuelto = true;
+      resolve(false);
+    }, ms);
+    video.requestVideoFrameCallback(() => {
+      if (resuelto) return;
+      resuelto = true;
+      clearTimeout(timer);
+      resolve(true);
+    });
+  });
+}
+
+async function extraerUnCuadro(video: HTMLVideoElement, canvas: HTMLCanvasElement, ctx: CanvasRenderingContext2D, segundo: number, duracionS: number): Promise<string | null> {
+  const objetivo = Math.min(Math.max(segundo, 0), Math.max(duracionS - 0.05, 0));
+  video.currentTime = objetivo;
+  const buscoATiempo = await esperarEventoVideo(video, "seeked", TIMEOUT_SEEK_MS);
+  if (!buscoATiempo) return null;
+  await esperarCuadroPresentado(video, TIMEOUT_RVFC_MS);
+  try {
+    ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
+    return canvas.toDataURL("image/jpeg", 0.85);
+  } catch {
+    return null;
+  }
+}
+
+export async function extraerCuadrosClave(
+  blob: Blob,
+  duracionS: number,
+  etiquetasYSegundos: { etiqueta: string; segundo: number }[],
+  onProgreso: (actual: number, total: number) => void
+): Promise<{ etiqueta: string; dataUrl: string | null }[]> {
+  const url = URL.createObjectURL(blob);
+  try {
+    const video = document.createElement("video");
+    video.src = url;
+    video.muted = true;
+    video.preload = "auto";
+
+    const cargoMetadata = await esperarEventoVideo(video, "loadedmetadata", TIMEOUT_METADATA_MS);
+    if (!cargoMetadata) throw new Error("El video renderizado no cargó a tiempo para extraer cuadros.");
+
+    await video.play().then(() => video.pause()).catch(() => {});
+
+    const canvas = document.createElement("canvas");
+    canvas.width = video.videoWidth || 1080;
+    canvas.height = video.videoHeight || 1920;
+    const ctx = canvas.getContext("2d");
+    if (!ctx) throw new Error("No se pudo preparar el lienzo para extraer cuadros.");
+
+    const resultados: { etiqueta: string; dataUrl: string | null }[] = [];
+    for (let i = 0; i < etiquetasYSegundos.length; i++) {
+      const { etiqueta, segundo } = etiquetasYSegundos[i];
+      onProgreso(i + 1, etiquetasYSegundos.length);
+      let dataUrl: string | null;
+      try {
+        dataUrl = await conTimeout(extraerUnCuadro(video, canvas, ctx, segundo, duracionS), TIMEOUT_CUADRO_TOTAL_MS, "timeout");
+      } catch {
+        dataUrl = null;
+      }
+      resultados.push({ etiqueta, dataUrl });
+    }
+    return resultados;
+  } finally {
+    URL.revokeObjectURL(url);
+  }
+}
+
+export type ResultadoSilencio = "silencioso" | "con_audio" | "no_verificado";
+
+async function audioEstaEnSilencioInterno(blob: Blob): Promise<ResultadoSilencio> {
+  const buffer = await blob.arrayBuffer();
+  const AudioContextCtor = window.AudioContext || (window as unknown as { webkitAudioContext: typeof AudioContext }).webkitAudioContext;
+  const contexto = new AudioContextCtor();
+  try {
+    const decodificado = await contexto.decodeAudioData(buffer.slice(0));
+    let sumaCuadrados = 0;
+    let total = 0;
+    for (let canal = 0; canal < decodificado.numberOfChannels; canal++) {
+      const datos = decodificado.getChannelData(canal);
+      for (let i = 0; i < datos.length; i += 50) {
+        sumaCuadrados += datos[i] * datos[i];
+        total += 1;
+      }
+    }
+    if (total === 0) return "silencioso";
+    const rms = Math.sqrt(sumaCuadrados / total);
+    const db = 20 * Math.log10(rms || 1e-10);
+    return db < -45 ? "silencioso" : "con_audio";
+  } finally {
+    await contexto.close().catch(() => {});
+  }
+}
+
+export async function audioEstaEnSilencio(blob: Blob): Promise<ResultadoSilencio> {
+  try {
+    return await conTimeout(audioEstaEnSilencioInterno(blob), TIMEOUT_AUDIO_MS, "timeout");
+  } catch {
+    return "no_verificado";
+  }
+}
+
+const UMBRAL_SILENCIO_DB = -45;
+export const DURACION_MINIMA_SILENCIO_S = 0.6;
+const VENTANA_ESCANEO_S = 0.05;
+
+async function encontrarSilenciosLargosInterno(blob: Blob, duracionMinima_s: number = DURACION_MINIMA_SILENCIO_S): Promise<SilencioLargo[]> {
+  const buffer = await blob.arrayBuffer();
+  const AudioContextCtor = window.AudioContext || (window as unknown as { webkitAudioContext: typeof AudioContext }).webkitAudioContext;
+  const contexto = new AudioContextCtor();
+  try {
+    const decodificado = await contexto.decodeAudioData(buffer.slice(0));
+    const sampleRate = decodificado.sampleRate;
+    const tamanoVentana = Math.max(1, Math.round(VENTANA_ESCANEO_S * sampleRate));
+    const canales = Array.from({ length: decodificado.numberOfChannels }, (_, c) => decodificado.getChannelData(c));
+    const totalMuestras = decodificado.length;
+
+    const nivelesDb: number[] = [];
+    for (let i = 0; i < totalMuestras; i += tamanoVentana) {
+      const fin = Math.min(i + tamanoVentana, totalMuestras);
+      let sumaCuadrados = 0;
+      let total = 0;
+      for (const datos of canales) {
+        for (let j = i; j < fin; j++) {
+          sumaCuadrados += datos[j] * datos[j];
+          total += 1;
+        }
+      }
+      const rms = Math.sqrt(sumaCuadrados / Math.max(total, 1));
+      nivelesDb.push(20 * Math.log10(rms || 1e-10));
+    }
+
+    return silenciosLargosDesdeNivelesDb(nivelesDb, VENTANA_ESCANEO_S, UMBRAL_SILENCIO_DB, duracionMinima_s);
+  } finally {
+    await contexto.close().catch(() => {});
+  }
+}
+
+export async function encontrarSilenciosLargos(blob: Blob): Promise<SilencioLargo[] | "no_verificado"> {
+  try {
+    return await conTimeout(encontrarSilenciosLargosInterno(blob), TIMEOUT_AUDIO_MS, "timeout");
+  } catch {
+    return "no_verificado";
+  }
+}
+
+export function combinarHallazgosConImagenes(hallazgos: HallazgoVision[], cuadros: { etiqueta: string; dataUrl: string }[]): HallazgoConImagen[] {
+  if (hallazgos.length === cuadros.length) {
+    return hallazgos.map((h, i) => ({ ...h, dataUrl: cuadros[i].dataUrl }));
+  }
+  const porEtiqueta = new Map(cuadros.map((c) => [c.etiqueta, c.dataUrl]));
+  return hallazgos.map((h) => ({ ...h, dataUrl: porEtiqueta.get(h.cuadro) }));
+}
+
+export function erroresDesdeQC(hallazgos: HallazgoVision[], silencio: ResultadoSilencio, silenciosLargos: SilencioLargo[] | "no_verificado"): string[] {
+  const errores = hallazgos
+    .filter((h) => h.pantalla_vacia || h.texto_superpuesto || h.contraste_bajo)
+    .map((h) => `El control de calidad (visión) encontró un problema real en el cuadro "${h.cuadro}": ${h.nota}`);
+  if (silencio === "silencioso") errores.push("El audio final mezclado salió en silencio -- revisa que ninguna narracion haya quedado vacía o con un texto raro para la voz.");
+  if (Array.isArray(silenciosLargos)) {
+    for (const s of silenciosLargos) {
+      errores.push(`El audio final mezclado tiene ${(s.fin_s - s.inicio_s).toFixed(2)}s de silencio real entre el segundo ${s.inicio_s.toFixed(2)} y ${s.fin_s.toFixed(2)} -- revisa compactarPausas()/las pausas de la narración ahí.`);
+    }
+  }
+  return errores;
+}
+
+export function esSoloProblemaDePausas(hallazgos: HallazgoVision[], silencio: ResultadoSilencio, silenciosLargos: SilencioLargo[] | "no_verificado"): boolean {
+  const hayProblemaVision = hallazgos.some((h) => h.pantalla_vacia || h.texto_superpuesto || h.contraste_bajo);
+  const haySilencioLargo = Array.isArray(silenciosLargos) && silenciosLargos.length > 0;
+  return !hayProblemaVision && silencio !== "silencioso" && haySilencioLargo;
+}
+
+export function limitesDeRecompactacion(intentosRecompactacion: number): { pausaEntreFrases_s: number; pausaDentroDeFrase_s: number } {
+  return {
+    pausaEntreFrases_s: Math.max(0.3, 0.4 - 0.05 * intentosRecompactacion),
+    pausaDentroDeFrase_s: Math.max(0.15, 0.25 - 0.05 * intentosRecompactacion),
+  };
+}

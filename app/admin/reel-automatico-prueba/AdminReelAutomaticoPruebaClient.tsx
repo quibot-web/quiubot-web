@@ -1,7 +1,21 @@
 "use client";
 import { useRef, useState } from "react";
 import type { Guion } from "@/video/guion.schema";
-import { silenciosLargosDesdeNivelesDb, type SilencioLargo } from "@/app/lib/videoOrganico/encontrarSilenciosLargos";
+import type { SilencioLargo } from "@/app/lib/videoOrganico/encontrarSilenciosLargos";
+import {
+  conTimeout,
+  extraerCuadrosClave,
+  audioEstaEnSilencio,
+  encontrarSilenciosLargos,
+  combinarHallazgosConImagenes,
+  erroresDesdeQC,
+  esSoloProblemaDePausas,
+  limitesDeRecompactacion,
+  DURACION_MINIMA_SILENCIO_S,
+  type HallazgoVision,
+  type HallazgoConImagen,
+  type ResultadoSilencio,
+} from "@/app/lib/videoOrganico/controlCalidadCliente";
 
 // Fase B v2.0, paso 8 del plan -- arnés de prueba del único reel
 // automático. Flujo real (nada mockeado): genera el guion con voz vía
@@ -13,15 +27,6 @@ import { silenciosLargosDesdeNivelesDb, type SilencioLargo } from "@/app/lib/vid
 // Si no pasa, nunca entrega el mp4 -- muestra por qué.
 
 type FaseArnes = "inactivo" | "generando_guion" | "renderizando" | "extrayendo_cuadros" | "control_calidad" | "listo" | "rechazado" | "error";
-
-type HallazgoVision = { cuadro: string; pantalla_vacia: boolean; texto_superpuesto: boolean; contraste_bajo: boolean; nota: string };
-// El cuadro real que vio el modelo, para poder confirmar a simple
-// vista si un hallazgo es real o un falso positivo -- pedido explícito
-// de Juan José tras el caso de "texto_superpuesto" en escena_3_mitad
-// que no se pudo reproducir con un spike: antes de aflojar la
-// definición otra vez hace falta ver el cuadro exacto que la disparó,
-// no solo confiar en la nota en texto del modelo.
-type HallazgoConImagen = HallazgoVision & { dataUrl?: string };
 
 // "crudo" (ronda J): palabras de Whisper + silencios reales de ffmpeg
 // ANTES de compactar -- se guarda tal cual (nunca se interpreta acá)
@@ -49,317 +54,7 @@ const MAX_REINTENTOS_QC = 2;
 // un tiempo límite explícito en cada paso, con una salida de
 // emergencia que SIEMPRE resuelve (nunca deja la promesa colgada) --
 // ningún paso puede quedarse esperando para siempre.
-const TIMEOUT_METADATA_MS = 10_000;
-const TIMEOUT_SEEK_MS = 5_000;
-const TIMEOUT_RVFC_MS = 1_500;
-const TIMEOUT_CUADRO_TOTAL_MS = 8_000;
-const TIMEOUT_AUDIO_MS = 10_000;
 const TIMEOUT_FASE_CONTROL_CALIDAD_MS = 120_000;
-
-function conTimeout<T>(promesa: Promise<T>, ms: number, mensajeTimeout: string): Promise<T> {
-  let timer: ReturnType<typeof setTimeout>;
-  const timeout = new Promise<never>((_, reject) => {
-    timer = setTimeout(() => reject(new Error(mensajeTimeout)), ms);
-  });
-  return Promise.race([promesa, timeout]).finally(() => clearTimeout(timer)) as Promise<T>;
-}
-
-// Espera un evento del <video> con tiempo límite -- a diferencia de
-// conTimeout(), esto NUNCA rechaza: devuelve false si se agotó el
-// tiempo, para que quien llama decida qué hacer (nunca un throw que
-// tumbe todo el proceso por un solo cuadro).
-function esperarEventoVideo(video: HTMLVideoElement, evento: "loadedmetadata" | "seeked", ms: number): Promise<boolean> {
-  return new Promise((resolve) => {
-    let resuelto = false;
-    function limpiar() {
-      video.removeEventListener(evento, onEvento);
-      clearTimeout(timer);
-    }
-    function onEvento() {
-      if (resuelto) return;
-      resuelto = true;
-      limpiar();
-      resolve(true);
-    }
-    const timer = setTimeout(() => {
-      if (resuelto) return;
-      resuelto = true;
-      limpiar();
-      resolve(false);
-    }, ms);
-    video.addEventListener(evento, onEvento);
-  });
-}
-
-// Confirmación real de que el navegador ya PINTÓ el cuadro nuevo
-// (evita el bug del cuadro negro: "seeked" dispara en cuanto el
-// navegador ACEPTA el seek, no cuando el cuadro ya está decodificado
-// en el buffer que lee drawImage()) -- pero con un tiempo límite
-// corto: en una pestaña oculta, requestVideoFrameCallback puede no
-// responder nunca, y para entonces "seeked" ya disparó -- mejor
-// dibujar un cuadro "probablemente ya listo" que colgarse esperando
-// la confirmación perfecta.
-function esperarCuadroPresentado(video: HTMLVideoElement, ms: number): Promise<boolean> {
-  if (typeof video.requestVideoFrameCallback !== "function") {
-    return new Promise((resolve) => requestAnimationFrame(() => requestAnimationFrame(() => setTimeout(() => resolve(true), 50))));
-  }
-  return new Promise((resolve) => {
-    let resuelto = false;
-    const timer = setTimeout(() => {
-      if (resuelto) return;
-      resuelto = true;
-      resolve(false);
-    }, ms);
-    video.requestVideoFrameCallback(() => {
-      if (resuelto) return;
-      resuelto = true;
-      clearTimeout(timer);
-      resolve(true);
-    });
-  });
-}
-
-async function extraerUnCuadro(video: HTMLVideoElement, canvas: HTMLCanvasElement, ctx: CanvasRenderingContext2D, segundo: number, duracionS: number): Promise<string | null> {
-  const objetivo = Math.min(Math.max(segundo, 0), Math.max(duracionS - 0.05, 0));
-  video.currentTime = objetivo;
-  const buscoATiempo = await esperarEventoVideo(video, "seeked", TIMEOUT_SEEK_MS);
-  if (!buscoATiempo) return null;
-  await esperarCuadroPresentado(video, TIMEOUT_RVFC_MS);
-  try {
-    ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
-    return canvas.toDataURL("image/jpeg", 0.85);
-  } catch {
-    return null;
-  }
-}
-
-// dataUrl: null = "no se pudo extraer este cuadro a tiempo" -- NO es
-// un error que tumbe el proceso (pedido explícito): se marca así y
-// se sigue con el resto. onProgreso informa "cuadro N de M" para que
-// la pantalla nunca se vea colgada sin explicación.
-async function extraerCuadrosClave(
-  blob: Blob,
-  duracionS: number,
-  etiquetasYSegundos: { etiqueta: string; segundo: number }[],
-  onProgreso: (actual: number, total: number) => void
-): Promise<{ etiqueta: string; dataUrl: string | null }[]> {
-  const url = URL.createObjectURL(blob);
-  try {
-    const video = document.createElement("video");
-    video.src = url;
-    video.muted = true;
-    video.preload = "auto";
-
-    const cargoMetadata = await esperarEventoVideo(video, "loadedmetadata", TIMEOUT_METADATA_MS);
-    if (!cargoMetadata) throw new Error("El video renderizado no cargó a tiempo para extraer cuadros.");
-
-    // "Calienta" el decodificador -- mitigación real para navegadores
-    // (Safari en particular) que no resuelven nunca un seek sobre un
-    // <video> de blob que no llegó a reproducir ni un cuadro.
-    await video.play().then(() => video.pause()).catch(() => {});
-
-    const canvas = document.createElement("canvas");
-    canvas.width = video.videoWidth || 1080;
-    canvas.height = video.videoHeight || 1920;
-    const ctx = canvas.getContext("2d");
-    if (!ctx) throw new Error("No se pudo preparar el lienzo para extraer cuadros.");
-
-    const resultados: { etiqueta: string; dataUrl: string | null }[] = [];
-    for (let i = 0; i < etiquetasYSegundos.length; i++) {
-      const { etiqueta, segundo } = etiquetasYSegundos[i];
-      onProgreso(i + 1, etiquetasYSegundos.length);
-      let dataUrl: string | null;
-      try {
-        dataUrl = await conTimeout(extraerUnCuadro(video, canvas, ctx, segundo, duracionS), TIMEOUT_CUADRO_TOTAL_MS, "timeout");
-      } catch {
-        dataUrl = null;
-      }
-      resultados.push({ etiqueta, dataUrl });
-    }
-    return resultados;
-  } finally {
-    URL.revokeObjectURL(url);
-  }
-}
-
-// "no_verificado" (nunca "silencioso" por defecto) si decodeAudioData
-// se cuelga o falla -- no hay forma de distinguir "sí tiene audio"
-// de "no se pudo revisar" sin el dato real, así que nunca se asume
-// lo peor ni lo mejor, se lo dice claro al admin.
-type ResultadoSilencio = "silencioso" | "con_audio" | "no_verificado";
-
-// Silencio real del audio YA MEZCLADO (voz + música + efectos) -- el
-// único de los 2 casos documentados en el plan que se puede medir acá
-// mismo, sin mandar nada a un modelo: Web Audio API decodifica el
-// archivo final tal cual va a quedar. Umbral generoso (-45dB de RMS)
-// -- lo que importa es detectar "no hay NADA de audio", no afinar el
-// nivel ideal de mezcla.
-async function audioEstaEnSilencioInterno(blob: Blob): Promise<ResultadoSilencio> {
-  const buffer = await blob.arrayBuffer();
-  const AudioContextCtor = window.AudioContext || (window as unknown as { webkitAudioContext: typeof AudioContext }).webkitAudioContext;
-  const contexto = new AudioContextCtor();
-  try {
-    const decodificado = await contexto.decodeAudioData(buffer.slice(0));
-    let sumaCuadrados = 0;
-    let total = 0;
-    for (let canal = 0; canal < decodificado.numberOfChannels; canal++) {
-      const datos = decodificado.getChannelData(canal);
-      for (let i = 0; i < datos.length; i += 50) {
-        sumaCuadrados += datos[i] * datos[i];
-        total += 1;
-      }
-    }
-    if (total === 0) return "silencioso";
-    const rms = Math.sqrt(sumaCuadrados / total);
-    const db = 20 * Math.log10(rms || 1e-10);
-    return db < -45 ? "silencioso" : "con_audio";
-  } finally {
-    await contexto.close().catch(() => {});
-  }
-}
-
-async function audioEstaEnSilencio(blob: Blob): Promise<ResultadoSilencio> {
-  try {
-    return await conTimeout(audioEstaEnSilencioInterno(blob), TIMEOUT_AUDIO_MS, "timeout");
-  } catch {
-    return "no_verificado";
-  }
-}
-
-// Ronda H (revisión de staging, 16 nov 2026): "¿está todo en silencio?"
-// no atrapa un hueco puntual DENTRO de un reel que por lo demás suena
-// bien (el caso real que motivó esto: 0.56s de silencio real a mitad
-// de una sola escena, por un hueco de Whisper que
-// app/lib/videoOrganico/compactarPausas.ts ahora recorta en el
-// guion -- esto mide el audio YA MEZCLADO Y RENDERIZADO de verdad,
-// nunca los números crudos de tiemposRender/palabrasPorEscena, para
-// atrapar tanto un hueco que se escapó de esa compactación como
-// cualquier otra causa de silencio real (música/efectos no cubren un
-// hueco de voz, por ejemplo). Mismo umbral de -45dB que ya usa
-// audioEstaEnSilencioInterno -- lo que importa es "no hay nada
-// sonando", no afinar el nivel ideal de mezcla.
-//
-// Ronda J: el umbral subió de 0.4 a 0.6 -- 0.4 quedó obsoleto en
-// cuanto compactarPausas.ts empezó a apuntar a pausas de 0.35-0.45s
-// ENTRE frases/escenas a propósito (antes sonaba "mordido"; ver su
-// propio comentario). Caso real que lo disparó en staging: un intento
-// 3/3 falló por un silencio de 0.50s que era exactamente el respiro
-// nuevo pedido, no un defecto. compactarPausas.ts ya garantiza un
-// techo duro de 0.5s (PAUSA_MAXIMA_ABSOLUTA_S) -- este umbral solo
-// necesita quedar POR ENCIMA de ese techo para no marcar como falla
-// lo que la compactación hace a propósito, con margen para que un
-// silencio real de verdad (una pausa que se escapó, o música/efectos
-// que no taparon un hueco de voz) siga marcándose.
-const UMBRAL_SILENCIO_DB = -45;
-const DURACION_MINIMA_SILENCIO_S = 0.6;
-const VENTANA_ESCANEO_S = 0.05;
-
-async function encontrarSilenciosLargosInterno(blob: Blob, duracionMinima_s: number = DURACION_MINIMA_SILENCIO_S): Promise<SilencioLargo[]> {
-  const buffer = await blob.arrayBuffer();
-  const AudioContextCtor = window.AudioContext || (window as unknown as { webkitAudioContext: typeof AudioContext }).webkitAudioContext;
-  const contexto = new AudioContextCtor();
-  try {
-    const decodificado = await contexto.decodeAudioData(buffer.slice(0));
-    const sampleRate = decodificado.sampleRate;
-    const tamanoVentana = Math.max(1, Math.round(VENTANA_ESCANEO_S * sampleRate));
-    const canales = Array.from({ length: decodificado.numberOfChannels }, (_, c) => decodificado.getChannelData(c));
-    const totalMuestras = decodificado.length;
-
-    // Un nivel de dB por ventana -- la detección de "cuánto dura un
-    // tramo por debajo del umbral" es lógica pura aparte, probada con
-    // niveles sintéticos (silenciosLargosDesdeNivelesDb, ver
-    // app/lib/videoOrganico/encontrarSilenciosLargos.ts); acá solo se
-    // arma el arreglo real a partir del audio de verdad decodificado.
-    const nivelesDb: number[] = [];
-    for (let i = 0; i < totalMuestras; i += tamanoVentana) {
-      const fin = Math.min(i + tamanoVentana, totalMuestras);
-      let sumaCuadrados = 0;
-      let total = 0;
-      for (const datos of canales) {
-        for (let j = i; j < fin; j++) {
-          sumaCuadrados += datos[j] * datos[j];
-          total += 1;
-        }
-      }
-      const rms = Math.sqrt(sumaCuadrados / Math.max(total, 1));
-      nivelesDb.push(20 * Math.log10(rms || 1e-10));
-    }
-
-    return silenciosLargosDesdeNivelesDb(nivelesDb, VENTANA_ESCANEO_S, UMBRAL_SILENCIO_DB, duracionMinima_s);
-  } finally {
-    await contexto.close().catch(() => {});
-  }
-}
-
-async function encontrarSilenciosLargos(blob: Blob): Promise<SilencioLargo[] | "no_verificado"> {
-  try {
-    return await conTimeout(encontrarSilenciosLargosInterno(blob), TIMEOUT_AUDIO_MS, "timeout");
-  } catch {
-    return "no_verificado";
-  }
-}
-
-// Empareja cada hallazgo con el cuadro (dataUrl) que lo originó.
-// control-calidad/route.ts le pide al modelo responder "en el mismo
-// orden" que los cuadros que recibió -- se empareja por posición
-// primero (el caso normal); si por algún motivo la cantidad no
-// coincide, se cae a emparejar por el texto exacto de la etiqueta en
-// vez de asumir una posición que puede estar desalineada.
-function combinarHallazgosConImagenes(hallazgos: HallazgoVision[], cuadros: { etiqueta: string; dataUrl: string }[]): HallazgoConImagen[] {
-  if (hallazgos.length === cuadros.length) {
-    return hallazgos.map((h, i) => ({ ...h, dataUrl: cuadros[i].dataUrl }));
-  }
-  const porEtiqueta = new Map(cuadros.map((c) => [c.etiqueta, c.dataUrl]));
-  return hallazgos.map((h) => ({ ...h, dataUrl: porEtiqueta.get(h.cuadro) }));
-}
-
-// Construye los mensajes de corrección que se le mandan de vuelta a
-// POST /guion (erroresPrevios) cuando el control de calidad rechaza un
-// intento -- mismo texto que ve la IA al reintentar por un fallo de
-// validación estructural (ver el comentario en esa ruta). "no_verificado"
-// NUNCA se trata como un fallo real (no hay evidencia de que algo esté
-// mal, solo que no se pudo confirmar) -- no dispara un reintento por
-// sí solo.
-function erroresDesdeQC(hallazgos: HallazgoVision[], silencio: ResultadoSilencio, silenciosLargos: SilencioLargo[] | "no_verificado"): string[] {
-  const errores = hallazgos
-    .filter((h) => h.pantalla_vacia || h.texto_superpuesto || h.contraste_bajo)
-    .map((h) => `El control de calidad (visión) encontró un problema real en el cuadro "${h.cuadro}": ${h.nota}`);
-  if (silencio === "silencioso") errores.push("El audio final mezclado salió en silencio -- revisa que ninguna narracion haya quedado vacía o con un texto raro para la voz.");
-  if (Array.isArray(silenciosLargos)) {
-    for (const s of silenciosLargos) {
-      errores.push(`El audio final mezclado tiene ${(s.fin_s - s.inicio_s).toFixed(2)}s de silencio real entre el segundo ${s.inicio_s.toFixed(2)} y ${s.fin_s.toFixed(2)} -- revisa compactarPausas()/las pausas de la narración ahí.`);
-    }
-  }
-  return errores;
-}
-
-// Ronda J, punto B: clasifica el hallazgo del intento anterior -- si
-// lo ÚNICO que falló fue un silencio largo (audio ya renderizado y
-// visión limpios), el problema es de PAUSAS, no de contenido. Nunca
-// hace falta un guion ni una voz nuevos para arreglar eso -- solo
-// recompactar la misma voz con límites más estrictos (POST
-// /recompactar). Cualquier otra causa (visión, o el audio completo en
-// silencio -- señal de algo roto de verdad, no solo una pausa larga)
-// sigue regenerando todo desde cero, igual que antes.
-function esSoloProblemaDePausas(hallazgos: HallazgoVision[], silencio: ResultadoSilencio, silenciosLargos: SilencioLargo[] | "no_verificado"): boolean {
-  const hayProblemaVision = hallazgos.some((h) => h.pantalla_vacia || h.texto_superpuesto || h.contraste_bajo);
-  const haySilencioLargo = Array.isArray(silenciosLargos) && silenciosLargos.length > 0;
-  return !hayProblemaVision && silencio !== "silencioso" && haySilencioLargo;
-}
-
-// Cada recompactación es más estricta que la anterior -- un paso de
-// 0.05s por intento, nunca por debajo de un piso razonable (0.3s entre
-// frases/escenas sigue siendo un respiro real; 0.15s dentro de una
-// frase sigue sin sonar mordido). Si tras MAX_REINTENTOS_QC intentos
-// de recompactación el silencio sigue sin resolverse, el problema ya
-// no es de límites -- el loop principal lo trata como cualquier otro
-// fallo agotado.
-function limitesDeRecompactacion(intentosRecompactacion: number): { pausaEntreFrases_s: number; pausaDentroDeFrase_s: number } {
-  return {
-    pausaEntreFrases_s: Math.max(0.3, 0.4 - 0.05 * intentosRecompactacion),
-    pausaDentroDeFrase_s: Math.max(0.15, 0.25 - 0.05 * intentosRecompactacion),
-  };
-}
 
 export default function AdminReelAutomaticoPruebaClient() {
   const [fase, setFase] = useState<FaseArnes>("inactivo");

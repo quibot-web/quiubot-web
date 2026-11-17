@@ -230,6 +230,100 @@ export async function PATCH(req: NextRequest, { params }: { params: Promise<{ id
     return NextResponse.json({ ok: true });
   }
 
+  if (cuerpo?.accion === "guardar_calidad") {
+    // Paso 3 del plan de integración: ColaDeRender.tsx corre el mismo
+    // control de calidad del arnés admin (render + visión + audio)
+    // antes de subir al álbum. Esta acción es el único punto donde esa
+    // pantalla persiste lo que encontró -- siempre mientras la pieza
+    // sigue en "renderizando" (el claim atómico de "iniciar_render" ya
+    // la dejó así): (a) un guion recompactado (recompactar.ts, mismo
+    // mecanismo del arnés admin, sin volver a llamar la IA ni a
+    // generarVoz) antes de reintentar la subida; (b) el hallazgo final
+    // si el control de calidad rechaza de verdad (estado="error",
+    // tipo_error="calidad"); (c) "forzado" (un admin decide subir
+    // igual un reel que no pasó) -- control_calidad.aprobado queda en
+    // false, nunca se trata como una aprobación real en ningún lado de
+    // la UI (ver /contenido/page.tsx, "Lista, no aprobada").
+    const guionNuevo = cuerpo.guion as Record<string, unknown> | undefined;
+    const controlCalidad = cuerpo.control_calidad as Record<string, unknown> | undefined;
+    const estadoNuevo = cuerpo.estado as "error" | undefined;
+
+    const { data: piezaActual } = await supabaseAdmin.from("publicaciones_organicas").select("estado").eq("id", id).eq("user_id", usuario!.id).maybeSingle();
+    if (!piezaActual) return NextResponse.json({ error: "Pieza no encontrada." }, { status: 404 });
+    if (piezaActual.estado !== "renderizando") {
+      return NextResponse.json({ error: `Esta pieza está en estado "${piezaActual.estado}", no se puede guardar el control de calidad ahora.` }, { status: 400 });
+    }
+
+    const valoresUpdate: Record<string, unknown> = { actualizado_en: new Date().toISOString() };
+    if (guionNuevo) {
+      const resultadoGuion = GuionSchema.safeParse(guionNuevo);
+      if (!resultadoGuion.success) return NextResponse.json({ error: "El guion recompactado no es válido." }, { status: 400 });
+      valoresUpdate.guion = resultadoGuion.data;
+    }
+    if (controlCalidad) valoresUpdate.control_calidad = controlCalidad;
+    if (estadoNuevo === "error") {
+      valoresUpdate.estado = "error";
+      valoresUpdate.tipo_error = "calidad";
+    }
+
+    const { error: errorUpdate } = await supabaseAdmin.from("publicaciones_organicas").update(valoresUpdate).eq("id", id).eq("user_id", usuario!.id).eq("estado", "renderizando");
+    if (errorUpdate) return NextResponse.json({ error: "No se pudo guardar el control de calidad." }, { status: 503 });
+    return NextResponse.json({ ok: true });
+  }
+
+  if (cuerpo?.accion === "forzar_sin_calidad") {
+    // El admin decide subir un reel que el control de calidad rechazó
+    // -- vuelve a "aprobada" (ColaDeRender la vuelve a tomar sola) con
+    // una marca que el render de esta vuelta lee para saltarse el
+    // gate de calidad (nunca borra los hallazgos anteriores, quedan
+    // como evidencia de qué se forzó). Publicar de todos modos (acción
+    // aparte, más abajo) es la única que la vuelve elegible para el
+    // publicador automático -- "forzar" por sí solo NUNCA basta.
+    const { data: piezaActual } = await supabaseAdmin.from("publicaciones_organicas").select("estado, control_calidad").eq("id", id).eq("user_id", usuario!.id).maybeSingle();
+    if (!piezaActual) return NextResponse.json({ error: "Pieza no encontrada." }, { status: 404 });
+    if (piezaActual.estado !== "error") {
+      return NextResponse.json({ error: `Esta pieza está en estado "${piezaActual.estado}", no se puede forzar.` }, { status: 400 });
+    }
+    const { error: errorUpdate } = await supabaseAdmin
+      .from("publicaciones_organicas")
+      .update({
+        estado: "aprobada",
+        control_calidad: { ...(piezaActual.control_calidad as object), forzarSinCalidad: true },
+        actualizado_en: new Date().toISOString(),
+      })
+      .eq("id", id)
+      .eq("user_id", usuario!.id)
+      .eq("estado", "error");
+    if (errorUpdate) return NextResponse.json({ error: "No se pudo forzar la pieza." }, { status: 503 });
+    return NextResponse.json({ ok: true });
+  }
+
+  if (cuerpo?.accion === "publicar_igual") {
+    // Paso 4 (publicador, todavía no construido) leerá esta marca --
+    // una pieza "lista" cuyo control de calidad quedó forzado/no
+    // aprobado NUNCA es elegible para el cron sin este paso extra y
+    // explícito (pedido de Juan José, 17-nov-2026: nunca auto-publicar
+    // un reel forzado). "Lista, no aprobada: requiere confirmación" es
+    // el estado visible en /contenido hasta que se presione este botón.
+    const { data: piezaActual } = await supabaseAdmin.from("publicaciones_organicas").select("estado, control_calidad").eq("id", id).eq("user_id", usuario!.id).maybeSingle();
+    if (!piezaActual) return NextResponse.json({ error: "Pieza no encontrada." }, { status: 404 });
+    if (piezaActual.estado !== "lista") {
+      return NextResponse.json({ error: `Esta pieza está en estado "${piezaActual.estado}", no se puede marcar para publicar.` }, { status: 400 });
+    }
+    const controlActual = (piezaActual.control_calidad as { aprobado?: boolean } | null) ?? null;
+    if (controlActual?.aprobado !== false) {
+      return NextResponse.json({ error: "Esta pieza no necesita este botón -- ya está aprobada normalmente." }, { status: 400 });
+    }
+    const { error: errorUpdate } = await supabaseAdmin
+      .from("publicaciones_organicas")
+      .update({ control_calidad: { ...controlActual, publicarIgual: true }, actualizado_en: new Date().toISOString() })
+      .eq("id", id)
+      .eq("user_id", usuario!.id)
+      .eq("estado", "lista");
+    if (errorUpdate) return NextResponse.json({ error: "No se pudo marcar la pieza para publicar." }, { status: 503 });
+    return NextResponse.json({ ok: true });
+  }
+
   if (cuerpo?.accion === "reprogramar") {
     // Arrastrar y soltar en el calendario (sección 2 del plan) -- solo
     // cambia programada_para/semana, nunca el estado. Mismo
@@ -336,7 +430,7 @@ export async function PATCH(req: NextRequest, { params }: { params: Promise<{ id
     const guionActualizado: Guion = { ...guionActual, ...resultado.campos };
     const { error: errorUpdate } = await supabaseAdmin
       .from("publicaciones_organicas")
-      .update({ guion: guionActualizado, voz_url: resultado.campos.vozUrl, actualizado_en: new Date().toISOString() })
+      .update({ guion: guionActualizado, voz_url: resultado.campos.vozUrl, control_calidad: resultado.crudo ? { crudo: resultado.crudo } : null, actualizado_en: new Date().toISOString() })
       .eq("id", id)
       .eq("user_id", usuario!.id)
       .eq("estado", "borrador");
