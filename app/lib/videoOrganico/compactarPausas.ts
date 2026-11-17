@@ -1,134 +1,178 @@
 import type { PalabraConTiempo } from "./generarVoz";
+import type { SilencioReal } from "./detectarSilenciosReales";
 
-// Fase B v2.0, ronda H (revisión de staging, 16 nov 2026). Bug real
-// confirmado leyendo un guion real generado de punta a punta: las
-// palabras que Whisper alinea pueden tener un hueco interno más largo
-// que el que un reel debería mostrar -- ej. "mensajes" (termina en
-// 1.06s) -> "aunque" (empieza en 1.62s), 0.56s de silencio real DENTRO
-// de una sola escena (ReelAutomatico.tsx reproduce cada escena como
-// un solo tramo continuo de audio, así que ese hueco SÍ se escucha).
-// El hueco ENTRE escenas distintas (ej. fin_s de e1=3.38, inicio_s de
-// e2=4.24) no tiene el mismo problema -- cada escena ya reproduce
-// SOLO su propio tramo de palabras, así que ese hueco nunca se oye
-// (duracionReelAutomaticoEnCuadros() suma (fin_s-inicio_s) por
-// escena, nunca el tiempo total de la toma cruda). Esta función de
-// todos modos no distingue "mismo hueco" de "hueco entre escenas" --
-// no necesita saberlo, cualquier hueco (de la toma cruda) por encima
-// de maxPausa_s se recorta igual, esté donde esté.
+// Fase B v2.0, ronda I (escuchó el reel real en staging, 18 nov 2026).
+// La ronda H decidía DÓNDE cortar a partir de los huecos entre los
+// tiempos de PALABRA de Whisper -- esos tiempos son una alineación
+// aproximada (hay palabras reales con inicio_s===fin_s: "botón",
+// "anuncio", "atención", "mejorar"), nunca una medición real del
+// audio. Cortar justo en ese límite impreciso mordió palabras reales
+// ("conecta", "responde", "Quiubot") en un reel real, sobre todo en
+// los bordes entre escenas (donde la ronda H nunca aplicó margen,
+// asumiendo que ese borde "siempre se cortó ahí, con la misma
+// precisión de Whisper de siempre" -- un supuesto que resultó falso).
 //
-// Enfoque: NUNCA se edita el archivo de audio. Se recalculan los
-// tiempos de cada palabra a una línea de tiempo "compactada" (más
-// corta) donde ningún hueco entre palabras consecutivas supera
-// maxPausa_s -- el contenido real de cada palabra (su propia
-// duración) nunca cambia, solo se la corre hacia atrás lo que haga
-// falta. Quien reproduce el audio (ReelAutomatico.tsx) sigue
-// extrayendo del archivo ORIGINAL (campo "original"), solo que ahora
-// puede necesitar varios tramos por escena en vez de uno solo --ver
-// construirSegmentosAudio() más abajo-- cada uno colocado en su
-// posición COMPACTADA (campo "compactado").
+// Enfoque nuevo: el silencio se mide en la FORMA DE ONDA real
+// (detectarSilenciosReales.ts, sobre el propio ffmpeg que Remotion ya
+// empaqueta), nunca se infiere de dónde Whisper CREE que empieza o
+// termina una palabra. Solo se recorta DENTRO de un tramo que esa
+// medición real ya confirmó que es silencio -- nunca se toca nada
+// fuera de ahí, así que jamás se puede morder una palabra real, sin
+// importar si el corte cae en medio de una escena o entre dos
+// distintas: ambos casos son, a partir de ahora, exactamente el mismo
+// caso. Los tiempos de Whisper solo sirven para (a) decidir si un
+// silencio real es "entre frases/escenas" o "dentro de una frase"
+// (mirando si la palabra de antes termina en puntuación fuerte, o si
+// las dos palabras son de escenas distintas) y (b) re-ubicar cada
+// palabra en la línea de tiempo ya compactada, para sincronizar
+// subtítulos y eventos -- nunca para decidir el corte en sí.
+//
+// Nunca se edita el archivo de audio. Cada "tramo" conservado sigue
+// siendo una extracción directa del archivo ORIGINAL (campo
+// "original"), solo que ahora puede haber más de uno por escena --
+// ReelAutomatico.tsx coloca cada uno en su posición COMPACTADA (campo
+// "compactado") dentro del Sequence de su propia escena.
 export type PalabraCompactada = {
   texto: string;
   original: { inicio_s: number; fin_s: number };
   compactado: { inicio_s: number; fin_s: number };
 };
 
-export const MAX_PAUSA_S = 0.25;
-
-export function compactarPausas(palabras: PalabraConTiempo[], maxPausa_s: number = MAX_PAUSA_S): PalabraCompactada[] {
-  let corrimiento = 0;
-  let finOriginalAnterior: number | null = null;
-
-  return palabras.map((p) => {
-    if (finOriginalAnterior !== null) {
-      const gap = p.inicio_s - finOriginalAnterior;
-      if (gap > maxPausa_s) corrimiento += gap - maxPausa_s;
-    }
-    finOriginalAnterior = p.fin_s;
-    return {
-      texto: p.texto,
-      original: { inicio_s: p.inicio_s, fin_s: p.fin_s },
-      compactado: { inicio_s: p.inicio_s - corrimiento, fin_s: p.fin_s - corrimiento },
-    };
-  });
-}
-
-// Margen de seguridad en cada punto de CORTE (60-80ms, mitad del
-// rango pedido) -- Whisper no mide con precisión perfecta (hay
-// palabras reales con inicio_s===fin_s en guiones reales: "botón",
-// "anuncio", "atención", "mejorar"). Cortar justo en el límite medido
-// de una palabra arriesga morder su cola/cabeza real. Como cada corte
-// solo ocurre donde el hueco ORIGINAL ya superó maxPausa_s (0.25s) --
-// y 2×margenCorte_s <= maxPausa_s --, extender el tramo guardado hacia
-// AFUERA (hacia el silencio real que ya existe a los dos lados del
-// corte) nunca muerde habla real y nunca se come el silencio objetivo
-// entre tramos: solo cambia CUÁNTO de ese silencio real se conserva
-// como audio (en vez de puro corte en cero) vs. cuánto queda como
-// silencio digital puro entre los dos <CapaVoz> consecutivos.
-export const MARGEN_CORTE_S = 0.07;
-
-// Por escena: agrupa sus propias palabras (ya compactadas) en
-// "tramos" -- cada vez que el hueco ORIGINAL entre dos palabras
-// consecutivas de esa escena superó maxPausa_s, ahí hay que cortar
-// (ese tramo de la toma cruda ya no es contiguo con el siguiente en
-// el tiempo compactado, hace falta un <CapaVoz> aparte para saltar el
-// sobrante). Si una escena no tiene ningún hueco así, da exactamente
-// 1 tramo -- mismo comportamiento de hoy (una sola extracción
-// continua por escena).
-//
-// margenAlInicio/margenAlFinal: si el primer/último tramo de ESTA
-// escena también es un "corte" real desde el punto de vista del
-// REEL completo -- ej. el primer tramo de e2 linda con el fin de e1,
-// que en la práctica siempre es un hueco grande (cada escena es su
-// propia oración) aunque, visto solo con las palabras de e2, no haya
-// ningún hueco ahí adentro. El caller (quien ya sabe si esta escena es
-// la primera/última del reel) decide esto -- por defecto true (más
-// seguro: aplicar el margen) salvo en los 2 bordes reales del reel
-// completo, donde no hay silencio fuente de dónde sacar margen antes
-// de la primera palabra o después de la última.
 export type TramoAudio = { original: { inicio_s: number; fin_s: number }; compactado: { inicio_s: number; fin_s: number } };
 
-export function construirTramosAudio(
-  palabrasDeEscena: PalabraCompactada[],
-  opciones: { maxPausa_s?: number; margenCorte_s?: number; margenAlInicio?: boolean; margenAlFinal?: boolean } = {}
-): TramoAudio[] {
-  const { maxPausa_s = MAX_PAUSA_S, margenCorte_s = MARGEN_CORTE_S, margenAlInicio = true, margenAlFinal = true } = opciones;
-  if (palabrasDeEscena.length === 0) return [];
+// Dentro de una misma frase: nunca más de un cuarto de segundo (igual
+// que la ronda H). Entre frases/escenas: un respiro real, pedido
+// explícito tras escuchar el reel (sonaba "mordido", no solo
+// "apretado") -- el objetivo (0.4s) cae en el centro del rango
+// pedido (0.35-0.45s).
+export const PAUSA_DENTRO_DE_FRASE_S = 0.25;
+export const PAUSA_ENTRE_FRASES_S = 0.4;
 
-  const crudos: TramoAudio[] = [];
-  let inicioTramo = palabrasDeEscena[0];
-  let finTramo = palabrasDeEscena[0];
+// Tolerancia de desacuerdo entre lo que ffmpeg mide como silencio y lo
+// que Whisper cree que dura una palabra -- las dos mediciones nunca
+// coinciden al milisegundo (confirmado real: ffmpeg detectó el mismo
+// hueco entre escenas que Whisper, pero con bordes ~20-80ms distintos
+// a cada lado). Un silencio real que no calza con NINGÚN hueco de
+// palabras (más allá de esta tolerancia) nunca se recorta -- más
+// seguro dejarlo intacto que arriesgar con un emparejamiento dudoso.
+const TOLERANCIA_EMPAREJAMIENTO_S = 0.05;
 
-  for (let i = 1; i < palabrasDeEscena.length; i++) {
-    const anterior = palabrasDeEscena[i - 1];
-    const actual = palabrasDeEscena[i];
-    const gapOriginal = actual.original.inicio_s - anterior.original.fin_s;
-    if (gapOriginal > maxPausa_s) {
-      crudos.push({
-        original: { inicio_s: inicioTramo.original.inicio_s, fin_s: finTramo.original.fin_s },
-        compactado: { inicio_s: inicioTramo.compactado.inicio_s, fin_s: finTramo.compactado.fin_s },
-      });
-      inicioTramo = actual;
+type Remocion = { inicioOriginal: number; finOriginal: number; magnitud: number };
+
+export function compactarConSilenciosReales(
+  palabras: PalabraConTiempo[],
+  silencios: SilencioReal[],
+  escenaIndicePorPalabra: number[],
+  opciones: { pausaDentroDeFrase_s?: number; pausaEntreFrases_s?: number } = {}
+): { palabras: PalabraCompactada[]; tramosPorEscena: TramoAudio[][] } {
+  if (palabras.length === 0) return { palabras: [], tramosPorEscena: [] };
+  const pausaFrase = opciones.pausaDentroDeFrase_s ?? PAUSA_DENTRO_DE_FRASE_S;
+  const pausaEntreFrases = opciones.pausaEntreFrases_s ?? PAUSA_ENTRE_FRASES_S;
+
+  const remociones: Remocion[] = [];
+  const primeraPalabra = palabras[0];
+  const ultimaPalabra = palabras[palabras.length - 1];
+
+  for (const s of silencios) {
+    // Silencio antes de la primera palabra -- el gancho debe arrancar
+    // en (casi) 0, sin importar cuánto dure este tramo inicial.
+    if (s.fin_s <= primeraPalabra.inicio_s + TOLERANCIA_EMPAREJAMIENTO_S) {
+      const finReal = Math.min(s.fin_s, primeraPalabra.inicio_s);
+      if (finReal > 1e-6) remociones.push({ inicioOriginal: 0, finOriginal: finReal, magnitud: finReal });
+      continue;
     }
-    finTramo = actual;
-  }
-  crudos.push({
-    original: { inicio_s: inicioTramo.original.inicio_s, fin_s: finTramo.original.fin_s },
-    compactado: { inicio_s: inicioTramo.compactado.inicio_s, fin_s: finTramo.compactado.fin_s },
-  });
+    // Silencio después de la última palabra -- no afecta nada del
+    // contenido hablado, se ignora (no hace falta recortar la cola).
+    if (s.inicio_s >= ultimaPalabra.fin_s - TOLERANCIA_EMPAREJAMIENTO_S) continue;
 
-  return crudos.map((tramo, i) => {
-    const esPrimero = i === 0;
-    const esUltimo = i === crudos.length - 1;
-    // Un corte INTERNO (no es ni el primer ni el último tramo de esta
-    // escena) siempre lleva margen -- es, sin excepción, un punto
-    // donde se saltó un hueco real. En los bordes, el margen depende
-    // de si ese borde también linda con un corte visto desde el reel
-    // completo (lo decide el caller).
-    const margenAntes = esPrimero ? (margenAlInicio ? margenCorte_s : 0) : margenCorte_s;
-    const margenDespues = esUltimo ? (margenAlFinal ? margenCorte_s : 0) : margenCorte_s;
-    return {
-      original: { inicio_s: tramo.original.inicio_s - margenAntes, fin_s: tramo.original.fin_s + margenDespues },
-      compactado: { inicio_s: tramo.compactado.inicio_s - margenAntes, fin_s: tramo.compactado.fin_s + margenDespues },
-    };
-  });
+    let i = -1;
+    for (let k = 0; k < palabras.length - 1; k++) {
+      if (s.inicio_s >= palabras[k].fin_s - TOLERANCIA_EMPAREJAMIENTO_S && s.fin_s <= palabras[k + 1].inicio_s + TOLERANCIA_EMPAREJAMIENTO_S) {
+        i = k;
+        break;
+      }
+    }
+    if (i === -1) continue; // ambiguo, nunca se toca
+
+    const distintaEscena = escenaIndicePorPalabra[i] !== escenaIndicePorPalabra[i + 1];
+    const terminaEnPuntuacionFuerte = /[.?!;]$/.test(palabras[i].texto.trim());
+    const esLimiteDeFrase = distintaEscena || terminaEnPuntuacionFuerte;
+    const duracion = s.fin_s - s.inicio_s;
+    const objetivo = esLimiteDeFrase ? pausaEntreFrases : Math.min(duracion, pausaFrase);
+    if (duracion <= objetivo) continue;
+
+    const recorte = duracion - objetivo;
+    remociones.push({ inicioOriginal: s.inicio_s + objetivo / 2, finOriginal: s.fin_s - objetivo / 2, magnitud: recorte });
+  }
+
+  remociones.sort((a, b) => a.inicioOriginal - b.inicioOriginal);
+
+  function corrimientoEn(tOriginal: number): number {
+    let total = 0;
+    for (const r of remociones) {
+      if (r.finOriginal <= tOriginal + 1e-9) total += r.magnitud;
+      else break;
+    }
+    return total;
+  }
+
+  const palabrasCompactadas: PalabraCompactada[] = palabras.map((p) => ({
+    texto: p.texto,
+    original: { inicio_s: p.inicio_s, fin_s: p.fin_s },
+    compactado: { inicio_s: p.inicio_s - corrimientoEn(p.inicio_s), fin_s: p.fin_s - corrimientoEn(p.fin_s) },
+  }));
+
+  // Puntos de separación de tramos: los 2 bordes de cada remoción, más
+  // (siempre) un punto en cada límite de escena -- aunque ese límite
+  // no haya necesitado recorte (el hueco real ya estaba dentro del
+  // objetivo), ReelAutomatico.tsx igual necesita un <CapaVoz> propio
+  // por escena (cada una vive en su propio Sequence). Ese punto
+  // "sin edición" no mueve nada (mismo original y compactado), así que
+  // no hace falta fundido ahí -- pero CapaVoz ya aplica uno mínimo a
+  // TODOS los tramos, así que no hay que distinguir el caso.
+  const puntos = new Set<number>([0]);
+  for (const r of remociones) {
+    puntos.add(r.inicioOriginal);
+    puntos.add(r.finOriginal);
+  }
+  for (let i = 0; i < palabras.length - 1; i++) {
+    if (escenaIndicePorPalabra[i] !== escenaIndicePorPalabra[i + 1]) {
+      const yaCubierto = remociones.some((r) => r.inicioOriginal >= palabras[i].fin_s - TOLERANCIA_EMPAREJAMIENTO_S && r.finOriginal <= palabras[i + 1].inicio_s + TOLERANCIA_EMPAREJAMIENTO_S);
+      if (!yaCubierto) puntos.add((palabras[i].fin_s + palabras[i + 1].inicio_s) / 2);
+    }
+  }
+  const finalDeAudio = Math.max(ultimaPalabra.fin_s, ...silencios.map((s) => s.fin_s));
+  puntos.add(finalDeAudio);
+
+  const ordenados = [...puntos].sort((a, b) => a - b);
+  const esRemocion = (desde: number, hasta: number) => remociones.some((r) => Math.abs(r.inicioOriginal - desde) < 1e-6 && Math.abs(r.finOriginal - hasta) < 1e-6);
+
+  const tramosGlobales: TramoAudio[] = [];
+  for (let k = 0; k < ordenados.length - 1; k++) {
+    const desde = ordenados[k];
+    const hasta = ordenados[k + 1];
+    if (hasta - desde < 1e-9) continue;
+    if (esRemocion(desde, hasta)) continue;
+    tramosGlobales.push({
+      original: { inicio_s: desde, fin_s: hasta },
+      compactado: { inicio_s: desde - corrimientoEn(desde), fin_s: hasta - corrimientoEn(hasta) },
+    });
+  }
+
+  // Cada tramo global pertenece exactamente a UNA escena: la de la
+  // última palabra cuyo inicio (original) no pasa de su propio punto
+  // medio (por construcción, ningún tramo cruza un límite de escena --
+  // siempre se forzó un punto de corte ahí arriba).
+  const tramosPorEscena: TramoAudio[][] = Array.from({ length: Math.max(...escenaIndicePorPalabra) + 1 }, () => []);
+  for (const tramo of tramosGlobales) {
+    const medio = (tramo.original.inicio_s + tramo.original.fin_s) / 2;
+    let indiceEscena = escenaIndicePorPalabra[0];
+    for (let i = 0; i < palabras.length; i++) {
+      if (palabras[i].inicio_s <= medio) indiceEscena = escenaIndicePorPalabra[i];
+      else break;
+    }
+    tramosPorEscena[indiceEscena].push(tramo);
+  }
+
+  return { palabras: palabrasCompactadas, tramosPorEscena };
 }

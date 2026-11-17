@@ -11,6 +11,18 @@ vi.mock("cloudinary", () => ({
   },
 }));
 
+// Ronda I: generarVoz() ahora también llama a detectarSilenciosReales(),
+// que corre un ffmpeg REAL contra el audio -- en este archivo el "audio"
+// es un ArrayBuffer falso (texto plano, ni siquiera un mp3 real), así
+// que dejarlo correr de verdad cuelga/falla sin sentido. Se mockea
+// igual que cloudinary: esta unidad prueba la orquestación de
+// generarVoz(), nunca la detección de silencio real en sí (eso lo
+// prueba detectarSilenciosReales.test.ts/compactarPausas.test.ts).
+const detectarSilenciosMock = vi.fn().mockResolvedValue([]);
+vi.mock("./detectarSilenciosReales", () => ({
+  detectarSilenciosReales: (...args: unknown[]) => detectarSilenciosMock(...args),
+}));
+
 import { generarVoz } from "./generarVoz";
 
 const AUDIO_FALSO = new TextEncoder().encode("audio-falso").buffer;
@@ -37,6 +49,8 @@ const OPCIONES = { openaiKey: "sk-test", voz: "alloy", cloudinary: { cloudName: 
 beforeEach(() => {
   uploadMock.mockReset();
   uploadMock.mockResolvedValue({ secure_url: "https://res.cloudinary.com/demo/video/upload/narracion.mp3" });
+  detectarSilenciosMock.mockReset();
+  detectarSilenciosMock.mockResolvedValue([{ inicio_s: 0.3, fin_s: 0.4 }]);
 });
 
 afterEach(() => {
@@ -55,7 +69,9 @@ describe("generarVoz", () => {
       { texto: "hola", inicio_s: 0, fin_s: 0.3 },
       { texto: "mundo", inicio_s: 0.3, fin_s: 0.7 },
     ]);
+    expect(resultado.silencios).toEqual([{ inicio_s: 0.3, fin_s: 0.4 }]);
     expect(uploadMock).toHaveBeenCalledTimes(1);
+    expect(detectarSilenciosMock).toHaveBeenCalledTimes(1);
   });
 
   it("créditos de OpenAI agotados en el TTS: mensaje claro, no el error crudo", async () => {

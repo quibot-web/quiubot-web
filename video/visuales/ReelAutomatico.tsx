@@ -117,11 +117,10 @@ export function ReelAutomatico({ guion, pistaMusicaUrl, efectos = [], mostrarZon
               // Posición/duración de ESTE tramo, relativas al propio
               // Sequence de la escena (que ya arranca en cuadro 0 ahí
               // mismo) -- nunca negativas ni más allá de
-              // duracionEscenaCuadros: el margen de seguridad de
-              // construirTramosAudio() solo se aplicó a cortes
-              // internos (route.ts pasa margenAlInicio/margenAlFinal
-              // en false), así que el primer/último tramo de esta
-              // escena siempre coincide exacto con tiempo.inicio_s/fin_s.
+              // duracionEscenaCuadros: tiempo.inicio_s/fin_s (route.ts,
+              // ronda I) YA ES el borde del primer/último tramo de esta
+              // escena, así que siempre coincide exacto, haya habido
+              // margen real ahí (un corte de verdad) o no.
               const desdeCuadro = Math.round((tramo.compactado.inicio_s - inicioEscena_s) * fps);
               const duracionTramoCuadros = Math.round((tramo.compactado.fin_s - tramo.compactado.inicio_s) * fps);
               if (duracionTramoCuadros <= 0) return null;

@@ -1,5 +1,6 @@
 import "server-only";
 import { v2 as cloudinary } from "cloudinary";
+import { detectarSilenciosReales, type SilencioReal } from "./detectarSilenciosReales";
 
 // Fase B v2.0 (docs/diseno/plan_contenido_organico_fase_b_v2.md,
 // punto 2). ÚNICA función pública de este archivo -- el resto de el
@@ -19,20 +20,21 @@ const MODELO_TRANSCRIPCION = "whisper-1";
 // es el único modelo de TTS de OpenAI que admite control de tono por
 // instrucciones (confirmado por la investigación externa del plan;
 // tts-1/tts-1-hd no lo soportan).
-// Ronda H (revisión de staging): "ritmo de reel" solo no evitaba pausas
-// internas largas entre frases (caso real medido: 0.56s de silencio
-// en medio de una sola escena) -- esta instrucción es la mitigación en
-// el ORIGEN (más barata, nunca garantizada); compactarPausas.ts (ver
-// app/lib/videoOrganico/compactarPausas.ts) es la que de verdad
-// garantiza el tope de 0.25s, pidiéndole menos trabajo a esta.
+// Ronda I (escuchó el reel completo): "enérgico" sonaba robótico y con
+// el tono alto. El tope de pausas tampoco va acá -- compactarPausas.ts
+// ya no decide los cortes a partir de esta instrucción ni de los
+// tiempos de Whisper, sino del silencio real medido en la onda de
+// audio (ver detectarSilenciosReales.ts); esta instrucción solo pide
+// el TONO, nunca el ritmo exacto de pausas.
 const INSTRUCCIONES_TONO =
-  "Español latino neutro con calidez colombiana, cercano, enérgico, ritmo de reel: frases cortas, pausas breves entre ellas (nunca más de un cuarto de segundo), sin silencios largos ni dramáticos entre una idea y la siguiente.";
+  "Español latino neutro con calidez colombiana, conversacional y cálido, como explicándole a un amigo; tono medio, sin exagerar la emoción.";
 
 export type PalabraConTiempo = { texto: string; inicio_s: number; fin_s: number };
 
 export type ResultadoGenerarVoz = {
   audioUrl: string;
   palabras: PalabraConTiempo[];
+  silencios: SilencioReal[];
 };
 
 export type CredencialesCloudinary = { cloudName: string; apiKey: string; apiSecret: string };
@@ -134,9 +136,10 @@ export async function generarVoz(
   opciones: { openaiKey: string; voz: string; cloudinary: CredencialesCloudinary }
 ): Promise<ResultadoGenerarVoz> {
   const audio = await llamarTTS(opciones.openaiKey, textoCompleto, opciones.voz);
-  const [audioUrl, palabras] = await Promise.all([
+  const [audioUrl, palabras, silencios] = await Promise.all([
     subirAudioACloudinary(audio, opciones.cloudinary),
     llamarTranscripcion(opciones.openaiKey, audio),
+    detectarSilenciosReales(audio),
   ]);
-  return { audioUrl, palabras };
+  return { audioUrl, palabras, silencios };
 }

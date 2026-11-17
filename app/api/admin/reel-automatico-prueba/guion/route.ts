@@ -22,7 +22,8 @@ import { validarEdicionDesdeAudio, validarEstructuraConsejosNumeradosAudio } fro
 import { validarGeometriaMinima } from "@/video/visuales/validarGeometriaMinima";
 import { generarVoz } from "@/app/lib/videoOrganico/generarVoz";
 import { alinearPalabras } from "@/app/lib/videoOrganico/alinearPalabras";
-import { compactarPausas, construirTramosAudio } from "@/app/lib/videoOrganico/compactarPausas";
+import { compactarConSilenciosReales } from "@/app/lib/videoOrganico/compactarPausas";
+import { verificarPalabrasCompletas } from "@/app/lib/videoOrganico/verificarPalabrasCompletas";
 import { calcularHashNarracion } from "@/app/lib/videoOrganico/hashNarracion";
 
 // Fase B v2.0, paso 8 del plan (docs/diseno/plan_contenido_organico_fase_b_v2.md)
@@ -287,7 +288,7 @@ export async function POST(req: NextRequest) {
     // un guion que YA pasó validarEdicionDesdeAudio(), para no gastarla
     // en un guion que de todos modos se iba a descartar.
     const textoCompleto = resultado.guion.escenas.map((e) => e.narracion ?? "").join(" ");
-    const { audioUrl, palabras } = await generarVoz(textoCompleto, {
+    const { audioUrl, palabras, silencios } = await generarVoz(textoCompleto, {
       openaiKey: apiKeyUsuario,
       voz,
       cloudinary: { cloudName: usuario.cloudinary_name, apiKey: cloudinaryKey, apiSecret: cloudinarySecret },
@@ -297,16 +298,36 @@ export async function POST(req: NextRequest) {
       palabras
     );
 
-    // Ronda H (revisión de staging, 16 nov 2026): ningún hueco entre
-    // palabras consecutivas de la toma cruda (misma escena o entre
-    // escenas distintas, ver app/lib/videoOrganico/compactarPausas.ts)
-    // sobrevive a más de MAX_PAUSA_S en la línea de tiempo que de
-    // verdad se renderiza -- tiemposRender/palabrasPorEscena pasan a
-    // ser los tiempos YA COMPACTADOS, y segmentosAudio le dice a
-    // ReelAutomatico.tsx de dónde sacar cada tramo en el archivo
-    // fuente sin tocarlo.
+    // Ronda I (escuchó el reel real en staging, 18 nov 2026): la ronda
+    // H decidía los cortes a partir de los huecos entre los tiempos de
+    // PALABRA de Whisper -- imprecisos por diseño, mordieron palabras
+    // reales ("conecta", "responde", "Quiubot") sobre todo en los
+    // bordes entre escenas (donde encima no se aplicaba margen).
+    // compactarConSilenciosReales() corta SOLO dentro de silencio real
+    // medido en la propia onda de audio (detectarSilenciosReales.ts) --
+    // nunca a partir de lo que Whisper CREE que dura una palabra. Las
+    // palabras siguen viniendo de Whisper, pero solo para (a) saber a
+    // qué escena pertenece cada una (clasificar un silencio como "fin
+    // de frase/escena" -- objetivo 0.35-0.45s -- o "dentro de una
+    // frase" -- objetivo 0.25s) y (b) la sincronía de subtítulos.
     const cantidadesPorEscena = palabrasPorEscenaCrudo.map((p) => p.palabras.length);
-    const palabrasCompactadas = compactarPausas(palabrasPorEscenaCrudo.flatMap((p) => p.palabras));
+    const palabrasFlat = palabrasPorEscenaCrudo.flatMap((p) => p.palabras);
+    const escenaIndicePorPalabra = palabrasPorEscenaCrudo.flatMap((p, i) => p.palabras.map(() => i));
+    const { palabras: palabrasCompactadas, tramosPorEscena } = compactarConSilenciosReales(palabrasFlat, silencios, escenaIndicePorPalabra);
+
+    // Red de seguridad final: ¿alguna palabra real quedó fuera de todo
+    // tramo que de verdad se va a reproducir? Si es así, el guion no
+    // sale -- una palabra mordida es peor que repetir el intento.
+    const hallazgosPalabrasPerdidas = verificarPalabrasCompletas(palabrasFlat, tramosPorEscena);
+    if (hallazgosPalabrasPerdidas.length > 0) {
+      return NextResponse.json(
+        {
+          error: "La compactación de pausas se comió parte de una palabra real -- no se entrega un reel con audio mordido.",
+          resumenErrores: hallazgosPalabrasPerdidas.map((h) => h.mensaje),
+        },
+        { status: 502 }
+      );
+    }
 
     const tiemposRender: Guion["tiemposRender"] = [];
     const palabrasPorEscena: Guion["palabrasPorEscena"] = [];
@@ -320,31 +341,22 @@ export async function POST(req: NextRequest) {
 
       palabrasPorEscena!.push({ escena_id: escenaId, palabras: deEscena.map((p) => ({ texto: p.texto, inicio_s: p.compactado.inicio_s, fin_s: p.compactado.fin_s })) });
 
-      if (deEscena.length === 0) {
+      const tramos = tramosPorEscena[i] ?? [];
+      if (tramos.length === 0) {
         tiemposRender!.push({ escena_id: escenaId, inicio_s: 0, fin_s: 0 });
         segmentosAudio.push({ escena_id: escenaId, tramos: [] });
         continue;
       }
 
-      tiemposRender!.push({ escena_id: escenaId, inicio_s: deEscena[0].compactado.inicio_s, fin_s: deEscena[deEscena.length - 1].compactado.fin_s });
-      // margenAlInicio/margenAlFinal en false: el margen de seguridad
-      // (construirTramosAudio) solo se aplica a los CORTES INTERNOS de
-      // esta escena (una pausa larga en medio de su propia narración --
-      // el caso real que motivó este arreglo). En los 2 bordes de la
-      // escena no se aplica: ReelAutomatico.tsx renderiza cada escena
-      // en su PROPIO Sequence, aislado de sus vecinas -- extender el
-      // margen ahí exigiría ensanchar ese Sequence (su duracionCuadros
-      // ya es exactamente tiempo.fin_s-tiempo.inicio_s) o correr
-      // cuadros a un Sequence negativo, que Remotion no renderiza
-      // dentro de su propio padre. El punto de corte entre escenas
-      // distintas no es nuevo (siempre se extrajo justo ahí, con la
-      // misma precisión de Whisper de siempre) -- el riesgo de "morder
-      // una palabra" que motiva este margen es nuevo SOLO para los
-      // cortes que esta misma ronda introduce (los internos).
-      segmentosAudio.push({
-        escena_id: escenaId,
-        tramos: construirTramosAudio(deEscena, { margenAlInicio: false, margenAlFinal: false }),
-      });
+      // El límite de la escena ahora es el borde de su PROPIO tramo
+      // (que ya incluye, si hubo un corte real ahí, la mitad del
+      // silencio real conservada de este lado) -- nunca el tiempo
+      // desnudo de su primera/última palabra. Por eso ya no hace falta
+      // "margenAlInicio/margenAlFinal": el margen, cuando existe, ya es
+      // parte del propio tramo, así que siempre cabe exacto dentro del
+      // Sequence de esta escena.
+      tiemposRender!.push({ escena_id: escenaId, inicio_s: tramos[0].compactado.inicio_s, fin_s: tramos[tramos.length - 1].compactado.fin_s });
+      segmentosAudio.push({ escena_id: escenaId, tramos });
     }
 
     const guionFinal: Guion = {
