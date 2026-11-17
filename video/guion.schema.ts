@@ -258,6 +258,15 @@ const Tema = z.object({
   logo_url: z.url().nullable(),
   // Respaldo del cta "suave" cuando no hay logo_url.
   nombre_marca: z.string().max(40).nullable(),
+  // Fase B v2.0, ronda H: @usuario real de Instagram (resuelto por
+  // código vía obtenerSaludInstagram(), NUNCA inventado por la IA --
+  // tema completo siempre se inyecta por código, ver
+  // app/api/admin/reel-automatico-prueba/guion/route.ts). Opcional
+  // (no afecta a ningún guion/fixture existente, igual que
+  // tiemposRender más abajo) y nullable -- null/ausente si no hay
+  // Instagram conectado, el botón de "Seguir" cae a texto genérico en
+  // ese caso (video/visuales/index.tsx).
+  instagramUsuario: z.string().max(60).nullable().optional(),
 });
 
 const Bucle = z.object({
@@ -304,6 +313,22 @@ const PalabraDeEscena = z.object({
   palabras: z.array(z.object({ texto: z.string(), inicio_s: z.number(), fin_s: z.number() })),
 });
 
+// Ronda H (app/lib/videoOrganico/compactarPausas.ts): por escena,
+// los tramos reales de audio que hay que reproducir -- casi siempre
+// 1 solo (toda la escena es un tramo continuo de la toma cruda), más
+// de 1 si esa escena tenía una pausa interna larga que se compactó.
+// "original" es de dónde recortar en el archivo fuente (vozUrl);
+// "compactado" es dónde colocarlo en la línea de tiempo ya sin esa
+// pausa (coincide con tiemposRender/palabrasPorEscena). Opcional: un
+// guion sin esto cae al comportamiento de siempre (1 tramo = el rango
+// completo de tiemposRender de esa escena), nunca rompe nada viejo.
+const RangoTiempo = z.object({ inicio_s: z.number(), fin_s: z.number() });
+const TramoAudioSchema = z.object({ original: RangoTiempo, compactado: RangoTiempo });
+const SegmentoAudioEscena = z.object({
+  escena_id: z.string().min(1),
+  tramos: z.array(TramoAudioSchema),
+});
+
 export const GuionSchema = z
   .object({
     version: z.literal(1),
@@ -340,6 +365,10 @@ export const GuionSchema = z
     tiemposRender: z.array(TiempoRenderEscena).optional(),
     // Idem, a nivel de cada palabra -- lo necesitan los subtítulos.
     palabrasPorEscena: z.array(PalabraDeEscena).optional(),
+    // Idem, los tramos reales de audio por escena (ver SegmentoAudioEscena
+    // arriba) -- los usa ReelAutomatico.tsx para no reproducir las
+    // pausas internas largas que compactarPausas() ya recortó.
+    segmentosAudio: z.array(SegmentoAudioEscena).optional(),
     // Hash de la narración que generó voz_url/tiemposRender (ver
     // app/lib/videoOrganico/hashNarracion.ts) -- si una narracion
     // cambia después, este hash ya no coincide y hay que regenerar

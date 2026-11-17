@@ -7,19 +7,27 @@ import { Audio } from "@remotion/media";
 // acomodan alrededor de ella (ver CapaMusicaConDucking.tsx), nunca al
 // revés.
 //
-// SE MONTA UNA POR ESCENA (dentro de su propio TransitionSeries.Sequence),
-// nunca una sola global para todo el reel: tiemposRender trae PAUSAS
-// reales entre escenas (ej. e1 termina en 2.78s, e2 no arranca a
-// hablar sino hasta 3.6s) que el VIDEO salta (cero cuadros de hueco
-// entre escenas), pero que existen en el archivo de audio fuente. Una
-// sola <Audio> de punta a punta se desincroniza del video después de
-// la primera escena. trimBefore/trimAfter de @remotion/media son en
-// CUADROS del archivo fuente (confirmado en
-// node_modules/@remotion/media/dist/esm/index.mjs, dividen por fps)
-// -- cada escena recorta exactamente su propio tramo
-// [inicio_s, fin_s] de tiemposRender, así que lo que se oye siempre
-// es lo que esa escena puntual dijo.
-const SEGUNDOS_FADE = 0.1;
+// SE MONTA UNA (O VARIAS, ver construirTramosAudio en
+// compactarPausas.ts) POR ESCENA, dentro de su propio
+// TransitionSeries.Sequence, nunca una sola global para todo el
+// reel: tiemposRender trae PAUSAS reales entre escenas (ej. e1
+// termina en 2.78s, e2 no arranca a hablar sino hasta 3.6s) que el
+// VIDEO salta (cero cuadros de hueco entre escenas), pero que existen
+// en el archivo de audio fuente. Una sola <Audio> de punta a punta se
+// desincroniza del video después de la primera escena. trimBefore/
+// trimAfter de @remotion/media son en CUADROS del archivo fuente
+// (confirmado en node_modules/@remotion/media/dist/esm/index.mjs,
+// dividen por fps) -- cada tramo recorta exactamente su propio rango
+// de la toma cruda, así que lo que se oye siempre es lo que se dijo
+// ahí, nunca otra cosa.
+//
+// Ronda H: ahora puede haber varios tramos cortos por escena (cuando
+// se compactó una pausa interna larga) -- un corte seco en el límite
+// exacto de un tramo se oye como un "clic". 15ms de fade alcanza para
+// evitarlo sin notarse, y con duracionCuadros corto (un tramo de una
+// sola palabra) se recorta a la mitad de esa duración para no dejar
+// toda la palabra como un fundido en vez de sonido pleno.
+const SEGUNDOS_FADE = 0.015;
 
 export function CapaVoz({
   url,

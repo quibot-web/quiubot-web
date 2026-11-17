@@ -4,6 +4,7 @@ import { supabaseAdmin } from "@/lib/supabase";
 import { desencriptarSiHaceFalta } from "@/lib/crypto";
 import { GuionSchema, idsDeMediaUsados, type Guion } from "@/video/guion.schema";
 import { construirTemaDesdeAdn } from "@/video/tema";
+import { obtenerSaludInstagram } from "@/app/lib/metaInstagramSalud";
 import { RECETAS_ORGANICAS, validarContraRecetaOrganica } from "@/video/recetas/organico";
 import {
   construirPromptGuionOrganicoConAudio,
@@ -21,6 +22,7 @@ import { validarEdicionDesdeAudio, validarEstructuraConsejosNumeradosAudio } fro
 import { validarGeometriaMinima } from "@/video/visuales/validarGeometriaMinima";
 import { generarVoz } from "@/app/lib/videoOrganico/generarVoz";
 import { alinearPalabras } from "@/app/lib/videoOrganico/alinearPalabras";
+import { compactarPausas, construirTramosAudio } from "@/app/lib/videoOrganico/compactarPausas";
 import { calcularHashNarracion } from "@/app/lib/videoOrganico/hashNarracion";
 
 // Fase B v2.0, paso 8 del plan (docs/diseno/plan_contenido_organico_fase_b_v2.md)
@@ -115,7 +117,11 @@ export async function POST(req: NextRequest) {
   const cuerpo = await req.json().catch(() => null);
   const erroresPreviosDelCliente = Array.isArray(cuerpo?.erroresPrevios) ? cuerpo.erroresPrevios.filter((e: unknown): e is string => typeof e === "string") : undefined;
 
-  const { data: usuario } = await supabaseAdmin.from("usuarios").select("id, rol, openai_key, cloudinary_name, cloudinary_key, cloudinary_secret").eq("email", emailBusqueda).single();
+  const { data: usuario } = await supabaseAdmin
+    .from("usuarios")
+    .select("id, rol, openai_key, cloudinary_name, cloudinary_key, cloudinary_secret, meta_page_id, meta_access_token")
+    .eq("email", emailBusqueda)
+    .single();
   if (!usuario) return NextResponse.json({ error: "Usuario no encontrado" }, { status: 404 });
   if (usuario.rol !== "admin") return NextResponse.json({ error: "No autorizado" }, { status: 403 });
   if (!usuario.openai_key) return NextResponse.json({ error: "Conecta tu cuenta de OpenAI en Integraciones antes de generar el guion." }, { status: 400 });
@@ -137,7 +143,24 @@ export async function POST(req: NextRequest) {
   const { data: marca } = await supabaseAdmin.from("marcas").select("adn_marca, nombre_marca, logo_url, info_adicional, voz_tts").eq("email", emailBusqueda).maybeSingle();
   if (!marca?.adn_marca) return NextResponse.json({ error: "Genera primero el ADN de tu marca en Mi marca." }, { status: 400 });
 
-  const tema = construirTemaDesdeAdn({ ...(marca.adn_marca as Record<string, unknown>), logo_url: marca.logo_url ?? null, nombre_marca: marca.nombre_marca ?? null });
+  // Ronda H: @usuario real de Instagram, misma fuente que ya usa el
+  // Director (app/lib/director/flujoCrearMeta.ts) para esto mismo --
+  // nunca se le pregunta a la IA, nunca se inventa. obtenerSaludInstagram
+  // ya atrapa sus propios errores de red/Meta (responde "no conectado"
+  // en vez de lanzar); este catch es la red de seguridad de todos
+  // modos, igual que en el Director -- un fallo acá nunca debe tumbar
+  // la generación del guion, solo degradar el CTA a "Seguir" genérico.
+  let saludInstagram: { conectado: boolean; username: string | null };
+  try {
+    saludInstagram = await obtenerSaludInstagram({ meta_page_id: usuario.meta_page_id, meta_access_token: usuario.meta_access_token });
+  } catch (err) {
+    console.error("Error consultando salud de Instagram para el reel automático de prueba:", err);
+    saludInstagram = { conectado: false, username: null };
+  }
+  const tema = construirTemaDesdeAdn(
+    { ...(marca.adn_marca as Record<string, unknown>), logo_url: marca.logo_url ?? null, nombre_marca: marca.nombre_marca ?? null },
+    saludInstagram.conectado ? saludInstagram.username : null
+  );
   const adnMarca = marca.adn_marca as { titular?: string | null; frase_corta?: string | null };
   const infoAdicionalMarca = (marca.info_adicional as string | null)?.trim().slice(0, 800) || null;
   const voz = (marca.voz_tts as string | null) || VOZ_POR_DEFECTO;
@@ -269,15 +292,66 @@ export async function POST(req: NextRequest) {
       voz,
       cloudinary: { cloudName: usuario.cloudinary_name, apiKey: cloudinaryKey, apiSecret: cloudinarySecret },
     });
-    const { tiemposRender, palabrasPorEscena, puntaje } = alinearPalabras(
+    const { palabrasPorEscena: palabrasPorEscenaCrudo, puntaje } = alinearPalabras(
       resultado.guion.escenas.map((e) => ({ id: e.id, narracion: e.narracion ?? "" })),
       palabras
     );
+
+    // Ronda H (revisión de staging, 16 nov 2026): ningún hueco entre
+    // palabras consecutivas de la toma cruda (misma escena o entre
+    // escenas distintas, ver app/lib/videoOrganico/compactarPausas.ts)
+    // sobrevive a más de MAX_PAUSA_S en la línea de tiempo que de
+    // verdad se renderiza -- tiemposRender/palabrasPorEscena pasan a
+    // ser los tiempos YA COMPACTADOS, y segmentosAudio le dice a
+    // ReelAutomatico.tsx de dónde sacar cada tramo en el archivo
+    // fuente sin tocarlo.
+    const cantidadesPorEscena = palabrasPorEscenaCrudo.map((p) => p.palabras.length);
+    const palabrasCompactadas = compactarPausas(palabrasPorEscenaCrudo.flatMap((p) => p.palabras));
+
+    const tiemposRender: Guion["tiemposRender"] = [];
+    const palabrasPorEscena: Guion["palabrasPorEscena"] = [];
+    const segmentosAudio: NonNullable<Guion["segmentosAudio"]> = [];
+    let cursor = 0;
+    for (let i = 0; i < palabrasPorEscenaCrudo.length; i++) {
+      const escenaId = palabrasPorEscenaCrudo[i].escena_id;
+      const cantidad = cantidadesPorEscena[i];
+      const deEscena = palabrasCompactadas.slice(cursor, cursor + cantidad);
+      cursor += cantidad;
+
+      palabrasPorEscena!.push({ escena_id: escenaId, palabras: deEscena.map((p) => ({ texto: p.texto, inicio_s: p.compactado.inicio_s, fin_s: p.compactado.fin_s })) });
+
+      if (deEscena.length === 0) {
+        tiemposRender!.push({ escena_id: escenaId, inicio_s: 0, fin_s: 0 });
+        segmentosAudio.push({ escena_id: escenaId, tramos: [] });
+        continue;
+      }
+
+      tiemposRender!.push({ escena_id: escenaId, inicio_s: deEscena[0].compactado.inicio_s, fin_s: deEscena[deEscena.length - 1].compactado.fin_s });
+      // margenAlInicio/margenAlFinal en false: el margen de seguridad
+      // (construirTramosAudio) solo se aplica a los CORTES INTERNOS de
+      // esta escena (una pausa larga en medio de su propia narración --
+      // el caso real que motivó este arreglo). En los 2 bordes de la
+      // escena no se aplica: ReelAutomatico.tsx renderiza cada escena
+      // en su PROPIO Sequence, aislado de sus vecinas -- extender el
+      // margen ahí exigiría ensanchar ese Sequence (su duracionCuadros
+      // ya es exactamente tiempo.fin_s-tiempo.inicio_s) o correr
+      // cuadros a un Sequence negativo, que Remotion no renderiza
+      // dentro de su propio padre. El punto de corte entre escenas
+      // distintas no es nuevo (siempre se extrajo justo ahí, con la
+      // misma precisión de Whisper de siempre) -- el riesgo de "morder
+      // una palabra" que motiva este margen es nuevo SOLO para los
+      // cortes que esta misma ronda introduce (los internos).
+      segmentosAudio.push({
+        escena_id: escenaId,
+        tramos: construirTramosAudio(deEscena, { margenAlInicio: false, margenAlFinal: false }),
+      });
+    }
 
     const guionFinal: Guion = {
       ...resultado.guion,
       tiemposRender,
       palabrasPorEscena,
+      segmentosAudio,
       narracionHash: calcularHashNarracion(resultado.guion.escenas),
       vozUrl: audioUrl,
     };

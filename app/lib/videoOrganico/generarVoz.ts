@@ -19,7 +19,14 @@ const MODELO_TRANSCRIPCION = "whisper-1";
 // es el único modelo de TTS de OpenAI que admite control de tono por
 // instrucciones (confirmado por la investigación externa del plan;
 // tts-1/tts-1-hd no lo soportan).
-const INSTRUCCIONES_TONO = "Español latino neutro con calidez colombiana, cercano, enérgico, ritmo de reel.";
+// Ronda H (revisión de staging): "ritmo de reel" solo no evitaba pausas
+// internas largas entre frases (caso real medido: 0.56s de silencio
+// en medio de una sola escena) -- esta instrucción es la mitigación en
+// el ORIGEN (más barata, nunca garantizada); compactarPausas.ts (ver
+// app/lib/videoOrganico/compactarPausas.ts) es la que de verdad
+// garantiza el tope de 0.25s, pidiéndole menos trabajo a esta.
+const INSTRUCCIONES_TONO =
+  "Español latino neutro con calidez colombiana, cercano, enérgico, ritmo de reel: frases cortas, pausas breves entre ellas (nunca más de un cuarto de segundo), sin silencios largos ni dramáticos entre una idea y la siguiente.";
 
 export type PalabraConTiempo = { texto: string; inicio_s: number; fin_s: number };
 

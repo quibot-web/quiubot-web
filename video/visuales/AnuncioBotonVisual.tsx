@@ -21,7 +21,14 @@ import { TARJETA_ALTURA_PORCENTAJE, TARJETA_ANCHO_PORCENTAJE, TARJETA_TOP_PORCEN
 export function AnuncioBotonVisual({ frame, fps, tema, cuadroCambia }: { frame: number; fps: number; tema: TemaGuion; cuadroCambia: number }) {
   const activa = frame >= cuadroCambia;
   const progreso = spring({ frame: frame - cuadroCambia, fps, config: { damping: 13 } });
-  const colorTextoBoton = colorTextoSobre(tema.color_primario);
+  // Bug real (ronda H, revisión de staging): colorTextoSobre(primario)
+  // da un color de TEXTO con contraste contra el primario -- usarlo
+  // como fondo del botón lo dejaba casi blanco sobre la tarjeta blanca
+  // (invisible, se leía como texto suelto). Mismo bug y misma fórmula
+  // de arreglo que ya tiene BotonEstado.tsx: el color de marca real
+  // como fondo, el color de contraste como texto encima de ESE fondo.
+  const colorBoton = tema.color_primario;
+  const colorTextoBoton = colorTextoSobre(colorBoton);
 
   return (
     <div
@@ -76,8 +83,8 @@ export function AnuncioBotonVisual({ frame, fps, tema, cuadroCambia }: { frame: 
           <div style={{ position: "relative", width: "100%" }}>
             <div
               style={{
-                background: colorTextoBoton,
-                color: colorTextoSobre(colorTextoBoton),
+                background: colorBoton,
+                color: colorTextoBoton,
                 borderRadius: 999,
                 padding: "20px 0",
                 width: "100%",

@@ -139,10 +139,17 @@ export function renderizarVisual(visual: Visual, ctx: ContextoVisual) {
       const cuadroCambia = cambia ? cuadroDePalabra(cambia.palabra, ctx) : null;
       const progreso = spring({ frame: ctx.frame - cuadroAparece, fps: ctx.fps, config: { damping: 14 } });
       const activo = cuadroCambia !== null && ctx.frame >= cuadroCambia;
+      // Ronda H: en la escena "cta", el @usuario que ve la persona
+      // tiene que ser el real (ctx.tema.instagramUsuario, resuelto por
+      // código en la ruta -- ver video/tema.ts), nunca el que la IA
+      // haya inventado en visual.texto/texto_activo. En cualquier otro
+      // bloque que use boton_estado, el texto de la IA sigue intacto.
+      const textoIdle = ctx.bloque === "cta" ? (ctx.tema.instagramUsuario ? `Seguir @${ctx.tema.instagramUsuario}` : "Seguir") : visual.texto;
+      const textoActivo = ctx.bloque === "cta" ? (ctx.tema.instagramUsuario ? `Siguiendo @${ctx.tema.instagramUsuario} ✓` : "Siguiendo ✓") : visual.texto_activo;
       return (
         <ZonaVisual>
           <TarjetaSimple>
-            <BotonEstado texto={activo ? visual.texto_activo : visual.texto} tema={ctx.tema} progreso={progreso} activo={activo} colorActivo={COLOR_EXITO} />
+            <BotonEstado texto={activo ? textoActivo : textoIdle} tema={ctx.tema} progreso={progreso} activo={activo} colorActivo={COLOR_EXITO} />
           </TarjetaSimple>
         </ZonaVisual>
       );

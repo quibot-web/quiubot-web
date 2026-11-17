@@ -1,6 +1,7 @@
 "use client";
 import { useRef, useState } from "react";
 import type { Guion } from "@/video/guion.schema";
+import { silenciosLargosDesdeNivelesDb, type SilencioLargo } from "@/app/lib/videoOrganico/encontrarSilenciosLargos";
 
 // Fase B v2.0, paso 8 del plan -- arnés de prueba del único reel
 // automático. Flujo real (nada mockeado): genera el guion con voz vía
@@ -220,6 +221,67 @@ async function audioEstaEnSilencio(blob: Blob): Promise<ResultadoSilencio> {
   }
 }
 
+// Ronda H (revisión de staging, 16 nov 2026): "¿está todo en silencio?"
+// no atrapa un hueco puntual DENTRO de un reel que por lo demás suena
+// bien (el caso real que motivó esto: 0.56s de silencio real a mitad
+// de una sola escena, por un hueco de Whisper que
+// app/lib/videoOrganico/compactarPausas.ts ahora recorta en el
+// guion -- esto mide el audio YA MEZCLADO Y RENDERIZADO de verdad,
+// nunca los números crudos de tiemposRender/palabrasPorEscena, para
+// atrapar tanto un hueco que se escapó de esa compactación como
+// cualquier otra causa de silencio real (música/efectos no cubren un
+// hueco de voz, por ejemplo). Mismo umbral de -45dB que ya usa
+// audioEstaEnSilencioInterno -- lo que importa es "no hay nada
+// sonando", no afinar el nivel ideal de mezcla.
+const UMBRAL_SILENCIO_DB = -45;
+const DURACION_MINIMA_SILENCIO_S = 0.4;
+const VENTANA_ESCANEO_S = 0.05;
+
+async function encontrarSilenciosLargosInterno(blob: Blob, duracionMinima_s: number = DURACION_MINIMA_SILENCIO_S): Promise<SilencioLargo[]> {
+  const buffer = await blob.arrayBuffer();
+  const AudioContextCtor = window.AudioContext || (window as unknown as { webkitAudioContext: typeof AudioContext }).webkitAudioContext;
+  const contexto = new AudioContextCtor();
+  try {
+    const decodificado = await contexto.decodeAudioData(buffer.slice(0));
+    const sampleRate = decodificado.sampleRate;
+    const tamanoVentana = Math.max(1, Math.round(VENTANA_ESCANEO_S * sampleRate));
+    const canales = Array.from({ length: decodificado.numberOfChannels }, (_, c) => decodificado.getChannelData(c));
+    const totalMuestras = decodificado.length;
+
+    // Un nivel de dB por ventana -- la detección de "cuánto dura un
+    // tramo por debajo del umbral" es lógica pura aparte, probada con
+    // niveles sintéticos (silenciosLargosDesdeNivelesDb, ver
+    // app/lib/videoOrganico/encontrarSilenciosLargos.ts); acá solo se
+    // arma el arreglo real a partir del audio de verdad decodificado.
+    const nivelesDb: number[] = [];
+    for (let i = 0; i < totalMuestras; i += tamanoVentana) {
+      const fin = Math.min(i + tamanoVentana, totalMuestras);
+      let sumaCuadrados = 0;
+      let total = 0;
+      for (const datos of canales) {
+        for (let j = i; j < fin; j++) {
+          sumaCuadrados += datos[j] * datos[j];
+          total += 1;
+        }
+      }
+      const rms = Math.sqrt(sumaCuadrados / Math.max(total, 1));
+      nivelesDb.push(20 * Math.log10(rms || 1e-10));
+    }
+
+    return silenciosLargosDesdeNivelesDb(nivelesDb, VENTANA_ESCANEO_S, UMBRAL_SILENCIO_DB, duracionMinima_s);
+  } finally {
+    await contexto.close().catch(() => {});
+  }
+}
+
+async function encontrarSilenciosLargos(blob: Blob): Promise<SilencioLargo[] | "no_verificado"> {
+  try {
+    return await conTimeout(encontrarSilenciosLargosInterno(blob), TIMEOUT_AUDIO_MS, "timeout");
+  } catch {
+    return "no_verificado";
+  }
+}
+
 // Empareja cada hallazgo con el cuadro (dataUrl) que lo originó.
 // control-calidad/route.ts le pide al modelo responder "en el mismo
 // orden" que los cuadros que recibió -- se empareja por posición
@@ -241,11 +303,16 @@ function combinarHallazgosConImagenes(hallazgos: HallazgoVision[], cuadros: { et
 // NUNCA se trata como un fallo real (no hay evidencia de que algo esté
 // mal, solo que no se pudo confirmar) -- no dispara un reintento por
 // sí solo.
-function erroresDesdeQC(hallazgos: HallazgoVision[], silencio: ResultadoSilencio): string[] {
+function erroresDesdeQC(hallazgos: HallazgoVision[], silencio: ResultadoSilencio, silenciosLargos: SilencioLargo[] | "no_verificado"): string[] {
   const errores = hallazgos
     .filter((h) => h.pantalla_vacia || h.texto_superpuesto || h.contraste_bajo)
     .map((h) => `El control de calidad (visión) encontró un problema real en el cuadro "${h.cuadro}": ${h.nota}`);
   if (silencio === "silencioso") errores.push("El audio final mezclado salió en silencio -- revisa que ninguna narracion haya quedado vacía o con un texto raro para la voz.");
+  if (Array.isArray(silenciosLargos)) {
+    for (const s of silenciosLargos) {
+      errores.push(`El audio final mezclado tiene ${(s.fin_s - s.inicio_s).toFixed(2)}s de silencio real entre el segundo ${s.inicio_s.toFixed(2)} y ${s.fin_s.toFixed(2)} -- revisa compactarPausas()/las pausas de la narración ahí.`);
+    }
+  }
   return errores;
 }
 
@@ -256,6 +323,7 @@ export default function AdminReelAutomaticoPruebaClient() {
   const [progresoRender, setProgresoRender] = useState(0);
   const [hallazgosVision, setHallazgosVision] = useState<HallazgoConImagen[] | null>(null);
   const [audioSilencioso, setAudioSilencioso] = useState<ResultadoSilencio | null>(null);
+  const [silenciosLargos, setSilenciosLargos] = useState<SilencioLargo[] | "no_verificado" | null>(null);
   const [intentoQC, setIntentoQC] = useState(0);
   // Texto de progreso DENTRO de "extrayendo_cuadros"/"control_calidad"
   // -- pedido explícito, para que la pantalla nunca se vea colgada sin
@@ -288,6 +356,7 @@ export default function AdminReelAutomaticoPruebaClient() {
     setResumenGuion(null);
     setHallazgosVision(null);
     setAudioSilencioso(null);
+    setSilenciosLargos(null);
     setIntentoQC(0);
     limpiarUrls();
 
@@ -361,16 +430,18 @@ export default function AdminReelAutomaticoPruebaClient() {
         // Se devuelve el resultado en vez de mutar variables de afuera
         // desde el closure -- TypeScript no sigue ese tipo de mutación
         // para angostar el tipo en el código que viene después.
-        const { hallazgos, silencio } = await conTimeout(
-          (async (): Promise<{ hallazgos: HallazgoVision[]; silencio: ResultadoSilencio }> => {
-            const [cuadrosConFallidos, silencioDetectado] = await Promise.all([
+        const { hallazgos, silencio, silenciosLargosDetectados } = await conTimeout(
+          (async (): Promise<{ hallazgos: HallazgoVision[]; silencio: ResultadoSilencio; silenciosLargosDetectados: SilencioLargo[] | "no_verificado" }> => {
+            const [cuadrosConFallidos, silencioDetectado, silenciosLargosRes] = await Promise.all([
               extraerCuadrosClave(blob, duracionS, etiquetasYSegundos, (actual, total) => setDetalleProgreso(`Extrayendo cuadro ${actual} de ${total}...`)),
               (async () => {
                 setDetalleProgreso("Revisando audio...");
                 return audioEstaEnSilencio(blob);
               })(),
+              encontrarSilenciosLargos(blob),
             ]);
             setAudioSilencioso(silencioDetectado);
+            setSilenciosLargos(silenciosLargosRes);
 
             const cuadrosValidos = cuadrosConFallidos.filter((c): c is { etiqueta: string; dataUrl: string } => c.dataUrl !== null);
             const etiquetasFallidas = cuadrosConFallidos.filter((c) => c.dataUrl === null).map((c) => c.etiqueta);
@@ -398,14 +469,15 @@ export default function AdminReelAutomaticoPruebaClient() {
             }));
             setHallazgosVision([...combinarHallazgosConImagenes(hallazgosDetectados, cuadrosValidos), ...hallazgosFallidos]);
 
-            return { hallazgos: hallazgosDetectados, silencio: silencioDetectado };
+            return { hallazgos: hallazgosDetectados, silencio: silencioDetectado, silenciosLargosDetectados: silenciosLargosRes };
           })(),
           TIMEOUT_FASE_CONTROL_CALIDAD_MS,
           "El control de calidad tardó demasiado (más de 2 minutos) -- revisa la consola del navegador o inténtalo de nuevo."
         );
 
         const hayProblemaVision = hallazgos.some((h) => h.pantalla_vacia || h.texto_superpuesto || h.contraste_bajo);
-        if (!hayProblemaVision && silencio !== "silencioso") {
+        const haySilencioLargo = Array.isArray(silenciosLargosDetectados) && silenciosLargosDetectados.length > 0;
+        if (!hayProblemaVision && silencio !== "silencioso" && !haySilencioLargo) {
           const url = URL.createObjectURL(blob);
           urlDescargaRef.current = url;
           setUrlDescarga(url);
@@ -423,7 +495,7 @@ export default function AdminReelAutomaticoPruebaClient() {
           return;
         }
 
-        erroresPrevios = erroresDesdeQC(hallazgos, silencio);
+        erroresPrevios = erroresDesdeQC(hallazgos, silencio, silenciosLargosDetectados);
       }
     } catch (err) {
       setError(err instanceof Error ? err.message : "Algo falló generando el reel.");
@@ -481,6 +553,21 @@ export default function AdminReelAutomaticoPruebaClient() {
       )}
       {audioSilencioso === "no_verificado" && (
         <p style={{ marginTop: 16, color: "#966F00", fontWeight: 700 }}>⚠️ No se pudo revisar el audio a tiempo (no es necesariamente un error -- revisa el mp4 a oído si sigues dudando).</p>
+      )}
+      {Array.isArray(silenciosLargos) && silenciosLargos.length > 0 && (
+        <div style={{ marginTop: 16, color: "#B42318", fontWeight: 700 }}>
+          ⚠️ El audio mezclado tiene {silenciosLargos.length} silencio{silenciosLargos.length === 1 ? "" : "s"} real{silenciosLargos.length === 1 ? "" : "es"} de más de 0.4s -- el reel no se entrega.
+          <ul style={{ fontWeight: 400, fontSize: 13, marginTop: 4 }}>
+            {silenciosLargos.map((s, i) => (
+              <li key={i}>
+                {s.inicio_s.toFixed(2)}s a {s.fin_s.toFixed(2)}s ({(s.fin_s - s.inicio_s).toFixed(2)}s)
+              </li>
+            ))}
+          </ul>
+        </div>
+      )}
+      {silenciosLargos === "no_verificado" && (
+        <p style={{ marginTop: 16, color: "#966F00", fontWeight: 700 }}>⚠️ No se pudo revisar si hay silencios largos a tiempo (no es necesariamente un error).</p>
       )}
 
       {hallazgosVision && (

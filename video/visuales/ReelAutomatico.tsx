@@ -1,4 +1,4 @@
-import { AbsoluteFill, useCurrentFrame } from "remotion";
+import { AbsoluteFill, Sequence, useCurrentFrame } from "remotion";
 import type { BloqueGuion } from "../guion.schema";
 import type { TemaGuion } from "../tema";
 import type { Visual } from "./schema";
@@ -77,11 +77,20 @@ export function ReelAutomatico({ guion, pistaMusicaUrl, efectos = [], mostrarZon
   const primeraInicio_s = tiemposRender[0]?.inicio_s ?? 0;
   const ultimaFin_s = tiemposRender[tiemposRender.length - 1]?.fin_s ?? 0;
 
+  const segmentosAudio = guion.segmentosAudio ?? [];
+
   const nodosEscenas = escenas.flatMap((escena, i) => {
     const tiempo = tiemposRender.find((t) => t.escena_id === escena.id);
     const palabras = palabrasPorEscena.find((p) => p.escena_id === escena.id)?.palabras ?? [];
     const duracionS = tiempo ? tiempo.fin_s - tiempo.inicio_s : 0;
     const inicioEscena_s = tiempo?.inicio_s ?? 0;
+    // Ronda H: tramos reales de audio de esta escena (ver
+    // app/lib/videoOrganico/compactarPausas.ts) -- casi siempre 1
+    // (toda la narración de la escena es continua en la toma cruda).
+    // Si el guion no trae segmentosAudio (guion viejo, de antes de
+    // esta ronda), cae al tramo único de siempre: todo
+    // [tiempo.inicio_s, tiempo.fin_s].
+    const tramos = segmentosAudio.find((s) => s.escena_id === escena.id)?.tramos ?? (tiempo ? [{ original: tiempo, compactado: tiempo }] : []);
 
     // Subtítulos en cuadros RELATIVOS a esta escena -- useCurrentFrame()
     // dentro del Sequence ya arranca en 0 acá, mismo criterio que el
@@ -102,15 +111,32 @@ export function ReelAutomatico({ guion, pistaMusicaUrl, efectos = [], mostrarZon
             <ContenidoEscena tema={tema} bloque={escena.bloque} fps={fps} visual={escena.visual} palabras={palabras} inicioEscena_s={inicioEscena_s} />
           )}
           <SubtitulosSincronizados palabras={palabrasEnCuadros} tema={tema} />
-          {guion.vozUrl && tiempo && (
-            <CapaVoz
-              url={guion.vozUrl}
-              trimBefore={Math.round(tiempo.inicio_s * fps)}
-              trimAfter={Math.round(tiempo.fin_s * fps)}
-              duracionCuadros={duracionEscenaCuadros}
-              fps={fps}
-            />
-          )}
+          {guion.vozUrl &&
+            tiempo &&
+            tramos.map((tramo, iTramo) => {
+              // Posición/duración de ESTE tramo, relativas al propio
+              // Sequence de la escena (que ya arranca en cuadro 0 ahí
+              // mismo) -- nunca negativas ni más allá de
+              // duracionEscenaCuadros: el margen de seguridad de
+              // construirTramosAudio() solo se aplicó a cortes
+              // internos (route.ts pasa margenAlInicio/margenAlFinal
+              // en false), así que el primer/último tramo de esta
+              // escena siempre coincide exacto con tiempo.inicio_s/fin_s.
+              const desdeCuadro = Math.round((tramo.compactado.inicio_s - inicioEscena_s) * fps);
+              const duracionTramoCuadros = Math.round((tramo.compactado.fin_s - tramo.compactado.inicio_s) * fps);
+              if (duracionTramoCuadros <= 0) return null;
+              return (
+                <Sequence key={`${escena.id}-voz-${iTramo}`} from={desdeCuadro} durationInFrames={duracionTramoCuadros}>
+                  <CapaVoz
+                    url={guion.vozUrl!}
+                    trimBefore={Math.round(tramo.original.inicio_s * fps)}
+                    trimAfter={Math.round(tramo.original.fin_s * fps)}
+                    duracionCuadros={duracionTramoCuadros}
+                    fps={fps}
+                  />
+                </Sequence>
+              );
+            })}
         </AbsoluteFill>
       </TransitionSeries.Sequence>,
     ];

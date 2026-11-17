@@ -138,9 +138,15 @@ export interface TemaGuion {
   // Respaldo para el cta "suave" cuando no hay logo -- sin esto no
   // queda nada que mostrar en esa escena.
   nombre_marca: string | null;
+  // Fase B v2.0, ronda H: @usuario real de Instagram, resuelto por
+  // quien llama (obtenerSaludInstagram(), nunca por este archivo --
+  // no tiene nada que ver con el ADN de marca). Opcional (fixtures
+  // existentes no lo traen) y null si no está conectado; el CTA cae a
+  // "Seguir" genérico en ambos casos.
+  instagramUsuario?: string | null;
 }
 
-export function construirTemaDesdeAdn(adn: AdnMarcaParaTema | null | undefined): TemaGuion {
+export function construirTemaDesdeAdn(adn: AdnMarcaParaTema | null | undefined, instagramUsuario: string | null = null): TemaGuion {
   const paleta = adn?.paleta_color || {};
   const primario = esHexValido(paleta.color_primario_hex) ? paleta.color_primario_hex : COLOR_PRIMARIO_DEFECTO;
   const secundario = esHexValido(paleta.color_secundario_hex) ? paleta.color_secundario_hex : COLOR_SECUNDARIO_DEFECTO;
@@ -152,6 +158,7 @@ export function construirTemaDesdeAdn(adn: AdnMarcaParaTema | null | undefined):
     fuente: clasificarEstiloFuente(textoTipografia),
     logo_url: adn?.logo_url ?? null,
     nombre_marca: adn?.nombre_marca ?? null,
+    instagramUsuario,
   };
 }
 
