@@ -6,28 +6,38 @@
 import { fitText } from "@remotion/layout-utils";
 import { colorTextoSobre, type TemaGuion } from "../tema";
 import { ANCHO_BOTON_PORCENTAJE_NUM, TAMANO_FUENTE_BOTON, familiaDeFuenteSinCargar } from "./tamanos";
+import { TARJETA_ANCHO_PORCENTAJE } from "./geometria";
 
 // Fórmula exacta copiada del molde aprobado (molde.tsx) -- no un
 // porcentaje redondeado a mano: 88% de la zona segura (ANCHO_MAX_PX
 // real de Cta.tsx) * 80% del ancho real del botón dentro de eso.
 const ANCHO_BOTON_PORCENTAJE = `${ANCHO_BOTON_PORCENTAJE_NUM.toFixed(1)}%`;
-const ANCHO_BOTON_PX = (ANCHO_BOTON_PORCENTAJE_NUM / 100) * 1080;
 const PADDING_HORIZONTAL_BOTON_PX = 28;
 
-// Ronda J (revisión de staging real, 18 nov 2026): "Siguiendo
-// @quiubot ✓" (el @usuario real, más largo que cualquier texto de
-// prueba usado antes) partió en 2 líneas en el mp4 real renderizado
-// con @remotion/web-renderer -- aunque una medición con Playwright
-// decía que cabía. En vez de confiar en que el texto SIEMPRE quepa a
-// TAMANO_FUENTE_BOTON (una apuesta, como ya le pasó a Cta.tsx con
-// textos largos -- ver su propio calcularFuenteBoton()), acá se mide
-// el ancho real con @remotion/layout-utils (el mismo Chromium real
-// que usa cualquier renderer de Remotion, nunca el DOM de una pestaña
-// aparte) y se encoge la letra solo si hace falta -- nunca por encima
-// de TAMANO_FUENTE_BOTON, y whiteSpace:nowrap para que nunca pueda
-// envolver a una 2da línea aunque la medición se equivoque por algo.
+// Ronda K (revisión real en staging, 19 nov 2026): "Siguiendo @quiubot
+// ✓" seguía recortándose en el mp4 real aunque fitText() ya medía el
+// texto -- el error real no era la medición, era la BASE: este
+// componente SIEMPRE vive dentro de TarjetaSimple.tsx (video/visuales/
+// index.tsx, casos "boton_estado"/"cursor_clic", el único lugar que lo
+// usa en todo el proyecto), que ocupa TARJETA_ANCHO_PORCENTAJE (80%)
+// del cuadro de 1080px -- no el cuadro completo. ANCHO_BOTON_PX
+// calculaba el ancho real del botón como 70.4% de 1080 (760px) cuando
+// el ancho real disponible es 70.4% de (1080*0.80)=864px (608px) --
+// casi 150px de diferencia, suficiente para que un texto corto
+// ("Seguir") nunca lo notara pero uno largo con el @usuario real sí.
+// fitText() medía bien, solo que contra un presupuesto de ancho que no
+// era el real.
+const ANCHO_BOTON_PX = (ANCHO_BOTON_PORCENTAJE_NUM / 100) * (TARJETA_ANCHO_PORCENTAJE / 100) * 1080;
+
+// Margen chico de respaldo (no la causa principal, ya corregida arriba):
+// un carácter como "✓" puede no tener glifo en la fuente de marca y
+// pintarse con una fuente de respaldo del sistema que fitText() no
+// puede medir -- esto absorbe esa diferencia menor sin volver a
+// adivinar el ancho base completo.
+const MARGEN_SEGURIDAD_GLIFO_PX = 16;
+
 function calcularFuenteBotonQueCabe(texto: string, familia: string): number {
-  const anchoDisponible = ANCHO_BOTON_PX - PADDING_HORIZONTAL_BOTON_PX * 2;
+  const anchoDisponible = ANCHO_BOTON_PX - PADDING_HORIZONTAL_BOTON_PX * 2 - MARGEN_SEGURIDAD_GLIFO_PX;
   const { fontSize } = fitText({ text: texto, withinWidth: anchoDisponible, fontFamily: familia, fontWeight: 800 });
   return Math.min(TAMANO_FUENTE_BOTON, Math.floor(fontSize));
 }
@@ -72,8 +82,14 @@ export function BotonEstado({
   // real como fondo (en vez de "lo que contrastaría con" el color de
   // marca) es correcto en cualquier backdrop, y de paso se ve como un
   // botón de marca real, no uno genérico blanco/negro.
+  // Ronda K: el estado activo usaba "#fff" fijo en vez de calcularlo --
+  // blanco sobre el verde real de colorActivo no pasa
+  // contrasteSuficiente(). colorTextoSobre() ya es la fórmula
+  // establecida y probada del proyecto para esto (igual que el estado
+  // inactivo, justo arriba) -- los dos estados ahora la usan igual,
+  // sin excepción.
   const colorBoton = activo ? colorActivo : tema.color_primario;
-  const colorTexto = activo ? "#fff" : colorTextoSobre(colorBoton);
+  const colorTexto = colorTextoSobre(colorBoton);
   const fontSize = calcularFuenteBotonQueCabe(texto, familiaDeFuenteSinCargar(tema.fuente));
   return (
     <div style={{ position: "relative", width: ANCHO_BOTON_PORCENTAJE }}>

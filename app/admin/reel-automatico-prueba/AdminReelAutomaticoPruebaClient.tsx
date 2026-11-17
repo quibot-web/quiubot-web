@@ -631,7 +631,7 @@ export default function AdminReelAutomaticoPruebaClient() {
       )}
       {Array.isArray(silenciosLargos) && silenciosLargos.length > 0 && (
         <div style={{ marginTop: 16, color: "#B42318", fontWeight: 700 }}>
-          ⚠️ El audio mezclado tiene {silenciosLargos.length} silencio{silenciosLargos.length === 1 ? "" : "s"} real{silenciosLargos.length === 1 ? "" : "es"} de más de 0.4s -- el reel no se entrega.
+          ⚠️ El audio mezclado tiene {silenciosLargos.length} silencio{silenciosLargos.length === 1 ? "" : "s"} real{silenciosLargos.length === 1 ? "" : "es"} de más de {DURACION_MINIMA_SILENCIO_S}s -- el reel no se entrega.
           <ul style={{ fontWeight: 400, fontSize: 13, marginTop: 4 }}>
             {silenciosLargos.map((s, i) => (
               <li key={i}>

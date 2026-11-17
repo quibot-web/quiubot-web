@@ -3,8 +3,6 @@ import type { BloqueGuion } from "../guion.schema";
 import type { TemaGuion } from "../tema";
 import type { Visual } from "./schema";
 import type { PalabraConTiempoVisual } from "./index";
-import { TransitionSeries, linearTiming } from "@remotion/transitions";
-import { fade } from "@remotion/transitions/fade";
 import type { Guion } from "../guion.schema";
 import { familiaDeFuente } from "../fuentes";
 import { FondoMarca } from "../capas/FondoMarca";
@@ -16,6 +14,9 @@ import { CapaMusicaConDucking } from "./CapaMusicaConDucking";
 import { CapaEfectos, type EfectoSonido } from "./CapaEfectos";
 import { renderizarVisual } from "./index";
 import { SubtitulosSincronizados, type PalabraEnCuadros } from "./SubtitulosSincronizados";
+import { duracionReelAutomaticoEnCuadros } from "./duracionReel";
+
+export { duracionReelAutomaticoEnCuadros };
 
 // Fase B v2.0 (docs/diseno/plan_contenido_organico_fase_b_v2.md,
 // punto 9). Composición standalone -- MISMO criterio que los 2 reels
@@ -30,13 +31,26 @@ import { SubtitulosSincronizados, type PalabraEnCuadros } from "./SubtitulosSinc
 // valídalo con video/visuales/validarEdicionDesdeAudio.ts ANTES de
 // montar esta composición, no acá (este componente asume un guion ya
 // válido, igual que Composicion.tsx asume un GuionSchema ya parseado).
-export const CUADROS_TRANSICION = 8;
-
-export function duracionReelAutomaticoEnCuadros(guion: Guion): number {
-  const tiempos = guion.tiemposRender ?? [];
-  const base = Math.round(tiempos.reduce((acc, t) => acc + (t.fin_s - t.inicio_s), 0) * guion.fps);
-  return tiempos.length > 1 ? base + CUADROS_TRANSICION : base;
-}
+//
+// Ronda K (revisión real en staging, 19 nov 2026): esto usaba
+// <TransitionSeries>+fade() como Composicion.tsx (las 6 recetas de
+// siempre) -- pero ahí el respiro entre escenas es una ESTIMACIÓN de
+// la IA (duracion_s) con margen de sobra para un fundido. Acá, el
+// respiro YA es un silencio real medido y deliberado (0.35-0.45s,
+// ver compactarPausas.ts): el fundido de 8 cuadros (0.27s) se sumaba
+// ENCIMA de ese respiro (cada escena se alargaba +8 cuadros propios, y
+// la transición solapaba la ÚLTIMA parte de una escena con la
+// PRIMERA de la siguiente) -- dos problemas reales del mismo origen,
+// no dos bugs distintos: (a) la tarjeta/subtítulo de la escena que
+// sale queda montada 8 cuadros de más, visible al mismo tiempo que la
+// que entra (dos tarjetas/subtítulos superpuestos, caso real: "Tercero,
+// responde…" sobre "del negocio."), y (b) el silencio real deliberado
+// (0.4s) más esos 8 cuadros de más sumaban ~0.67s de tiempo muerto
+// visual en cada unión (caso real medido: e3->e4, ~0.7s) -- muy por
+// encima del respiro pedido. Corte directo (Sequence a Sequence, sin
+// solape ni fundido, ver duracionReel.ts): el respiro que se escucha
+// es EXACTAMENTE el que compactarPausas.ts ya calculó, ningún cuadro
+// extra, y nunca hay 2 escenas montadas a la vez.
 
 // renderizarVisual() es una función pura (no un componente): necesita
 // el cuadro ACTUAL, que solo useCurrentFrame() puede dar, y solo
@@ -79,10 +93,23 @@ export function ReelAutomatico({ guion, pistaMusicaUrl, efectos = [], mostrarZon
 
   const segmentosAudio = guion.segmentosAudio ?? [];
 
-  const nodosEscenas = escenas.flatMap((escena, i) => {
+  // Desplazamientos acumulados (dónde empieza cada escena, en cuadros)
+  // calculados aparte, en un solo reduce puro -- nunca una variable
+  // reasignada DENTRO del .map() que arma el JSX de cada escena:
+  // react-hooks/immutability rechaza mutar una variable de closure
+  // durante el render, aunque acá sea determinístico y seguro.
+  const duracionesEnCuadros = escenas.map((escena) => {
+    const tiempo = tiemposRender.find((t) => t.escena_id === escena.id);
+    return Math.round((tiempo ? tiempo.fin_s - tiempo.inicio_s : 0) * fps);
+  });
+  const desdeEscenaPorIndice = duracionesEnCuadros.reduce<number[]>((acc, _duracion, i) => {
+    acc.push(i === 0 ? 0 : acc[i - 1] + duracionesEnCuadros[i - 1]);
+    return acc;
+  }, []);
+
+  const nodosEscenas = escenas.map((escena, i) => {
     const tiempo = tiemposRender.find((t) => t.escena_id === escena.id);
     const palabras = palabrasPorEscena.find((p) => p.escena_id === escena.id)?.palabras ?? [];
-    const duracionS = tiempo ? tiempo.fin_s - tiempo.inicio_s : 0;
     const inicioEscena_s = tiempo?.inicio_s ?? 0;
     // Ronda H: tramos reales de audio de esta escena (ver
     // app/lib/videoOrganico/compactarPausas.ts) -- casi siempre 1
@@ -101,10 +128,11 @@ export function ReelAutomatico({ guion, pistaMusicaUrl, efectos = [], mostrarZon
       finCuadro: Math.round((p.fin_s - inicioEscena_s) * fps),
     }));
 
-    const duracionEscenaCuadros = Math.round(duracionS * fps);
+    const duracionEscenaCuadros = duracionesEnCuadros[i];
+    const desdeEscena = desdeEscenaPorIndice[i];
 
-    const nodos: React.ReactNode[] = [
-      <TransitionSeries.Sequence key={escena.id} durationInFrames={duracionEscenaCuadros + CUADROS_TRANSICION}>
+    return (
+      <Sequence key={escena.id} from={desdeEscena} durationInFrames={duracionEscenaCuadros}>
         <AbsoluteFill>
           <FondoMarca tema={tema} bloque={escena.bloque} organico />
           {escena.visual && (
@@ -137,23 +165,13 @@ export function ReelAutomatico({ guion, pistaMusicaUrl, efectos = [], mostrarZon
               );
             })}
         </AbsoluteFill>
-      </TransitionSeries.Sequence>,
-    ];
-    if (i < escenas.length - 1) {
-      nodos.push(
-        <TransitionSeries.Transition
-          key={`${escena.id}-transicion`}
-          presentation={fade()}
-          timing={linearTiming({ durationInFrames: CUADROS_TRANSICION })}
-        />
-      );
-    }
-    return nodos;
+      </Sequence>
+    );
   });
 
   return (
     <AbsoluteFill style={{ fontFamily: familia }}>
-      <TransitionSeries>{nodosEscenas}</TransitionSeries>
+      {nodosEscenas}
 
       <CapaLogo tema={tema} />
       <CapaBucleAudio guion={guion} />

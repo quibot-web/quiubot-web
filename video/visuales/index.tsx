@@ -10,7 +10,7 @@ import { TarjetaSimple } from "./TarjetaSimple";
 import { AnuncioBotonVisual } from "./AnuncioBotonVisual";
 import { ConexionWhatsappVisual } from "./ConexionWhatsappVisual";
 import { RespuestaLentaVisual } from "./RespuestaLentaVisual";
-import { COLOR_ALERTA, COLOR_EXITO } from "./acento";
+import { COLOR_ALERTA, COLOR_EXITO_BLOQUE } from "./acento";
 import { TARJETA_ALTURA_PORCENTAJE, TARJETA_TOP_PORCENTAJE } from "./geometria";
 
 // Fase B v2.0 (docs/diseno/plan_contenido_organico_fase_b_v2.md,
@@ -71,9 +71,14 @@ function ZonaVisual({ children }: { children: React.ReactNode }) {
 
 // Mismo criterio que el arco de color del molde aprobado: alerta en
 // el gancho (problema), éxito en marca/cierre (arreglo) -- nunca un
-// color elegido por la IA.
+// color elegido por la IA. COLOR_EXITO_BLOQUE (no COLOR_EXITO): este
+// color alimenta colorActivo de BotonEstado (texto blanco encima) en
+// más de un case (cursor_clic, boton_estado) -- COLOR_EXITO normal
+// solo da 1.98:1 con blanco, bastante por debajo de los 4.5:1 de
+// contrasteSuficiente() (ver acento.ts); COLOR_EXITO_BLOQUE ya está
+// verificado (5.43:1) justo para este caso.
 function colorDeBloque(bloque: BloqueGuion): string {
-  return bloque === "gancho" || bloque === "problema" ? COLOR_ALERTA : COLOR_EXITO;
+  return bloque === "gancho" || bloque === "problema" ? COLOR_ALERTA : COLOR_EXITO_BLOQUE;
 }
 
 export function renderizarVisual(visual: Visual, ctx: ContextoVisual) {
@@ -149,7 +154,7 @@ export function renderizarVisual(visual: Visual, ctx: ContextoVisual) {
       return (
         <ZonaVisual>
           <TarjetaSimple>
-            <BotonEstado texto={activo ? textoActivo : textoIdle} tema={ctx.tema} progreso={progreso} activo={activo} colorActivo={COLOR_EXITO} />
+            <BotonEstado texto={activo ? textoActivo : textoIdle} tema={ctx.tema} progreso={progreso} activo={activo} colorActivo={COLOR_EXITO_BLOQUE} />
           </TarjetaSimple>
         </ZonaVisual>
       );
