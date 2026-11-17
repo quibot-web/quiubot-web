@@ -653,9 +653,17 @@ function FormularioAgregarReel({ fechaInicial, onCerrar, onCreado }: { fechaInic
         <select value={receta} onChange={(e) => setReceta(e.target.value as RecetaOrganicaId)} style={campo}>
           {RECETAS_ORGANICAS_INFO.map((r) => {
             const bloqueada = RECETAS_QUE_EXIGEN_MEDIA.includes(r.id) && piezasElegidas.length === 0;
+            // Fase B v2.0 (narración + voz + subtítulos sincronizados)
+            // solo está en consejos_numerados por ahora -- las demás
+            // siguen con el pipeline de siempre (sin voz) hasta que la
+            // Fase B v2.1 las generalice. Se dejan seleccionables (no
+            // se ocultan, para no cortar producción mientras eso pasa),
+            // solo marcadas para que quede claro qué esperar.
+            const esVersionAnterior = r.id !== "consejos_numerados";
             return (
               <option key={r.id} value={r.id} disabled={bloqueada}>
                 {r.label}
+                {esVersionAnterior ? " (versión anterior, sin voz)" : ""}
                 {bloqueada ? " (elige antes una foto o video)" : ""}
               </option>
             );

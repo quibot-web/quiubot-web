@@ -9,6 +9,7 @@ import { construirTemaDesdeAdn } from "@/video/tema";
 import { RECETAS_ORGANICAS, validarContraRecetaOrganica } from "@/video/recetas/organico";
 import {
   construirPromptGuionOrganico,
+  recetaParaPromptConAudio,
   hayContextoDeNegocioSuficiente,
   AVISO_SIN_CONTEXTO_NEGOCIO,
   type EntradaGuionOrganico,
@@ -21,6 +22,16 @@ import { analizarPiezaConOpenAI } from "@/app/lib/analizarPiezaImagen";
 import { ajustarDuracionesProporcional, limpiarHashtags, limpiarNumeracionItemsLista } from "@/video/arreglosAutomaticosGuion";
 import { elegirGanchoTipoMenosUsado, elegirPistaMusicalOrganica } from "@/app/lib/contenido";
 import type { RecetaOrganicaId } from "@/video/guion.schema";
+import { obtenerSaludInstagram } from "@/app/lib/metaInstagramSalud";
+import { generarGuionConVoz } from "@/app/lib/videoOrganico/generarGuionConVoz";
+
+// Receta que ya pasó al pipeline nuevo (narración + voz real, ver
+// app/lib/videoOrganico/generarGuionConVoz.ts -- el mismo código que
+// ya probó 12 rondas reales en el arnés admin). Las otras 5 recetas se
+// quedan en construirPromptGuionOrganico de siempre, sin voz, "versión
+// anterior" (ver app/contenido/page.tsx) hasta la Fase B v2.1.
+const RECETAS_CON_VOZ = new Set<RecetaOrganicaId>(["consejos_numerados"]);
+const VOZ_POR_DEFECTO = "cedar";
 
 // Genera (o regenera) el guion de una pieza orgánica -- commit 4b,
 // pantalla de revisión. Mismo modelo y mismo patrón de un reintento
@@ -97,7 +108,7 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
 
   const { data: usuario } = await supabaseAdmin
     .from("usuarios")
-    .select("id, rol, openai_key")
+    .select("id, rol, openai_key, cloudinary_name, cloudinary_key, cloudinary_secret, meta_page_id, meta_access_token")
     .eq("email", emailBusqueda)
     .single();
 
@@ -176,7 +187,7 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
 
   const { data: marca } = await supabaseAdmin
     .from("marcas")
-    .select("adn_marca, nombre_marca, logo_url, info_adicional")
+    .select("adn_marca, nombre_marca, logo_url, info_adicional, voz_tts")
     .eq("email", emailBusqueda)
     .maybeSingle();
 
@@ -184,11 +195,29 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
     return NextResponse.json({ error: "Genera primero el ADN de tu marca en Mi marca." }, { status: 400 });
   }
 
-  const tema = construirTemaDesdeAdn({
-    ...(marca.adn_marca as Record<string, unknown>),
-    logo_url: marca.logo_url ?? null,
-    nombre_marca: marca.nombre_marca ?? null,
-  });
+  // @usuario real de Instagram, misma fuente que ya usa el Director
+  // (app/lib/director/flujoCrearMeta.ts) y el arnés de prueba del reel
+  // con voz -- nunca se le pregunta a la IA, nunca se inventa. Se
+  // resuelve para cualquier receta (es un campo más del tema, las 5
+  // recetas sin voz simplemente no lo leen -- ver video/escenas/Cta.tsx
+  // vs. video/visuales/index.tsx) para no tener 2 caminos de armar
+  // `tema` según la receta.
+  let saludInstagram: { conectado: boolean; username: string | null };
+  try {
+    saludInstagram = await obtenerSaludInstagram({ meta_page_id: usuario.meta_page_id, meta_access_token: usuario.meta_access_token });
+  } catch (err) {
+    console.error("Error consultando salud de Instagram para el guion orgánico:", err);
+    saludInstagram = { conectado: false, username: null };
+  }
+
+  const tema = construirTemaDesdeAdn(
+    {
+      ...(marca.adn_marca as Record<string, unknown>),
+      logo_url: marca.logo_url ?? null,
+      nombre_marca: marca.nombre_marca ?? null,
+    },
+    saludInstagram.conectado ? saludInstagram.username : null
+  );
   const adnMarca = marca.adn_marca as { titular?: string | null; frase_corta?: string | null };
   const infoAdicionalMarca = (marca.info_adicional as string | null)?.trim().slice(0, 800) || null;
 
@@ -258,6 +287,92 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
     piezas: piezasDisponibles,
     analisisPiezas,
   };
+
+  // Pipeline con voz (narración + TTS + subtítulos sincronizados),
+  // reusando el MISMO código que el arnés admin ya probó en 12 rondas
+  // reales de staging (app/lib/videoOrganico/generarGuionConVoz.ts) --
+  // ver RECETAS_CON_VOZ arriba. Las demás recetas caen al código de
+  // siempre más abajo, sin ningún cambio de comportamiento.
+  if (RECETAS_CON_VOZ.has(recetaId)) {
+    if (!usuario.cloudinary_name || !usuario.cloudinary_key || !usuario.cloudinary_secret) {
+      return NextResponse.json({ error: "Conecta tu cuenta de Cloudinary en Integraciones antes de generar la voz." }, { status: 400 });
+    }
+    let cloudinaryKey: string;
+    let cloudinarySecret: string;
+    try {
+      cloudinaryKey = desencriptarSiHaceFalta(usuario.cloudinary_key);
+      cloudinarySecret = desencriptarSiHaceFalta(usuario.cloudinary_secret);
+    } catch {
+      return NextResponse.json({ error: "No se pudo leer tus llaves de Cloudinary guardadas." }, { status: 500 });
+    }
+
+    const voz = (marca.voz_tts as string | null) || VOZ_POR_DEFECTO;
+    const recetaConAudio = recetaParaPromptConAudio(entrada);
+
+    try {
+      const resultado = await generarGuionConVoz({
+        apiKeyUsuario,
+        cloudinary: { cloudName: usuario.cloudinary_name, apiKey: cloudinaryKey, apiSecret: cloudinarySecret },
+        voz,
+        tema,
+        entrada,
+        recetaConAudio,
+        tienePiezas: piezasDisponibles.length > 0,
+        pistaIdElegida,
+        duracionObjetivoS: duracionS,
+        recetaId,
+        maxReintentos: MAX_REINTENTOS,
+      });
+
+      if (!resultado.ok) {
+        registrarError({
+          origen: "contenido_guion",
+          userId: usuario.id,
+          email: emailBusqueda,
+          paso: "validacion_guion_con_voz",
+          errorMensaje: resultado.error,
+          detalleTecnico: (resultado.resumenErrores ?? []).join(" || "),
+        });
+        return NextResponse.json({ error: resultado.error, resumenErrores: resultado.resumenErrores }, { status: resultado.status });
+      }
+
+      const { error: errorUpdate } = await supabaseAdmin
+        .from("publicaciones_organicas")
+        .update({
+          guion: resultado.guion,
+          caption: resultado.guion.publicacion?.caption ?? null,
+          hashtags: resultado.guion.publicacion?.hashtags ?? null,
+          voz_url: resultado.guion.vozUrl ?? null,
+          actualizado_en: new Date().toISOString(),
+        })
+        .eq("id", id)
+        .eq("user_id", usuario.id);
+
+      if (errorUpdate) {
+        throw new Error(`No se pudo guardar el guion: ${errorUpdate.message}`);
+      }
+
+      return NextResponse.json({ guion: resultado.guion });
+    } catch (err) {
+      console.error("Error generando guion orgánico con voz:", err);
+      const detalle = String(err);
+      registrarError({
+        origen: "contenido_guion",
+        userId: usuario.id,
+        email: emailBusqueda,
+        paso: "pipeline_con_voz",
+        errorMensaje: "No se pudo generar el guion con voz.",
+        detalleTecnico: detalle,
+      });
+      if (/insufficient_quota|credit_balance_exhausted/.test(detalle)) {
+        return NextResponse.json(
+          { error: "Tu cuenta de OpenAI no tiene créditos. Agrega saldo en platform.openai.com y vuelve a intentar." },
+          { status: 503 }
+        );
+      }
+      return NextResponse.json({ error: "No se pudo generar el guion en este momento. Intenta de nuevo." }, { status: 503 });
+    }
+  }
 
   interface Intento {
     errores: string[];

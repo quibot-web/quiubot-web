@@ -2,29 +2,20 @@ import { auth } from "@/auth";
 import { NextRequest, NextResponse } from "next/server";
 import { supabaseAdmin } from "@/lib/supabase";
 import { desencriptarSiHaceFalta } from "@/lib/crypto";
-import { GuionSchema, idsDeMediaUsados, type Guion } from "@/video/guion.schema";
 import { construirTemaDesdeAdn } from "@/video/tema";
 import { obtenerSaludInstagram } from "@/app/lib/metaInstagramSalud";
-import { RECETAS_ORGANICAS, validarContraRecetaOrganica } from "@/video/recetas/organico";
+import { RECETAS_ORGANICAS } from "@/video/recetas/organico";
 import {
-  construirPromptGuionOrganicoConAudio,
   recetaParaPromptConAudio,
   hayContextoDeNegocioSuficiente,
   AVISO_SIN_CONTEXTO_NEGOCIO,
   type EntradaGuionOrganico,
   type ProductoResumenNegocio,
 } from "@/video/promptGuionOrganico";
-import { detectarFrasesDescargo, detectarFrasesVacias, recopilarTextosEscenas } from "@/video/reglasCopy";
-import { ajustarDuracionesProporcional, limpiarHashtags, limpiarNumeracionItemsLista } from "@/video/arreglosAutomaticosGuion";
 import { elegirPistaMusicalOrganica } from "@/app/lib/contenido";
 import { urlPistaMusical } from "@/app/lib/cloudinaryUrl";
-import { validarEdicionDesdeAudio, validarEstructuraConsejosNumeradosAudio } from "@/video/visuales/validarEdicionDesdeAudio";
 import { validarGeometriaMinima } from "@/video/visuales/validarGeometriaMinima";
-import { generarVoz } from "@/app/lib/videoOrganico/generarVoz";
-import { alinearPalabras } from "@/app/lib/videoOrganico/alinearPalabras";
-import { construirCamposDeTiempo } from "@/app/lib/videoOrganico/compactarPausas";
-import { verificarPalabrasCompletas } from "@/app/lib/videoOrganico/verificarPalabrasCompletas";
-import { calcularHashNarracion } from "@/app/lib/videoOrganico/hashNarracion";
+import { generarGuionConVoz } from "@/app/lib/videoOrganico/generarGuionConVoz";
 
 // Fase B v2.0, paso 8 del plan (docs/diseno/plan_contenido_organico_fase_b_v2.md)
 // -- arnés de prueba del ÚNICO reel automático (consejos_numerados,
@@ -39,8 +30,6 @@ import { calcularHashNarracion } from "@/app/lib/videoOrganico/hashNarracion";
 // gastar en generarVoz()) y, si pasa, la llamada real a generarVoz()+
 // alinearPalabras() para dejar tiemposRender/palabrasPorEscena/vozUrl
 // ya resueltos en el guion que se devuelve.
-const MODELO_GUION = "gpt-5.6-sol";
-const TIMEOUT_OPENAI_MS = 60_000;
 const MAX_REINTENTOS = 2;
 const RECETA_ID = "consejos_numerados" as const;
 const DURACION_OBJETIVO_S = 16;
@@ -49,34 +38,6 @@ const DURACION_OBJETIVO_S = 16;
 // Y guardada en marcas.voz_tts para Quiubot (esta columna solo pisa el
 // default si una marca puntual pide otra voz distinta).
 const VOZ_POR_DEFECTO = "cedar";
-
-async function llamarOpenAI(apiKey: string, prompt: string): Promise<string> {
-  const controller = new AbortController();
-  const timeoutId = setTimeout(() => controller.abort(), TIMEOUT_OPENAI_MS);
-  try {
-    const res = await fetch("https://api.openai.com/v1/chat/completions", {
-      method: "POST",
-      headers: { "Content-Type": "application/json", Authorization: `Bearer ${apiKey}` },
-      body: JSON.stringify({
-        model: MODELO_GUION,
-        messages: [{ role: "system", content: prompt }],
-        max_completion_tokens: 6000,
-        response_format: { type: "json_object" },
-      }),
-      signal: controller.signal,
-    });
-    if (!res.ok) {
-      const detalle = await res.text();
-      throw new Error(`Error de OpenAI (${res.status}): ${detalle}`);
-    }
-    const data = await res.json();
-    const contenido = data?.choices?.[0]?.message?.content;
-    if (typeof contenido !== "string") throw new Error("OpenAI no devolvió contenido de texto.");
-    return contenido;
-  } finally {
-    clearTimeout(timeoutId);
-  }
-}
 
 export async function POST(req: NextRequest) {
   const session = await auth();
@@ -202,138 +163,31 @@ export async function POST(req: NextRequest) {
   // de este chequeo genérico.
   const recetaConAudio = recetaParaPromptConAudio(entrada);
 
-  const intentosRegistrados: { errores: string[] }[] = [];
-
-  async function intentar(erroresPrevios?: string[]): Promise<{ ok: true; guion: Guion } | { ok: false; errores: string[] }> {
-    const prompt = construirPromptGuionOrganicoConAudio(entrada, erroresPrevios);
-    const contenido = await llamarOpenAI(apiKeyUsuario, prompt);
-
-    let crudo: unknown;
-    try {
-      crudo = JSON.parse(contenido);
-    } catch {
-      const errores = ["La respuesta no fue un JSON válido."];
-      intentosRegistrados.push({ errores });
-      return { ok: false, errores };
-    }
-
-    const crudoObj = crudo as Record<string, unknown>;
-    const escenasSinNumeracionDoble = limpiarNumeracionItemsLista(crudoObj?.escenas);
-    const escenasAjustadas = ajustarDuracionesProporcional(escenasSinNumeracionDoble, DURACION_OBJETIVO_S);
-    const hashtagsLimpios = limpiarHashtags(crudoObj?.hashtags);
-    const candidato = {
-      version: 1 as const,
-      formato: "9x16" as const,
-      fps: 30 as const,
-      uso: "organico" as const,
-      receta_organica: RECETA_ID,
-      gancho_tipo: entrada.ganchoTipoAsignado,
-      duracion_objetivo_s: DURACION_OBJETIVO_S,
-      bucle: crudoObj?.bucle,
-      tema,
-      musica: { pista_id: pistaIdElegida, volumen: 0.35 },
-      escenas: escenasAjustadas,
-      publicacion: { caption: crudoObj?.caption, hashtags: hashtagsLimpios ?? crudoObj?.hashtags },
-    };
-
-    const resultado = GuionSchema.safeParse(candidato);
-    if (!resultado.success) {
-      const errores = resultado.error.issues.map((issue) => `${issue.path.join(".")}: ${issue.message}`);
-      intentosRegistrados.push({ errores });
-      return { ok: false, errores };
-    }
-
-    const erroresReceta = validarContraRecetaOrganica(resultado.data, recetaConAudio, false);
-    const idsUsados = idsDeMediaUsados(resultado.data.escenas);
-    const erroresMedia = idsUsados.map((idUsado) => `media_id "${idUsado}" no está permitido en este guion de prueba (sin piezas del álbum).`);
-    const textosEscenas = recopilarTextosEscenas(resultado.data.escenas);
-    const erroresCopy = detectarFrasesDescargo(textosEscenas).map((m) => `copy tímido: ${m}`);
-    const erroresVacios = detectarFrasesVacias(textosEscenas).map((m) => `copy abstracto: ${m}`);
-    // Específico de esta Fase: narracion/visual/eventos consistentes
-    // (ver video/visuales/validarEdicionDesdeAudio.ts) -- la ruta de
-    // siempre no corre esto porque esas 6 recetas no llevan voz.
-    const hallazgosAudio = validarEdicionDesdeAudio(resultado.data.escenas).map((h) => `${h.escenaId}: ${h.mensaje}`);
-    // Caso real de staging (16 nov 2026): los 3 consejos metidos en
-    // una sola escena con un "contador" -- decir, no mostrar. Esta
-    // SÍ es específica de consejos_numerados (por eso vive aparte de
-    // validarEdicionDesdeAudio, que es genérica).
-    const hallazgosEstructura = validarEstructuraConsejosNumeradosAudio(resultado.data.escenas).map((h) => `${h.escenaId}: ${h.mensaje}`);
-
-    const erroresTotales = [...erroresReceta, ...erroresMedia, ...erroresCopy, ...erroresVacios, ...hallazgosAudio, ...hallazgosEstructura];
-    intentosRegistrados.push({ errores: erroresTotales });
-    if (erroresTotales.length > 0) return { ok: false, errores: erroresTotales };
-
-    return { ok: true, guion: resultado.data };
-  }
-
   try {
-    // Si el cliente mandó errores de un intento anterior (control de
-    // calidad por visión/audio sobre un render previo, ver el
-    // comentario de erroresPreviosDelCliente más arriba), la PRIMERA
-    // llamada ya arranca con esos errores en el prompt -- no hace
-    // falta gastar una llamada "a ciegas" primero.
-    let resultado = await intentar(erroresPreviosDelCliente);
-    let intentosGuion = 1;
-    while (!resultado.ok && intentosGuion <= MAX_REINTENTOS) {
-      resultado = await intentar(resultado.errores);
-      intentosGuion += 1;
-    }
+    // Pipeline real (prompt con audio -> validación -> voz -> alineación
+    // -> compactación de pausas por silencio real), extraído a
+    // app/lib/videoOrganico/generarGuionConVoz.ts (paso 1 de la
+    // integración a /contenido) para que esta ruta de prueba y la ruta
+    // real (app/api/contenido/[id]/guion/route.ts, solo consejos_numerados)
+    // compartan el MISMO código, probado en 12 rondas reales de staging.
+    const resultado = await generarGuionConVoz({
+      apiKeyUsuario,
+      cloudinary: { cloudName: usuario.cloudinary_name, apiKey: cloudinaryKey, apiSecret: cloudinarySecret },
+      voz,
+      tema,
+      entrada,
+      recetaConAudio,
+      tienePiezas: false,
+      pistaIdElegida,
+      duracionObjetivoS: DURACION_OBJETIVO_S,
+      recetaId: RECETA_ID,
+      erroresPrevios: erroresPreviosDelCliente,
+      maxReintentos: MAX_REINTENTOS,
+    });
 
     if (!resultado.ok) {
-      return NextResponse.json({ error: "No se pudo generar un guion válido (narración/visual) después de varios intentos.", resumenErrores: resultado.errores }, { status: 502 });
+      return NextResponse.json({ error: resultado.error, resumenErrores: resultado.resumenErrores }, { status: resultado.status });
     }
-
-    // Voz real -- única llamada de todo este endpoint que cuesta dinero
-    // de verdad (TTS + Whisper, unos centavos). Solo se llega acá con
-    // un guion que YA pasó validarEdicionDesdeAudio(), para no gastarla
-    // en un guion que de todos modos se iba a descartar.
-    const textoCompleto = resultado.guion.escenas.map((e) => e.narracion ?? "").join(" ");
-    const { audioUrl, palabras, silencios } = await generarVoz(textoCompleto, {
-      openaiKey: apiKeyUsuario,
-      voz,
-      cloudinary: { cloudName: usuario.cloudinary_name, apiKey: cloudinaryKey, apiSecret: cloudinarySecret },
-    });
-    const { palabrasPorEscena: palabrasPorEscenaCrudo, puntaje } = alinearPalabras(
-      resultado.guion.escenas.map((e) => ({ id: e.id, narracion: e.narracion ?? "" })),
-      palabras
-    );
-
-    // Ronda I (escuchó el reel real en staging, 18 nov 2026): la ronda
-    // H decidía los cortes a partir de los huecos entre los tiempos de
-    // PALABRA de Whisper -- imprecisos por diseño, mordieron palabras
-    // reales ("conecta", "responde", "Quiubot") sobre todo en los
-    // bordes entre escenas (donde encima no se aplicaba margen).
-    // compactarConSilenciosReales() corta SOLO dentro de silencio real
-    // medido en la propia onda de audio (detectarSilenciosReales.ts) --
-    // nunca a partir de lo que Whisper CREE que dura una palabra. Las
-    // palabras siguen viniendo de Whisper, pero solo para (a) saber a
-    // qué escena pertenece cada una (clasificar un silencio como "fin
-    // de frase/escena" -- objetivo 0.35-0.45s -- o "dentro de una
-    // frase" -- objetivo 0.25s) y (b) la sincronía de subtítulos.
-    const { tiemposRender, palabrasPorEscena, segmentosAudio, palabrasFlat, tramosPorEscena } = construirCamposDeTiempo(palabrasPorEscenaCrudo, silencios);
-
-    // Red de seguridad final: ¿alguna palabra real quedó fuera de todo
-    // tramo que de verdad se va a reproducir? Si es así, el guion no
-    // sale -- una palabra mordida es peor que repetir el intento.
-    const hallazgosPalabrasPerdidas = verificarPalabrasCompletas(palabrasFlat, tramosPorEscena);
-    if (hallazgosPalabrasPerdidas.length > 0) {
-      return NextResponse.json(
-        {
-          error: "La compactación de pausas se comió parte de una palabra real -- no se entrega un reel con audio mordido.",
-          resumenErrores: hallazgosPalabrasPerdidas.map((h) => h.mensaje),
-        },
-        { status: 502 }
-      );
-    }
-
-    const guionFinal: Guion = {
-      ...resultado.guion,
-      tiemposRender,
-      palabrasPorEscena,
-      segmentosAudio,
-      narracionHash: calcularHashNarracion(resultado.guion.escenas),
-      vozUrl: audioUrl,
-    };
 
     // Ronda J, punto B: se devuelven los ingredientes crudos (ANTES de
     // compactar) junto con el guion final -- así, si el control de
@@ -343,13 +197,13 @@ export async function POST(req: NextRequest) {
     // estrictos) sobre esta MISMA voz ya generada, sin volver a gastar
     // en la IA ni en TTS -- ver AdminReelAutomaticoPruebaClient.tsx.
     return NextResponse.json({
-      guion: guionFinal,
+      guion: resultado.guion,
       pistaMusicaUrl,
       voz,
-      puntajeAlineacion: puntaje,
-      intentosGuion,
+      puntajeAlineacion: resultado.puntajeAlineacion,
+      intentosGuion: resultado.intentosGuion,
       seRegeneroPorQC: !!erroresPreviosDelCliente,
-      crudo: { palabrasPorEscenaCrudo, silencios },
+      crudo: resultado.crudo,
     });
   } catch (err) {
     const detalle = String(err instanceof Error ? err.message : err);

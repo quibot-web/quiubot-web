@@ -86,9 +86,15 @@ vi.mock("@/lib/supabase", () => ({
 const registrarErrorMock = vi.fn();
 vi.mock("@/lib/registrarError", () => ({ registrarError: (...args: unknown[]) => registrarErrorMock(...args) }));
 
+// Para probar que la receta decide el camino (pipeline con voz vs. el
+// de siempre) sin reprobar el pipeline con voz por dentro -- eso ya
+// tiene su propia batería en generarGuionConVoz.test.ts.
+const generarGuionConVozMock = vi.fn();
+vi.mock("@/app/lib/videoOrganico/generarGuionConVoz", () => ({ generarGuionConVoz: (...args: unknown[]) => generarGuionConVozMock(...args) }));
+
 const { POST } = await import("./route");
 
-const USUARIO_ADMIN = { id: "user-1", rol: "admin", openai_key: "sk-test" };
+const USUARIO_ADMIN = { id: "user-1", rol: "admin", openai_key: "sk-test", cloudinary_name: "demo", cloudinary_key: "k", cloudinary_secret: "s", meta_page_id: null, meta_access_token: null };
 // info_adicional real y suficiente -- la descripción REAL del negocio,
 // nunca algo que la IA tenga que deducir por el nombre de la marca
 // (caso real: "Quiubot" asumido como chatbot por el nombre).
@@ -372,7 +378,11 @@ describe("POST /api/contenido/[id]/guion", () => {
   });
 
   it("lista_numerada con '1/3 ' antepuesto por la IA: se limpia solo, sin gastar reintento (caso real: círculo + número duplicados)", async () => {
-    piezaActual = { ...piezaActual, receta_organica: "consejos_numerados" };
+    // Caso real migrado a serie_partes -- consejos_numerados ya no pasa
+    // por este pipeline viejo (ver describe("receta con voz...") más
+    // abajo); limpiarNumeracionItemsLista() para el pipeline con voz
+    // tiene su propia prueba en generarGuionConVoz.test.ts.
+    piezaActual = { ...piezaActual, receta_organica: "serie_partes", gancho_tipo: "pregunta" };
     const guionConNumeracionDoble = {
       gancho_tipo: "pregunta",
       bucle: { texto: "3 trucos para tu pan", abre_en: "e1", cierra_en: "e2", indicador: "contador" },
@@ -385,7 +395,13 @@ describe("POST /api/contenido/[id]/guion", () => {
           duracion_s: 5,
           params: { titulo: "3 trucos", items: ["1/3 Guárdalo en bolsa de tela", "2/3 Nunca en la nevera", "3/3 Congélalo en rebanadas"] },
         },
-        { id: "e3", bloque: "marca", tipo: "revelacion_marca", duracion_s: 5, params: { frase: "Pan fresco siempre", mostrar_logo: true } },
+        {
+          id: "e3",
+          bloque: "valor",
+          tipo: "lista_numerada",
+          duracion_s: 5,
+          params: { titulo: "La parte 2", items: ["Viene la parte 2", "Más trucos reales", "No te la pierdas"] },
+        },
         { id: "e4", bloque: "cta", tipo: "cta", duracion_s: 4.5, params: { accion: "seguir", texto_boton: "Síguenos", usuario: "@panaderia" } },
       ],
       caption: "Trucos de pan.",
@@ -451,6 +467,81 @@ describe("POST /api/contenido/[id]/guion", () => {
     const res = await POST(req(), contexto());
     expect(res.status).toBe(502);
     expect(updatesRealizados.length).toBe(0);
+    vi.unstubAllGlobals();
+  });
+});
+
+describe("POST /api/contenido/[id]/guion -- receta con voz vs. receta de siempre", () => {
+  beforeEach(() => {
+    fromMock.mockClear();
+    registrarErrorMock.mockReset();
+    generarGuionConVozMock.mockReset();
+    rateLimitMock.mockReturnValue(true);
+    updatesRealizados = [];
+    authMock.mockResolvedValue({ user: { email: "marca@quiubot.com" } });
+    usuarioActual = USUARIO_ADMIN;
+    marcaActual = { ...MARCA_BASE, voz_tts: "cedar" };
+    piezasAlbumActual = [];
+    productosActivosActual = [];
+    piezasSemanaActual = [];
+    pistasActivasActual = [];
+    vi.spyOn(console, "error").mockImplementation(() => {});
+  });
+
+  it("consejos_numerados: llama a generarGuionConVoz(), nunca a OpenAI directo desde esta ruta, y guarda voz_url", async () => {
+    piezaActual = { id: "pieza-1", receta_organica: "consejos_numerados", estado: "borrador", media_ids: null, semana: "2026-11-09", tema: null, gancho_tipo: "pregunta" };
+    const fetchMock = vi.fn();
+    vi.stubGlobal("fetch", fetchMock);
+    generarGuionConVozMock.mockResolvedValue({
+      ok: true,
+      guion: { version: 1, formato: "9x16", fps: 30, uso: "organico", receta_organica: "consejos_numerados", escenas: [], publicacion: { caption: "cap", hashtags: ["#a", "#b", "#c"] }, vozUrl: "https://cloudinary.test/voz.mp3" },
+      puntajeAlineacion: 1,
+      intentosGuion: 1,
+      crudo: { palabrasPorEscenaCrudo: [], silencios: [] },
+    });
+
+    const res = await POST(req(), contexto());
+    const body = await res.json();
+
+    expect(res.status).toBe(200);
+    expect(generarGuionConVozMock).toHaveBeenCalledTimes(1);
+    expect(generarGuionConVozMock.mock.calls[0][0].voz).toBe("cedar");
+    expect(fetchMock).not.toHaveBeenCalled(); // esta ruta ya no llama a OpenAI directo para esta receta
+    expect(body.guion.vozUrl).toBe("https://cloudinary.test/voz.mp3");
+    expect(updatesRealizados[0].voz_url).toBe("https://cloudinary.test/voz.mp3");
+    vi.unstubAllGlobals();
+  });
+
+  it("consejos_numerados sin Cloudinary conectado: 400, nunca llama a generarGuionConVoz", async () => {
+    piezaActual = { id: "pieza-1", receta_organica: "consejos_numerados", estado: "borrador", media_ids: null, semana: "2026-11-09", tema: null, gancho_tipo: "pregunta" };
+    usuarioActual = { ...USUARIO_ADMIN, cloudinary_name: null };
+
+    const res = await POST(req(), contexto());
+    expect(res.status).toBe(400);
+    expect(generarGuionConVozMock).not.toHaveBeenCalled();
+  });
+
+  it("consejos_numerados: cuando generarGuionConVoz() falla, propaga su status/error tal cual, sin guardar nada", async () => {
+    piezaActual = { id: "pieza-1", receta_organica: "consejos_numerados", estado: "borrador", media_ids: null, semana: "2026-11-09", tema: null, gancho_tipo: "pregunta" };
+    generarGuionConVozMock.mockResolvedValue({ ok: false, status: 502, error: "No se pudo generar un guion válido (narración/visual) después de varios intentos.", resumenErrores: ["e1: algo falló"] });
+
+    const res = await POST(req(), contexto());
+    const body = await res.json();
+    expect(res.status).toBe(502);
+    expect(body.resumenErrores).toEqual(["e1: algo falló"]);
+    expect(updatesRealizados.length).toBe(0);
+  });
+
+  it("mito_verdad (receta de siempre): nunca llama a generarGuionConVoz, sigue usando el prompt viejo", async () => {
+    piezaActual = { id: "pieza-1", receta_organica: "mito_verdad", estado: "borrador", media_ids: null, semana: "2026-11-09", tema: null, gancho_tipo: "pregunta" };
+    const fetchMock = vi.fn().mockResolvedValue(respuestaOpenAI(GUION_VALIDO_CRUDO));
+    vi.stubGlobal("fetch", fetchMock);
+
+    const res = await POST(req(), contexto());
+
+    expect(res.status).toBe(200);
+    expect(generarGuionConVozMock).not.toHaveBeenCalled();
+    expect(fetchMock).toHaveBeenCalledTimes(1);
     vi.unstubAllGlobals();
   });
 });
