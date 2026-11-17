@@ -22,7 +22,7 @@ import { validarEdicionDesdeAudio, validarEstructuraConsejosNumeradosAudio } fro
 import { validarGeometriaMinima } from "@/video/visuales/validarGeometriaMinima";
 import { generarVoz } from "@/app/lib/videoOrganico/generarVoz";
 import { alinearPalabras } from "@/app/lib/videoOrganico/alinearPalabras";
-import { compactarConSilenciosReales } from "@/app/lib/videoOrganico/compactarPausas";
+import { construirCamposDeTiempo } from "@/app/lib/videoOrganico/compactarPausas";
 import { verificarPalabrasCompletas } from "@/app/lib/videoOrganico/verificarPalabrasCompletas";
 import { calcularHashNarracion } from "@/app/lib/videoOrganico/hashNarracion";
 
@@ -310,10 +310,7 @@ export async function POST(req: NextRequest) {
     // qué escena pertenece cada una (clasificar un silencio como "fin
     // de frase/escena" -- objetivo 0.35-0.45s -- o "dentro de una
     // frase" -- objetivo 0.25s) y (b) la sincronía de subtítulos.
-    const cantidadesPorEscena = palabrasPorEscenaCrudo.map((p) => p.palabras.length);
-    const palabrasFlat = palabrasPorEscenaCrudo.flatMap((p) => p.palabras);
-    const escenaIndicePorPalabra = palabrasPorEscenaCrudo.flatMap((p, i) => p.palabras.map(() => i));
-    const { palabras: palabrasCompactadas, tramosPorEscena } = compactarConSilenciosReales(palabrasFlat, silencios, escenaIndicePorPalabra);
+    const { tiemposRender, palabrasPorEscena, segmentosAudio, palabrasFlat, tramosPorEscena } = construirCamposDeTiempo(palabrasPorEscenaCrudo, silencios);
 
     // Red de seguridad final: ¿alguna palabra real quedó fuera de todo
     // tramo que de verdad se va a reproducir? Si es así, el guion no
@@ -329,36 +326,6 @@ export async function POST(req: NextRequest) {
       );
     }
 
-    const tiemposRender: Guion["tiemposRender"] = [];
-    const palabrasPorEscena: Guion["palabrasPorEscena"] = [];
-    const segmentosAudio: NonNullable<Guion["segmentosAudio"]> = [];
-    let cursor = 0;
-    for (let i = 0; i < palabrasPorEscenaCrudo.length; i++) {
-      const escenaId = palabrasPorEscenaCrudo[i].escena_id;
-      const cantidad = cantidadesPorEscena[i];
-      const deEscena = palabrasCompactadas.slice(cursor, cursor + cantidad);
-      cursor += cantidad;
-
-      palabrasPorEscena!.push({ escena_id: escenaId, palabras: deEscena.map((p) => ({ texto: p.texto, inicio_s: p.compactado.inicio_s, fin_s: p.compactado.fin_s })) });
-
-      const tramos = tramosPorEscena[i] ?? [];
-      if (tramos.length === 0) {
-        tiemposRender!.push({ escena_id: escenaId, inicio_s: 0, fin_s: 0 });
-        segmentosAudio.push({ escena_id: escenaId, tramos: [] });
-        continue;
-      }
-
-      // El límite de la escena ahora es el borde de su PROPIO tramo
-      // (que ya incluye, si hubo un corte real ahí, la mitad del
-      // silencio real conservada de este lado) -- nunca el tiempo
-      // desnudo de su primera/última palabra. Por eso ya no hace falta
-      // "margenAlInicio/margenAlFinal": el margen, cuando existe, ya es
-      // parte del propio tramo, así que siempre cabe exacto dentro del
-      // Sequence de esta escena.
-      tiemposRender!.push({ escena_id: escenaId, inicio_s: tramos[0].compactado.inicio_s, fin_s: tramos[tramos.length - 1].compactado.fin_s });
-      segmentosAudio.push({ escena_id: escenaId, tramos });
-    }
-
     const guionFinal: Guion = {
       ...resultado.guion,
       tiemposRender,
@@ -368,7 +335,22 @@ export async function POST(req: NextRequest) {
       vozUrl: audioUrl,
     };
 
-    return NextResponse.json({ guion: guionFinal, pistaMusicaUrl, voz, puntajeAlineacion: puntaje, intentosGuion, seRegeneroPorQC: !!erroresPreviosDelCliente });
+    // Ronda J, punto B: se devuelven los ingredientes crudos (ANTES de
+    // compactar) junto con el guion final -- así, si el control de
+    // calidad del arnés (render + visión + audio, en el cliente)
+    // encuentra SOLO un problema de pausas, puede pedir una
+    // recompactación sola (POST /recompactar, con límites más
+    // estrictos) sobre esta MISMA voz ya generada, sin volver a gastar
+    // en la IA ni en TTS -- ver AdminReelAutomaticoPruebaClient.tsx.
+    return NextResponse.json({
+      guion: guionFinal,
+      pistaMusicaUrl,
+      voz,
+      puntajeAlineacion: puntaje,
+      intentosGuion,
+      seRegeneroPorQC: !!erroresPreviosDelCliente,
+      crudo: { palabrasPorEscenaCrudo, silencios },
+    });
   } catch (err) {
     const detalle = String(err instanceof Error ? err.message : err);
     if (/insufficient_quota|credit_balance_exhausted|no tiene créditos/.test(detalle)) {

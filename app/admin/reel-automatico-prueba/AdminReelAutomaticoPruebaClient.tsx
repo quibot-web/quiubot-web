@@ -23,7 +23,12 @@ type HallazgoVision = { cuadro: string; pantalla_vacia: boolean; texto_superpues
 // no solo confiar en la nota en texto del modelo.
 type HallazgoConImagen = HallazgoVision & { dataUrl?: string };
 
-type ResultadoGuion = { guion: Guion; pistaMusicaUrl: string | null; voz: string; puntajeAlineacion: number; intentosGuion: number; seRegeneroPorQC: boolean };
+// "crudo" (ronda J): palabras de Whisper + silencios reales de ffmpeg
+// ANTES de compactar -- se guarda tal cual (nunca se interpreta acá)
+// para poder pedir una recompactación sola sobre la MISMA voz ya
+// generada, sin volver a llamar a la IA ni a generarVoz().
+type CrudoVoz = { palabrasPorEscenaCrudo: unknown; silencios: unknown };
+type ResultadoGuion = { guion: Guion; pistaMusicaUrl: string | null; voz: string; puntajeAlineacion: number; intentosGuion: number; seRegeneroPorQC: boolean; crudo?: CrudoVoz };
 
 const LICENCIA_REMOTION = "free-license";
 // Plan punto 8: "si algo falla, se reintenta... hasta 2 veces". Son
@@ -233,8 +238,20 @@ async function audioEstaEnSilencio(blob: Blob): Promise<ResultadoSilencio> {
 // hueco de voz, por ejemplo). Mismo umbral de -45dB que ya usa
 // audioEstaEnSilencioInterno -- lo que importa es "no hay nada
 // sonando", no afinar el nivel ideal de mezcla.
+//
+// Ronda J: el umbral subió de 0.4 a 0.6 -- 0.4 quedó obsoleto en
+// cuanto compactarPausas.ts empezó a apuntar a pausas de 0.35-0.45s
+// ENTRE frases/escenas a propósito (antes sonaba "mordido"; ver su
+// propio comentario). Caso real que lo disparó en staging: un intento
+// 3/3 falló por un silencio de 0.50s que era exactamente el respiro
+// nuevo pedido, no un defecto. compactarPausas.ts ya garantiza un
+// techo duro de 0.5s (PAUSA_MAXIMA_ABSOLUTA_S) -- este umbral solo
+// necesita quedar POR ENCIMA de ese techo para no marcar como falla
+// lo que la compactación hace a propósito, con margen para que un
+// silencio real de verdad (una pausa que se escapó, o música/efectos
+// que no taparon un hueco de voz) siga marcándose.
 const UMBRAL_SILENCIO_DB = -45;
-const DURACION_MINIMA_SILENCIO_S = 0.4;
+const DURACION_MINIMA_SILENCIO_S = 0.6;
 const VENTANA_ESCANEO_S = 0.05;
 
 async function encontrarSilenciosLargosInterno(blob: Blob, duracionMinima_s: number = DURACION_MINIMA_SILENCIO_S): Promise<SilencioLargo[]> {
@@ -316,6 +333,34 @@ function erroresDesdeQC(hallazgos: HallazgoVision[], silencio: ResultadoSilencio
   return errores;
 }
 
+// Ronda J, punto B: clasifica el hallazgo del intento anterior -- si
+// lo ÚNICO que falló fue un silencio largo (audio ya renderizado y
+// visión limpios), el problema es de PAUSAS, no de contenido. Nunca
+// hace falta un guion ni una voz nuevos para arreglar eso -- solo
+// recompactar la misma voz con límites más estrictos (POST
+// /recompactar). Cualquier otra causa (visión, o el audio completo en
+// silencio -- señal de algo roto de verdad, no solo una pausa larga)
+// sigue regenerando todo desde cero, igual que antes.
+function esSoloProblemaDePausas(hallazgos: HallazgoVision[], silencio: ResultadoSilencio, silenciosLargos: SilencioLargo[] | "no_verificado"): boolean {
+  const hayProblemaVision = hallazgos.some((h) => h.pantalla_vacia || h.texto_superpuesto || h.contraste_bajo);
+  const haySilencioLargo = Array.isArray(silenciosLargos) && silenciosLargos.length > 0;
+  return !hayProblemaVision && silencio !== "silencioso" && haySilencioLargo;
+}
+
+// Cada recompactación es más estricta que la anterior -- un paso de
+// 0.05s por intento, nunca por debajo de un piso razonable (0.3s entre
+// frases/escenas sigue siendo un respiro real; 0.15s dentro de una
+// frase sigue sin sonar mordido). Si tras MAX_REINTENTOS_QC intentos
+// de recompactación el silencio sigue sin resolverse, el problema ya
+// no es de límites -- el loop principal lo trata como cualquier otro
+// fallo agotado.
+function limitesDeRecompactacion(intentosRecompactacion: number): { pausaEntreFrases_s: number; pausaDentroDeFrase_s: number } {
+  return {
+    pausaEntreFrases_s: Math.max(0.3, 0.4 - 0.05 * intentosRecompactacion),
+    pausaDentroDeFrase_s: Math.max(0.15, 0.25 - 0.05 * intentosRecompactacion),
+  };
+}
+
 export default function AdminReelAutomaticoPruebaClient() {
   const [fase, setFase] = useState<FaseArnes>("inactivo");
   const [error, setError] = useState<string | null>(null);
@@ -372,23 +417,50 @@ export default function AdminReelAutomaticoPruebaClient() {
       }
 
       let erroresPrevios: string[] | undefined = undefined;
+      // Ronda J, punto B: si el intento anterior falló SOLO por pausas,
+      // el siguiente intento recompacta la MISMA voz (resultadoAnterior)
+      // en vez de pedir un guion y una voz nuevos -- ver
+      // esSoloProblemaDePausas()/limitesDeRecompactacion() más arriba.
+      let resultadoAnterior: ResultadoGuion | null = null;
+      let soloFuePausaElUltimoIntento = false;
+      let intentosRecompactacion = 0;
 
       for (let intento = 1; intento <= MAX_REINTENTOS_QC + 1; intento++) {
         setIntentoQC(intento);
 
-        setFase("generando_guion");
-        const resGuion = await fetch("/api/admin/reel-automatico-prueba/guion", {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ erroresPrevios }),
-        });
-        const dataGuion = await resGuion.json();
-        if (!resGuion.ok) {
-          setError(dataGuion.resumenErrores ? `${dataGuion.error}\n- ${dataGuion.resumenErrores.join("\n- ")}` : dataGuion.error || "No se pudo generar el guion.");
-          setFase("error");
-          return;
+        let resultado: ResultadoGuion;
+        if (soloFuePausaElUltimoIntento && resultadoAnterior?.crudo) {
+          intentosRecompactacion += 1;
+          setFase("generando_guion");
+          const resRecompactar = await fetch("/api/admin/reel-automatico-prueba/recompactar", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ guion: resultadoAnterior.guion, crudo: resultadoAnterior.crudo, ...limitesDeRecompactacion(intentosRecompactacion) }),
+          });
+          const dataRecompactar = await resRecompactar.json();
+          if (!resRecompactar.ok) {
+            setError(dataRecompactar.resumenErrores ? `${dataRecompactar.error}\n- ${dataRecompactar.resumenErrores.join("\n- ")}` : dataRecompactar.error || "No se pudo recompactar las pausas.");
+            setFase("error");
+            return;
+          }
+          resultado = { ...resultadoAnterior, guion: dataRecompactar.guion, crudo: dataRecompactar.crudo, seRegeneroPorQC: true };
+        } else {
+          intentosRecompactacion = 0; // voz nueva -- las pausas vuelven a sus límites por defecto
+          setFase("generando_guion");
+          const resGuion = await fetch("/api/admin/reel-automatico-prueba/guion", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ erroresPrevios }),
+          });
+          const dataGuion = await resGuion.json();
+          if (!resGuion.ok) {
+            setError(dataGuion.resumenErrores ? `${dataGuion.error}\n- ${dataGuion.resumenErrores.join("\n- ")}` : dataGuion.error || "No se pudo generar el guion.");
+            setFase("error");
+            return;
+          }
+          resultado = dataGuion as ResultadoGuion;
         }
-        const resultado = dataGuion as ResultadoGuion;
+        resultadoAnterior = resultado;
         setResumenGuion(resultado);
 
         setFase("renderizando");
@@ -495,7 +567,10 @@ export default function AdminReelAutomaticoPruebaClient() {
           return;
         }
 
-        erroresPrevios = erroresDesdeQC(hallazgos, silencio, silenciosLargosDetectados);
+        soloFuePausaElUltimoIntento = esSoloProblemaDePausas(hallazgos, silencio, silenciosLargosDetectados);
+        if (!soloFuePausaElUltimoIntento) {
+          erroresPrevios = erroresDesdeQC(hallazgos, silencio, silenciosLargosDetectados);
+        }
       }
     } catch (err) {
       setError(err instanceof Error ? err.message : "Algo falló generando el reel.");

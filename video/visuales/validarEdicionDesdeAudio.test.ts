@@ -87,9 +87,12 @@ function escenaConAudio(id: string, bloque: Guion["escenas"][number]["bloque"], 
   return escenaBase(id, { bloque, narracion, visual });
 }
 
+// Ronda J: el gancho se queda CONGELADO en 0 -- eventos vacío, nunca
+// "numero_sube"/"notificacion_llega" (esos cuentan la resolución, que
+// es de la escena "marca", nunca del gancho).
 const GANCHO_OK = escenaConAudio("e1", "gancho", "¿Sabes por qué pierdes clientes sin darte cuenta?", {
   tipo: "celular_chat",
-  eventos: [{ palabra: 0, accion: "notificacion_llega" }],
+  eventos: [],
 });
 // Los 3 consejos usan los 3 tipos de 2 estados (problema->arreglo) --
 // pedido explícito (3ra revisión de staging): boton_estado/cursor_clic
@@ -153,6 +156,32 @@ describe("validarEstructuraConsejosNumeradosAudio", () => {
     const escenas = [ganchoMalo, VALOR_1_OK, VALOR_2_OK, VALOR_3_OK, MARCA_OK, CTA_OK];
     const hallazgos = validarEstructuraConsejosNumeradosAudio(escenas);
     expect(hallazgos.some((h) => h.escenaId === "e1" && h.mensaje.includes("celular_chat"))).toBe(true);
+  });
+
+  it("ronda J -- caso real: gancho con celular_chat pero con numero_sube (contradice 'Cero mensajes...'): hallazgo específico", () => {
+    const ganchoConSubida = escenaConAudio("e1", "gancho", "¿Cero mensajes aunque tus anuncios ya están publicados?", {
+      tipo: "celular_chat",
+      eventos: [{ palabra: 7, accion: "numero_sube" }],
+    });
+    const escenas = [ganchoConSubida, VALOR_1_OK, VALOR_2_OK, VALOR_3_OK, MARCA_OK, CTA_OK];
+    const hallazgos = validarEstructuraConsejosNumeradosAudio(escenas);
+    expect(hallazgos.some((h) => h.escenaId === "e1" && h.mensaje.includes("congelado"))).toBe(true);
+  });
+
+  it("ronda J -- gancho con celular_chat y notificacion_llega: mismo hallazgo", () => {
+    const ganchoConNotificacion = escenaConAudio("e1", "gancho", "¿Sabes por qué pierdes clientes sin darte cuenta?", {
+      tipo: "celular_chat",
+      eventos: [{ palabra: 0, accion: "notificacion_llega" }],
+    });
+    const escenas = [ganchoConNotificacion, VALOR_1_OK, VALOR_2_OK, VALOR_3_OK, MARCA_OK, CTA_OK];
+    const hallazgos = validarEstructuraConsejosNumeradosAudio(escenas);
+    expect(hallazgos.some((h) => h.escenaId === "e1" && h.mensaje.includes("congelado"))).toBe(true);
+  });
+
+  it("ronda J -- gancho con celular_chat y eventos vacíos: pasa limpio (GANCHO_OK ya lo cubre, caso explícito aparte)", () => {
+    const escenas = [GANCHO_OK, VALOR_1_OK, VALOR_2_OK, VALOR_3_OK, MARCA_OK, CTA_OK];
+    const hallazgos = validarEstructuraConsejosNumeradosAudio(escenas);
+    expect(hallazgos.some((h) => h.escenaId === "e1")).toBe(false);
   });
 
   it("marca sin reusar celular_chat (no cierra el bucle): hallazgo específico", () => {

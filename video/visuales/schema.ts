@@ -28,7 +28,13 @@ export const VisualSchema = z.discriminatedUnion("tipo", [
     tipo: z.literal("celular_chat"),
     // "numero_sube" es puramente ilustrativo (regla ya aprobada en
     // Contador.tsx): nunca una cifra de resultado real de Quiubot.
-    eventos: z.array(Evento.extend({ accion: z.enum(["notificacion_llega", "numero_sube"]) })).min(1).max(6),
+    // min(0) -- ronda J: el gancho de consejos_numerados reutiliza este
+    // mismo visual pero DEBE quedarse congelado en 0 (la narración dice
+    // "cero mensajes"; un numero_sube/notificacion_llega ahí contradice
+    // su propia narración) -- CelularChat.tsx ya soporta notificaciones
+    // vacías sin romperse (nuevos = [].filter(...).length = 0), antes
+    // el schema simplemente no dejaba construir ese estado.
+    eventos: z.array(Evento.extend({ accion: z.enum(["notificacion_llega", "numero_sube"]) })).min(0).max(6),
   }),
   z.object({
     tipo: z.literal("cursor_clic"),

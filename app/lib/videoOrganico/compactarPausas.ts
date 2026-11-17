@@ -1,5 +1,6 @@
 import type { PalabraConTiempo } from "./generarVoz";
 import type { SilencioReal } from "./detectarSilenciosReales";
+import type { Guion } from "@/video/guion.schema";
 
 // Fase B v2.0, ronda I (escuchó el reel real en staging, 18 nov 2026).
 // La ronda H decidía DÓNDE cortar a partir de los huecos entre los
@@ -48,6 +49,14 @@ export type TramoAudio = { original: { inicio_s: number; fin_s: number }; compac
 export const PAUSA_DENTRO_DE_FRASE_S = 0.25;
 export const PAUSA_ENTRE_FRASES_S = 0.4;
 
+// Ronda J: techo duro pedido explícito ("nunca más de 0.5s") -- red de
+// seguridad final, independiente de que la clasificación de arriba
+// (límite de frase vs dentro de frase) se calcule bien. Con los
+// objetivos de arriba (0.25/0.4) nunca se activa en el caso normal;
+// protege si algún día opciones.pausaEntreFrases_s se configura más
+// alto, o aparece un caso borde no previsto.
+const PAUSA_MAXIMA_ABSOLUTA_S = 0.5;
+
 // Tolerancia de desacuerdo entre lo que ffmpeg mide como silencio y lo
 // que Whisper cree que dura una palabra -- las dos mediciones nunca
 // coinciden al milisegundo (confirmado real: ffmpeg detectó el mismo
@@ -85,24 +94,62 @@ export function compactarConSilenciosReales(
     // contenido hablado, se ignora (no hace falta recortar la cola).
     if (s.inicio_s >= ultimaPalabra.fin_s - TOLERANCIA_EMPAREJAMIENTO_S) continue;
 
+    // Encuentra la última palabra que ya había empezado para cuando
+    // arranca este silencio real. Esto es SOLO para clasificar el tipo
+    // de pausa (límite de frase vs dentro de frase) -- el corte en sí
+    // siempre usa s.inicio_s/s.fin_s (el silencio real medido), nunca
+    // estos límites de palabra, así que ensanchar esta búsqueda no
+    // puede volver a morder una palabra.
     let i = -1;
-    for (let k = 0; k < palabras.length - 1; k++) {
-      if (s.inicio_s >= palabras[k].fin_s - TOLERANCIA_EMPAREJAMIENTO_S && s.fin_s <= palabras[k + 1].inicio_s + TOLERANCIA_EMPAREJAMIENTO_S) {
-        i = k;
-        break;
-      }
+    for (let k = 0; k < palabras.length; k++) {
+      if (palabras[k].inicio_s <= s.inicio_s + TOLERANCIA_EMPAREJAMIENTO_S) i = k;
+      else break;
     }
-    if (i === -1) continue; // ambiguo, nunca se toca
+    if (i === -1 || i >= palabras.length - 1) continue; // no debería pasar (ya cubierto por los 2 casos de arriba) -- no se toca
 
-    const distintaEscena = escenaIndicePorPalabra[i] !== escenaIndicePorPalabra[i + 1];
+    const siguiente = i + 1;
+    // Caso real que antes se dejaba sin tocar (mordió "conecta"/
+    // "responde"/"Quiubot" en la ronda H, y de nuevo dejó un hueco de
+    // 0.73s sin comprimir en la ronda I): Whisper reporta que una
+    // palabra se extiende varios cientos de ms DESPUÉS de donde ffmpeg
+    // ya mide silencio real (ej. real: "anuncio" fin_s=7.98 pero el
+    // silencio real ya empezaba en 7.48). Eso es la imprecisión normal
+    // de Whisper en el BORDE de una sola palabra, no un caso ambiguo --
+    // sigue siendo seguro clasificar y comprimir. Solo es GENUINAMENTE
+    // ambiguo (y por eso nunca se toca) cuando el hueco medido se mete
+    // adentro de las DOS palabras vecinas a la vez -- ahí sí no separa
+    // nada real y cualquier emparejamiento sería una apuesta.
+    const anteriorSeMeteAdentro = palabras[i].fin_s > s.inicio_s + TOLERANCIA_EMPAREJAMIENTO_S;
+    const siguienteSeMeteAdentro = palabras[siguiente].inicio_s < s.fin_s - TOLERANCIA_EMPAREJAMIENTO_S;
+    if (anteriorSeMeteAdentro && siguienteSeMeteAdentro) continue; // ambiguo real, no tocar
+
+    const distintaEscena = escenaIndicePorPalabra[i] !== escenaIndicePorPalabra[siguiente];
     const terminaEnPuntuacionFuerte = /[.?!;]$/.test(palabras[i].texto.trim());
     const esLimiteDeFrase = distintaEscena || terminaEnPuntuacionFuerte;
-    const duracion = s.fin_s - s.inicio_s;
-    const objetivo = esLimiteDeFrase ? pausaEntreFrases : Math.min(duracion, pausaFrase);
+
+    // El silencio que detectó ffmpeg solo CONFIRMA que este hueco entre
+    // palabras tiene silencio real adentro (ya se descartó arriba el
+    // caso ambiguo) -- una vez confirmado, se compacta el hueco ENTERO
+    // entre las dos palabras (de fin_s de la anterior a inicio_s de la
+    // siguiente), no solo el sub-tramo que ffmpeg marcó. Caso real que
+    // esto corrige: ffmpeg a veces deja de marcar silencio un poco
+    // ANTES de que Whisper diga que la siguiente palabra ya empezó
+    // (ej. real: el silencio mide hasta 12.902 pero "Tercero" recién
+    // se reporta en 13.100) -- esos ~200ms de holgura sin clasificar no
+    // son otra palabra (no hay ninguna palabra ahí, por construcción:
+    // "palabras" es la lista completa y ordenada, sin huecos), así que
+    // es seguro tratarlos igual que el silencio ya confirmado. Sin
+    // este ajuste, esa holgura se sumaba AFUERA de cualquier objetivo y
+    // el techo de 0.5s pedido explícito se rompía en la práctica
+    // (medido real: hasta 0.63s).
+    const inicioHueco = palabras[i].fin_s;
+    const finHueco = palabras[siguiente].inicio_s;
+    const duracion = finHueco - inicioHueco;
+    const objetivo = Math.min(esLimiteDeFrase ? pausaEntreFrases : Math.min(duracion, pausaFrase), PAUSA_MAXIMA_ABSOLUTA_S);
     if (duracion <= objetivo) continue;
 
     const recorte = duracion - objetivo;
-    remociones.push({ inicioOriginal: s.inicio_s + objetivo / 2, finOriginal: s.fin_s - objetivo / 2, magnitud: recorte });
+    remociones.push({ inicioOriginal: inicioHueco + objetivo / 2, finOriginal: finHueco - objetivo / 2, magnitud: recorte });
   }
 
   remociones.sort((a, b) => a.inicioOriginal - b.inicioOriginal);
@@ -175,4 +222,59 @@ export function compactarConSilenciosReales(
   }
 
   return { palabras: palabrasCompactadas, tramosPorEscena };
+}
+
+// Ronda J, punto B (revisión de escucha en staging): el control de
+// calidad del arnés (render + visión + audio, ver
+// AdminReelAutomaticoPruebaClient.tsx) antes llamaba a /guion desde
+// cero en CADA reintento -- nuevo guion de la IA, nueva voz de TTS --
+// aunque el ÚNICO hallazgo fuera un silencio largo. Carísimo e
+// inútil: un reintento completo ni siquiera garantiza que el nuevo
+// guion/toma tenga el mismo problema resuelto, cuando lo único que
+// hacía falta era recompactar la MISMA voz ya generada con límites
+// más estrictos. Esta función extrae exactamente la construcción de
+// tiemposRender/palabrasPorEscena/segmentosAudio que antes vivía
+// inline en route.ts, para que /guion y el nuevo endpoint de
+// recompactación (que SOLO corre esto, nunca la IA ni generarVoz())
+// compartan la misma lógica, una sola vez.
+export function construirCamposDeTiempo(
+  palabrasPorEscenaCrudo: { escena_id: string; palabras: PalabraConTiempo[] }[],
+  silencios: SilencioReal[],
+  opciones: { pausaDentroDeFrase_s?: number; pausaEntreFrases_s?: number } = {}
+): {
+  tiemposRender: NonNullable<Guion["tiemposRender"]>;
+  palabrasPorEscena: NonNullable<Guion["palabrasPorEscena"]>;
+  segmentosAudio: NonNullable<Guion["segmentosAudio"]>;
+  palabrasFlat: PalabraConTiempo[];
+  tramosPorEscena: TramoAudio[][];
+} {
+  const cantidadesPorEscena = palabrasPorEscenaCrudo.map((p) => p.palabras.length);
+  const palabrasFlat = palabrasPorEscenaCrudo.flatMap((p) => p.palabras);
+  const escenaIndicePorPalabra = palabrasPorEscenaCrudo.flatMap((p, i) => p.palabras.map(() => i));
+  const { palabras: palabrasCompactadas, tramosPorEscena } = compactarConSilenciosReales(palabrasFlat, silencios, escenaIndicePorPalabra, opciones);
+
+  const tiemposRender: NonNullable<Guion["tiemposRender"]> = [];
+  const palabrasPorEscena: NonNullable<Guion["palabrasPorEscena"]> = [];
+  const segmentosAudio: NonNullable<Guion["segmentosAudio"]> = [];
+  let cursor = 0;
+  for (let i = 0; i < palabrasPorEscenaCrudo.length; i++) {
+    const escenaId = palabrasPorEscenaCrudo[i].escena_id;
+    const cantidad = cantidadesPorEscena[i];
+    const deEscena = palabrasCompactadas.slice(cursor, cursor + cantidad);
+    cursor += cantidad;
+
+    palabrasPorEscena.push({ escena_id: escenaId, palabras: deEscena.map((p) => ({ texto: p.texto, inicio_s: p.compactado.inicio_s, fin_s: p.compactado.fin_s })) });
+
+    const tramos = tramosPorEscena[i] ?? [];
+    if (tramos.length === 0) {
+      tiemposRender.push({ escena_id: escenaId, inicio_s: 0, fin_s: 0 });
+      segmentosAudio.push({ escena_id: escenaId, tramos: [] });
+      continue;
+    }
+
+    tiemposRender.push({ escena_id: escenaId, inicio_s: tramos[0].compactado.inicio_s, fin_s: tramos[tramos.length - 1].compactado.fin_s });
+    segmentosAudio.push({ escena_id: escenaId, tramos });
+  }
+
+  return { tiemposRender, palabrasPorEscena, segmentosAudio, palabrasFlat, tramosPorEscena };
 }

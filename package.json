@@ -7,6 +7,7 @@
   },
   "scripts": {
     "dev": "next dev --webpack",
+    "prebuild": "tsx scripts/generarInfoBuild.ts",
     "build": "next build --webpack",
     "start": "next start",
     "lint": "eslint",
@@ -21,6 +22,7 @@
   "dependencies": {
     "@remotion/captions": "4.0.540",
     "@remotion/fonts": "4.0.540",
+    "@remotion/layout-utils": "4.0.540",
     "@remotion/media": "4.0.540",
     "@remotion/openai-whisper": "4.0.540",
     "@remotion/player": "4.0.540",

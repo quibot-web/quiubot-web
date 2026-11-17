@@ -242,7 +242,7 @@ export function recetaParaPromptConAudio(entrada: EntradaGuionOrganico): RecetaO
 }
 
 const ESTRUCTURA_CONSEJOS_NUMERADOS_AUDIO = `ESTRUCTURA OBLIGATORIA PARA "consejos_numerados" CON VOZ -- EXACTAMENTE 6 escenas, en este orden (nunca menos, nunca los 3 consejos juntos en una sola escena):
-1. "gancho": visual "celular_chat", arranca en 0 ("0 mensajes nuevos" -- sin eventos de notificacion_llega todavía, o como mucho uno bien al final de la narración si el gancho lo pide).
+1. "gancho": visual "celular_chat", congelado en 0 -- "eventos": SIEMPRE un array vacío ([]), NUNCA "numero_sube" ni "notificacion_llega" en esta escena. El gancho presenta el problema tal cual, sin resolverlo todavía (caso real que se rechazó: la narración decía "¿Cero mensajes...?" y el visual igual subía el contador en la misma escena -- se contradice a sí mismo). Esos 2 eventos son exclusivos de la escena "marca" (punto 5), donde sí se cumple la promesa.
 2, 3, 4. TRES escenas "valor", UNA POR CADA CONSEJO. Cada una:
    - Es UN solo consejo, concreto y accionable, en una frase COMPLETA (ej. "Responde cada mensaje en menos de un minuto" -- nunca un fragmento vago como "elige mensajes" o "sé más rápido" que no se entiende por sí solo).
    - Preferible (no obligatorio, pero evítalo si puedes): UNA sola acción, no varias cosas que verificar o revisar a la vez -- mejor "Responde cada mensaje en menos de un minuto" que "Verifica que respondas rápido y que uses fotos reales" (eso mezcla 2 acciones en una).

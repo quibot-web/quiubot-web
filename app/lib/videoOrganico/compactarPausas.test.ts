@@ -110,4 +110,32 @@ describe("compactarConSilenciosReales", () => {
   it("lista de palabras vacía da listas vacías", () => {
     expect(compactarConSilenciosReales([], [], [])).toEqual({ palabras: [], tramosPorEscena: [] });
   });
+
+  it("ronda J -- caso real: la palabra ANTERIOR se mete en el silencio (Whisper la reporta más larga de lo real), pero la SIGUIENTE no -- ya no se deja sin tocar", () => {
+    // Caso real medido (cedar.mp3, ronda J): "anuncio" reporta fin_s=7.98
+    // pero ffmpeg ya mide silencio real desde 7.484 -- el hueco entre
+    // escenas (e2->e3) quedaba sin comprimir por completo (0.73s) porque
+    // el viejo emparejamiento exigía que AMBAS palabras vecinas calzaran
+    // dentro de una tolerancia de 50ms.
+    const palabras = [
+      { texto: "anuncio", inicio_s: 7.12, fin_s: 7.98 }, // última de e2, Whisper la reporta más larga de lo real
+      { texto: "Segundo", inicio_s: 8.5, fin_s: 8.5 }, // primera de e3 (valores reales medidos)
+    ];
+    const silencios = [{ inicio_s: 7.484, fin_s: 8.063 }]; // silencio real medido por ffmpeg
+    const { palabras: resultado } = compactarConSilenciosReales(palabras, silencios, [0, 1]);
+    // se comprime a 0.4s (límite de frase, distinta escena) -- medido
+    // sobre el hueco ENTERO entre palabras (7.98 a 8.5), no solo sobre
+    // el sub-tramo que ffmpeg marcó -- ya NO se deja intacto.
+    expect(resultado[1].compactado.inicio_s).toBeCloseTo(7.98 + PAUSA_ENTRE_FRASES_S, 5);
+  });
+
+  it("ronda J -- techo duro de 0.5s: nunca se supera aunque pausaEntreFrases_s pida más", () => {
+    const palabras = [
+      { texto: "a.", inicio_s: 0, fin_s: 0.2 },
+      { texto: "b", inicio_s: 2, fin_s: 2.2 },
+    ];
+    const silencios = [{ inicio_s: 0.2, fin_s: 2 }];
+    const { palabras: resultado } = compactarConSilenciosReales(palabras, silencios, [0, 0], { pausaEntreFrases_s: 0.8 });
+    expect(resultado[1].compactado.inicio_s).toBeCloseTo(0.2 + 0.5, 5);
+  });
 });

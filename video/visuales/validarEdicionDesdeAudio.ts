@@ -110,6 +110,23 @@ export function validarEstructuraConsejosNumeradosAudio(escenas: Guion["escenas"
   const [gancho, , , , marca] = escenas;
   if (gancho.visual?.tipo !== "celular_chat") {
     hallazgos.push({ escenaId: gancho.id, mensaje: `El gancho debe usar visual "celular_chat" (arranca en 0 mensajes) -- llegó "${gancho.visual?.tipo ?? "sin visual"}".` });
+  } else {
+    // Ronda J: corrige una confusión real de la ronda anterior -- "que
+    // el gancho se quede en 0" no era sobre el AUDIO (eso ya arrancaba
+    // en 0s), era sobre este VISUAL. Caso real que lo motivó: la
+    // narración del gancho es literalmente "¿Cero mensajes aunque tus
+    // anuncios ya están publicados?" y el guion real traía un evento
+    // "numero_sube" DENTRO de esa misma escena -- el visual contradice
+    // su propia narración (la promesa/resolución de "el número sube"
+    // es de la escena "marca"/"cta", nunca del gancho, cuyo trabajo es
+    // mostrar el problema crudo, sin tocar).
+    const eventosProblematicos = gancho.visual.eventos.filter((e) => e.accion === "numero_sube" || e.accion === "notificacion_llega");
+    if (eventosProblematicos.length > 0) {
+      hallazgos.push({
+        escenaId: gancho.id,
+        mensaje: `El "celular_chat" del gancho debe quedarse congelado en 0 (sin eventos "numero_sube" ni "notificacion_llega") -- la narración del gancho presenta el problema tal cual, nunca lo resuelve. Esos eventos son de las escenas "marca"/"cta", donde sí se cumple la promesa. Quita los eventos de esta escena (eventos: []).`,
+      });
+    }
   }
   if (marca.visual?.tipo !== "celular_chat") {
     hallazgos.push({
