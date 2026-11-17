@@ -54,6 +54,14 @@ export function validarEdicionDesdeAudio(escenas: Guion["escenas"]): HallazgoEdi
 // receta -- se llama aparte, solo para consejos_numerados.
 const ESTRUCTURA_CONSEJOS_NUMERADOS: BloqueGuion[] = ["gancho", "valor", "valor", "valor", "marca", "cta"];
 const MIN_PALABRAS_CONSEJO_CONCRETO = 5;
+// Ronda M (staging real): un gancho de ~16 palabras duraba ~5s con el
+// "0" quieto -- demasiado para un gancho, que debe enganchar rápido.
+const MAX_PALABRAS_GANCHO = 12;
+// Ronda M: el clic de la CTA cayendo en la última palabra dejaba
+// "Siguiendo ✓" visible ~0 segundos antes del corte. Mismo criterio
+// que FRACCION_MINIMA_ANTES_DEL_CAMBIO pero INVERTIDO -- acá lo que
+// importa es que quede tiempo DESPUÉS del cambio, no antes.
+const FRACCION_MAXIMA_CLIC_CTA = 0.5;
 
 // Únicos tipos de 2 estados (problema->arreglo) de verdad -- boton_estado/
 // cursor_clic quedan afuera a propósito (pedido explícito, 3ra
@@ -107,7 +115,16 @@ export function validarEstructuraConsejosNumeradosAudio(escenas: Guion["escenas"
     return hallazgos;
   }
 
-  const [gancho, , , , marca] = escenas;
+  const [gancho, , , , marca, cta] = escenas;
+
+  const palabrasGancho = contarPalabras(gancho.narracion ?? "");
+  if (palabrasGancho > MAX_PALABRAS_GANCHO) {
+    hallazgos.push({
+      escenaId: gancho.id,
+      mensaje: `El gancho "${gancho.narracion}" tiene ${palabrasGancho} palabras -- un gancho largo se demora en enganchar (máximo ${MAX_PALABRAS_GANCHO} palabras, unos 3 segundos). Recórtalo a la frase más fuerte, sin perder la pregunta/promesa/dato.`,
+    });
+  }
+
   if (gancho.visual?.tipo !== "celular_chat") {
     hallazgos.push({ escenaId: gancho.id, mensaje: `El gancho debe usar visual "celular_chat" (arranca en 0 mensajes) -- llegó "${gancho.visual?.tipo ?? "sin visual"}".` });
   } else {
@@ -134,6 +151,19 @@ export function validarEstructuraConsejosNumeradosAudio(escenas: Guion["escenas"
       mensaje: `La escena "marca" cierra el bucle del gancho y debe reusar visual "celular_chat" (el MISMO celular del gancho, ahora con el contador ya arriba) -- llegó "${marca.visual?.tipo ?? "sin visual"}".`,
     });
   }
+
+  if (cta?.visual && (cta.visual.tipo === "boton_estado" || cta.visual.tipo === "cursor_clic")) {
+    const totalPalabrasCta = contarPalabras(cta.narracion ?? "");
+    const cambioCta = cta.visual.eventos.find((e) => e.accion === "clic" || e.accion === "cambia_estado");
+    if (cambioCta && totalPalabrasCta > 0 && cambioCta.palabra > Math.floor(totalPalabrasCta * FRACCION_MAXIMA_CLIC_CTA)) {
+      hallazgos.push({
+        escenaId: cta.id,
+        mensaje: `El clic de la CTA (palabra ${cambioCta.palabra} de ${totalPalabrasCta}) cae muy tarde -- el botón queda sin cambiar a "Siguiendo ✓" casi todo el tiempo de la escena. Ponlo como máximo a la mitad de la narracion "${cta.narracion}" (palabra ${Math.floor(totalPalabrasCta * FRACCION_MAXIMA_CLIC_CTA)} o antes), para que se alcance a ver el cambio con tiempo.`,
+      });
+    }
+  }
+
+  const tiposVisualValorUsados: { escenaId: string; tipo: string }[] = [];
 
   for (const escena of escenas.slice(1, 4)) {
     const narracion = escena.narracion ?? "";
@@ -169,6 +199,7 @@ export function validarEstructuraConsejosNumeradosAudio(escenas: Guion["escenas"
         mensaje: `Cada escena "valor" muestra el consejo con un visual de 2 estados (problema->arreglo): ${[...TIPOS_VISUAL_VALOR].join(", ")} -- llegó "${visual.tipo}". Un botón o cursor sueltos no muestran el antes y el después del consejo, cámbialo por uno de esos tipos.`,
       });
     } else if (visual) {
+      tiposVisualValorUsados.push({ escenaId: escena.id, tipo: visual.tipo });
       const totalPalabras = contarPalabras(narracion);
       // "contador" puede traer varios eventos ("sube" por cada paso) --
       // el que importa para este chequeo es el ÚLTIMO (el "arreglo",
@@ -181,6 +212,22 @@ export function validarEstructuraConsejosNumeradosAudio(escenas: Guion["escenas"
         });
       }
     }
+  }
+
+  // Ronda M (staging real): "pon WhatsApp como botón" y "conecta el
+  // anuncio a WhatsApp" son casi el mismo consejo -- un indicio fuerte
+  // de tema repetido es que terminen usando el MISMO tipo de visual de
+  // 2 estados (cada tipo muestra un problema distinto a propósito, ver
+  // TIPOS_VISUAL_VALOR). No detecta cualquier repetición de tema (eso
+  // necesitaría entender el significado), pero sí esta señal concreta
+  // y barata de chequear en código.
+  const tiposRepetidos = tiposVisualValorUsados.filter((t, i) => tiposVisualValorUsados.findIndex((o) => o.tipo === t.tipo) !== i);
+  if (tiposRepetidos.length > 0) {
+    const escenasAfectadas = tiposVisualValorUsados.filter((t) => t.tipo === tiposRepetidos[0].tipo).map((t) => t.escenaId);
+    hallazgos.push({
+      escenaId: tiposRepetidos[0].escenaId,
+      mensaje: `Las escenas ${escenasAfectadas.join(" y ")} usan el mismo visual "${tiposRepetidos[0].tipo}" -- es señal de que los 2 consejos atacan el mismo problema (ej. "pon WhatsApp como botón" y "conecta el anuncio a WhatsApp" son el mismo tema). Los 3 consejos deben atacar 3 problemas DISTINTOS, cada uno con su propio tipo de visual de 2 estados.`,
+    });
   }
 
   return hallazgos;

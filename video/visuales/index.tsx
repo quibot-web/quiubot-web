@@ -89,8 +89,23 @@ export function renderizarVisual(visual: Visual, ctx: ContextoVisual) {
       // alimentan el mismo array: el número gigante ya sube solo por
       // cada notificación que haya "llegado" (frame >= cuadro).
       const notificaciones = visual.eventos.map((evento) => cuadroDePalabra(evento.palabra, ctx));
+      // Ronda M (staging): el gancho queda con el contador en 0 quieto
+      // (sin eventos, ver la ronda J -- numero_sube/notificacion_llega
+      // está prohibido ahí) y se leía como "no está renderizando" en
+      // vez de "a propósito en cero". `parpadear` ya existía en
+      // CelularChat (opacidadParpadeo, un seno de amplitud chica) --
+      // solo faltaba conectarlo acá para el gancho. El VALOR sigue
+      // congelado en 0 (notificaciones=[] no cambia), solo la opacidad
+      // respira.
       return (
-        <CelularChat frame={ctx.frame} fps={ctx.fps} tema={ctx.tema} notificaciones={notificaciones} colorNumeroGigante={colorDeBloque(ctx.bloque)} />
+        <CelularChat
+          frame={ctx.frame}
+          fps={ctx.fps}
+          tema={ctx.tema}
+          notificaciones={notificaciones}
+          colorNumeroGigante={colorDeBloque(ctx.bloque)}
+          parpadear={ctx.bloque === "gancho"}
+        />
       );
     }
 

@@ -119,11 +119,15 @@ const MARCA_OK = escenaConAudio("e5", "marca", "Así ganas la confianza de quien
   tipo: "celular_chat",
   eventos: [{ palabra: 0, accion: "notificacion_llega" }, { palabra: 4, accion: "numero_sube" }],
 });
+// Ronda M -- caso real que motivó la regla: el clic cayendo en la
+// última palabra dejaba "Siguiendo ✓" sin tiempo visible. 6 palabras
+// (índices 0-5); palabra 2 es <= la mitad (3), deja la mitad de la
+// escena para ver el cambio.
 const CTA_OK = escenaConAudio("e6", "cta", "Síguenos para más consejos como este.", {
   tipo: "boton_estado",
   texto: "Seguir",
   texto_activo: "Siguiendo ✓",
-  eventos: [{ palabra: 0, accion: "aparece" }, { palabra: 5, accion: "clic" }],
+  eventos: [{ palabra: 0, accion: "aparece" }, { palabra: 2, accion: "clic" }],
 });
 
 describe("validarEstructuraConsejosNumeradosAudio", () => {
@@ -286,5 +290,66 @@ describe("validarEstructuraConsejosNumeradosAudio", () => {
     const escenas = [GANCHO_OK, valorCambioMuyPronto, VALOR_2_OK, VALOR_3_OK, MARCA_OK, CTA_OK];
     const hallazgos = validarEstructuraConsejosNumeradosAudio(escenas);
     expect(hallazgos.some((h) => h.escenaId === "e2" && h.mensaje.includes("muy al principio"))).toBe(true);
+  });
+
+  it("ronda M -- caso real: gancho de 16 palabras (~5s) -- hallazgo de gancho largo", () => {
+    const ganchoLargo = escenaConAudio(
+      "e1",
+      "gancho",
+      "¿Sabes por qué muchos negocios pierden clientes todos los días sin darse cuenta de lo que está pasando?",
+      { tipo: "celular_chat", eventos: [] }
+    );
+    const escenas = [ganchoLargo, VALOR_1_OK, VALOR_2_OK, VALOR_3_OK, MARCA_OK, CTA_OK];
+    const hallazgos = validarEstructuraConsejosNumeradosAudio(escenas);
+    expect(hallazgos.some((h) => h.escenaId === "e1" && h.mensaje.includes("palabras"))).toBe(true);
+  });
+
+  it("gancho de 12 palabras exactas: pasa (el límite es inclusivo)", () => {
+    const ganchoLimite = escenaConAudio("e1", "gancho", "¿Sabes por qué muchos negocios pierden clientes todos los días sin razón?", {
+      tipo: "celular_chat",
+      eventos: [],
+    });
+    const escenas = [ganchoLimite, VALOR_1_OK, VALOR_2_OK, VALOR_3_OK, MARCA_OK, CTA_OK];
+    const hallazgos = validarEstructuraConsejosNumeradosAudio(escenas);
+    expect(hallazgos.some((h) => h.escenaId === "e1" && h.mensaje.includes("palabras"))).toBe(false);
+  });
+
+  it("ronda M -- caso real: el clic de la CTA cae en la última palabra -- hallazgo de clic tardío", () => {
+    const ctaClicTardio = escenaConAudio("e6", "cta", "Síguenos para más consejos como este.", {
+      tipo: "boton_estado",
+      texto: "Seguir",
+      texto_activo: "Siguiendo ✓",
+      eventos: [{ palabra: 0, accion: "aparece" }, { palabra: 5, accion: "clic" }],
+    });
+    const escenas = [GANCHO_OK, VALOR_1_OK, VALOR_2_OK, VALOR_3_OK, MARCA_OK, ctaClicTardio];
+    const hallazgos = validarEstructuraConsejosNumeradosAudio(escenas);
+    expect(hallazgos.some((h) => h.escenaId === "e6" && h.mensaje.includes("cae muy tarde"))).toBe(true);
+  });
+
+  it("CTA con cursor_clic (no boton_estado): misma regla de la mitad se aplica igual", () => {
+    const ctaConCursor = escenaConAudio("e6", "cta", "Síguenos para más consejos como este.", {
+      tipo: "cursor_clic",
+      texto_boton: "Seguir",
+      eventos: [{ palabra: 0, accion: "aparece" }, { palabra: 5, accion: "clic" }],
+    });
+    const escenas = [GANCHO_OK, VALOR_1_OK, VALOR_2_OK, VALOR_3_OK, MARCA_OK, ctaConCursor];
+    const hallazgos = validarEstructuraConsejosNumeradosAudio(escenas);
+    expect(hallazgos.some((h) => h.escenaId === "e6" && h.mensaje.includes("cae muy tarde"))).toBe(true);
+  });
+
+  it("ronda M -- caso real: 2 consejos distintos en palabras pero con el MISMO tipo de visual -- hallazgo de tema repetido", () => {
+    const valor2ConTipoRepetido = escenaConAudio("e3", "valor", "Usa fotos reales de tu negocio, no imágenes genéricas.", {
+      tipo: "anuncio_boton", // mismo tipo que VALOR_1_OK ("e2")
+      eventos: [{ palabra: 5, accion: "cambia_estado" }],
+    });
+    const escenas = [GANCHO_OK, VALOR_1_OK, valor2ConTipoRepetido, VALOR_3_OK, MARCA_OK, CTA_OK];
+    const hallazgos = validarEstructuraConsejosNumeradosAudio(escenas);
+    expect(hallazgos.some((h) => h.mensaje.includes("mismo visual") && h.mensaje.includes("e2") && h.mensaje.includes("e3"))).toBe(true);
+  });
+
+  it("los 3 consejos con 3 tipos de visual distintos (GANCHO_OK..CTA_OK ya lo cubre): sin hallazgo de repetido", () => {
+    const escenas = [GANCHO_OK, VALOR_1_OK, VALOR_2_OK, VALOR_3_OK, MARCA_OK, CTA_OK];
+    const hallazgos = validarEstructuraConsejosNumeradosAudio(escenas);
+    expect(hallazgos.some((h) => h.mensaje.includes("mismo visual"))).toBe(false);
   });
 });
