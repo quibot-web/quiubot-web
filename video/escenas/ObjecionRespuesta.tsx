@@ -1,6 +1,7 @@
 import { AbsoluteFill, interpolate, useCurrentFrame, useVideoConfig } from "remotion";
 import { colorMasContraste, colorTextoSobre } from "../tema";
 import { FondoMarca } from "../capas/FondoMarca";
+import { interpolarSeguro } from "../interpolarSeguro";
 import type { PropsEscena } from "./tipos";
 
 export function ObjecionRespuesta({ escena, tema, uso, medioDeFondo }: PropsEscena<"objecion_respuesta">) {
@@ -11,7 +12,10 @@ export function ObjecionRespuesta({ escena, tema, uso, medioDeFondo }: PropsEsce
   const mostrarRespuesta = frame > mitad;
   const colorTexto = colorTextoSobre(tema.color_primario);
   const colorRespuesta = colorMasContraste([tema.color_secundario], tema.color_primario, colorTexto);
-  const tachado = interpolate(frame, [mitad * 0.3, mitad * 0.8], [0, 100], {
+  // Con escena.duracion_s=0 (degenerado), mitad=0 y los dos puntos de
+  // abajo colisionan en [0, 0] -- mismo bug de interpolate() que ya
+  // tumbó un render; interpolarSeguro() lo cubre aquí también.
+  const tachado = interpolarSeguro(frame, [mitad * 0.3, mitad * 0.8], [0, 100], {
     extrapolateLeft: "clamp",
     extrapolateRight: "clamp",
   });

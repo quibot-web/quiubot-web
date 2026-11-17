@@ -7,7 +7,8 @@
 // visual.eventos (palabra -> tiempo real de generarVoz()), porque la
 // Fase B v2.0 ya no tiene una "duración de escena" fija de la que
 // adivinar un 60%.
-import { interpolate, spring } from "remotion";
+import { spring } from "remotion";
+import { interpolarSeguro } from "../interpolarSeguro";
 
 // Bug real encontrado con una prueba real en navegador (16 nov 2026):
 // interpolate() exige un eje de entrada ESTRICTAMENTE creciente --
@@ -16,13 +17,18 @@ import { interpolate, spring } from "remotion";
 // MISMO cuadro si quedan muy cerca en el audio real (los tiempos de
 // generarVoz() son en segundos, Math.round() a cuadros) -- ahí
 // Remotion tiraba "inputRange must be strictly monotonically
-// increasing" y tumbaba el render entero. Con el mismo cuadro para
-// "aparece" y "clic" no hay nada que interpolar: el cursor ya llegó
-// en cuanto aparece. Función pura aparte (no solo inline) para poder
-// probarla sin montar el componente.
+// increasing" y tumbaba el render entero.
+//
+// La guarda de abajo NO es solo anti-crash: con el mismo cuadro para
+// "aparece" y "clic" no hay nada que interpolar, el cursor ya llegó en
+// cuanto aparece -- es comportamiento real, probado en
+// CursorClicEventos.test.ts. Se mantiene tal cual; interpolarSeguro()
+// cubre el branch normal (y el fundido de opacidad de abajo) como red
+// de seguridad adicional. Función pura aparte (no solo inline) para
+// poder probarla sin montar el componente.
 export function calcularLlegadaCursor(frame: number, cuadroAparece: number, cuadroClic: number): number {
   if (cuadroAparece === cuadroClic) return frame >= cuadroAparece ? 1 : 0;
-  return interpolate(frame, [cuadroAparece, cuadroClic], [0, 1], { extrapolateLeft: "clamp", extrapolateRight: "clamp" });
+  return interpolarSeguro(frame, [cuadroAparece, cuadroClic], [0, 1], { extrapolateLeft: "clamp", extrapolateRight: "clamp" });
 }
 
 export function CursorClicEventos({ frame, fps, cuadroAparece, cuadroClic }: { frame: number; fps: number; cuadroAparece: number; cuadroClic: number }) {
@@ -34,10 +40,10 @@ export function CursorClicEventos({ frame, fps, cuadroAparece, cuadroClic }: { f
       style={{
         position: "absolute",
         fontSize: 104,
-        right: `${interpolate(llegada, [0, 1], [-34, 4])}%`,
-        bottom: `${interpolate(llegada, [0, 1], [-70, -22])}%`,
+        right: `${interpolarSeguro(llegada, [0, 1], [-34, 4])}%`,
+        bottom: `${interpolarSeguro(llegada, [0, 1], [-70, -22])}%`,
         transform: `scale(${escalaCursor}) rotate(-20deg)`,
-        opacity: interpolate(frame, [cuadroAparece, cuadroAparece + fps * 0.2], [0, 1], { extrapolateLeft: "clamp", extrapolateRight: "clamp" }),
+        opacity: interpolarSeguro(frame, [cuadroAparece, cuadroAparece + fps * 0.2], [0, 1], { extrapolateLeft: "clamp", extrapolateRight: "clamp" }),
         filter: "drop-shadow(0 4px 6px rgba(0,0,0,0.4))",
       }}
     >

@@ -6,6 +6,7 @@
 // "visto") y un después (respuesta + confirmación) real.
 import { interpolate, spring } from "remotion";
 import { respiracion } from "../tema";
+import { interpolarSeguro } from "../interpolarSeguro";
 import { COLOR_ALERTA, COLOR_EXITO } from "./acento";
 import { TARJETA_ALTURA_PORCENTAJE, TARJETA_ANCHO_PORCENTAJE, TARJETA_TOP_PORCENTAJE } from "./geometria";
 
@@ -24,7 +25,7 @@ export function RespuestaLentaVisual({ frame, fps, cuadroCambia }: { frame: numb
   const progresoConfirmacion = spring({ frame: frame - cuadroConfirmacion, fps, config: { damping: 16, stiffness: 300 } });
   const escalaRespiracion = respiracion(frame, fps);
 
-  const segundosReloj = interpolate(frame, [0, Math.max(cuadroCambia * 0.5, 1), Math.max(cuadroCambia, 2)], [5, 150, 900], { extrapolateLeft: "clamp", extrapolateRight: "clamp" });
+  const segundosReloj = interpolarSeguro(frame, [0, Math.max(cuadroCambia * 0.5, 1), Math.max(cuadroCambia, 2)], [5, 150, 900], { extrapolateLeft: "clamp", extrapolateRight: "clamp" });
   const rotacionReloj = rapida ? 0 : Math.sin(frame / 6) * 10;
 
   return (

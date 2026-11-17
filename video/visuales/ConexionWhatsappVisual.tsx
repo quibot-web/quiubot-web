@@ -17,13 +17,14 @@
 // memoria).
 import { AbsoluteFill, interpolate, spring } from "remotion";
 import { respiracion, type TemaGuion } from "../tema";
+import { interpolarSeguro } from "../interpolarSeguro";
 import { COLOR_ALERTA, COLOR_EXITO } from "./acento";
 import { TARJETA_ALTURA_PORCENTAJE, TARJETA_TOP_PORCENTAJE } from "./geometria";
 
 export function ConexionWhatsappVisual({ frame, fps, tema, cuadroCambia }: { frame: number; fps: number; tema: TemaGuion; cuadroCambia: number }) {
   const conectado = frame >= cuadroCambia;
   const progresoMensaje = spring({ frame: frame - cuadroCambia, fps, config: { damping: 14 } });
-  const progresoViaje = interpolate(frame, [cuadroCambia, cuadroCambia + Math.round(fps * 0.35)], [0, 1], { extrapolateLeft: "clamp", extrapolateRight: "clamp" });
+  const progresoViaje = interpolarSeguro(frame, [cuadroCambia, cuadroCambia + Math.round(fps * 0.35)], [0, 1], { extrapolateLeft: "clamp", extrapolateRight: "clamp" });
   const escalaRespiracion = respiracion(frame, fps);
   const color = conectado ? COLOR_EXITO : COLOR_ALERTA;
 

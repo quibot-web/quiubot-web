@@ -7,7 +7,7 @@
 // resultado inventado de Quiubot -- quien llama a esto decide si es
 // puramente ilustrativo (ej. "nuevos: 0->3" sin afirmar nada real) o
 // una cifra real que el usuario dio.
-import { interpolate } from "remotion";
+import { interpolarSeguro } from "../interpolarSeguro";
 import { TAMANO_FUENTE_CONTADOR_GIGANTE, TAMANO_FUENTE_ETIQUETA_CONTADOR_GIGANTE } from "./tamanos";
 
 // Bug real encontrado con una prueba real en navegador (16 nov 2026):
@@ -15,14 +15,24 @@ import { TAMANO_FUENTE_CONTADOR_GIGANTE, TAMANO_FUENTE_ETIQUETA_CONTADOR_GIGANTE
 // visual "contador" solo trae 1 evento (el schema lo permite, min 1),
 // cuadroInicio === cuadroFin y Remotion tira "inputRange must be
 // strictly monotonically increasing but got [0,0]", tumbando el
-// render completo. Con un solo evento no hay nada que "interpolar" de
-// todos modos: el contador salta directo a "hasta" en cuanto llega
-// ese cuadro, nunca sube gradualmente.
+// render completo. Este fue el PRIMER caso de esta clase de bug (hubo
+// 2 más después, CursorClicEventos.tsx y el fundido de audio de
+// CapaVoz.tsx).
+//
+// La guarda de abajo NO es solo anti-crash: con un solo evento no hay
+// nada que interpolar de todos modos, el contador debe saltar directo
+// a "hasta" en cuanto llega ese cuadro (nunca subir gradualmente) --
+// es comportamiento real, probado en Contador.test.ts, no un atajo.
+// Se mantiene tal cual; interpolarSeguro() solo cubre el branch normal
+// como red de seguridad adicional (ya es seguro por construcción,
+// cuadroInicio<cuadroFin, porque quien llama normaliza con
+// Math.min/Math.max -- esto protege contra un futuro llamador que no
+// lo haga).
 export function valorContadorEnFrame(frame: number, cuadroInicio: number, cuadroFin: number, desde: number, hasta: number): number {
   if (cuadroInicio === cuadroFin) {
     return frame >= cuadroInicio ? hasta : desde;
   }
-  const progreso = interpolate(frame, [cuadroInicio, cuadroFin], [0, 1], { extrapolateLeft: "clamp", extrapolateRight: "clamp" });
+  const progreso = interpolarSeguro(frame, [cuadroInicio, cuadroFin], [0, 1], { extrapolateLeft: "clamp", extrapolateRight: "clamp" });
   return Math.round(desde + (hasta - desde) * progreso);
 }
 

@@ -1,5 +1,6 @@
 import { AbsoluteFill, Img, interpolate, spring, useCurrentFrame, useVideoConfig } from "remotion";
 import { colorTextoSobre, respiracion } from "../tema";
+import { interpolarSeguro } from "../interpolarSeguro";
 import { FondoMarca } from "../capas/FondoMarca";
 import type { PropsEscena } from "./tipos";
 import type { TemaGuion } from "../tema";
@@ -78,8 +79,12 @@ export function BotonGrande({ texto, tema, progreso, completo }: { texto: string
 // contenedor), nunca a un punto adivinado de la pantalla completa.
 // Exportado para la prueba de texto largo (Cta.test.ts).
 export function CursorClic({ frame, fps, duracionCuadros }: { frame: number; fps: number; duracionCuadros: number }) {
+  // Bug real de la misma clase (video/interpolarSeguro.ts): con una
+  // escena de CTA muy corta, cuadroClic (60% de duracionCuadros) puede
+  // caer antes o exactamente en fps*0.3 -- rango no estrictamente
+  // creciente, Remotion lanza y tumba el render.
   const cuadroClic = Math.round(duracionCuadros * 0.6);
-  const llegada = interpolate(frame, [fps * 0.3, cuadroClic], [0, 1], { extrapolateLeft: "clamp", extrapolateRight: "clamp" });
+  const llegada = interpolarSeguro(frame, [fps * 0.3, cuadroClic], [0, 1], { extrapolateLeft: "clamp", extrapolateRight: "clamp" });
   const clic = spring({ frame: frame - cuadroClic, fps, config: { damping: 6, mass: 0.4 } });
   const escalaCursor = 1 - Math.sin(Math.min(clic, 1) * Math.PI) * 0.3;
   return (

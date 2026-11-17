@@ -1,5 +1,6 @@
 import { interpolate, useCurrentFrame, useVideoConfig } from "remotion";
 import { Audio } from "@remotion/media";
+import { corregirRangoCreciente } from "../interpolarSeguro";
 
 // Fase B v2.0 (docs/diseno/plan_contenido_organico_fase_b_v2.md,
 // punto 7). Variante de capas/Musica.tsx SOLO para el reel automático
@@ -36,9 +37,10 @@ export function calcularCurvaDucking(params: {
   // interpolate() exige el eje de entrada ESTRICTAMENTE creciente --
   // si inicioVoz/finVoz caen muy cerca de los bordes del reel (o el
   // reel es muy corto), los puntos "ideales" de abajo pueden
-  // empatarse o invertirse; este paso los fuerza a quedar en orden,
-  // cada uno al menos 1 cuadro después del anterior, en vez de
-  // confiar en que la geometría real siempre cae bien espaciada.
+  // empatarse o invertirse. corregirRangoCreciente() (video/interpolarSeguro.ts)
+  // es la MISMA corrección que antes vivía acá a mano -- ahora un solo
+  // lugar, compartido con cualquier otro interpolate() de tiempos
+  // calculados.
   const idealesSinOrdenar = [
     0,
     cuadroFadeBorde,
@@ -49,11 +51,7 @@ export function calcularCurvaDucking(params: {
     durationInFrames - cuadroFadeBorde,
     durationInFrames,
   ];
-  const puntos: number[] = [];
-  for (const ideal of idealesSinOrdenar) {
-    const anterior = puntos[puntos.length - 1];
-    puntos.push(anterior === undefined ? Math.max(0, ideal) : Math.max(ideal, anterior + 1));
-  }
+  const puntos = corregirRangoCreciente(idealesSinOrdenar);
   const valores = [0, volumenNormal, volumenNormal, volumenConVoz, volumenConVoz, volumenNormal, volumenNormal, 0];
   return { puntos, valores };
 }
