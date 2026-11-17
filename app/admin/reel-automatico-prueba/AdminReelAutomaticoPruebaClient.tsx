@@ -12,6 +12,7 @@ import {
   esSoloProblemaDePausas,
   limitesDeRecompactacion,
   DURACION_MINIMA_SILENCIO_S,
+  MAX_REINTENTOS_QC,
   type HallazgoVision,
   type HallazgoConImagen,
   type ResultadoSilencio,
@@ -41,7 +42,6 @@ const LICENCIA_REMOTION = "free-license";
 // los intentos de validación estructural que ya corren dentro de cada
 // llamada a /guion (MAX_REINTENTOS en esa ruta) -- 3 corridas
 // completas en total como máximo (1 + 2 reintentos).
-const MAX_REINTENTOS_QC = 2;
 
 // Bug real reportado (staging, 16 nov 2026): el arnés se quedaba
 // colgado para siempre en "extrayendo cuadros/revisando audio", tanto

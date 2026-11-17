@@ -11,7 +11,8 @@ import {
   encontrarSilenciosLargos,
   erroresDesdeQC,
   esSoloProblemaDePausas,
-  limitesDeRecompactacion,
+  ejecutarControlDeCalidadConReintentos,
+  type ClasificacionQC,
 } from "@/app/lib/videoOrganico/controlCalidadCliente";
 
 const TIMEOUT_FASE_CONTROL_CALIDAD_MS = 120_000;
@@ -78,17 +79,20 @@ export default function ColaDeRender({
     }
   }
 
-  type ResultadoControlCalidad =
-    | { tipo: "aprobado" }
-    | { tipo: "recompactado"; guion: Guion }
-    | { tipo: "rechazado"; hallazgos: unknown[] };
-
   // Mismo control de calidad que el arnés admin (código + silencio
-  // real del audio ya mezclado + visión) -- un único intento de
-  // recompactación (límites más estrictos sobre la MISMA voz, sin IA
-  // ni generarVoz) si lo único que falló fue un silencio largo. Nunca
-  // se queda colgado: TIMEOUT_FASE_CONTROL_CALIDAD_MS en el llamador.
-  async function correrControlDeCalidad(piezaId: string, blob: Blob, guionActual: Guion, crudo: unknown): Promise<ResultadoControlCalidad> {
+  // real del audio YA MEZCLADO -- el mismo blob que se sube al álbum,
+  // voz+música, nunca solo la voz -- + visión). Esta función SOLO
+  // corre el chequeo y clasifica: la recompactación y el re-render
+  // viven en el loop de renderizarYSubir(), igual que el arnés admin.
+  //
+  // Bug real (ronda M, probado en staging): antes esta función
+  // recompactaba UNA vez acá adentro y nunca volvía a revisar el
+  // resultado -- un silencio de 0.78s en la unión marca->CTA pasó
+  // igual al álbum porque "recompactado" se trataba como aprobado sin
+  // verificarlo. El arnés admin SIEMPRE vuelve a correr el control de
+  // calidad después de recompactar (hasta MAX_REINTENTOS_QC veces) --
+  // acá ahora es igual.
+  async function correrControlDeCalidad(blob: Blob, guionActual: Guion): Promise<ClasificacionQC> {
     const duracionS = guionActual.escenas.reduce((acc, e) => acc + e.duracion_s, 0);
     const etiquetasYSegundos = [
       { etiqueta: "inicio", segundo: 0.1 },
@@ -115,20 +119,7 @@ export default function ColaDeRender({
 
     const errores = erroresDesdeQC(hallazgos, silencio, silenciosLargos);
     if (errores.length === 0) return { tipo: "aprobado" };
-
-    if (esSoloProblemaDePausas(hallazgos, silencio, silenciosLargos) && crudo) {
-      const limites = limitesDeRecompactacion(1);
-      const resRecompactar = await fetch("/api/admin/reel-automatico-prueba/recompactar", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ guion: guionActual, crudo, ...limites }),
-      }).catch(() => null);
-      if (resRecompactar?.ok) {
-        const data = await resRecompactar.json();
-        return { tipo: "recompactado", guion: data.guion as Guion };
-      }
-    }
-
+    if (esSoloProblemaDePausas(hallazgos, silencio, silenciosLargos)) return { tipo: "pausas" };
     return { tipo: "rechazado", hallazgos: errores };
   }
 
@@ -208,35 +199,58 @@ export default function ColaDeRender({
         // queda con aprobado:false de todos modos.
         if (esPiezaConVoz && !controlCalidadActual?.forzarSinCalidad) {
           actualizarEstado(pieza.id, { fase: "control_calidad" });
-          const resultadoQC = await conTimeout(
-            correrControlDeCalidad(pieza.id, blob, guion, controlCalidadActual?.crudo),
+
+          // ejecutarControlDeCalidadConReintentos() es el MISMO loop
+          // que el arnés admin ya probó en staging: cada recompactación
+          // vuelve a renderizar Y a correr el control de calidad de
+          // nuevo antes de aceptar el resultado -- ver el comentario en
+          // controlCalidadCliente.ts sobre el bug real de esta ronda.
+          const resultadoLoop = await conTimeout(
+            ejecutarControlDeCalidadConReintentos<Guion, Blob>({
+              blobInicial: blob,
+              guionInicial: guion,
+              crudo: controlCalidadActual?.crudo,
+              correrQC: (b, g) => correrControlDeCalidad(b, g),
+              recompactar: async (g, crudo, limites) => {
+                const resRecompactar = await fetch("/api/admin/reel-automatico-prueba/recompactar", {
+                  method: "POST",
+                  headers: { "Content-Type": "application/json" },
+                  body: JSON.stringify({ guion: g, crudo, ...limites }),
+                }).catch(() => null);
+                if (!resRecompactar?.ok) return null;
+                const data = await resRecompactar.json();
+                const guionRecompactado = data.guion as Guion;
+                await fetch(`/api/contenido/${pieza.id}`, {
+                  method: "PATCH",
+                  headers: { "Content-Type": "application/json" },
+                  body: JSON.stringify({ accion: "guardar_calidad", guion: guionRecompactado }),
+                });
+                return guionRecompactado;
+              },
+              rerenderizar: async (g) => (await renderizarConGuion(g)).blob,
+            }),
             TIMEOUT_FASE_CONTROL_CALIDAD_MS,
             "El control de calidad tardó demasiado."
           );
 
-          if (resultadoQC.tipo === "recompactado") {
-            guion = resultadoQC.guion;
+          guion = resultadoLoop.guion;
+          blob = resultadoLoop.blob;
+
+          if (!resultadoLoop.aprobado) {
             await fetch(`/api/contenido/${pieza.id}`, {
               method: "PATCH",
               headers: { "Content-Type": "application/json" },
-              body: JSON.stringify({ accion: "guardar_calidad", guion }),
-            });
-            blob = (await renderizarConGuion(guion)).blob;
-          } else if (resultadoQC.tipo === "rechazado") {
-            await fetch(`/api/contenido/${pieza.id}`, {
-              method: "PATCH",
-              headers: { "Content-Type": "application/json" },
-              body: JSON.stringify({ accion: "guardar_calidad", estado: "error", control_calidad: { aprobado: false, forzado: false, hallazgos: resultadoQC.hallazgos } }),
+              body: JSON.stringify({ accion: "guardar_calidad", estado: "error", control_calidad: { aprobado: false, forzado: false, hallazgos: resultadoLoop.hallazgos } }),
             });
             actualizarEstado(pieza.id, { fase: "error", errorMsg: "El control de calidad rechazó este reel -- revísalo en la pieza." });
             return;
-          } else {
-            await fetch(`/api/contenido/${pieza.id}`, {
-              method: "PATCH",
-              headers: { "Content-Type": "application/json" },
-              body: JSON.stringify({ accion: "guardar_calidad", control_calidad: { aprobado: true } }),
-            });
           }
+
+          await fetch(`/api/contenido/${pieza.id}`, {
+            method: "PATCH",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ accion: "guardar_calidad", control_calidad: { aprobado: true } }),
+          });
         } else if (esPiezaConVoz) {
           await fetch(`/api/contenido/${pieza.id}`, {
             method: "PATCH",

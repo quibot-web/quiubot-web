@@ -231,9 +231,80 @@ export function esSoloProblemaDePausas(hallazgos: HallazgoVision[], silencio: Re
   return !hayProblemaVision && silencio !== "silencioso" && haySilencioLargo;
 }
 
+// Compartida entre el arnés admin y ColaDeRender.tsx (/contenido real)
+// -- hasta 3 intentos totales de control de calidad (el primer render
+// + hasta 2 reintentos), igual en los 2 lugares. Un valor compartido
+// evita que un lugar quede en 3 intentos y el otro en 1 por error de
+// copiar-pegar (justo el bug real de la ronda M: /contenido
+// recompactaba UNA vez y subía sin volver a verificar el resultado).
+export const MAX_REINTENTOS_QC = 2;
+
 export function limitesDeRecompactacion(intentosRecompactacion: number): { pausaEntreFrases_s: number; pausaDentroDeFrase_s: number } {
   return {
     pausaEntreFrases_s: Math.max(0.3, 0.4 - 0.05 * intentosRecompactacion),
     pausaDentroDeFrase_s: Math.max(0.15, 0.25 - 0.05 * intentosRecompactacion),
   };
+}
+
+export type ClasificacionQC = { tipo: "aprobado" } | { tipo: "pausas" } | { tipo: "rechazado"; hallazgos: string[] };
+
+export type ResultadoLoopQC<TGuion, TBlob> = {
+  aprobado: boolean;
+  guion: TGuion;
+  blob: TBlob;
+  hallazgos: string[];
+  intentosRecompactacion: number;
+};
+
+// Orquesta el MISMO loop que el arnés admin ya probó en staging: correr
+// el control de calidad, y si lo único que falló fue un silencio largo,
+// recompactar + volver a renderizar + VOLVER A CORRER el control de
+// calidad sobre ese nuevo blob -- nunca subir/entregar un resultado
+// recompactado sin reverificarlo. Extraído a función pura (en vez de
+// vivir inline dentro de ColaDeRender.tsx) específicamente para poder
+// probar con callbacks simulados que el loop SÍ vuelve a llamar a
+// `correrQC` después de recompactar -- bug real de la ronda M: antes
+// ColaDeRender.tsx recompactaba una vez y subía sin volver a este
+// punto.
+export async function ejecutarControlDeCalidadConReintentos<TGuion, TBlob>(params: {
+  blobInicial: TBlob;
+  guionInicial: TGuion;
+  crudo: unknown;
+  maxIntentos?: number;
+  correrQC: (blob: TBlob, guion: TGuion) => Promise<ClasificacionQC>;
+  recompactar: (guion: TGuion, crudo: unknown, limites: { pausaEntreFrases_s: number; pausaDentroDeFrase_s: number }) => Promise<TGuion | null>;
+  rerenderizar: (guion: TGuion) => Promise<TBlob>;
+}): Promise<ResultadoLoopQC<TGuion, TBlob>> {
+  const maxIntentos = params.maxIntentos ?? MAX_REINTENTOS_QC + 1;
+  let guion = params.guionInicial;
+  let blob = params.blobInicial;
+  let intentosRecompactacion = 0;
+  let hallazgosFinal: string[] = [];
+
+  for (let intento = 1; intento <= maxIntentos; intento++) {
+    const resultadoQC = await params.correrQC(blob, guion);
+
+    if (resultadoQC.tipo === "aprobado") {
+      return { aprobado: true, guion, blob, hallazgos: [], intentosRecompactacion };
+    }
+
+    if (resultadoQC.tipo === "pausas" && params.crudo && intento < maxIntentos) {
+      intentosRecompactacion += 1;
+      const limites = limitesDeRecompactacion(intentosRecompactacion);
+      const guionRecompactado = await params.recompactar(guion, params.crudo, limites);
+      if (!guionRecompactado) {
+        hallazgosFinal = ["No se pudo recompactar las pausas -- revisa este reel a mano."];
+        break;
+      }
+      guion = guionRecompactado;
+      blob = await params.rerenderizar(guion);
+      continue;
+    }
+
+    hallazgosFinal =
+      resultadoQC.tipo === "rechazado" ? resultadoQC.hallazgos : ["El audio siguió con pausas largas después de recompactar -- revisa este reel a mano."];
+    break;
+  }
+
+  return { aprobado: false, guion, blob, hallazgos: hallazgosFinal, intentosRecompactacion };
 }
