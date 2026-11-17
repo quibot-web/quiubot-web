@@ -9,8 +9,10 @@ import { urlDescargaCloudinary } from "@/app/lib/cloudinaryUrl";
 import type { Guion, Escena } from "@/video/guion.schema";
 import type { MediosResueltos } from "@/video/escenas/tipos";
 import { duracionEnCuadros } from "@/video/Composicion";
+import { duracionReelAutomaticoEnCuadros } from "@/video/visuales/ReelAutomatico";
 
 const VistaPrevia = dynamic(() => import("@/app/video/VistaPrevia"), { ssr: false });
+const VistaPreviaConVoz = dynamic(() => import("@/app/video/VistaPreviaConVoz"), { ssr: false });
 
 type Paso = "cargando" | "sin-acceso" | "no-encontrada" | "revision";
 
@@ -36,6 +38,9 @@ export default function RevisionPiezaPage({ params }: { params: Promise<{ id: st
   const [pistasDisponibles, setPistasDisponibles] = useState<{ id: string; nombre: string | null; mood: string; licencia_url: string | null }[]>([]);
   const [guardandoMusica, setGuardandoMusica] = useState(false);
   const [errorMsg, setErrorMsg] = useState<string | null>(null);
+  const [esPiezaConVoz, setEsPiezaConVoz] = useState(false);
+  const [vozDesactualizada, setVozDesactualizada] = useState(false);
+  const [regenerandoVoz, setRegenerandoVoz] = useState(false);
   // Guardado explícito (no solo "ya pasó el gate de arriba") para que,
   // el día que esta pantalla se abra a clientes, la distinción
   // admin/cliente de generarGuion() siga siendo correcta sin tener que
@@ -61,6 +66,8 @@ export default function RevisionPiezaPage({ params }: { params: Promise<{ id: st
     setPistaUrl((data.pistaUrl as string | null) ?? null);
     setPistaSinLicencia(!!data.pistaSinLicencia);
     setAvisoSinMusica(!!data.avisoSinMusica);
+    setEsPiezaConVoz(!!data.esPiezaConVoz);
+    setVozDesactualizada(!!data.vozDesactualizada);
     setPaso("revision");
   }, [id]);
 
@@ -174,11 +181,42 @@ export default function RevisionPiezaPage({ params }: { params: Promise<{ id: st
         setErrorMsg(data.error || "No se pudo guardar.");
         return;
       }
-      setGuion(guionConPublicacion);
+      // Recarga (en vez de solo setGuion local) para que
+      // vozDesactualizada venga recalculada de verdad contra la
+      // narración recién guardada -- ese cálculo es server-only
+      // (hashNarracion.ts), no se puede repetir en el cliente.
+      await cargar();
     } catch {
       setErrorMsg("No se pudo guardar.");
     } finally {
       setGuardando(false);
+    }
+  }
+
+  async function regenerarVoz() {
+    setRegenerandoVoz(true);
+    setErrorMsg(null);
+    try {
+      await guardarCambios();
+      const res = await fetch(`/api/contenido/${id}`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ accion: "regenerar_voz" }),
+      });
+      const data = await res.json();
+      if (!res.ok) {
+        if (rol === "admin" && Array.isArray(data.resumenErrores) && data.resumenErrores.length > 0) {
+          setErrorMsg(`${data.error || "No se pudo regenerar la voz."}\n${data.resumenErrores.map((e: string) => `• ${e}`).join("\n")}`);
+        } else {
+          setErrorMsg(data.error || "No se pudo regenerar la voz.");
+        }
+        return;
+      }
+      await cargar();
+    } catch {
+      setErrorMsg("No se pudo regenerar la voz.");
+    } finally {
+      setRegenerandoVoz(false);
     }
   }
 
@@ -233,6 +271,15 @@ export default function RevisionPiezaPage({ params }: { params: Promise<{ id: st
         {guion && avisoSinMusica && (
           <p style={{ background: "#FEF6E7", border: "1px solid #F0C36D", borderRadius: 10, padding: "10px 14px", fontSize: 13, color: "#8A6416", marginBottom: 16 }}>
             Sin música: no hay pistas con licencia.
+          </p>
+        )}
+
+        {guion && esPiezaConVoz && vozDesactualizada && (
+          <p style={{ background: "#FDECEC", border: "1px solid #E8A0A0", borderRadius: 10, padding: "10px 14px", fontSize: 13, color: "#8A1F1F", fontWeight: 700, marginBottom: 16, display: "flex", gap: 10, alignItems: "center", flexWrap: "wrap" }}>
+            <span style={{ flex: 1 }}>La narración se editó después de generar la voz -- regenérala antes de aprobar.</span>
+            <button type="button" onClick={regenerarVoz} disabled={regenerandoVoz} style={{ ...botonPrimario, padding: "6px 12px", fontSize: 12 }}>
+              {regenerandoVoz ? "Regenerando voz…" : "Regenerar voz"}
+            </button>
           </p>
         )}
 
@@ -345,15 +392,21 @@ export default function RevisionPiezaPage({ params }: { params: Promise<{ id: st
                 <button type="button" onClick={guardarCambios} disabled={guardando} style={botonSecundario}>
                   {guardando ? "Guardando…" : "Guardar cambios"}
                 </button>
-                <button type="button" onClick={aprobar} disabled={aprobando} style={botonPrimario}>
+                <button type="button" onClick={aprobar} disabled={aprobando || (esPiezaConVoz && vozDesactualizada)} style={botonPrimario}>
                   {aprobando ? "Aprobando…" : "Aprobar"}
                 </button>
               </div>
             </div>
 
             <div style={{ position: "sticky", top: 24 }}>
-              <VistaPrevia guion={guion} medios={medios} pistaUrl={pistaUrl} mostrarZonaSegura={false} />
-              <p style={{ fontSize: 11, color: "#888", marginTop: 8 }}>{(duracionEnCuadros(guion) / guion.fps).toFixed(1)}s</p>
+              {esPiezaConVoz ? (
+                <VistaPreviaConVoz guion={guion} pistaMusicaUrl={pistaUrl} />
+              ) : (
+                <VistaPrevia guion={guion} medios={medios} pistaUrl={pistaUrl} mostrarZonaSegura={false} />
+              )}
+              <p style={{ fontSize: 11, color: "#888", marginTop: 8 }}>
+                {((esPiezaConVoz ? duracionReelAutomaticoEnCuadros(guion) : duracionEnCuadros(guion)) / guion.fps).toFixed(1)}s
+              </p>
             </div>
           </div>
         )}

@@ -53,6 +53,9 @@ export default function EditorEscena({
     const actual = escena.subtitulo || { texto: "", palabra_clave: "" };
     onCambiar({ ...escena, subtitulo: { ...actual, [campo]: valor } } as Escena);
   }
+  function cambiarNarracion(valor: string) {
+    onCambiar({ ...escena, narracion: valor } as Escena);
+  }
 
   const piezaElegida = (id: string | undefined) => piezas.find((p) => p.id === id);
 
@@ -76,6 +79,26 @@ export default function EditorEscena({
           <span style={{ fontSize: 11, color: "#888", marginLeft: 4 }}>s</span>
         </Campo>
       </div>
+
+      {escena.narracion !== undefined && (
+        // Piezas con pipeline de voz (Fase B v2.0): este es el texto que
+        // TTS lee en voz alta -- editarlo desactualiza la voz/los
+        // tiempos ya generados (ver GET .../[id] -> vozDesactualizada,
+        // página de revisión bloquea "Aprobar" hasta "Regenerar voz").
+        // Los índices de palabra de escena.visual.eventos quedan
+        // amarrados al conteo de palabras de ESTE texto -- si el nuevo
+        // conteo rompe algún evento, regenerarVozParaGuion() lo detecta
+        // (vuelve a correr validarEdicionDesdeAudio) en vez de
+        // reindexar nada acá.
+        <Campo label="Narración (lo que dice la voz)">
+          <textarea
+            style={{ ...estiloCampo, minHeight: 50 }}
+            maxLength={220}
+            value={escena.narracion}
+            onChange={(e) => cambiarNarracion(e.target.value)}
+          />
+        </Campo>
+      )}
 
       {escena.tipo === "gancho_texto" && (
         <>

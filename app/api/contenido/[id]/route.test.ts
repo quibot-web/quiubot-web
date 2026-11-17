@@ -210,6 +210,79 @@ describe("PATCH /api/contenido/[id] -- aprobar", () => {
     const res = await PATCH(patchReq({ accion: "aprobar" }), contexto());
     expect(res.status).toBe(409);
   });
+
+  it("pieza con pipeline de voz y narración editada después (hash ya no calza): 400, nunca aprueba", async () => {
+    piezaActual = {
+      ...piezaActual,
+      guion: { ...fixtureMitoVerdad, escenas: fixtureMitoVerdad.escenas, vozUrl: "https://x/voz.mp3", narracionHash: "hash-viejo-que-no-calza" },
+    };
+    const res = await PATCH(patchReq({ accion: "aprobar" }), contexto());
+    expect(res.status).toBe(400);
+    expect(updatesRealizados.length).toBe(0);
+  });
+
+  it("pieza con pipeline de voz y hash SÍ calza con la narración actual: aprueba normal", async () => {
+    const { calcularHashNarracion } = await import("@/app/lib/videoOrganico/hashNarracion");
+    piezaActual = {
+      ...piezaActual,
+      guion: { ...fixtureMitoVerdad, vozUrl: "https://x/voz.mp3", narracionHash: calcularHashNarracion(fixtureMitoVerdad.escenas) },
+    };
+    const res = await PATCH(patchReq({ accion: "aprobar" }), contexto());
+    expect(res.status).toBe(200);
+  });
+});
+
+describe("PATCH /api/contenido/[id] -- regenerar_voz", () => {
+  beforeEach(() => {
+    fromMock.mockClear();
+    authMock.mockResolvedValue({ user: { email: "marca@quiubot.com" } });
+    usuarioActual = { ...USUARIO_ADMIN, openai_key: "key-cifrada", cloudinary_name: "demo", cloudinary_key: "k-cifrada", cloudinary_secret: "s-cifrada" };
+    piezaActual = { id: "pieza-1", estado: "borrador", guion: { ...fixtureMitoVerdad, vozUrl: "https://x/voz-vieja.mp3", narracionHash: "hash-viejo" } };
+    marcaInfoActual = { voz_tts: "cedar" };
+    filasUpdateActual = [{ id: "pieza-1" }];
+    updatesRealizados = [];
+  });
+
+  it("pieza sin pipeline de voz: 400", async () => {
+    piezaActual = { ...piezaActual, guion: fixtureMitoVerdad };
+    const res = await PATCH(patchReq({ accion: "regenerar_voz" }), contexto());
+    expect(res.status).toBe(400);
+  });
+
+  it("éxito: guarda los campos nuevos de regenerarVozParaGuion en el guion y en voz_url", async () => {
+    vi.doMock("@/lib/crypto", () => ({ desencriptarSiHaceFalta: (v: string) => v }));
+    vi.doMock("@/app/lib/videoOrganico/generarGuionConVoz", () => ({
+      regenerarVozParaGuion: vi.fn(async () => ({
+        ok: true,
+        campos: { tiemposRender: [], palabrasPorEscena: [], segmentosAudio: [], narracionHash: "hash-nuevo", vozUrl: "https://x/voz-nueva.mp3" },
+        puntajeAlineacion: 1,
+        crudo: { palabrasPorEscenaCrudo: null, silencios: null },
+      })),
+    }));
+    vi.resetModules();
+    const { PATCH: PATCH2 } = await import("./route");
+    const res = await PATCH2(patchReq({ accion: "regenerar_voz" }), contexto());
+    const body = await res.json();
+    expect(res.status).toBe(200);
+    expect(body.guion.vozUrl).toBe("https://x/voz-nueva.mp3");
+    expect(updatesRealizados[0]).toMatchObject({ voz_url: "https://x/voz-nueva.mp3" });
+    vi.doUnmock("@/lib/crypto");
+    vi.doUnmock("@/app/lib/videoOrganico/generarGuionConVoz");
+  });
+
+  it("regenerarVozParaGuion encuentra hallazgos (narración rota tras editar): propaga el error, nunca actualiza", async () => {
+    vi.doMock("@/lib/crypto", () => ({ desencriptarSiHaceFalta: (v: string) => v }));
+    vi.doMock("@/app/lib/videoOrganico/generarGuionConVoz", () => ({
+      regenerarVozParaGuion: vi.fn(async () => ({ ok: false, status: 400, error: "inconsistente", resumenErrores: ["e1: evento fuera de rango"] })),
+    }));
+    vi.resetModules();
+    const { PATCH: PATCH2 } = await import("./route");
+    const res = await PATCH2(patchReq({ accion: "regenerar_voz" }), contexto());
+    expect(res.status).toBe(400);
+    expect(updatesRealizados.length).toBe(0);
+    vi.doUnmock("@/lib/crypto");
+    vi.doUnmock("@/app/lib/videoOrganico/generarGuionConVoz");
+  });
 });
 
 describe("PATCH /api/contenido/[id] -- iniciar_render", () => {

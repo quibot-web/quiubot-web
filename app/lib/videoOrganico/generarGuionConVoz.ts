@@ -79,6 +79,63 @@ export type ResultadoGenerarGuionConVoz =
     }
   | { ok: false; status: number; error: string; resumenErrores?: string[] };
 
+export type ParametrosRegenerarVoz = { openaiKey: string; voz: string; cloudinary: CredencialesCloudinary };
+
+export type ResultadoRegenerarVoz =
+  | {
+      ok: true;
+      campos: Pick<Guion, "tiemposRender" | "palabrasPorEscena" | "segmentosAudio" | "narracionHash" | "vozUrl">;
+      puntajeAlineacion: number;
+      crudo: { palabrasPorEscenaCrudo: unknown; silencios: unknown };
+    }
+  | { ok: false; status: number; error: string; resumenErrores?: string[] };
+
+// Segunda mitad de generarGuionConVoz(), sin el llamado a la IA --
+// para cuando el admin edita una narración a mano en la revisión
+// (app/contenido/[id]/page.tsx): el texto ya está escrito, no hace
+// falta pedirle a la IA uno nuevo, solo volver a generar voz/tiempos
+// para el texto editado. Igual se revalida contra los mismos
+// validadores de audio (un evento con palabra fuera de rango por el
+// nuevo conteo de palabras tiene que detectarse ACÁ, no solo en la
+// generación inicial).
+export async function regenerarVozParaGuion(escenas: Guion["escenas"], params: ParametrosRegenerarVoz): Promise<ResultadoRegenerarVoz> {
+  const hallazgosAudio = validarEdicionDesdeAudio(escenas).map((h) => `${h.escenaId}: ${h.mensaje}`);
+  const hallazgosEstructura = validarEstructuraConsejosNumeradosAudio(escenas).map((h) => `${h.escenaId}: ${h.mensaje}`);
+  const erroresTotales = [...hallazgosAudio, ...hallazgosEstructura];
+  if (erroresTotales.length > 0) {
+    return { ok: false, status: 400, error: "La narración editada ya no es consistente con sus eventos/visuales.", resumenErrores: erroresTotales };
+  }
+
+  const textoCompleto = escenas.map((e) => e.narracion ?? "").join(" ");
+  const { audioUrl, palabras, silencios } = await generarVoz(textoCompleto, {
+    openaiKey: params.openaiKey,
+    voz: params.voz,
+    cloudinary: params.cloudinary,
+  });
+  const { palabrasPorEscena: palabrasPorEscenaCrudo, puntaje } = alinearPalabras(
+    escenas.map((e) => ({ id: e.id, narracion: e.narracion ?? "" })),
+    palabras
+  );
+  const { tiemposRender, palabrasPorEscena, segmentosAudio, palabrasFlat, tramosPorEscena } = construirCamposDeTiempo(palabrasPorEscenaCrudo, silencios);
+
+  const hallazgosPalabrasPerdidas = verificarPalabrasCompletas(palabrasFlat, tramosPorEscena);
+  if (hallazgosPalabrasPerdidas.length > 0) {
+    return {
+      ok: false,
+      status: 502,
+      error: "La compactación de pausas se comió parte de una palabra real -- no se entrega un reel con audio mordido.",
+      resumenErrores: hallazgosPalabrasPerdidas.map((h) => h.mensaje),
+    };
+  }
+
+  return {
+    ok: true,
+    campos: { tiemposRender, palabrasPorEscena, segmentosAudio, narracionHash: calcularHashNarracion(escenas), vozUrl: audioUrl },
+    puntajeAlineacion: puntaje,
+    crudo: { palabrasPorEscenaCrudo, silencios },
+  };
+}
+
 export async function generarGuionConVoz(params: ParametrosGenerarGuionConVoz): Promise<ResultadoGenerarGuionConVoz> {
   const maxReintentos = params.maxReintentos ?? 2;
   const intentosRegistrados: { errores: string[] }[] = [];
@@ -153,40 +210,15 @@ export async function generarGuionConVoz(params: ParametrosGenerarGuionConVoz): 
   // Voz real -- única llamada de toda esta función que cuesta dinero de
   // verdad (TTS + Whisper). Solo se llega acá con un guion que YA pasó
   // validarEdicionDesdeAudio(), para no gastarla en un guion que de
-  // todos modos se iba a descartar.
-  const textoCompleto = resultado.guion.escenas.map((e) => e.narracion ?? "").join(" ");
-  const { audioUrl, palabras, silencios } = await generarVoz(textoCompleto, {
-    openaiKey: params.apiKeyUsuario,
-    voz: params.voz,
-    cloudinary: params.cloudinary,
-  });
-  const { palabrasPorEscena: palabrasPorEscenaCrudo, puntaje } = alinearPalabras(
-    resultado.guion.escenas.map((e) => ({ id: e.id, narracion: e.narracion ?? "" })),
-    palabras
-  );
-  const { tiemposRender, palabrasPorEscena, segmentosAudio, palabrasFlat, tramosPorEscena } = construirCamposDeTiempo(palabrasPorEscenaCrudo, silencios);
-
-  // Red de seguridad final: ¿alguna palabra real quedó fuera de todo
-  // tramo que de verdad se va a reproducir? Si es así, el guion no sale
-  // -- una palabra mordida es peor que repetir el intento.
-  const hallazgosPalabrasPerdidas = verificarPalabrasCompletas(palabrasFlat, tramosPorEscena);
-  if (hallazgosPalabrasPerdidas.length > 0) {
-    return {
-      ok: false,
-      status: 502,
-      error: "La compactación de pausas se comió parte de una palabra real -- no se entrega un reel con audio mordido.",
-      resumenErrores: hallazgosPalabrasPerdidas.map((h) => h.mensaje),
-    };
+  // todos modos se iba a descartar. Comparte la segunda mitad del
+  // pipeline con regenerarVozParaGuion() (revisión en /contenido tras
+  // editar una narración a mano) -- una sola implementación real.
+  const resultadoVoz = await regenerarVozParaGuion(resultado.guion.escenas, { openaiKey: params.apiKeyUsuario, voz: params.voz, cloudinary: params.cloudinary });
+  if (!resultadoVoz.ok) {
+    return resultadoVoz;
   }
 
-  const guionFinal: Guion = {
-    ...resultado.guion,
-    tiemposRender,
-    palabrasPorEscena,
-    segmentosAudio,
-    narracionHash: calcularHashNarracion(resultado.guion.escenas),
-    vozUrl: audioUrl,
-  };
+  const guionFinal: Guion = { ...resultado.guion, ...resultadoVoz.campos };
 
-  return { ok: true, guion: guionFinal, puntajeAlineacion: puntaje, intentosGuion, crudo: { palabrasPorEscenaCrudo, silencios } };
+  return { ok: true, guion: guionFinal, puntajeAlineacion: resultadoVoz.puntajeAlineacion, intentosGuion, crudo: resultadoVoz.crudo };
 }

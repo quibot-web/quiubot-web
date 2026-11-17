@@ -1,11 +1,16 @@
 import { auth } from "@/auth";
 import { NextRequest, NextResponse } from "next/server";
 import { supabaseAdmin } from "@/lib/supabase";
-import { GuionSchema } from "@/video/guion.schema";
+import { desencriptarSiHaceFalta } from "@/lib/crypto";
+import { GuionSchema, type Guion } from "@/video/guion.schema";
 import { ESTADOS_NO_REPROGRAMABLES, esFechaFutura, lunesDeLaSemana, type EstadoContenido, type PublicacionOrganica } from "@/app/lib/contenido";
 import { fechaBogota } from "@/app/lib/fechaBogota";
 import { infoAdicionalEsSuficiente } from "@/video/promptGuionOrganico";
 import { urlPistaMusical } from "@/app/lib/cloudinaryUrl";
+import { vozDesactualizada } from "@/app/lib/videoOrganico/hashNarracion";
+import { regenerarVozParaGuion } from "@/app/lib/videoOrganico/generarGuionConVoz";
+
+const VOZ_POR_DEFECTO = "cedar";
 
 // Detalle de una pieza (commit 4b, pantalla de revisión) + "Aprobar".
 // Solo admin, igual que el resto del plan.
@@ -83,7 +88,17 @@ export async function GET(req: NextRequest, { params }: { params: Promise<{ id: 
     avisoSinMusica = !count;
   }
 
-  return NextResponse.json({ pieza: pieza as PublicacionOrganica, medios, avisoInfoIncompleta, pistaUrl, pistaSinLicencia, avisoSinMusica });
+  // Fase B v2.0 en /contenido (paso 2 del plan de integración): solo
+  // las piezas que pasaron por generarGuionConVoz() tienen vozUrl/
+  // narracionHash -- las recetas "versión anterior" nunca disparan
+  // este aviso. Si el admin edita una narración a mano después de
+  // generar la voz, el hash ya no calza -- bloquea "Aprobar" en el
+  // cliente (ver PATCH "aprobar" acá mismo) hasta "Regenerar voz".
+  const guionActual = pieza.guion as Guion | null;
+  const esPiezaConVoz = !!guionActual?.vozUrl;
+  const vozDesactualizadaFlag = esPiezaConVoz && vozDesactualizada(guionActual?.narracionHash, guionActual?.escenas ?? []);
+
+  return NextResponse.json({ pieza: pieza as PublicacionOrganica, medios, avisoInfoIncompleta, pistaUrl, pistaSinLicencia, avisoSinMusica, esPiezaConVoz, vozDesactualizada: vozDesactualizadaFlag });
 }
 
 export async function PATCH(req: NextRequest, { params }: { params: Promise<{ id: string }> }) {
@@ -260,6 +275,78 @@ export async function PATCH(req: NextRequest, { params }: { params: Promise<{ id
     return NextResponse.json({ ok: true, semana });
   }
 
+  if (cuerpo?.accion === "regenerar_voz") {
+    // Paso 2 del plan de integración: el admin editó una narración a
+    // mano y la voz quedó desactualizada (narracionHash ya no calza) --
+    // esto vuelve a generar voz/tiempos para el texto ACTUAL, sin
+    // volver a llamar a la IA (el texto ya está escrito). Reusa
+    // regenerarVozParaGuion(), la misma segunda mitad del pipeline que
+    // generarGuionConVoz() ya usa en la generación inicial.
+    const { data: piezaActual } = await supabaseAdmin
+      .from("publicaciones_organicas")
+      .select("guion, estado")
+      .eq("id", id)
+      .eq("user_id", usuario!.id)
+      .maybeSingle();
+
+    const guionActual = piezaActual?.guion as Guion | null;
+    if (!guionActual?.vozUrl) {
+      return NextResponse.json({ error: "Esta pieza no usa el pipeline con voz." }, { status: 400 });
+    }
+    if (piezaActual!.estado !== "borrador") {
+      return NextResponse.json({ error: `Esta pieza está en estado "${piezaActual!.estado}", no se puede regenerar la voz ahora.` }, { status: 400 });
+    }
+
+    const { data: usuarioCreds } = await supabaseAdmin
+      .from("usuarios")
+      .select("openai_key, cloudinary_name, cloudinary_key, cloudinary_secret")
+      .eq("id", usuario!.id)
+      .single();
+    if (!usuarioCreds?.openai_key) {
+      return NextResponse.json({ error: "Conecta tu cuenta de OpenAI en Integraciones antes de regenerar la voz." }, { status: 400 });
+    }
+    if (!usuarioCreds.cloudinary_name || !usuarioCreds.cloudinary_key || !usuarioCreds.cloudinary_secret) {
+      return NextResponse.json({ error: "Conecta tu cuenta de Cloudinary en Integraciones antes de regenerar la voz." }, { status: 400 });
+    }
+
+    let apiKeyUsuario: string;
+    let cloudinaryKey: string;
+    let cloudinarySecret: string;
+    try {
+      apiKeyUsuario = desencriptarSiHaceFalta(usuarioCreds.openai_key);
+      cloudinaryKey = desencriptarSiHaceFalta(usuarioCreds.cloudinary_key);
+      cloudinarySecret = desencriptarSiHaceFalta(usuarioCreds.cloudinary_secret);
+    } catch {
+      return NextResponse.json({ error: "No se pudo leer alguna de tus llaves guardadas." }, { status: 500 });
+    }
+
+    const { data: marca } = await supabaseAdmin.from("marcas").select("voz_tts").eq("email", emailBusqueda).maybeSingle();
+    const voz = (marca?.voz_tts as string | null) || VOZ_POR_DEFECTO;
+
+    const resultado = await regenerarVozParaGuion(guionActual.escenas, {
+      openaiKey: apiKeyUsuario,
+      voz,
+      cloudinary: { cloudName: usuarioCreds.cloudinary_name, apiKey: cloudinaryKey, apiSecret: cloudinarySecret },
+    });
+
+    if (!resultado.ok) {
+      return NextResponse.json({ error: resultado.error, resumenErrores: resultado.resumenErrores }, { status: resultado.status });
+    }
+
+    const guionActualizado: Guion = { ...guionActual, ...resultado.campos };
+    const { error: errorUpdate } = await supabaseAdmin
+      .from("publicaciones_organicas")
+      .update({ guion: guionActualizado, voz_url: resultado.campos.vozUrl, actualizado_en: new Date().toISOString() })
+      .eq("id", id)
+      .eq("user_id", usuario!.id)
+      .eq("estado", "borrador");
+
+    if (errorUpdate) {
+      return NextResponse.json({ error: "No se pudo guardar la voz regenerada." }, { status: 503 });
+    }
+    return NextResponse.json({ ok: true, guion: guionActualizado });
+  }
+
   if (cuerpo?.accion !== "aprobar") {
     return NextResponse.json({ error: "Acción inválida." }, { status: 400 });
   }
@@ -279,6 +366,15 @@ export async function PATCH(req: NextRequest, { params }: { params: Promise<{ id
   }
   if (!pieza.guion || !pieza.caption || !pieza.hashtags?.length) {
     return NextResponse.json({ error: "Esta pieza todavía no tiene guion. Genera el guion antes de aprobar." }, { status: 400 });
+  }
+  {
+    // Paso 2: nunca aprobar una pieza con voz cuya narración se editó
+    // después de generar esa voz -- el admin tiene que regenerarla
+    // primero (botón "Regenerar voz" en la revisión).
+    const guionParaAprobar = pieza.guion as Guion;
+    if (guionParaAprobar.vozUrl && vozDesactualizada(guionParaAprobar.narracionHash, guionParaAprobar.escenas)) {
+      return NextResponse.json({ error: "La narración se editó después de generar la voz. Regenera la voz antes de aprobar." }, { status: 400 });
+    }
   }
 
   const { data: filas, error: errorUpdate } = await supabaseAdmin
