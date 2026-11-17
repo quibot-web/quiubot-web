@@ -122,7 +122,7 @@ const REFERENCIA_ESCENAS = `TIPOS DE ESCENA Y SUS "params" (respeta los límites
 
 Cada escena también lleva: id (único, ej. "e1","e2"...), bloque (uno de: gancho, producto, valor, beneficio, marca, objecion, cta -- el de la receta), duracion_s (un número entre 1.5 y 5, la del gancho además entre 1.5 y 2.5), y subtitulo? -- OPCIONAL y SOLO en producto_hero (las demás escenas ya tienen su propio texto grande en pantalla), y si lo usas es SIEMPRE UN OBJETO, NUNCA un string: {texto (<=80 car.), palabra_clave (palabra o frase corta DENTRO de texto, <=30 car.)}. Si no estás seguro, mejor omite el campo "subtitulo" por completo (no es obligatorio).
 
-"bucle" (objeto aparte, no es una escena): {texto (<=60 car. -- es la frase corta que abre y recuerda el bucle, NUNCA una frase larga), abre_en (id de una escena real), cierra_en (id de una escena real, posterior a abre_en), indicador ("contador"|"espera_final"|"ninguno", el que pida la receta)}.
+"bucle" (objeto aparte, no es una escena): {texto (<=32 car. -- es la frase corta que abre y recuerda el bucle, NUNCA una frase larga: va en un chip de una sola línea sobre el video), abre_en (id de una escena real), cierra_en (id de una escena real, posterior a abre_en), indicador ("contador"|"espera_final"|"ninguno", el que pida la receta)}.
 
 CAPTION Y HASHTAGS: "caption" hasta 2200 caracteres (el gancho en la primera línea). "hashtags": un array de ENTRE 3 Y 8 strings, cada uno <=40 caracteres, cada uno empezando con "#", SIN REPETIR ninguno (ni con mayúsculas distintas).
 

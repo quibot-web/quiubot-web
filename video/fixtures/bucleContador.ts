@@ -8,8 +8,11 @@ export const fixtureBucleContador = GuionSchema.parse({
   fps: 30,
   objetivo: "seguidores_instagram",
   duracion_objetivo_s: 15,
+  // Ronda L: bucle.texto bajó a <=32 caracteres (video/guion.schema.ts)
+  // -- el "params.texto" del gancho de abajo, campo aparte, se queda
+  // tal cual (hasta 60 caracteres, es el titular grande en pantalla).
   bucle: {
-    texto: "3 trucos para que tu café dure más",
+    texto: "3 trucos para tu café",
     abre_en: "e1",
     cierra_en: "e2",
     indicador: "contador",

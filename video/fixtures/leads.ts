@@ -7,7 +7,8 @@ export const fixtureLeads = GuionSchema.parse({
   fps: 30,
   objetivo: "leads",
   duracion_objetivo_s: 14,
-  bucle: { texto: "Te digo cuánto cuesta tu proyecto", abre_en: "e1", cierra_en: "e5", indicador: "espera_final" },
+  // Ronda L: bucle.texto bajó a <=32 caracteres (video/guion.schema.ts).
+  bucle: { texto: "Cuánto cuesta tu proyecto", abre_en: "e1", cierra_en: "e5", indicador: "espera_final" },
   tema: {
     color_primario: "#BBDEFB",
     color_secundario: "#1565C0",

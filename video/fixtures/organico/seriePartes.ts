@@ -11,7 +11,9 @@ export const fixtureSeriePartes = GuionSchema.parse({
   receta_organica: "serie_partes",
   gancho_tipo: "dato_sorprendente",
   duracion_objetivo_s: 18,
-  bucle: { texto: "Parte 1 de 3: cómo elegir tu primera soldadora", abre_en: "e1", cierra_en: "e2", indicador: "contador" },
+  // Ronda L: bucle.texto bajó a <=32 caracteres (video/guion.schema.ts)
+  // -- "caption" de abajo, campo aparte, se queda con el texto completo.
+  bucle: { texto: "Parte 1 de 3: tu soldadora", abre_en: "e1", cierra_en: "e2", indicador: "contador" },
   tema: {
     color_primario: "#D14724",
     color_secundario: "#F4A860",

@@ -9,7 +9,8 @@ export const fixtureReconocimiento = GuionSchema.parse({
   fps: 30,
   objetivo: "reconocimiento",
   duracion_objetivo_s: 12,
-  bucle: { texto: "3 trucos para que tu café dure más", abre_en: "e1", cierra_en: "e2", indicador: "contador" },
+  // Ronda L: bucle.texto bajó a <=32 caracteres (video/guion.schema.ts).
+  bucle: { texto: "3 trucos para tu café", abre_en: "e1", cierra_en: "e2", indicador: "contador" },
   tema: {
     color_primario: "#C8893F",
     color_secundario: "#D8B48C",

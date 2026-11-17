@@ -11,7 +11,8 @@ export const fixtureConsejosNumerados = GuionSchema.parse({
   receta_organica: "consejos_numerados",
   gancho_tipo: "pregunta",
   duracion_objetivo_s: 17,
-  bucle: { texto: "3 consejos para que tu pan dure más fresco", abre_en: "e1", cierra_en: "e2", indicador: "contador" },
+  // Ronda L: bucle.texto bajó a <=32 caracteres (video/guion.schema.ts).
+  bucle: { texto: "3 consejos para pan fresco", abre_en: "e1", cierra_en: "e2", indicador: "contador" },
   tema: {
     color_primario: "#C8893F",
     color_secundario: "#D8B48C",

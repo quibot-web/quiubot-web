@@ -17,6 +17,7 @@ export const TAMANO_FUENTE_MENSAJE = 40;
 export const TAMANO_FUENTE_NOTIFICACION = 40;
 export const TAMANO_FUENTE_NUMERO_GIGANTE = 260;
 export const TAMANO_FUENTE_ETIQUETA_NUMERO_GIGANTE = 44;
+export const TAMANO_FUENTE_CHIP_BUCLE = 40;
 
 // Ronda J: gemelo SIN efecto secundario de video/fuentes.ts's
 // familiaDeFuente() -- BotonEstado.tsx necesita el nombre real de la

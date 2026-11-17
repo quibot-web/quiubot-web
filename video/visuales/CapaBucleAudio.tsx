@@ -1,5 +1,7 @@
 import { AbsoluteFill, useCurrentFrame } from "remotion";
+import { fitText } from "@remotion/layout-utils";
 import type { BloqueGuion, Guion } from "../guion.schema";
+import { familiaDeFuenteSinCargar, TAMANO_FUENTE_CHIP_BUCLE } from "./tamanos";
 
 // Bucle persistente para ReelAutomatico.tsx -- NO es capas/Bucle.tsx
 // (esa queda intacta, la usan las 6 recetas de siempre sin voz).
@@ -53,11 +55,32 @@ export function contenidoBucleAudio(frame: number, bucle: Guion["bucle"], limite
   return null;
 }
 
+// Ronda L (revisión real en staging): "3 ajustes antes de cambiar tu
+// anuncio" (38 caracteres, dentro del límite viejo de 60 de
+// bucle.texto) se partía en 2 líneas -- sin whiteSpace:"nowrap" el chip
+// crecía hacia abajo y su 2da línea se montaba sobre la tarjeta
+// (empieza en TARJETA_TOP_PORCENTAJE, ~22%). Mismo criterio ya probado
+// en BotonEstado.tsx: medir el ancho real del texto con fitText() y
+// encoger la fuente si hace falta, nunca confiar en que el límite de
+// caracteres del guion (ya bajado a 32 en guion.schema.ts) alcance
+// solo. maxWidth:80% del cuadro de 1080 -- "left:8%" deja el resto
+// como margen derecho real.
+const ANCHO_CHIP_PX = 1080 * 0.8;
+const PADDING_HORIZONTAL_CHIP_PX = 26;
+
+function calcularFuenteChipQueCabe(texto: string, familia: string): number {
+  const anchoDisponible = ANCHO_CHIP_PX - PADDING_HORIZONTAL_CHIP_PX * 2;
+  const { fontSize } = fitText({ text: texto, withinWidth: anchoDisponible, fontFamily: familia, fontWeight: 800 });
+  return Math.min(TAMANO_FUENTE_CHIP_BUCLE, Math.floor(fontSize));
+}
+
 export function CapaBucleAudio({ guion }: { guion: Guion }) {
   const frame = useCurrentFrame();
   const limites = calcularLimitesEscenas(guion);
   const contenido = contenidoBucleAudio(frame, guion.bucle, limites);
   if (!contenido) return null;
+
+  const fontSize = calcularFuenteChipQueCabe(contenido, familiaDeFuenteSinCargar(guion.tema.fuente));
 
   return (
     <AbsoluteFill style={{ pointerEvents: "none" }}>
@@ -69,10 +92,13 @@ export function CapaBucleAudio({ guion }: { guion: Guion }) {
           background: "#111111",
           color: "#FFD43B",
           borderRadius: 999,
-          padding: "10px 26px",
-          fontSize: 40,
+          padding: `10px ${PADDING_HORIZONTAL_CHIP_PX}px`,
+          fontSize,
           fontWeight: 800,
           maxWidth: "80%",
+          whiteSpace: "nowrap",
+          overflow: "hidden",
+          textOverflow: "ellipsis",
         }}
       >
         {contenido}

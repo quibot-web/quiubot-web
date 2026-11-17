@@ -270,7 +270,14 @@ const Tema = z.object({
 });
 
 const Bucle = z.object({
-  texto: z.string().min(1).max(60),
+  // Ronda L (revisión real en staging): a 60 caracteres, "3 ajustes
+  // antes de cambiar tu anuncio" (38 caracteres) ya se partía en 2
+  // líneas dentro del chip -- 60 es demasiado permisivo incluso con
+  // letra ajustable (CapaBucleAudio.tsx ahora encoge la fuente para
+  // que siempre quepa en una línea, pero un texto muy largo igual
+  // terminaría ilegible). 32 dejó margen real para el prefijo "👀 " que
+  // se le antepone en la variante de promesa.
+  texto: z.string().min(1).max(32),
   abre_en: z.string().min(1),
   cierra_en: z.string().min(1),
   indicador: z.enum(["contador", "espera_final", "ninguno"]),

@@ -3,6 +3,7 @@
 // VisualSchema necesita de ese archivo (TEMA_QUIUBOT/Titular/
 // EsquinaMarca son del molde del reel de referencia, no de la
 // biblioteca real todavía).
+import { interpolate } from "remotion";
 import { fitText } from "@remotion/layout-utils";
 import { colorTextoSobre, type TemaGuion } from "../tema";
 import { ANCHO_BOTON_PORCENTAJE_NUM, TAMANO_FUENTE_BOTON, familiaDeFuenteSinCargar } from "./tamanos";
@@ -91,6 +92,13 @@ export function BotonEstado({
   const colorBoton = activo ? colorActivo : tema.color_primario;
   const colorTexto = colorTextoSobre(colorBoton);
   const fontSize = calcularFuenteBotonQueCabe(texto, familiaDeFuenteSinCargar(tema.fuente));
+  // Ronda L (revisión real en staging): "progreso*escalaExtra" arranca
+  // en escala 0 -- el botón es invisible/imperceptible durante toda la
+  // rampa del spring (~0.5s), aunque su evento "aparece" ya dispare en
+  // la palabra 0 de la escena. Remapeado a [0.9,1] (mismo criterio que
+  // AnuncioBotonVisual.tsx's entrada): visible desde el primer cuadro,
+  // el spring solo entrega el último 10% del "pop".
+  const escalaEntrada = interpolate(progreso, [0, 1], [0.9, 1]);
   return (
     <div style={{ position: "relative", width: ANCHO_BOTON_PORCENTAJE }}>
       <div
@@ -107,7 +115,7 @@ export function BotonEstado({
           overflow: "hidden",
           textOverflow: "ellipsis",
           boxShadow: "0 8px 24px rgba(0,0,0,0.25)",
-          transform: `scale(${progreso * escalaExtra})`,
+          transform: `scale(${escalaEntrada * escalaExtra})`,
         }}
       >
         {texto}

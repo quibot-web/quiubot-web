@@ -10,7 +10,10 @@ export const fixtureMitoVerdad = GuionSchema.parse({
   receta_organica: "mito_verdad",
   gancho_tipo: "error_comun",
   duracion_objetivo_s: 17,
-  bucle: { texto: "¿De verdad hay que pintar antes de lijar?", abre_en: "e1", cierra_en: "e3", indicador: "espera_final" },
+  // Ronda L: bucle.texto bajó a <=32 caracteres (video/guion.schema.ts
+  // -- chip de una sola línea en CapaBucleAudio.tsx); este fixture
+  // seguía con la frase larga de antes de ese límite.
+  bucle: { texto: "¿Lijar antes de pintar?", abre_en: "e1", cierra_en: "e3", indicador: "espera_final" },
   tema: {
     color_primario: "#3F6FB5",
     color_secundario: "#9DB4FF",

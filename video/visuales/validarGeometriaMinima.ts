@@ -8,6 +8,7 @@ import {
   TAMANO_FUENTE_NOTIFICACION,
   TAMANO_FUENTE_NUMERO_GIGANTE,
   TAMANO_FUENTE_ETIQUETA_NUMERO_GIGANTE,
+  TAMANO_FUENTE_CHIP_BUCLE,
 } from "./tamanos";
 
 // Regla de escala del molde aprobado, pedida explícita (revisión de
@@ -66,5 +67,6 @@ export function validarGeometriaMinima(): HallazgoGeometria[] {
     { nombre: "CelularChat.TAMANO_FUENTE_NOTIFICACION", valor: TAMANO_FUENTE_NOTIFICACION },
     { nombre: "CelularChat.TAMANO_FUENTE_NUMERO_GIGANTE", valor: TAMANO_FUENTE_NUMERO_GIGANTE },
     { nombre: "CelularChat.TAMANO_FUENTE_ETIQUETA_NUMERO_GIGANTE", valor: TAMANO_FUENTE_ETIQUETA_NUMERO_GIGANTE },
+    { nombre: "CapaBucleAudio.TAMANO_FUENTE_CHIP_BUCLE", valor: TAMANO_FUENTE_CHIP_BUCLE },
   ]);
 }
