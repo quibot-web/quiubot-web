@@ -1,4 +1,9 @@
-import { AbsoluteFill, Sequence, useCurrentFrame } from "remotion";
+import { AbsoluteFill, Sequence, spring, useCurrentFrame } from "remotion";
+import { layoutDeEscena, layoutDelVisual, paletaNoche, type LayoutEscena } from "../estilos/estilos";
+import { FondoNoche } from "../estilos/FondoNoche";
+import { CamaraEscena } from "../estilos/CamaraEscena";
+import { PalabraGigante } from "../estilos/PalabraGigante";
+import { familiaDeFuenteSinCargar } from "./tamanos";
 import type { BloqueGuion } from "../guion.schema";
 import type { TemaGuion } from "../tema";
 import type { Visual } from "./schema";
@@ -78,6 +83,78 @@ function ContenidoEscena({
   return <>{renderizarVisual(visual, { tema, bloque, frame, fps, palabras, inicioEscena_s, medios })}</>;
 }
 
+// Momento en que la palabra gigante del gancho da paso al visual: la
+// palabra que cae en el ~45% de la narración, entre 1 y 2 s (cambio
+// visual cada 1-2 s).
+function cuadroSalidaPalabraGigante(palabras: PalabraConTiempoVisual[], inicioEscena_s: number, fps: number): number {
+  const indice = Math.ceil(palabras.length * 0.45);
+  const t = palabras[indice] ? palabras[indice].inicio_s - inicioEscena_s : 1.5;
+  return Math.round(Math.min(2, Math.max(1, t)) * fps);
+}
+
+// Escena en el sistema de estilos (paso 1, estilo Noche): fondo, cámara
+// y layout. Separado de ContenidoEscena para no tocar el camino de
+// siempre (guiones sin estilo).
+function EscenaNoche({
+  escena,
+  indiceEscena,
+  layout,
+  tema,
+  fps,
+  palabras,
+  inicioEscena_s,
+  duracionCuadros,
+  medios,
+}: {
+  escena: Guion["escenas"][number];
+  indiceEscena: number;
+  layout: LayoutEscena;
+  tema: TemaGuion;
+  fps: number;
+  palabras: PalabraConTiempoVisual[];
+  inicioEscena_s: number;
+  duracionCuadros: number;
+  medios?: MediosResueltos;
+}) {
+  const frame = useCurrentFrame();
+  const paleta = paletaNoche(tema);
+  const visual = escena.visual;
+  const esPalabraGigante = layout === "palabra_gigante" && escena.tipo === "gancho_texto";
+  // El visual que entra tras la palabra gigante se dibuja con su propio
+  // layout (protagonista si lo admite), nunca como tarjeta chica.
+  const layoutVisual = layout === "palabra_gigante" ? layoutDelVisual(visual?.tipo) : layout;
+  const ctx = { tema, bloque: escena.bloque, frame, fps, palabras, inicioEscena_s, medios, estilo: { paleta, layout: layoutVisual } };
+  const cuadroSalida = esPalabraGigante ? cuadroSalidaPalabraGigante(palabras, inicioEscena_s, fps) : null;
+  const primerEvento = visual && visual.eventos.length > 0 ? visual.eventos[0].palabra : null;
+  const cuadroEvento = primerEvento !== null && palabras[primerEvento] ? Math.round((palabras[primerEvento].inicio_s - inicioEscena_s) * fps) : null;
+  const cuadroGolpe = cuadroSalida ?? cuadroEvento;
+  // En la palabra gigante, el visual entra recién en la salida del texto.
+  const entradaVisual = cuadroSalida === null ? 1 : frame >= cuadroSalida ? spring({ frame: frame - cuadroSalida, fps, config: { damping: 13 } }) : 0;
+
+  return (
+    <>
+      <FondoNoche paleta={paleta} indiceEscena={indiceEscena} frame={frame} fps={fps} />
+      <CamaraEscena frame={frame} fps={fps} duracionCuadros={duracionCuadros} cuadroGolpe={cuadroGolpe}>
+        {visual && (
+          <AbsoluteFill style={{ opacity: entradaVisual, transform: `scale(${0.88 + 0.12 * entradaVisual})` }}>{renderizarVisual(visual, ctx)}</AbsoluteFill>
+        )}
+        {esPalabraGigante && escena.tipo === "gancho_texto" && (
+          <PalabraGigante
+            texto={escena.params.texto}
+            palabraClave={escena.params.palabra_clave}
+            sticker={escena.params.sticker}
+            familia={familiaDeFuenteSinCargar(tema.fuente)}
+            paleta={paleta}
+            frame={frame}
+            fps={fps}
+            cuadroSalida={cuadroSalida ?? duracionCuadros}
+          />
+        )}
+      </CamaraEscena>
+    </>
+  );
+}
+
 export type PropsReelAutomatico = {
   guion: Guion;
   // Piezas del álbum resueltas a URL (parte 2d, comparacion_foto) --
@@ -140,9 +217,25 @@ export function ReelAutomatico({ guion, medios, pistaMusicaUrl, efectos = [], mo
     return (
       <Sequence key={escena.id} from={desdeEscena} durationInFrames={duracionEscenaCuadros}>
         <AbsoluteFill>
-          <FondoMarca tema={tema} bloque={escena.bloque} organico />
-          {escena.visual && (
-            <ContenidoEscena tema={tema} bloque={escena.bloque} fps={fps} visual={escena.visual} palabras={palabras} inicioEscena_s={inicioEscena_s} medios={medios} />
+          {guion.estilo?.id === "noche" ? (
+            <EscenaNoche
+              escena={escena}
+              indiceEscena={i}
+              layout={guion.estilo.layouts[escena.id] ?? layoutDeEscena(escena)}
+              tema={tema}
+              fps={fps}
+              palabras={palabras}
+              inicioEscena_s={inicioEscena_s}
+              duracionCuadros={duracionEscenaCuadros}
+              medios={medios}
+            />
+          ) : (
+            <>
+              <FondoMarca tema={tema} bloque={escena.bloque} organico />
+              {escena.visual && (
+                <ContenidoEscena tema={tema} bloque={escena.bloque} fps={fps} visual={escena.visual} palabras={palabras} inicioEscena_s={inicioEscena_s} medios={medios} />
+              )}
+            </>
           )}
           <SubtitulosSincronizados palabras={palabrasEnCuadros} tema={tema} />
           {guion.vozUrl &&

@@ -33,3 +33,11 @@ export const TARJETA_ANCHO_PORCENTAJE = 80;
 // permite la regla del molde (70-85% del ancho, validarGeometriaMinima)
 // para que el texto de 40px o más quepa sin verse apretado.
 export const TARJETA_ANCHO_AMPLIO_PORCENTAJE = 85;
+
+// Layout "objeto protagonista" (sistema de estilos, paso 1): sin tarjeta,
+// el visual se dibuja directo sobre el fondo y ocupa más -- desde debajo
+// del chip/logo (16%) hasta justo antes de la franja de subtítulos (54%),
+// con el ancho completo de la zona segura (6% por lado).
+export const PROTAGONISTA_TOP_PORCENTAJE = 20;
+export const PROTAGONISTA_ALTURA_PORCENTAJE = 33; // termina en 53%
+export const PROTAGONISTA_ANCHO_PORCENTAJE = 88;

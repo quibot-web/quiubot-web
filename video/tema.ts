@@ -26,6 +26,13 @@ function hexARgb(hex: string): [number, number, number] {
   return [(num >> 16) & 255, (num >> 8) & 255, num & 255];
 }
 
+// "#RRGGBB" (o "#RGB") + opacidad -> "rgba(...)", para sombras y luces
+// con transparencia (estilo Noche).
+export function hexConAlfa(hex: string, alfa: number): string {
+  const [r, g, b] = hexARgb(hex);
+  return `rgba(${r}, ${g}, ${b}, ${Math.max(0, Math.min(1, alfa))})`;
+}
+
 function luminanciaRelativa(hex: string): number {
   const [r, g, b] = hexARgb(hex).map((c) => {
     const s = c / 255;

@@ -1,5 +1,7 @@
 import { AbsoluteFill, spring } from "remotion";
-import { respiracion, type TemaGuion } from "../tema";
+import { hexConAlfa, respiracion, type TemaGuion } from "../tema";
+import type { LayoutEscena, PaletaNoche } from "../estilos/estilos";
+import { ChecklistNoche, ComparacionFotoNoche, ComparacionNoche, ContadorNoche, IconoPalabraNoche } from "../estilos/VisualesNoche";
 import { quitarGlifosFueraDeFuentes } from "../glifos";
 import type { BloqueGuion } from "../guion.schema";
 import type { Visual } from "./schema";
@@ -53,6 +55,9 @@ export type ContextoVisual = {
   // Fotos/videos del álbum ya resueltos a URL (parte 2d, para
   // comparacion_foto). Opcional: el arnés admin no los tiene.
   medios?: MediosResueltos;
+  // Sistema de estilos (paso 1): estilo Noche y layout de ESTA escena.
+  // Sin él, el visual se dibuja como siempre.
+  estilo?: { paleta: PaletaNoche; layout: LayoutEscena };
 };
 
 function cuadroDePalabra(indicePalabra: number, ctx: ContextoVisual): number {
@@ -132,6 +137,20 @@ function limpiarTextosVisual(visual: Visual): Visual {
 
 export function renderizarVisual(visualGuardado: Visual, ctx: ContextoVisual) {
   const visual = limpiarTextosVisual(visualGuardado);
+  if (ctx.estilo) {
+    const protagonista = ctx.estilo.layout === "objeto_protagonista" ? renderizarProtagonistaNoche(visual, ctx, ctx.estilo.paleta) : null;
+    if (protagonista) return protagonista;
+    // Tarjeta flotante sobre el fondo oscuro: la misma tarjeta, con el
+    // resplandor de la luz de la marca alrededor.
+    // El botón de la CTA va sin tarjeta: se agranda para ser el protagonista
+    // (608px -> ~790px, dentro de la zona segura).
+    const esBoton = visual.tipo === "boton_estado" || visual.tipo === "cursor_clic";
+    return (
+      <AbsoluteFill style={{ filter: `drop-shadow(0 0 48px ${hexConAlfa(ctx.estilo.paleta.luz, 0.35)})`, transform: esBoton ? "scale(1.3)" : undefined, transformOrigin: "50% 35%" }}>
+        {renderizarVisualSinMovimiento(visual, ctx)}
+      </AbsoluteFill>
+    );
+  }
   const nodo = renderizarVisualSinMovimiento(visual, ctx);
   if (ctx.bloque === "gancho" && visual.tipo !== "celular_chat") {
     return (
@@ -141,6 +160,54 @@ export function renderizarVisual(visualGuardado: Visual, ctx: ContextoVisual) {
     );
   }
   return nodo;
+}
+
+// Layout "objeto protagonista" en Noche: sin tarjeta, directo sobre el
+// fondo (video/estilos/VisualesNoche.tsx). null = este visual no tiene
+// esa variante (las maquetas de interfaz van como tarjeta flotante).
+function renderizarProtagonistaNoche(visual: Visual, ctx: ContextoVisual, paleta: PaletaNoche) {
+  const base = { frame: ctx.frame, fps: ctx.fps, paleta };
+  switch (visual.tipo) {
+    case "icono_palabra":
+      return (
+        <IconoPalabraNoche
+          {...base}
+          tema={ctx.tema}
+          cuadroCambia={cuadroDelCambio(visual.eventos, ctx)}
+          iconoAntes={visual.icono_antes}
+          palabraAntes={visual.palabra_antes}
+          iconoDespues={visual.icono_despues}
+          palabraDespues={visual.palabra_despues}
+        />
+      );
+    case "contador": {
+      const cuadros = visual.eventos.length > 0 ? visual.eventos.map((e) => cuadroDePalabra(e.palabra, ctx)) : [cuadroDelCambio([], ctx)];
+      const valor = valorContadorEnFrame(ctx.frame, Math.min(...cuadros), Math.max(...cuadros), visual.desde, visual.hasta);
+      const color = ctx.bloque === "gancho" ? paleta.alerta : paleta.exito;
+      return <ContadorNoche valor={valor} etiqueta={visual.etiqueta} color={color} paleta={paleta} />;
+    }
+    case "checklist":
+      return <ChecklistNoche {...base} tema={ctx.tema} cuadroCambia={cuadroDelCambio(visual.eventos, ctx)} titulo={visual.titulo} items={visual.items} />;
+    case "comparacion":
+      return (
+        <ComparacionNoche
+          {...base}
+          tema={ctx.tema}
+          cuadroCambia={cuadroDelCambio(visual.eventos, ctx)}
+          textoMal={visual.texto_mal}
+          textoBien={visual.texto_bien}
+          etiquetaMal={visual.etiqueta_mal}
+          etiquetaBien={visual.etiqueta_bien}
+        />
+      );
+    case "comparacion_foto": {
+      const medio = ctx.medios?.[visual.media_id];
+      const urlFoto = medio && medio.tipo === "imagen" ? medio.url : null;
+      return <ComparacionFotoNoche {...base} cuadroCambia={cuadroDelCambio(visual.eventos, ctx)} urlFoto={urlFoto} textoMal={visual.texto_mal} textoBien={visual.texto_bien} />;
+    }
+    default:
+      return null;
+  }
 }
 
 function renderizarVisualSinMovimiento(visual: Visual, ctx: ContextoVisual) {
@@ -191,7 +258,7 @@ function renderizarVisualSinMovimiento(visual: Visual, ctx: ContextoVisual) {
       // -- por eso va como children, nunca como hermano suelto.
       return (
         <ZonaVisual>
-          <TarjetaSimple>
+          <TarjetaSimple sinFondo={!!ctx.estilo}>
             <BotonEstado texto={visual.texto_boton} tema={ctx.tema} progreso={progreso} activo={activo} colorActivo={colorDeBloque(ctx.bloque)}>
               <CursorClicEventos frame={ctx.frame} fps={ctx.fps} cuadroAparece={cuadroAparece} cuadroClic={cuadroClic} />
             </BotonEstado>
@@ -208,7 +275,7 @@ function renderizarVisualSinMovimiento(visual: Visual, ctx: ContextoVisual) {
       const valor = valorContadorEnFrame(ctx.frame, cuadroInicio, cuadroFin, visual.desde, visual.hasta);
       return (
         <ZonaVisual>
-          <TarjetaSimple>
+          <TarjetaSimple sinFondo={!!ctx.estilo}>
             <ContadorGigante valor={valor} etiqueta={visual.etiqueta} color={colorDeBloque(ctx.bloque)} />
           </TarjetaSimple>
         </ZonaVisual>
@@ -231,7 +298,7 @@ function renderizarVisualSinMovimiento(visual: Visual, ctx: ContextoVisual) {
       const textoActivo = ctx.bloque === "cta" ? (ctx.tema.instagramUsuario ? `Siguiendo @${ctx.tema.instagramUsuario}` : "Siguiendo") : visual.texto_activo;
       return (
         <ZonaVisual>
-          <TarjetaSimple>
+          <TarjetaSimple sinFondo={!!ctx.estilo}>
             <BotonEstado texto={activo ? textoActivo : textoIdle} conCheck={activo && ctx.bloque === "cta"} tema={ctx.tema} progreso={progreso} activo={activo} colorActivo={COLOR_EXITO_BLOQUE} />
           </TarjetaSimple>
         </ZonaVisual>

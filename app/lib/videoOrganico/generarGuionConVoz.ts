@@ -1,4 +1,5 @@
 import "server-only";
+import { asignarEstilo } from "@/video/estilos/estilos";
 import { GuionSchema, idsDeMediaUsados, type Guion, type RecetaOrganicaId } from "@/video/guion.schema";
 import type { TemaGuion } from "@/video/tema";
 import { validarContraRecetaOrganica, type RecetaOrganica } from "@/video/recetas/organico";
@@ -225,7 +226,9 @@ export async function generarGuionConVoz(params: ParametrosGenerarGuionConVoz): 
     return resultadoVoz;
   }
 
-  const guionFinal: Guion = { ...resultado.guion, ...resultadoVoz.campos };
+  // Estilo visual y layout por escena (sistema de estilos, paso 1): los
+  // decide el código, nunca la IA, y quedan en el guion para medirlos.
+  const guionFinal: Guion = { ...resultado.guion, ...resultadoVoz.campos, estilo: asignarEstilo(resultado.guion.escenas) };
 
   return { ok: true, guion: guionFinal, puntajeAlineacion: resultadoVoz.puntajeAlineacion, intentosGuion, crudo: resultadoVoz.crudo };
 }

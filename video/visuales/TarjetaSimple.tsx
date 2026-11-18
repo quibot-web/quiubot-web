@@ -10,7 +10,10 @@ import { TARJETA_ANCHO_PORCENTAJE } from "./geometria";
 // principal DENTRO de una tarjeta que ocupa el ancho real, 70-85%,
 // video/visuales/geometria.ts). Esta tarjeta genérica (fondo blanco,
 // mismo lenguaje que el mockup de CelularChat) es lo que les faltaba.
-export function TarjetaSimple({ children }: { children: ReactNode }) {
+// sinFondo (estilo Noche): mismo ancho -- BotonEstado calcula su tamaño
+// contra este ancho -- pero sin la tarjeta blanca: el botón va directo
+// sobre el fondo oscuro.
+export function TarjetaSimple({ children, sinFondo = false }: { children: ReactNode; sinFondo?: boolean }) {
   return (
     <div
       style={{
@@ -19,9 +22,9 @@ export function TarjetaSimple({ children }: { children: ReactNode }) {
         display: "flex",
         alignItems: "center",
         justifyContent: "center",
-        background: "#fff",
+        background: sinFondo ? "transparent" : "#fff",
         borderRadius: 36,
-        boxShadow: "0 30px 80px rgba(0,0,0,0.5)",
+        boxShadow: sinFondo ? "none" : "0 30px 80px rgba(0,0,0,0.5)",
       }}
     >
       {children}

@@ -4,6 +4,7 @@ import { z } from "zod";
 // alias de tsconfig, solo lo resuelve el bundler de Next.
 import { AnalisisPiezaSchema } from "../app/lib/analisisPieza";
 import { VisualSchema } from "./visuales/schema";
+import { EstiloGuionSchema } from "./estilos/estilos";
 
 // Ids reales de objetivos_config (ver app/lib/metas.ts -- OBJETIVOS_CATALOGO,
 // confirmados contra la tabla objetivos_config). Cada uno tiene su receta en
@@ -386,6 +387,10 @@ export const GuionSchema = z
     // para que ReelAutomatico.tsx pueda renderizar leyendo SOLO el
     // guion, igual que ya hace con guion.musica.pista_id.
     vozUrl: z.string().optional(),
+    // Sistema de estilos (paso 1, 18 nov 2026): estilo y layout por
+    // escena, elegidos por el código al generar. Opcional: sin él el reel
+    // se ve como siempre (guiones guardados antes de esto).
+    estilo: EstiloGuionSchema.optional(),
   })
   // Invariantes que no dependen de la receta del objetivo/orgánica --
   // las que sí dependen (orden de bloques, rango de duracion, escenas

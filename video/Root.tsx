@@ -18,6 +18,7 @@ import { fixturePreguntaComunidad } from "./fixtures/organico/preguntaComunidad"
 import { fixtureDetrasDeMarca } from "./fixtures/organico/detrasDeMarca";
 import { ReelConsejosNumerados, duracionReelConsejosNumeradosEnCuadros } from "./fixtures/organico/referencia/ReelConsejosNumerados";
 import { ReelMitoVerdad, duracionReelMitoVerdadEnCuadros } from "./fixtures/organico/referencia/ReelMitoVerdad";
+import { ReelAutomatico, duracionReelAutomaticoEnCuadros, type PropsReelAutomatico } from "./visuales/ReelAutomatico";
 import { BancoGanchoCierre, BancoVisuales, type PropsBancoGanchoCierre, type PropsBancoVisuales } from "./BancoVisuales";
 
 // Placeholder para "demo-1" (data URI, sin archivos nuevos en public/):
@@ -131,6 +132,19 @@ function RemotionRoot() {
         width={1080}
         height={1920}
         defaultProps={{ tipo: "anuncio_boton", estado: "antes", textos: {} } satisfies PropsBancoVisuales}
+      />
+      {/* Reel con voz completo desde un guion guardado
+          (video/renderReelAutomatico.ts) -- para revisar estilos con el
+          render real. La duración sale del guion (tiemposRender). */}
+      <Composition
+        id="reel-automatico"
+        component={ReelAutomatico}
+        durationInFrames={30}
+        fps={30}
+        width={1080}
+        height={1920}
+        calculateMetadata={({ props }) => ({ durationInFrames: Math.max(1, duracionReelAutomaticoEnCuadros(props.guion)), fps: props.guion.fps })}
+        defaultProps={{ guion: fixtureConsejosNumerados, medios: MEDIOS_DEMO } as PropsReelAutomatico}
       />
       {/* Parte 2e: un visual por el camino real (renderizarVisual), como
           gancho (problema) o cierre (arreglado). */}

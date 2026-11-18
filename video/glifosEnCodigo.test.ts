@@ -13,7 +13,7 @@ import path from "node:path";
 import { describe, expect, it } from "vitest";
 import { caracterEnFuentes } from "./glifos";
 
-const CARPETAS = ["video/visuales", "video/escenas", "video/capas"];
+const CARPETAS = ["video/visuales", "video/escenas", "video/capas", "video/estilos"];
 
 function sinComentarios(codigo: string): string {
   return codigo.replace(/\/\*[\s\S]*?\*\//g, "").replace(/(^|[^:])\/\/.*$/gm, "$1");
@@ -28,7 +28,7 @@ describe("ningún componente pinta un glifo fuera de nuestras fuentes", () => {
   );
 
   it("hay archivos que revisar", () => {
-    expect(archivos.length).toBeGreaterThan(20);
+    expect(archivos.length).toBeGreaterThan(25);
   });
 
   for (const archivo of archivos) {

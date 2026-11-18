@@ -152,6 +152,11 @@ describe("generarGuionConVoz", () => {
     expect(resultado.guion.palabrasPorEscena).toHaveLength(6);
     expect(resultado.guion.narracionHash).toEqual(expect.any(String));
     expect(resultado.intentosGuion).toBe(1);
+    // Sistema de estilos (paso 1): el estilo lo pone el código, con un
+    // layout por escena -- el gancho de texto va como palabra gigante.
+    expect(resultado.guion.estilo?.id).toBe("noche");
+    expect(Object.keys(resultado.guion.estilo?.layouts ?? {})).toHaveLength(6);
+    expect(resultado.guion.estilo?.layouts.e1).toBe("palabra_gigante");
     expect(generarVozMock).toHaveBeenCalledWith(textoCompleto, { openaiKey: "sk-test", voz: "cedar", cloudinary: { cloudName: "demo", apiKey: "k", apiSecret: "s" } });
   });
 

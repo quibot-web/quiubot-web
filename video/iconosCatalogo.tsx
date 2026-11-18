@@ -107,7 +107,7 @@ import {
   Zap,
   type LucideIcon,
 } from "lucide-react";
-import { contrasteHex, mezclarColoresHex, type TemaGuion } from "./tema";
+import { contrasteHex, hexConAlfa, mezclarColoresHex, type TemaGuion } from "./tema";
 import { esNombreIcono, type NombreIcono } from "./nombresIconos";
 
 export const CATALOGO_ICONOS = {
@@ -252,18 +252,45 @@ export function IconoCatalogo({
   tamano,
   tema,
   variante = "sobre_blanco",
+  colorLuz,
+  colorSuperficie,
   estilo,
 }: {
   valor: string | undefined | null;
   tamano: number;
   tema: TemaGuion;
-  variante?: "sobre_blanco" | "sobre_marca";
+  variante?: "sobre_blanco" | "sobre_marca" | "sobre_oscuro";
+  // Solo "sobre_oscuro" (estilo Noche): la luz de la marca (anillo) y la
+  // superficie del círculo.
+  colorLuz?: string;
+  colorSuperficie?: string;
   estilo?: CSSProperties;
 }) {
   const nombre = resolverIcono(valor) ?? ICONO_GENERICO;
   const Componente = CATALOGO_ICONOS[nombre];
   if (variante === "sobre_marca") {
     return <Componente size={tamano} color="#ffffff" strokeWidth={2} style={{ display: "block", flexShrink: 0, ...estilo }} aria-hidden />;
+  }
+  if (variante === "sobre_oscuro") {
+    return (
+      <div
+        style={{
+          width: tamano,
+          height: tamano,
+          borderRadius: "50%",
+          background: colorSuperficie ?? "#1c1c28",
+          border: `${Math.round(tamano * 0.025)}px solid ${colorLuz ?? "#ffffff"}`,
+          boxShadow: `0 0 ${Math.round(tamano * 0.3)}px ${hexConAlfa(colorLuz ?? "#ffffff", 0.45)}`,
+          display: "flex",
+          alignItems: "center",
+          justifyContent: "center",
+          flexShrink: 0,
+          ...estilo,
+        }}
+      >
+        <Componente size={Math.round(tamano * 0.58)} color="#ffffff" strokeWidth={2} aria-hidden />
+      </div>
+    );
   }
   const { trazo, acento } = coloresIconoSobreBlanco(tema);
   return (

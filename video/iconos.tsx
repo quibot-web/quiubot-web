@@ -46,14 +46,14 @@ export function IconoDobleCheck({ tamano, color = "currentColor", estilo }: Prop
 }
 
 // Reemplazo de ❌ / ✔️: cuadro de color con la marca blanca encima.
-export function IconoMarca({ tipo, tamano, colorMal = "#E0301E", colorBien = "#1E8E3E", estilo }: { tipo: "mal" | "bien"; tamano: number; colorMal?: string; colorBien?: string; estilo?: CSSProperties }) {
+export function IconoMarca({ tipo, tamano, colorMal = "#E0301E", colorBien = "#1E8E3E", colorTrazo = "#fff", estilo }: { tipo: "mal" | "bien"; tamano: number; colorMal?: string; colorBien?: string; colorTrazo?: string; estilo?: CSSProperties }) {
   return (
     <svg width={tamano} height={tamano} viewBox="0 0 24 24" style={estiloBase(estilo)} aria-hidden>
       <rect x={1} y={1} width={22} height={22} rx={6} fill={tipo === "mal" ? colorMal : colorBien} />
       {tipo === "mal" ? (
-        <path d="M8 8 L16 16 M16 8 L8 16" fill="none" stroke="#fff" strokeWidth={3} strokeLinecap="round" />
+        <path d="M8 8 L16 16 M16 8 L8 16" fill="none" stroke={colorTrazo} strokeWidth={3} strokeLinecap="round" />
       ) : (
-        <path d="M6.5 12.5 L10.5 16.5 L17.5 8" fill="none" stroke="#fff" strokeWidth={3} strokeLinecap="round" strokeLinejoin="round" />
+        <path d="M6.5 12.5 L10.5 16.5 L17.5 8" fill="none" stroke={colorTrazo} strokeWidth={3} strokeLinecap="round" strokeLinejoin="round" />
       )}
     </svg>
   );
