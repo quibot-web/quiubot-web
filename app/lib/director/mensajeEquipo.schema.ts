@@ -7,7 +7,20 @@
 import { z } from "zod";
 import { ASISTENTES_CON_CHAT_PROPIO } from "@/app/lib/director/chatsEquipo";
 
-export const TIPOS_EVENTO_EQUIPO = ["reporte_diario", "creativos_listos", "adn_marca_listo", "mensaje_usuario", "respuesta"] as const;
+export const TIPOS_EVENTO_EQUIPO = [
+  "reporte_diario",
+  "creativos_listos",
+  "adn_marca_listo",
+  "mensaje_usuario",
+  "respuesta",
+  // Publicador automático de contenido orgánico (paso 4 de la
+  // integración de Fase B v2.0) -- el asistente "publicador" ya
+  // existía en ASISTENTES_CON_CHAT_PROPIO, estos 3 tipos son los
+  // únicos agregados nuevos.
+  "reel_publicado",
+  "reel_publicacion_error",
+  "reel_vencido",
+] as const;
 export type TipoEventoEquipo = (typeof TIPOS_EVENTO_EQUIPO)[number];
 
 // Un mensaje de evento automático siempre lo "dice" uno de estos

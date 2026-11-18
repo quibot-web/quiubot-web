@@ -45,7 +45,6 @@ type CadenaPiezas = {
 };
 
 let filtrosRangoActual: { gte?: string; lte?: string } = {};
-let vencerUpdateCon: Record<string, unknown> | null = null;
 
 const fromMock = vi.fn();
 fromMock.mockImplementation((tabla: unknown) => {
@@ -64,10 +63,7 @@ fromMock.mockImplementation((tabla: unknown) => {
       },
       in: () => obj,
       lt: () => obj,
-      update: (valores) => {
-        vencerUpdateCon = valores;
-        return obj;
-      },
+      update: () => obj,
       order: async () => ({ data: piezasSemanaActual, error: null }),
       insert: (valores) => {
         insertadoCon = valores;
@@ -90,6 +86,9 @@ vi.mock("@/lib/supabase", () => ({
 const registrarErrorMock = vi.fn();
 vi.mock("@/lib/registrarError", () => ({ registrarError: (...args: unknown[]) => registrarErrorMock(...args) }));
 
+const vencerPiezasSinVideoMock = vi.fn();
+vi.mock("@/app/lib/publicadorOrganico", () => ({ vencerPiezasSinVideo: (...args: unknown[]) => vencerPiezasSinVideoMock(...args) }));
+
 const { GET, POST } = await import("./route");
 
 const USUARIO_ADMIN = { id: "user-1", rol: "admin" };
@@ -111,13 +110,12 @@ describe("GET /api/contenido", () => {
     usuarioActual = USUARIO_ADMIN;
     piezasSemanaActual = [{ id: "pieza-1", estado: "borrador" }];
     filtrosRangoActual = {};
-    vencerUpdateCon = null;
     vi.spyOn(console, "error").mockImplementation(() => {});
   });
 
-  it("vence piezas sin video cuya hora ya pasó, antes de devolver el calendario", async () => {
+  it("vence piezas sin video cuya hora ya pasó (misma función que el cron, con aviso), antes de devolver el calendario", async () => {
     await GET(getReq());
-    expect(vencerUpdateCon).toMatchObject({ estado: "vencida" });
+    expect(vencerPiezasSinVideoMock).toHaveBeenCalledWith({ userId: "user-1" });
   });
 
   it("sin sesión: 401", async () => {

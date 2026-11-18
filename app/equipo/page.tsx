@@ -490,7 +490,10 @@ function EquipoContenido() {
     // Director -- un evento automático cita al asistente que lo generó
     // (m.asistente), una respuesta libre cita a quien el usuario
     // mencionó con @ (contenido.asistenteCitado), si a alguien.
-    const esEvento = m.tipo_evento === "reporte_diario" || m.tipo_evento === "creativos_listos";
+    // Todo lo que no es conversación libre es un evento automático
+    // (antes solo reporte_diario/creativos_listos -- adn_marca_listo y
+    // los del Publicador quedaban sin la mini-esfera del asistente).
+    const esEvento = m.tipo_evento !== "respuesta";
     const citado = esEvento ? (m.asistente as Asistente) : (m.contenido.asistenteCitado as Asistente | undefined);
 
     return (

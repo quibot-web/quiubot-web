@@ -312,6 +312,28 @@ export default function RevisionPiezaPage({ params }: { params: Promise<{ id: st
           </div>
         )}
 
+        {pieza.estado === "publicada" && (
+          <div style={{ background: "#EAF7F0", border: "1px solid #9FD8BA", borderRadius: 14, padding: 16, marginBottom: 16, display: "flex", gap: 10, alignItems: "center", flexWrap: "wrap" }}>
+            <span style={{ fontSize: 13, color: "#1E6B47", fontWeight: 700, flex: 1 }}>Publicado en Instagram por el Publicador.</span>
+            {pieza.permalink && (
+              <a href={pieza.permalink} target="_blank" rel="noopener noreferrer" style={{ ...botonSecundario, textDecoration: "none", display: "inline-block" }}>
+                Ver en Instagram
+              </a>
+            )}
+          </div>
+        )}
+
+        {pieza.estado === "error" && pieza.tipo_error !== "calidad" && pieza.error && (
+          <div style={{ background: "#FDECEC", border: "1px solid #E8A0A0", borderRadius: 14, padding: 16, marginBottom: 16, display: "flex", gap: 10, alignItems: "center", flexWrap: "wrap" }}>
+            <span style={{ fontSize: 13, color: "#8A1F1F", fontWeight: 700, flex: 1 }}>{pieza.error}</span>
+            {(pieza.tipo_error === "reconexion" || pieza.tipo_error === "sin_instagram") && (
+              <a href="/api/meta/conectar" style={{ ...botonSecundario, borderColor: "#8A1F1F", color: "#8A1F1F", textDecoration: "none", display: "inline-block" }}>
+                Reconectar Meta
+              </a>
+            )}
+          </div>
+        )}
+
         {pieza.estado === "lista" && pieza.control_calidad?.aprobado === false && !pieza.control_calidad?.publicarIgual && (
           <div style={{ background: "#FEF6E7", border: "1px solid #F0C36D", borderRadius: 14, padding: 16, marginBottom: 16, display: "flex", gap: 10, alignItems: "center", flexWrap: "wrap" }}>
             <span style={{ fontSize: 13, color: "#8A6416", fontWeight: 700, flex: 1 }}>Lista, no aprobada: requiere confirmación -- el control de calidad no pasó y esta pieza se forzó.</span>

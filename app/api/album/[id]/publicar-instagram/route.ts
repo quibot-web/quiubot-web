@@ -6,6 +6,7 @@ import {
   crearContenedorInstagram,
   verificarEstadoContenedorInstagram,
   publicarContenedorInstagram,
+  type ErrorPublicarInstagram,
 } from "@/app/lib/instagramPublicar";
 
 // Publicar un video del álbum como Reel en Instagram -- función real
@@ -15,6 +16,12 @@ import {
 // Meta vive en app/lib/instagramPublicar.ts; esta ruta solo valida la
 // sesión y que el video sea del propio usuario.
 type Accion = "crear_contenedor" | "verificar_estado" | "publicar";
+
+// tipo/detalle son internos (detalle es la respuesta cruda de Meta) --
+// al navegador solo llega el mensaje amable y la acción.
+function errorPublico(resultado: ErrorPublicarInstagram) {
+  return { error: resultado.error, ...(resultado.accion ? { accion: resultado.accion } : {}) };
+}
 
 export async function POST(req: NextRequest, { params }: { params: Promise<{ id: string }> }) {
   const session = await auth();
@@ -55,7 +62,7 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
 
     const ig = await resolverCuentaInstagramParaPublicar(usuario.meta_page_id, usuario.meta_access_token);
     if ("error" in ig) {
-      return NextResponse.json(ig, { status: 400 });
+      return NextResponse.json(errorPublico(ig), { status: 400 });
     }
 
     const resultado = await crearContenedorInstagram({
@@ -65,7 +72,7 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
       caption,
     });
     if ("error" in resultado) {
-      return NextResponse.json(resultado, { status: 400 });
+      return NextResponse.json(errorPublico(resultado), { status: 400 });
     }
     return NextResponse.json({ container_id: resultado.container_id, ig_user_id: ig.igUserId });
   }
@@ -77,7 +84,7 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
     }
     const resultado = await verificarEstadoContenedorInstagram({ accessToken: usuario.meta_access_token, containerId });
     if ("error" in resultado) {
-      return NextResponse.json(resultado, { status: 400 });
+      return NextResponse.json(errorPublico(resultado), { status: 400 });
     }
     return NextResponse.json(resultado);
   }
@@ -90,7 +97,7 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
     }
     const resultado = await publicarContenedorInstagram({ accessToken: usuario.meta_access_token, igUserId, containerId });
     if ("error" in resultado) {
-      return NextResponse.json(resultado, { status: 400 });
+      return NextResponse.json(errorPublico(resultado), { status: 400 });
     }
     return NextResponse.json(resultado);
   }

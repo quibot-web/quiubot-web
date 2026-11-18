@@ -16,6 +16,10 @@
 --    plataformas_permitidas) -- "IMPOSIBLE DE OLVIDAR" en el plan
 --    original. Pieza sin música (pista_id null) no aplica, sigue de
 --    largo.
+-- 3. Solo plataforma = 'instagram' (agregado en el paso 4, antes de
+--    correr este archivo): una pieza de TikTok también llega a "lista"
+--    (se descarga y se sube a mano) y sin este filtro el cron la
+--    publicaría en Instagram.
 --
 -- Mismo criterio atómico de siempre (FOR UPDATE SKIP LOCKED, el UPDATE
 -- de afuera vuelve a filtrar estado='lista') -- solo cambian los
@@ -36,6 +40,7 @@ begin
         select p.id from publicaciones_organicas p
         where p.estado = 'lista'
           and p.programada_para <= now()
+          and p.plataforma = 'instagram'
           and (
             p.control_calidad is null
             or (p.control_calidad->>'aprobado')::boolean is not false
