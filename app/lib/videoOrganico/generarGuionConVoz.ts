@@ -183,6 +183,13 @@ export async function generarGuionConVoz(params: ParametrosGenerarGuionConVoz): 
     const idsUsados = idsDeMediaUsados(resultado.data.escenas);
     const idsValidos = new Set(params.entrada.piezas.map((p) => p.id));
     const erroresMedia = idsUsados.filter((idUsado) => !idsValidos.has(idUsado)).map((idUsado) => `media_id "${idUsado}" no está entre las piezas disponibles.`);
+    // comparacion_foto difumina y aclara una FOTO -- un video no sirve ahí.
+    const idsVideo = new Set(params.entrada.piezas.filter((p) => p.tipo === "video").map((p) => p.id));
+    for (const escena of resultado.data.escenas) {
+      if (escena.visual?.tipo === "comparacion_foto" && idsVideo.has(escena.visual.media_id)) {
+        erroresMedia.push(`${escena.id}: comparacion_foto necesita una pieza de tipo imagen, "${escena.visual.media_id}" es un video.`);
+      }
+    }
     const textosEscenas = recopilarTextosEscenas(resultado.data.escenas);
     const erroresCopy = detectarFrasesDescargo(textosEscenas).map((m) => `copy tímido: ${m}`);
     const erroresVacios = detectarFrasesVacias(textosEscenas).map((m) => `copy abstracto: ${m}`);

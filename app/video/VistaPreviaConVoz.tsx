@@ -3,6 +3,7 @@
 import { Player } from "@remotion/player";
 import { ReelAutomatico, duracionReelAutomaticoEnCuadros } from "@/video/visuales/ReelAutomatico";
 import type { Guion } from "@/video/guion.schema";
+import type { MediosResueltos } from "@/video/escenas/tipos";
 
 // Gemelo de VistaPrevia.tsx para piezas con pipeline de voz (Fase B
 // v2.0, paso 2 de la integración a /contenido) -- ReelAutomatico en
@@ -14,11 +15,11 @@ import type { Guion } from "@/video/guion.schema";
 // vista previa, así que esto no necesita el mismo cuidado de
 // unsafely-treat-insecure-origin-as-secure que sí hace falta para el
 // render real (ColaDeRender.tsx).
-export default function VistaPreviaConVoz({ guion, pistaMusicaUrl }: { guion: Guion; pistaMusicaUrl: string | null }) {
+export default function VistaPreviaConVoz({ guion, pistaMusicaUrl, medios }: { guion: Guion; pistaMusicaUrl: string | null; medios?: MediosResueltos }) {
   return (
     <Player
       component={ReelAutomatico}
-      inputProps={{ guion, pistaMusicaUrl, mostrarZonaSegura: false }}
+      inputProps={{ guion, medios, pistaMusicaUrl, mostrarZonaSegura: false }}
       durationInFrames={duracionReelAutomaticoEnCuadros(guion)}
       fps={guion.fps}
       compositionWidth={1080}

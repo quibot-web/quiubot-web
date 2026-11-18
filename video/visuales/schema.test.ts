@@ -76,3 +76,18 @@ describe("parte 2c: comparacion e icono_palabra", () => {
     }
   });
 });
+
+describe("parte 2d: checklist y comparacion_foto", () => {
+  it("checklist: 2 o 3 ítems con su límite, título opcional", () => {
+    expect(VisualSchema.safeParse({ tipo: "checklist", items: ["Luz natural", "Fondo liso"], eventos: evento }).success).toBe(true);
+    expect(VisualSchema.safeParse({ tipo: "checklist", titulo: "Antes de publicar", items: ["a", "b", "c"], eventos: evento }).success).toBe(true);
+    expect(VisualSchema.safeParse({ tipo: "checklist", items: ["solo uno"], eventos: evento }).success).toBe(false);
+    expect(VisualSchema.safeParse({ tipo: "checklist", items: ["a", "b", "c", "d"], eventos: evento }).success).toBe(false);
+    expect(VisualSchema.safeParse({ tipo: "checklist", items: ["a", "b".repeat(LIMITES_TEXTO_VISUAL.checklist.item + 1)], eventos: evento }).success).toBe(false);
+  });
+
+  it("comparacion_foto exige media_id y los dos textos", () => {
+    expect(VisualSchema.safeParse({ tipo: "comparacion_foto", media_id: "foto-1", texto_mal: "Oscura", texto_bien: "Con luz", eventos: evento }).success).toBe(true);
+    expect(VisualSchema.safeParse({ tipo: "comparacion_foto", texto_mal: "Oscura", texto_bien: "Con luz", eventos: evento }).success).toBe(false);
+  });
+});

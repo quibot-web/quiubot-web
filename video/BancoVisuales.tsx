@@ -4,7 +4,7 @@
 // código) que los textos al máximo de largo caben, no se cortan y no
 // salen como cuadros. Lo usa video/renderBancoVisuales.ts (stills PNG).
 // Nunca entra a un reel real: es solo una composición de revisión.
-import { AbsoluteFill, useCurrentFrame, useVideoConfig } from "remotion";
+import { AbsoluteFill, staticFile, useCurrentFrame, useVideoConfig } from "remotion";
 import { familiaDeFuente } from "./fuentes";
 import type { TemaGuion } from "./tema";
 import { AnuncioBotonVisual } from "./visuales/AnuncioBotonVisual";
@@ -12,9 +12,11 @@ import { ConexionWhatsappVisual } from "./visuales/ConexionWhatsappVisual";
 import { RespuestaLentaVisual } from "./visuales/RespuestaLentaVisual";
 import { ComparacionVisual } from "./visuales/ComparacionVisual";
 import { IconoPalabraVisual } from "./visuales/IconoPalabraVisual";
+import { ChecklistVisual } from "./visuales/ChecklistVisual";
+import { ComparacionFotoVisual } from "./visuales/ComparacionFotoVisual";
 
 export type PropsBancoVisuales = {
-  tipo: "anuncio_boton" | "conexion_whatsapp" | "respuesta_lenta" | "comparacion" | "icono_palabra";
+  tipo: "anuncio_boton" | "conexion_whatsapp" | "respuesta_lenta" | "comparacion" | "icono_palabra" | "checklist" | "comparacion_foto";
   estado: "antes" | "despues";
   textos: Record<string, string>;
   tema?: TemaGuion;
@@ -54,6 +56,21 @@ export function BancoVisuales({ tipo, estado, textos, tema = TEMA_BANCO }: Props
           palabraAntes={textos.palabra_antes}
           iconoDespues={textos.icono_despues}
           palabraDespues={textos.palabra_despues}
+        />
+      )}
+      {tipo === "checklist" && (
+        <ChecklistVisual frame={frame} fps={fps} cuadroCambia={cuadroCambia} titulo={textos.titulo || undefined} items={[textos.item1, textos.item2, textos.item3].filter(Boolean)} />
+      )}
+      {tipo === "comparacion_foto" && (
+        // Foto de stock SOLO para el banco de pruebas (sin logos, ver la
+        // referencia aprobada) -- en un reel real sale del álbum.
+        <ComparacionFotoVisual
+          frame={frame}
+          fps={fps}
+          cuadroCambia={cuadroCambia}
+          urlFoto={textos.sin_foto ? null : staticFile("demo-organico/foto-producto-ceramica.jpg")}
+          textoMal={textos.texto_mal}
+          textoBien={textos.texto_bien}
         />
       )}
     </AbsoluteFill>

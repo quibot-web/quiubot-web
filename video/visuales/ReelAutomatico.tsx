@@ -4,6 +4,7 @@ import type { TemaGuion } from "../tema";
 import type { Visual } from "./schema";
 import type { PalabraConTiempoVisual } from "./index";
 import type { Guion } from "../guion.schema";
+import type { MediosResueltos } from "../escenas/tipos";
 import { familiaDeFuente } from "../fuentes";
 import { FondoMarca } from "../capas/FondoMarca";
 import { CapaLogo } from "../capas/Logo";
@@ -63,6 +64,7 @@ function ContenidoEscena({
   visual,
   palabras,
   inicioEscena_s,
+  medios,
 }: {
   tema: TemaGuion;
   bloque: BloqueGuion;
@@ -70,19 +72,23 @@ function ContenidoEscena({
   visual: Visual;
   palabras: PalabraConTiempoVisual[];
   inicioEscena_s: number;
+  medios?: MediosResueltos;
 }) {
   const frame = useCurrentFrame();
-  return <>{renderizarVisual(visual, { tema, bloque, frame, fps, palabras, inicioEscena_s })}</>;
+  return <>{renderizarVisual(visual, { tema, bloque, frame, fps, palabras, inicioEscena_s, medios })}</>;
 }
 
 export type PropsReelAutomatico = {
   guion: Guion;
+  // Piezas del álbum resueltas a URL (parte 2d, comparacion_foto) --
+  // mismo contrato que Composicion/VistaPrevia.
+  medios?: MediosResueltos;
   pistaMusicaUrl?: string | null;
   efectos?: EfectoSonido[];
   mostrarZonaSegura?: boolean;
 };
 
-export function ReelAutomatico({ guion, pistaMusicaUrl, efectos = [], mostrarZonaSegura }: PropsReelAutomatico) {
+export function ReelAutomatico({ guion, medios, pistaMusicaUrl, efectos = [], mostrarZonaSegura }: PropsReelAutomatico) {
   const { escenas, tema, fps } = guion;
   const familia = familiaDeFuente(tema.fuente);
   const tiemposRender = guion.tiemposRender ?? [];
@@ -136,7 +142,7 @@ export function ReelAutomatico({ guion, pistaMusicaUrl, efectos = [], mostrarZon
         <AbsoluteFill>
           <FondoMarca tema={tema} bloque={escena.bloque} organico />
           {escena.visual && (
-            <ContenidoEscena tema={tema} bloque={escena.bloque} fps={fps} visual={escena.visual} palabras={palabras} inicioEscena_s={inicioEscena_s} />
+            <ContenidoEscena tema={tema} bloque={escena.bloque} fps={fps} visual={escena.visual} palabras={palabras} inicioEscena_s={inicioEscena_s} medios={medios} />
           )}
           <SubtitulosSincronizados palabras={palabrasEnCuadros} tema={tema} />
           {guion.vozUrl &&

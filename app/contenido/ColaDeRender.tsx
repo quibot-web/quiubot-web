@@ -164,7 +164,7 @@ export default function ColaDeRender({
             const { ReelAutomatico, duracionReelAutomaticoEnCuadros } = await import("@/video/visuales/ReelAutomatico");
             component = ReelAutomatico as unknown as React.ComponentType<Record<string, unknown>>;
             durationInFrames = duracionReelAutomaticoEnCuadros(guionARenderizar);
-            defaultProps = { guion: guionARenderizar, pistaMusicaUrl: pistaUrl, mostrarZonaSegura: false };
+            defaultProps = { guion: guionARenderizar, medios, pistaMusicaUrl: pistaUrl, mostrarZonaSegura: false };
             duracionS = guionARenderizar.escenas.reduce((acc, e) => acc + e.duracion_s, 0);
           } else {
             const { Composicion, duracionEnCuadros } = await import("@/video/Composicion");

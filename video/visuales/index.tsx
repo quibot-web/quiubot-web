@@ -12,6 +12,9 @@ import { ConexionWhatsappVisual } from "./ConexionWhatsappVisual";
 import { RespuestaLentaVisual } from "./RespuestaLentaVisual";
 import { ComparacionVisual } from "./ComparacionVisual";
 import { IconoPalabraVisual } from "./IconoPalabraVisual";
+import { ChecklistVisual } from "./ChecklistVisual";
+import { ComparacionFotoVisual } from "./ComparacionFotoVisual";
+import type { MediosResueltos } from "../escenas/tipos";
 import { COLOR_ALERTA, COLOR_EXITO_BLOQUE } from "./acento";
 import { TARJETA_ALTURA_PORCENTAJE, TARJETA_TOP_PORCENTAJE } from "./geometria";
 
@@ -46,6 +49,9 @@ export type ContextoVisual = {
   // tiempo absoluto de una palabra a un cuadro relativo al Sequence de
   // la escena (useCurrentFrame() ya arranca en 0 ahí).
   inicioEscena_s: number;
+  // Fotos/videos del álbum ya resueltos a URL (parte 2d, para
+  // comparacion_foto). Opcional: el arnés admin no los tiene.
+  medios?: MediosResueltos;
 };
 
 function cuadroDePalabra(indicePalabra: number, ctx: ContextoVisual): number {
@@ -236,6 +242,18 @@ export function renderizarVisual(visual: Visual, ctx: ContextoVisual) {
           palabraDespues={visual.palabra_despues}
         />
       );
+    }
+
+    case "checklist": {
+      const cuadroCambia = cuadroDePalabra(visual.eventos[0].palabra, ctx);
+      return <ChecklistVisual frame={ctx.frame} fps={ctx.fps} cuadroCambia={cuadroCambia} titulo={visual.titulo} items={visual.items} />;
+    }
+
+    case "comparacion_foto": {
+      const cuadroCambia = cuadroDePalabra(visual.eventos[0].palabra, ctx);
+      const medio = ctx.medios?.[visual.media_id];
+      const urlFoto = medio && medio.tipo === "imagen" ? medio.url : null;
+      return <ComparacionFotoVisual frame={ctx.frame} fps={ctx.fps} cuadroCambia={cuadroCambia} urlFoto={urlFoto} textoMal={visual.texto_mal} textoBien={visual.texto_bien} />;
     }
 
     case "respuesta_lenta": {

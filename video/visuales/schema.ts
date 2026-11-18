@@ -63,6 +63,8 @@ export const LIMITES_TEXTO_VISUAL = {
   respuesta_lenta: { pregunta_cliente: 40, respuesta: 36, confirmacion: 28 },
   comparacion: { etiqueta: 14, texto: 44 },
   icono_palabra: { palabra: 16 },
+  checklist: { titulo: 24, item: 26 },
+  comparacion_foto: { texto: 30 },
 } as const;
 
 export const VisualSchema = z.discriminatedUnion("tipo", [
@@ -145,6 +147,22 @@ export const VisualSchema = z.discriminatedUnion("tipo", [
     palabra_despues: TextoVisual(LIMITES_TEXTO_VISUAL.icono_palabra.palabra),
     eventos: z.array(Evento.extend({ accion: z.literal("cambia_estado") })).length(1),
   }),
+  // Parte 2d: checklist que se completa, y antes/después con una foto
+  // REAL del álbum (media_id validado contra las piezas de la pieza, solo
+  // imágenes -- ver generarGuionConVoz).
+  z.object({
+    tipo: z.literal("checklist"),
+    titulo: TextoVisual(LIMITES_TEXTO_VISUAL.checklist.titulo).optional(),
+    items: z.array(TextoVisual(LIMITES_TEXTO_VISUAL.checklist.item)).min(2).max(3),
+    eventos: z.array(Evento.extend({ accion: z.literal("cambia_estado") })).length(1),
+  }),
+  z.object({
+    tipo: z.literal("comparacion_foto"),
+    media_id: z.string().min(1),
+    texto_mal: TextoVisual(LIMITES_TEXTO_VISUAL.comparacion_foto.texto),
+    texto_bien: TextoVisual(LIMITES_TEXTO_VISUAL.comparacion_foto.texto),
+    eventos: z.array(Evento.extend({ accion: z.literal("cambia_estado") })).length(1),
+  }),
   z.object({
     tipo: z.literal("respuesta_lenta"),
     pregunta_cliente: TextoVisual(LIMITES_TEXTO_VISUAL.respuesta_lenta.pregunta_cliente).optional(),
@@ -162,7 +180,7 @@ export type Visual = z.infer<typeof VisualSchema>;
 // (validarEdicionDesdeAudio.ts) y el prompt. boton_estado/cursor_clic
 // quedan afuera (1 estado con una acción) y celular_chat también (es el
 // visual del gancho/cierre).
-export const TIPOS_VISUAL_DOS_ESTADOS = ["anuncio_boton", "conexion_whatsapp", "respuesta_lenta", "comparacion", "icono_palabra", "contador"] as const satisfies readonly Visual["tipo"][];
+export const TIPOS_VISUAL_DOS_ESTADOS = ["anuncio_boton", "conexion_whatsapp", "respuesta_lenta", "comparacion", "icono_palabra", "checklist", "comparacion_foto", "contador"] as const satisfies readonly Visual["tipo"][];
 
 // Todos los "eventos" de un visual, sin importar el tipo -- para
 // validar sus índices de palabra contra la narración real de la

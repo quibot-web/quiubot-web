@@ -22,7 +22,30 @@ function alMaximo(base: string, maximo: number): string {
   return t.slice(0, maximo).trimEnd().padEnd(maximo, "s");
 }
 
-const CASOS: { nombre: string; tipo: "anuncio_boton" | "conexion_whatsapp" | "respuesta_lenta" | "comparacion" | "icono_palabra"; textos: Record<string, string> }[] = [
+const CASOS: { nombre: string; tipo: "anuncio_boton" | "conexion_whatsapp" | "respuesta_lenta" | "comparacion" | "icono_palabra" | "checklist" | "comparacion_foto"; textos: Record<string, string> }[] = [
+  {
+    nombre: "checklist-maximo",
+    tipo: "checklist",
+    textos: {
+      titulo: alMaximo("Antes de publicar revisa", LIMITES_TEXTO_VISUAL.checklist.titulo),
+      item1: alMaximo("Luz natural de la ventana", LIMITES_TEXTO_VISUAL.checklist.item),
+      item2: alMaximo("Fondo liso y sin desorden", LIMITES_TEXTO_VISUAL.checklist.item),
+      item3: alMaximo("Producto en uso, con manos", LIMITES_TEXTO_VISUAL.checklist.item),
+    },
+  },
+  {
+    nombre: "comparacion_foto-maximo",
+    tipo: "comparacion_foto",
+    textos: {
+      texto_mal: alMaximo("Foto oscura, nadie la entiende", LIMITES_TEXTO_VISUAL.comparacion_foto.texto),
+      texto_bien: alMaximo("Con luz se ve el detalle real", LIMITES_TEXTO_VISUAL.comparacion_foto.texto),
+    },
+  },
+  {
+    nombre: "comparacion_foto-sin-foto",
+    tipo: "comparacion_foto",
+    textos: { sin_foto: "1", texto_mal: "Foto oscura", texto_bien: "Foto con luz" },
+  },
   {
     nombre: "comparacion-maximo",
     tipo: "comparacion",

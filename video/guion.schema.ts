@@ -505,6 +505,9 @@ export function idsDeMediaUsados(escenas: Guion["escenas"]): string[] {
   for (const e of escenas) {
     if (e.tipo === "producto_hero") ids.push(e.params.media_id);
     if (e.tipo === "gancho_texto" && e.params.media_id) ids.push(e.params.media_id);
+    // Parte 2d: el visual "comparacion_foto" también usa una pieza real
+    // del álbum -- se valida igual que las de las escenas.
+    if (e.visual?.tipo === "comparacion_foto") ids.push(e.visual.media_id);
   }
   return ids;
 }

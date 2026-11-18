@@ -196,6 +196,49 @@ describe("generarGuionConVoz", () => {
     expect(generarVozMock).not.toHaveBeenCalled();
   });
 
+  describe("parte 2d: comparacion_foto usa una foto REAL de las piezas elegidas", () => {
+    function guionConFoto(mediaId: string) {
+      return {
+        ...GUION_CON_AUDIO_VALIDO,
+        escenas: GUION_CON_AUDIO_VALIDO.escenas.map((e) =>
+          e.id === "e4" ? { ...e, visual: { tipo: "comparacion_foto", media_id: mediaId, texto_mal: "Foto oscura", texto_bien: "Foto con luz", eventos: [{ palabra: 4, accion: "cambia_estado" }] } } : e
+        ),
+      };
+    }
+    function parametrosConPiezas() {
+      const base = parametrosBase();
+      return {
+        ...base,
+        entrada: { ...base.entrada, piezas: [{ id: "foto-1", tipo: "imagen" as const }, { id: "video-1", tipo: "video" as const }] },
+        tienePiezas: true,
+        maxReintentos: 0,
+      };
+    }
+
+    it("con una imagen de las piezas elegidas: pasa", async () => {
+      const guion = guionConFoto("foto-1");
+      vi.stubGlobal("fetch", vi.fn().mockResolvedValue(respuestaOpenAI(guion)));
+      generarVozMock.mockResolvedValue({ audioUrl: "https://cloudinary.test/voz.mp3", palabras: palabrasParaTexto(guion.escenas.map((e) => e.narracion).join(" ")), silencios: [] });
+      const resultado = await generarGuionConVoz(parametrosConPiezas());
+      expect(resultado.ok).toBe(true);
+    });
+
+    it("con un id que no está entre las piezas: se rechaza (nunca inventa una foto)", async () => {
+      vi.stubGlobal("fetch", vi.fn().mockResolvedValue(respuestaOpenAI(guionConFoto("inventada"))));
+      const resultado = await generarGuionConVoz(parametrosConPiezas());
+      expect(resultado.ok).toBe(false);
+      if (!resultado.ok) expect(resultado.resumenErrores?.join(" ")).toContain('media_id "inventada" no está entre las piezas disponibles');
+      expect(generarVozMock).not.toHaveBeenCalled();
+    });
+
+    it("con un VIDEO de las piezas: se rechaza (el visual difumina y aclara una foto)", async () => {
+      vi.stubGlobal("fetch", vi.fn().mockResolvedValue(respuestaOpenAI(guionConFoto("video-1"))));
+      const resultado = await generarGuionConVoz(parametrosConPiezas());
+      expect(resultado.ok).toBe(false);
+      if (!resultado.ok) expect(resultado.resumenErrores?.join(" ")).toContain("necesita una pieza de tipo imagen");
+    });
+  });
+
   it("la compactación se come una palabra real: no entrega el guion, falla con 502 aunque la validación de texto haya pasado", async () => {
     // No se reconstruye a mano un silencio real que produzca el corte
     // -- eso ya lo prueba compactarPausas.test.ts/pruebaDeEstres.test.ts

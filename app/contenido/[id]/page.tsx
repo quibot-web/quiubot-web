@@ -513,7 +513,7 @@ export default function RevisionPiezaPage({ params }: { params: Promise<{ id: st
 
             <div style={{ position: "sticky", top: 24 }}>
               {esPiezaConVoz ? (
-                <VistaPreviaConVoz guion={guion} pistaMusicaUrl={pistaUrl} />
+                <VistaPreviaConVoz guion={guion} pistaMusicaUrl={pistaUrl} medios={medios} />
               ) : (
                 <VistaPrevia guion={guion} medios={medios} pistaUrl={pistaUrl} mostrarZonaSegura={false} />
               )}
