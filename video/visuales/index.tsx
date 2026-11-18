@@ -10,6 +10,8 @@ import { TarjetaSimple } from "./TarjetaSimple";
 import { AnuncioBotonVisual } from "./AnuncioBotonVisual";
 import { ConexionWhatsappVisual } from "./ConexionWhatsappVisual";
 import { RespuestaLentaVisual } from "./RespuestaLentaVisual";
+import { ComparacionVisual } from "./ComparacionVisual";
+import { IconoPalabraVisual } from "./IconoPalabraVisual";
 import { COLOR_ALERTA, COLOR_EXITO_BLOQUE } from "./acento";
 import { TARJETA_ALTURA_PORCENTAJE, TARJETA_TOP_PORCENTAJE } from "./geometria";
 
@@ -201,6 +203,37 @@ export function renderizarVisual(visual: Visual, ctx: ContextoVisual) {
           tema={ctx.tema}
           cuadroCambia={cuadroCambia}
           textos={{ icono: visual.icono, etiqueta: visual.etiqueta, texto_problema: visual.texto_problema, mensaje: visual.mensaje }}
+        />
+      );
+    }
+
+    case "comparacion": {
+      const cuadroCambia = cuadroDePalabra(visual.eventos[0].palabra, ctx);
+      return (
+        <ComparacionVisual
+          frame={ctx.frame}
+          fps={ctx.fps}
+          cuadroCambia={cuadroCambia}
+          textoMal={visual.texto_mal}
+          textoBien={visual.texto_bien}
+          etiquetaMal={visual.etiqueta_mal}
+          etiquetaBien={visual.etiqueta_bien}
+        />
+      );
+    }
+
+    case "icono_palabra": {
+      const cuadroCambia = cuadroDePalabra(visual.eventos[0].palabra, ctx);
+      return (
+        <IconoPalabraVisual
+          frame={ctx.frame}
+          fps={ctx.fps}
+          tema={ctx.tema}
+          cuadroCambia={cuadroCambia}
+          iconoAntes={visual.icono_antes}
+          palabraAntes={visual.palabra_antes}
+          iconoDespues={visual.icono_despues}
+          palabraDespues={visual.palabra_despues}
         />
       );
     }

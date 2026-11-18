@@ -10,9 +10,11 @@ import type { TemaGuion } from "./tema";
 import { AnuncioBotonVisual } from "./visuales/AnuncioBotonVisual";
 import { ConexionWhatsappVisual } from "./visuales/ConexionWhatsappVisual";
 import { RespuestaLentaVisual } from "./visuales/RespuestaLentaVisual";
+import { ComparacionVisual } from "./visuales/ComparacionVisual";
+import { IconoPalabraVisual } from "./visuales/IconoPalabraVisual";
 
 export type PropsBancoVisuales = {
-  tipo: "anuncio_boton" | "conexion_whatsapp" | "respuesta_lenta";
+  tipo: "anuncio_boton" | "conexion_whatsapp" | "respuesta_lenta" | "comparacion" | "icono_palabra";
   estado: "antes" | "despues";
   textos: Record<string, string>;
   tema?: TemaGuion;
@@ -39,6 +41,21 @@ export function BancoVisuales({ tipo, estado, textos, tema = TEMA_BANCO }: Props
       {tipo === "anuncio_boton" && <AnuncioBotonVisual frame={frame} fps={fps} tema={tema} cuadroCambia={cuadroCambia} textos={textos} />}
       {tipo === "conexion_whatsapp" && <ConexionWhatsappVisual frame={frame} fps={fps} tema={tema} cuadroCambia={cuadroCambia} textos={textos} />}
       {tipo === "respuesta_lenta" && <RespuestaLentaVisual frame={frame} fps={fps} cuadroCambia={cuadroCambia} textos={textos} />}
+      {tipo === "comparacion" && (
+        <ComparacionVisual frame={frame} fps={fps} cuadroCambia={cuadroCambia} textoMal={textos.texto_mal} textoBien={textos.texto_bien} etiquetaMal={textos.etiqueta_mal} etiquetaBien={textos.etiqueta_bien} />
+      )}
+      {tipo === "icono_palabra" && (
+        <IconoPalabraVisual
+          frame={frame}
+          fps={fps}
+          tema={tema}
+          cuadroCambia={cuadroCambia}
+          iconoAntes={textos.icono_antes}
+          palabraAntes={textos.palabra_antes}
+          iconoDespues={textos.icono_despues}
+          palabraDespues={textos.palabra_despues}
+        />
+      )}
     </AbsoluteFill>
   );
 }

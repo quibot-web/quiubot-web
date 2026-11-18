@@ -136,6 +136,31 @@ describe("validarEstructuraConsejosNumeradosAudio", () => {
     expect(validarEstructuraConsejosNumeradosAudio(escenas)).toHaveLength(0);
   });
 
+  it("parte 2c: los visuales nuevos (comparacion, icono_palabra) también valen para un consejo, con textos del tema", () => {
+    const comparacion = escenaConAudio("e2", "valor", "Saca la foto junto a una ventana, nunca con flash.", {
+      tipo: "comparacion",
+      texto_mal: "Foto con flash y fondo desordenado",
+      texto_bien: "Luz de ventana y fondo liso",
+      eventos: [{ palabra: 5, accion: "cambia_estado" }],
+    });
+    const iconoPalabra = escenaConAudio("e3", "valor", "Muestra el producto en uso, no solo sobre la mesa.", {
+      tipo: "icono_palabra",
+      icono_antes: "📦",
+      palabra_antes: "Quieto",
+      icono_despues: "🙌",
+      palabra_despues: "En uso",
+      eventos: [{ palabra: 4, accion: "cambia_estado" }],
+    });
+    const respuesta = escenaConAudio("e4", "valor", "Responde con el precio apenas te pregunten por una foto.", {
+      tipo: "respuesta_lenta",
+      pregunta_cliente: "¿Cuánto vale la taza azul?",
+      respuesta: "Vale $45.000, ¡te la envío hoy!",
+      confirmacion: "¡Me la llevo!",
+      eventos: [{ palabra: 5, accion: "cambia_estado" }],
+    });
+    expect(validarEstructuraConsejosNumeradosAudio([GANCHO_OK, comparacion, iconoPalabra, respuesta, MARCA_OK, CTA_OK])).toHaveLength(0);
+  });
+
   it("caso real: los 3 consejos metidos en una sola escena 'valor' con un contador -- hallazgo de estructura, no de contenido", () => {
     const escenaMergeada = escenaConAudio(
       "e2",

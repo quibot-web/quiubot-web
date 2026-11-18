@@ -79,4 +79,13 @@ describe("eje del reel: tema y producto de la pieza", () => {
     expect(prompt).toContain("primero decide los consejos a partir del eje");
     expect(prompt).toContain("Nunca elijas un consejo porque calza con un visual disponible");
   });
+
+  it("el prompt ofrece todos los visuales de 2 estados para los consejos, cada uno con sus textos", () => {
+    const prompt = construirPromptGuionOrganicoConAudio(entrada({ tema: "fotos de producto" }));
+    for (const tipo of ["comparacion", "icono_palabra", "anuncio_boton", "respuesta_lenta", "conexion_whatsapp", "contador"]) {
+      expect(prompt).toContain(tipo);
+    }
+    expect(prompt).not.toContain('Para el consejo "pon un botón de contacto en tu anuncio"');
+    expect(prompt).not.toContain('Para el consejo "responde rápido"');
+  });
 });

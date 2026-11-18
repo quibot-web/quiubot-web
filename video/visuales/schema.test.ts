@@ -1,6 +1,6 @@
 // Parte 2b: textos parametrizables en los 3 visuales de 2 estados.
 import { describe, it, expect } from "vitest";
-import { VisualSchema, LIMITES_TEXTO_VISUAL } from "./schema";
+import { VisualSchema, LIMITES_TEXTO_VISUAL, TIPOS_VISUAL_DOS_ESTADOS } from "./schema";
 
 const evento = [{ palabra: 2, accion: "cambia_estado" as const }];
 
@@ -46,5 +46,33 @@ describe("visuales de 2 estados con textos propios", () => {
 
   it("texto vacío o solo espacios: rechazado (mejor omitirlo y usar el de siempre)", () => {
     expect(VisualSchema.safeParse({ tipo: "respuesta_lenta", respuesta: "   ", eventos: evento }).success).toBe(false);
+  });
+});
+
+describe("parte 2c: comparacion e icono_palabra", () => {
+  it("comparacion exige los dos textos; las etiquetas son opcionales", () => {
+    expect(VisualSchema.safeParse({ tipo: "comparacion", texto_mal: "Fondo desordenado", texto_bien: "Fondo liso", eventos: evento }).success).toBe(true);
+    expect(VisualSchema.safeParse({ tipo: "comparacion", texto_mal: "Fondo desordenado", eventos: evento }).success).toBe(false);
+    expect(VisualSchema.safeParse({ tipo: "comparacion", texto_mal: "a".repeat(LIMITES_TEXTO_VISUAL.comparacion.texto + 1), texto_bien: "b", eventos: evento }).success).toBe(false);
+  });
+
+  it("icono_palabra exige los 2 íconos (un emoji cada uno) y las 2 palabras, con su límite", () => {
+    const base = { tipo: "icono_palabra", icono_antes: "🌑", palabra_antes: "Oscura", icono_despues: "☀️", palabra_despues: "Con luz", eventos: evento };
+    expect(VisualSchema.safeParse(base).success).toBe(true);
+    expect(VisualSchema.safeParse({ ...base, icono_antes: "luna" }).success).toBe(false);
+    expect(VisualSchema.safeParse({ ...base, palabra_despues: "a".repeat(LIMITES_TEXTO_VISUAL.icono_palabra.palabra + 1) }).success).toBe(false);
+    expect(VisualSchema.safeParse({ ...base, palabra_antes: "Mal ✗" }).success).toBe(false);
+  });
+
+  it("los visuales nuevos de 2 estados son 1 solo evento cambia_estado", () => {
+    const dos = [...evento, { palabra: 4, accion: "cambia_estado" as const }];
+    expect(VisualSchema.safeParse({ tipo: "comparacion", texto_mal: "a", texto_bien: "b", eventos: dos }).success).toBe(false);
+  });
+
+  it("la lista única de visuales para un consejo incluye los nuevos y deja afuera los de 1 estado y el del gancho", () => {
+    expect(TIPOS_VISUAL_DOS_ESTADOS).toEqual(expect.arrayContaining(["comparacion", "icono_palabra", "anuncio_boton", "respuesta_lenta", "conexion_whatsapp", "contador"]));
+    for (const fuera of ["boton_estado", "cursor_clic", "celular_chat"]) {
+      expect(TIPOS_VISUAL_DOS_ESTADOS as readonly string[]).not.toContain(fuera);
+    }
   });
 });

@@ -22,7 +22,32 @@ function alMaximo(base: string, maximo: number): string {
   return t.slice(0, maximo).trimEnd().padEnd(maximo, "s");
 }
 
-const CASOS: { nombre: string; tipo: "anuncio_boton" | "conexion_whatsapp" | "respuesta_lenta"; textos: Record<string, string> }[] = [
+const CASOS: { nombre: string; tipo: "anuncio_boton" | "conexion_whatsapp" | "respuesta_lenta" | "comparacion" | "icono_palabra"; textos: Record<string, string> }[] = [
+  {
+    nombre: "comparacion-maximo",
+    tipo: "comparacion",
+    textos: {
+      etiqueta_mal: alMaximo("Así no lo hagas", LIMITES_TEXTO_VISUAL.comparacion.etiqueta),
+      texto_mal: alMaximo("Foto con flash y fondo desordenado en la casa", LIMITES_TEXTO_VISUAL.comparacion.texto),
+      etiqueta_bien: alMaximo("Así sí funciona", LIMITES_TEXTO_VISUAL.comparacion.etiqueta),
+      texto_bien: alMaximo("Luz de ventana y fondo liso, sin distracciones", LIMITES_TEXTO_VISUAL.comparacion.texto),
+    },
+  },
+  {
+    nombre: "icono_palabra-maximo",
+    tipo: "icono_palabra",
+    textos: {
+      icono_antes: "🌑",
+      palabra_antes: alMaximo("Muy oscura y fea", LIMITES_TEXTO_VISUAL.icono_palabra.palabra),
+      icono_despues: "☀️",
+      palabra_despues: alMaximo("Luz natural ya", LIMITES_TEXTO_VISUAL.icono_palabra.palabra),
+    },
+  },
+  {
+    nombre: "icono_palabra-corta",
+    tipo: "icono_palabra",
+    textos: { icono_antes: "🐢", palabra_antes: "Lento", icono_despues: "⚡", palabra_despues: "Rápido" },
+  },
   {
     nombre: "anuncio_boton-maximo",
     tipo: "anuncio_boton",

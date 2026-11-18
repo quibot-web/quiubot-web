@@ -61,6 +61,8 @@ export const LIMITES_TEXTO_VISUAL = {
   anuncio_boton: { etiqueta: 16, texto_problema: 26, texto_arreglo: 20 },
   conexion_whatsapp: { etiqueta: 16, texto_problema: 18, mensaje: 36 },
   respuesta_lenta: { pregunta_cliente: 40, respuesta: 36, confirmacion: 28 },
+  comparacion: { etiqueta: 14, texto: 44 },
+  icono_palabra: { palabra: 16 },
 } as const;
 
 export const VisualSchema = z.discriminatedUnion("tipo", [
@@ -124,6 +126,25 @@ export const VisualSchema = z.discriminatedUnion("tipo", [
     mensaje: TextoVisual(LIMITES_TEXTO_VISUAL.conexion_whatsapp.mensaje).optional(),
     eventos: z.array(Evento.extend({ accion: z.literal("cambia_estado") })).length(1),
   }),
+  // Parte 2c: visuales genéricos de 2 estados del catálogo de la Fase B,
+  // sin ningún consejo escrito en el dibujo -- todo el texto lo pone la
+  // IA según el eje del reel.
+  z.object({
+    tipo: z.literal("comparacion"),
+    etiqueta_mal: TextoVisual(LIMITES_TEXTO_VISUAL.comparacion.etiqueta).optional(),
+    texto_mal: TextoVisual(LIMITES_TEXTO_VISUAL.comparacion.texto),
+    etiqueta_bien: TextoVisual(LIMITES_TEXTO_VISUAL.comparacion.etiqueta).optional(),
+    texto_bien: TextoVisual(LIMITES_TEXTO_VISUAL.comparacion.texto),
+    eventos: z.array(Evento.extend({ accion: z.literal("cambia_estado") })).length(1),
+  }),
+  z.object({
+    tipo: z.literal("icono_palabra"),
+    icono_antes: IconoVisual,
+    palabra_antes: TextoVisual(LIMITES_TEXTO_VISUAL.icono_palabra.palabra),
+    icono_despues: IconoVisual,
+    palabra_despues: TextoVisual(LIMITES_TEXTO_VISUAL.icono_palabra.palabra),
+    eventos: z.array(Evento.extend({ accion: z.literal("cambia_estado") })).length(1),
+  }),
   z.object({
     tipo: z.literal("respuesta_lenta"),
     pregunta_cliente: TextoVisual(LIMITES_TEXTO_VISUAL.respuesta_lenta.pregunta_cliente).optional(),
@@ -134,6 +155,14 @@ export const VisualSchema = z.discriminatedUnion("tipo", [
 ]);
 
 export type Visual = z.infer<typeof VisualSchema>;
+
+// Visuales que muestran un problema -> arreglo de verdad (2 estados, 1
+// evento "cambia_estado", o el contador que sube) -- los únicos válidos
+// para un consejo. Lista ÚNICA: la usan el validador
+// (validarEdicionDesdeAudio.ts) y el prompt. boton_estado/cursor_clic
+// quedan afuera (1 estado con una acción) y celular_chat también (es el
+// visual del gancho/cierre).
+export const TIPOS_VISUAL_DOS_ESTADOS = ["anuncio_boton", "conexion_whatsapp", "respuesta_lenta", "comparacion", "icono_palabra", "contador"] as const satisfies readonly Visual["tipo"][];
 
 // Todos los "eventos" de un visual, sin importar el tipo -- para
 // validar sus índices de palabra contra la narración real de la

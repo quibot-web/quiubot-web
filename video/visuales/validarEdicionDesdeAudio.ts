@@ -1,6 +1,7 @@
 import type { BloqueGuion, Guion } from "../guion.schema";
 import { contarPalabras } from "../guion.schema";
 import { eventosDeVisual } from "./schema";
+import { TIPOS_VISUAL_DOS_ESTADOS } from "./schema";
 
 // Validación ESTRICTA de la Fase B v2.0 (edición desde el audio), a
 // propósito separada de GuionSchema -- GuionSchema es la base
@@ -68,7 +69,8 @@ const FRACCION_MAXIMA_CLIC_CTA = 0.5;
 // revisión de staging): son UN estado con una acción, no muestran un
 // "antes" real del consejo. celular_chat tampoco entra acá (es el
 // visual del gancho/marca, no de un consejo puntual).
-const TIPOS_VISUAL_VALOR = new Set(["anuncio_boton", "conexion_whatsapp", "respuesta_lenta", "contador"]);
+// Lista única en schema.ts (TIPOS_VISUAL_DOS_ESTADOS), compartida con el prompt.
+const TIPOS_VISUAL_VALOR = new Set<string>(TIPOS_VISUAL_DOS_ESTADOS);
 // El cambio de estado debe caer, como mínimo, a este punto de la
 // narracion (fracción del total de palabras) -- si cae muy al
 // principio, el "problema" nunca llega a mostrarse de verdad.
