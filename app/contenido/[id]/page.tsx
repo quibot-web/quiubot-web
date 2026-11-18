@@ -4,6 +4,7 @@ import { useEffect, useState, useCallback, use } from "react";
 import dynamic from "next/dynamic";
 import { useRouter } from "next/navigation";
 import EditorEscena from "@/app/video/EditorEscena";
+import { rotuloEscena } from "@/app/lib/videoOrganico/rotuloEscena";
 import { labelReceta, formatoFechaLarga, evaluarEliminacion, puedePublicarAhora, type PublicacionOrganica } from "@/app/lib/contenido";
 import ConfirmarEliminarReel from "../ConfirmarEliminarReel";
 import SelectorFechaHora from "../SelectorFechaHora";
@@ -119,6 +120,12 @@ export default function RevisionPiezaPage({ params }: { params: Promise<{ id: st
       setGuion(data.guion as Guion);
       setCaption(data.guion.publicacion?.caption || "");
       setHashtagsTexto((data.guion.publicacion?.hashtags || []).join(" "));
+      // Caso real (staging, 18 nov 2026): el reproductor seguía con el
+      // diseño viejo (texto sobre fondo) hasta salir y volver a entrar --
+      // esPiezaConVoz, la pista y vozDesactualizada los calcula el
+      // servidor en GET y no se pedían de nuevo tras generar. Se recarga
+      // la pieza completa (el guion ya quedó guardado por la ruta).
+      await cargar();
     } catch {
       setErrorMsg("No se pudo generar el guion.");
     } finally {
@@ -461,6 +468,7 @@ export default function RevisionPiezaPage({ params }: { params: Promise<{ id: st
                 <EditorEscena
                   key={escena.id}
                   escena={escena}
+                  rotulo={rotuloEscena(guion.escenas, i)}
                   piezas={Object.entries(medios).map(([mid, m]) => ({ id: mid, url_imagen: m.url, tipo: m.tipo }))}
                   onCambiar={(nueva) => cambiarEscena(i, nueva)}
                   onElegirPieza={() => {}}
@@ -512,13 +520,13 @@ export default function RevisionPiezaPage({ params }: { params: Promise<{ id: st
             </div>
 
             <div style={{ position: "sticky", top: 24 }}>
-              {esPiezaConVoz ? (
+              {esPiezaConVoz || !!guion.vozUrl ? (
                 <VistaPreviaConVoz guion={guion} pistaMusicaUrl={pistaUrl} medios={medios} />
               ) : (
                 <VistaPrevia guion={guion} medios={medios} pistaUrl={pistaUrl} mostrarZonaSegura={false} />
               )}
               <p style={{ fontSize: 11, color: "#888", marginTop: 8 }}>
-                {((esPiezaConVoz ? duracionReelAutomaticoEnCuadros(guion) : duracionEnCuadros(guion)) / guion.fps).toFixed(1)}s
+                {((esPiezaConVoz || !!guion.vozUrl ? duracionReelAutomaticoEnCuadros(guion) : duracionEnCuadros(guion)) / guion.fps).toFixed(1)}s
               </p>
             </div>
           </div>

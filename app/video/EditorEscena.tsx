@@ -26,12 +26,16 @@ function Campo({ label, children }: { label: string; children: React.ReactNode }
 
 export default function EditorEscena({
   escena,
+  rotulo,
   piezas,
   tieneTextoPieza,
   onCambiar,
   onElegirPieza,
 }: {
   escena: Escena;
+  // Bloque real y visual (rotuloEscena) -- sin él, cae al id + tipo de
+  // escena de siempre (/video, anuncios).
+  rotulo?: { bloque: string; visual: string | null };
   piezas: PiezaElegida[];
   // Si la pieza asignada a ESTA escena tiene texto (lo calcula la página,
   // que es quien tiene el análisis) -- limita las opciones de
@@ -62,9 +66,16 @@ export default function EditorEscena({
   return (
     <div style={{ border: "1px solid #e5e5e5", borderRadius: 10, padding: 12, marginBottom: 10, background: "#fff" }}>
       <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 8 }}>
-        <span style={{ fontSize: 11, fontWeight: 700, color: "#534AB7", textTransform: "uppercase" }}>
-          {escena.id} · {escena.tipo}
-        </span>
+        {rotulo ? (
+          <span style={{ fontSize: 12, fontWeight: 700, color: "#534AB7" }}>
+            {rotulo.bloque}
+            {rotulo.visual && <span style={{ fontWeight: 500, color: "#888" }}> · visual: {rotulo.visual}</span>}
+          </span>
+        ) : (
+          <span style={{ fontSize: 11, fontWeight: 700, color: "#534AB7", textTransform: "uppercase" }}>
+            {escena.id} · {escena.tipo}
+          </span>
+        )}
         <Campo label="">
           <input
             type="number"
