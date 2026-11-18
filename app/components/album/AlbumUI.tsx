@@ -9,7 +9,8 @@ import { validarImagenPropia, validarVideoPropio } from "@/app/lib/imagenes";
 // album_creativos.html), para que las dos se vean idénticas. La única
 // diferencia entre ambas vive en quien las usa: /album abre un panel de
 // detalle al tocar una pieza; SelectorAlbum la elige y cierra.
-export type ItemAlbum = { id?: string; url_imagen: string; tipo: string; public_id: string; creado_en?: string };
+// analisis: el de gpt-4o (app/lib/analisisAlbum.ts); null = sin analizar.
+export type ItemAlbum = { id?: string; url_imagen: string; tipo: string; public_id: string; creado_en?: string; analisis?: { tiene_texto: boolean } | null };
 
 export type Filtro = "todos" | "imagen" | "video";
 

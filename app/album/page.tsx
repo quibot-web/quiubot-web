@@ -59,6 +59,66 @@ export default function AlbumPage() {
   const [borrando, setBorrando] = useState(false);
   const [erroresBorrado, setErroresBorrado] = useState(0);
   const [subiendo, setSubiendo] = useState(false);
+  // Análisis en lote de las imágenes sin analizar (con texto / sin texto,
+  // apta para fondo de un reel -- app/lib/analisisAlbum.ts).
+  const [pendientes, setPendientes] = useState<number | null>(null);
+  const [tieneLlave, setTieneLlave] = useState(true);
+  const [analizando, setAnalizando] = useState(false);
+  const [avanceAnalisis, setAvanceAnalisis] = useState(0);
+  const [errorAnalisis, setErrorAnalisis] = useState<string | null>(null);
+
+  const cargarPendientes = async () => {
+    try {
+      const res = await fetch("/api/album/analizar-pendientes");
+      if (!res.ok) return;
+      const data = await res.json();
+      setPendientes(data.pendientes ?? 0);
+      setTieneLlave(!!data.tieneLlave);
+    } catch {
+      // Sin el conteo, la barra simplemente no se muestra.
+    }
+  };
+
+  useEffect(() => {
+    let activo = true;
+    fetch("/api/album/analizar-pendientes")
+      .then((res) => (res.ok ? res.json() : null))
+      .then((data) => {
+        if (!activo || !data) return;
+        setPendientes(data.pendientes ?? 0);
+        setTieneLlave(!!data.tieneLlave);
+      })
+      .catch(() => {});
+    return () => {
+      activo = false;
+    };
+  }, []);
+
+  const analizarTodas = async () => {
+    setAnalizando(true);
+    setErrorAnalisis(null);
+    setAvanceAnalisis(0);
+    try {
+      // En lotes de 4 (cada imagen tarda unos segundos en gpt-4o) hasta
+      // que no quede ninguna; se corta si un lote no logra avanzar.
+      for (let vuelta = 0; vuelta < 100; vuelta++) {
+        const res = await fetch("/api/album/analizar-pendientes", { method: "POST" });
+        const data = await res.json();
+        if (!res.ok) {
+          setErrorAnalisis(data.error || "No se pudieron analizar las imágenes.");
+          break;
+        }
+        setAvanceAnalisis((n) => n + (data.analizadas ?? 0));
+        setPendientes(data.pendientes ?? 0);
+        if (!data.pendientes || (data.analizadas ?? 0) === 0) break;
+      }
+      await album.recargar();
+    } catch {
+      setErrorAnalisis("No se pudieron analizar las imágenes.");
+    } finally {
+      setAnalizando(false);
+    }
+  };
   const [errorSubida, setErrorSubida] = useState<string | null>(null);
   const fileRef = useRef<HTMLInputElement>(null);
 
@@ -90,6 +150,8 @@ export default function AlbumPage() {
       // vuelve a pedir la primera página (ya con la nueva pieza, por
       // creado_en desc) en vez de recargar el navegador.
       await album.recargar();
+      // La imagen se analiza sola en el servidor unos segundos después.
+      setTimeout(cargarPendientes, 8000);
     } else {
       setErrorSubida(resultado.error);
     }
@@ -157,6 +219,32 @@ export default function AlbumPage() {
         <div style={{ position: "sticky", top: 0, zIndex: 5, background: COLOR_FONDO, padding: "14px 0 10px" }}>
           <ChipsFiltro filtro={album.filtro} onCambiar={album.setFiltro} />
         </div>
+
+        {pendientes !== null && pendientes > 0 && (
+          <div style={{ display: "flex", alignItems: "center", gap: 12, flexWrap: "wrap", background: "#fff", border: `1px solid ${COLOR_BORDE}`, borderRadius: 12, padding: "12px 14px", marginBottom: 16, fontSize: 13, color: COLOR_TEXTO }}>
+            <span style={{ flex: 1, minWidth: 220 }}>
+              {analizando
+                ? `Analizando imágenes… ${avanceAnalisis} lista${avanceAnalisis !== 1 ? "s" : ""}, faltan ${pendientes}.`
+                : `${pendientes} imagen${pendientes !== 1 ? "es" : ""} sin analizar. El análisis detecta si tienen texto, para usar las fotos limpias de fondo en tus reels.`}
+            </span>
+            {tieneLlave ? (
+              <button
+                onClick={analizarTodas}
+                disabled={analizando}
+                style={{ border: "none", background: COLOR_MARCA, color: "#fff", borderRadius: 10, padding: "8px 14px", font: "inherit", fontWeight: 700, fontSize: 13, cursor: analizando ? "not-allowed" : "pointer", display: "inline-flex", alignItems: "center", gap: 6 }}
+              >
+                {analizando ? <Loader2 size={14} className="qb-album-spin" /> : null}
+                {analizando ? "Analizando…" : "Analizar ahora"}
+              </button>
+            ) : (
+              <span style={{ color: COLOR_TEXTO_SUAVE }}>Conecta tu cuenta de OpenAI en Integraciones para analizarlas.</span>
+            )}
+          </div>
+        )}
+
+        {errorAnalisis && (
+          <div style={{ background: "#FEF2F2", border: "1px solid #FCA5A5", borderRadius: 10, padding: "10px 14px", fontSize: 13, color: "#991B1B", marginBottom: 16 }}>{errorAnalisis}</div>
+        )}
 
         {(album.errorMsg || errorSubida) && (
           <div style={{ background: "#FEF2F2", border: "1px solid #FCA5A5", borderRadius: 10, padding: "10px 14px", fontSize: 13, color: "#991B1B", marginBottom: 16 }}>
@@ -320,6 +408,15 @@ export default function AlbumPage() {
               <p style={{ fontSize: 13, color: COLOR_TEXTO_SUAVE, margin: 0 }}>
                 {detalle.creado_en ? formatearFechaLarga(detalle.creado_en) : ""}
               </p>
+              {detalle.tipo !== "video" && (
+                <p style={{ fontSize: 13, margin: 0, color: COLOR_TEXTO }}>
+                  {detalle.analisis
+                    ? detalle.analisis.tiene_texto
+                      ? "Tiene texto: no se usa de fondo en tus reels."
+                      : "Sin texto: apta para fondo en tus reels."
+                    : "Todavía sin analizar."}
+                </p>
+              )}
               {detalle.tipo === "video" && detalle.id && (
                 <PublicarInstagramBoton albumId={detalle.id} />
               )}

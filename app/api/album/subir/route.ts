@@ -1,5 +1,6 @@
 import { auth } from "@/auth";
-import { NextRequest, NextResponse } from "next/server";
+import { after, NextRequest, NextResponse } from "next/server";
+import { analizarYGuardarPieza, llaveOpenAIDe } from "@/app/lib/analisisAlbum";
 import { supabaseAdmin } from "@/lib/supabase";
 import { desencriptarSiHaceFalta } from "@/lib/crypto";
 import { v2 as cloudinary } from "cloudinary";
@@ -15,7 +16,7 @@ export async function POST(req: NextRequest) {
 
     const { data: usuario, error: errorUsuario } = await supabaseAdmin
       .from("usuarios")
-      .select("id, cloudinary_name, cloudinary_key, cloudinary_secret")
+      .select("id, cloudinary_name, cloudinary_key, cloudinary_secret, openai_key")
       .eq("email", emailBusqueda)
       .single();
 
@@ -57,16 +58,33 @@ export async function POST(req: NextRequest) {
       resource_type: esVideo ? "video" : "image",
     });
 
-    const { error: insertError } = await supabaseAdmin.from("album_creativos").insert({
-      user_id: usuario.id,
-      url_imagen: upload.secure_url,
-      public_id: upload.public_id,
-      tipo: esVideo ? "video" : "imagen",
-    });
+    const { data: insertado, error: insertError } = await supabaseAdmin
+      .from("album_creativos")
+      .insert({
+        user_id: usuario.id,
+        url_imagen: upload.secure_url,
+        public_id: upload.public_id,
+        tipo: esVideo ? "video" : "imagen",
+      })
+      .select("id")
+      .single();
 
     if (insertError) {
       console.error("Error al insertar en álbum:", insertError);
       return NextResponse.json({ error: "Error al guardar en el álbum" }, { status: 500 });
+    }
+
+    // Análisis automático de la imagen (con texto o sin texto, apta para
+    // fondo de un reel -- app/lib/analisisAlbum.ts), después de responder:
+    // la subida no espera a gpt-4o. Sin llave de OpenAI se omite (queda
+    // pendiente para el análisis en lote de /album).
+    const apiKey = llaveOpenAIDe(usuario);
+    if (!esVideo && apiKey && insertado?.id) {
+      const pieza = { id: insertado.id as string, url_imagen: upload.secure_url };
+      after(async () => {
+        const resultado = await analizarYGuardarPieza(apiKey, pieza);
+        if (!resultado.ok) console.error("Análisis automático de imagen del álbum falló:", resultado.error);
+      });
     }
 
     return NextResponse.json({ ok: true, url: upload.secure_url, tipo: esVideo ? "video" : "imagen" });

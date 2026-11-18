@@ -53,7 +53,7 @@ export async function GET(req: NextRequest) {
 
   let query = supabaseAdmin
     .from("album_creativos")
-    .select("id, url_imagen, public_id, tipo, creado_en")
+    .select("id, url_imagen, public_id, tipo, creado_en, analisis")
     .eq("user_id", usuario.id);
 
   if (tipo === "imagen" || tipo === "video") {
