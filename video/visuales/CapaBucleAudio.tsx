@@ -3,6 +3,7 @@ import { fitText } from "@remotion/layout-utils";
 import type { BloqueGuion, Guion } from "../guion.schema";
 import { familiaDeFuenteSinCargar, TAMANO_FUENTE_CHIP_BUCLE } from "./tamanos";
 import { IconoOjos } from "../iconos";
+import { quitarGlifosFueraDeFuentes } from "../glifos";
 
 // Bucle persistente para ReelAutomatico.tsx -- NO es capas/Bucle.tsx
 // (esa queda intacta, la usan las 6 recetas de siempre sin voz).
@@ -90,7 +91,7 @@ export function CapaBucleAudio({ guion }: { guion: Guion }) {
   if (!contenido) return null;
 
   const conOjos = contenido.startsWith(MARCA_OJOS);
-  const texto = conOjos ? contenido.slice(MARCA_OJOS.length) : contenido;
+  const texto = quitarGlifosFueraDeFuentes(conOjos ? contenido.slice(MARCA_OJOS.length) : contenido);
   const fontSize = calcularFuenteChipQueCabe(texto, familiaDeFuenteSinCargar(guion.tema.fuente), conOjos);
 
   return (

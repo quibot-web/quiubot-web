@@ -2,6 +2,7 @@ import { AbsoluteFill, useCurrentFrame } from "remotion";
 import { colorTextoSobre, contrasteSuficiente, type TemaGuion } from "../tema";
 import { familiaDeFuente } from "../fuentes";
 import { TAMANO_FUENTE_SUBTITULOS } from "./tamanos";
+import { quitarGlifosFueraDeFuentes } from "../glifos";
 
 // Fase B v2.0 (docs/diseno/plan_contenido_organico_fase_b_v2.md,
 // punto 5). Palabra por palabra, dentro de zona segura (14%-65%,
@@ -121,7 +122,7 @@ export function SubtitulosSincronizados({ palabras, tema }: { palabras: PalabraE
                 padding: activa ? "0 0.2em" : 0,
               }}
             >
-              {palabra.texto}
+              {quitarGlifosFueraDeFuentes(palabra.texto)}
             </span>
           );
         })}

@@ -1,7 +1,10 @@
 import type { BloqueGuion, Guion } from "../guion.schema";
 import { contarPalabras } from "../guion.schema";
 import { eventosDeVisual } from "./schema";
-import { PATRON_TEXTO_VISUAL_SEGURO, TIPOS_VISUAL_DOS_ESTADOS } from "./schema";
+import { PATRON_EMOJI_EN_TEXTO, PATRON_TEXTO_VISUAL_SEGURO, TIPOS_VISUAL_DOS_ESTADOS } from "./schema";
+import { esNombreIcono } from "../nombresIconos";
+
+const CAMPOS_ICONO = new Set(["icono", "icono_antes", "icono_despues"]);
 
 // Validación ESTRICTA de la Fase B v2.0 (edición desde el audio), a
 // propósito separada de GuionSchema -- GuionSchema es la base
@@ -39,6 +42,30 @@ export function validarEdicionDesdeAudio(escenas: Guion["escenas"]): HallazgoEdi
           escenaId: escena.id,
           mensaje: `El texto de botón "${texto}" usa un símbolo que no se puede dibujar -- solo letras, números, puntuación común o emoji (nada de ✓ ✗ →; el chulo de "Siguiendo" lo pone el video solo).`,
         });
+      }
+    }
+
+    // Íconos y emoji (18 nov 2026): un emoji se ve distinto en cada
+    // sistema operativo o sale como cuadro blanco, así que lo nuevo que
+    // genera la IA usa SOLO nombres del catálogo de íconos dibujados, y
+    // ningún texto del visual lleva emoji. (El schema acepta emoji solo
+    // para que los guiones guardados sigan siendo válidos.)
+    for (const [campo, valor] of Object.entries(escena.visual)) {
+      if (typeof valor !== "string" || campo === "tipo" || campo === "media_id") continue;
+      if (CAMPOS_ICONO.has(campo)) {
+        if (!esNombreIcono(valor)) {
+          hallazgos.push({
+            escenaId: escena.id,
+            mensaje: `"${campo}": "${valor}" no es un nombre del catálogo de íconos -- usa uno de la lista (ej. "camara", "etiqueta_precio", "reloj_arena"), nunca un emoji.`,
+          });
+        }
+      } else if (PATRON_EMOJI_EN_TEXTO.test(valor)) {
+        hallazgos.push({ escenaId: escena.id, mensaje: `"${campo}": "${valor}" lleva emoji -- los textos de los visuales van sin emoji (solo letras, números y puntuación).` });
+      }
+    }
+    for (const item of escena.visual.tipo === "checklist" ? escena.visual.items : []) {
+      if (PATRON_EMOJI_EN_TEXTO.test(item)) {
+        hallazgos.push({ escenaId: escena.id, mensaje: `El paso "${item}" lleva emoji -- los textos de los visuales van sin emoji.` });
       }
     }
 

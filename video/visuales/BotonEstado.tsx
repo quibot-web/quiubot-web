@@ -9,6 +9,7 @@ import { colorTextoSobre, type TemaGuion } from "../tema";
 import { ANCHO_BOTON_PORCENTAJE_NUM, TAMANO_FUENTE_BOTON, familiaDeFuenteSinCargar } from "./tamanos";
 import { TARJETA_ANCHO_PORCENTAJE } from "./geometria";
 import { IconoCheck } from "../iconos";
+import { quitarGlifosFueraDeFuentes } from "../glifos";
 
 // Fórmula exacta copiada del molde aprobado (molde.tsx) -- no un
 // porcentaje redondeado a mano: 88% de la zona segura (ANCHO_MAX_PX
@@ -110,7 +111,7 @@ export function BotonEstado({
   const colorBoton = activo ? colorActivo : tema.color_primario;
   const colorTexto = colorTextoSobre(colorBoton);
   const separado = separarCheckFinal(texto);
-  const textoSinCheck = separado.texto;
+  const textoSinCheck = quitarGlifosFueraDeFuentes(separado.texto);
   const conCheck = conCheckPedido || separado.conCheck;
   const fontSize = calcularFuenteBotonQueCabe(textoSinCheck, familiaDeFuenteSinCargar(tema.fuente), conCheck);
   // Ronda L (revisión real en staging): "progreso*escalaExtra" arranca

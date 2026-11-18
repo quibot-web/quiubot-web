@@ -20,12 +20,13 @@ import { respiracion, type TemaGuion } from "../tema";
 import { interpolarSeguro } from "../interpolarSeguro";
 import { COLOR_ALERTA, COLOR_EXITO } from "./acento";
 import { TARJETA_ALTURA_PORCENTAJE, TARJETA_TOP_PORCENTAJE } from "./geometria";
-import { IconoCruz, IconoMegafono } from "../iconos";
+import { IconoCruz } from "../iconos";
+import { IconoCatalogo } from "../iconosCatalogo";
 
 // Textos (parte 2b): "etiqueta" es el origen (anuncio, perfil, catálogo,
 // historia...), "texto_problema" lo que pasa mientras está desconectado,
 // "mensaje" lo que llega al chat al conectarse.
-// Sin "icono" en el guion se dibuja IconoMegafono (nunca un emoji fijo).
+// Sin "icono" en el guion se dibuja el megáfono del catálogo.
 export const TEXTOS_CONEXION_POR_DEFECTO = { icono: undefined as string | undefined, etiqueta: "Anuncio", texto_problema: "Sin conexión", mensaje: "Hola, ¿tienen disponible?" };
 
 export function ConexionWhatsappVisual({
@@ -68,7 +69,7 @@ export function ConexionWhatsappVisual({
           justifyContent: "center",
         }}
       >
-        {t.icono ? <span style={{ fontSize: 60 }}>{t.icono}</span> : <IconoMegafono tamano={60} />}
+        <IconoCatalogo valor={t.icono ?? "megafono"} tamano={72} tema={tema} variante="sobre_marca" />
         <span style={{ position: "absolute", top: 10, left: 14, background: "rgba(0,0,0,0.3)", color: "#fff", fontSize: 18, fontWeight: 700, padding: "5px 14px", borderRadius: 999 }}>{t.etiqueta}</span>
       </div>
 

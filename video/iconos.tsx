@@ -138,15 +138,3 @@ export function IconoPersona({ tamano, color = "currentColor", estilo }: PropsIc
     </svg>
   );
 }
-
-// Megáfono (ícono por defecto de anuncio_boton/conexion_whatsapp cuando
-// el guion no trae "icono" -- antes era el emoji 📣).
-export function IconoMegafono({ tamano, color = "#fff", estilo }: PropsIcono) {
-  return (
-    <svg width={tamano} height={tamano} viewBox="0 0 24 24" style={estiloBase(estilo)} aria-hidden>
-      <path d="M3 10 H7 L17 4.5 V19.5 L7 14 H3 Z" fill={color} strokeLinejoin="round" />
-      <path d="M7.5 14.5 L9.5 20 H12 L10.5 15" fill={color} />
-      <path d="M19.5 9 Q21.5 12 19.5 15" fill="none" stroke={color} strokeWidth={1.8} strokeLinecap="round" />
-    </svg>
-  );
-}

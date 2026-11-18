@@ -1,5 +1,6 @@
 import { AbsoluteFill, spring } from "remotion";
 import { respiracion, type TemaGuion } from "../tema";
+import { quitarGlifosFueraDeFuentes } from "../glifos";
 import type { BloqueGuion } from "../guion.schema";
 import type { Visual } from "./schema";
 import { CelularChat } from "./CelularChat";
@@ -113,7 +114,24 @@ function MovimientoGancho({ frame, fps, children }: { frame: number; fps: number
   return <AbsoluteFill style={{ transform: `scale(${escala})` }}>{children}</AbsoluteFill>;
 }
 
-export function renderizarVisual(visual: Visual, ctx: ContextoVisual) {
+// Red de seguridad al pintar (18 nov 2026): textos ya guardados podían
+// traer emoji o símbolos fuera de nuestras fuentes (cuadro blanco en el
+// computador de un cliente sin fuente de respaldo). Se quitan acá; los
+// íconos (nombres del catálogo) y media_id no se tocan, y los textos de
+// botón los limpia BotonEstado (después de convertir el chulo final).
+const CAMPOS_SIN_LIMPIAR = new Set(["tipo", "media_id", "icono", "icono_antes", "icono_despues", "texto", "texto_activo", "texto_boton"]);
+function limpiarTextosVisual(visual: Visual): Visual {
+  const limpio: Record<string, unknown> = {};
+  for (const [campo, valor] of Object.entries(visual)) {
+    if (typeof valor === "string" && !CAMPOS_SIN_LIMPIAR.has(campo)) limpio[campo] = quitarGlifosFueraDeFuentes(valor);
+    else if (campo === "items" && Array.isArray(valor)) limpio[campo] = valor.map((v) => (typeof v === "string" ? quitarGlifosFueraDeFuentes(v) : v));
+    else limpio[campo] = valor;
+  }
+  return limpio as Visual;
+}
+
+export function renderizarVisual(visualGuardado: Visual, ctx: ContextoVisual) {
+  const visual = limpiarTextosVisual(visualGuardado);
   const nodo = renderizarVisualSinMovimiento(visual, ctx);
   if (ctx.bloque === "gancho" && visual.tipo !== "celular_chat") {
     return (

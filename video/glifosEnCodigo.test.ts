@@ -6,15 +6,13 @@
 // la portada). Los íconos se dibujan con SVG (video/iconos.tsx).
 //
 // Este test recorre el código (sin comentarios) de visuales, escenas y
-// capas y falla si aparece un carácter fuera de ASCII que no esté en la
-// lista de abajo. La lista se verificó contra el cmap real de las 4
-// fuentes con fontTools (todas lo tienen); para agregar un carácter
-// nuevo, verificarlo igual antes -- nunca agregar ✓ ✗ → ni emoji.
+// capas y falla si aparece un carácter que no esté en video/glifos.ts
+// (verificado contra el cmap real de las 4 fuentes con fontTools).
 import fs from "node:fs";
 import path from "node:path";
 import { describe, expect, it } from "vitest";
+import { caracterEnFuentes } from "./glifos";
 
-const GLIFOS_VERIFICADOS_EN_FUENTES = new Set([..."¡¿ÁÉÍÓÚÜÑáéíóúüñ"]);
 const CARPETAS = ["video/visuales", "video/escenas", "video/capas"];
 
 function sinComentarios(codigo: string): string {
@@ -36,7 +34,7 @@ describe("ningún componente pinta un glifo fuera de nuestras fuentes", () => {
   for (const archivo of archivos) {
     it(archivo, () => {
       const codigo = sinComentarios(fs.readFileSync(path.join(process.cwd(), archivo), "utf8"));
-      const fuera = [...new Set([...codigo].filter((c) => c.codePointAt(0)! > 127 && !GLIFOS_VERIFICADOS_EN_FUENTES.has(c)))];
+      const fuera = [...new Set([...codigo].filter((c) => c.codePointAt(0)! > 127 && !caracterEnFuentes(c)))];
       expect(fuera, `usa ${fuera.join(" ")} -- dibújalo con un ícono de video/iconos.tsx`).toEqual([]);
     });
   }

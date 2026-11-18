@@ -17,12 +17,12 @@ import { colorTextoSobre, mezclarColoresHex, type TemaGuion } from "../tema";
 import { CursorClicEventos } from "./CursorClicEventos";
 import { COLOR_ALERTA, COLOR_EXITO } from "./acento";
 import { TARJETA_ALTURA_PORCENTAJE, TARJETA_ANCHO_PORCENTAJE, TARJETA_TOP_PORCENTAJE } from "./geometria";
-import { IconoMegafono } from "../iconos";
+import { IconoCatalogo } from "../iconosCatalogo";
 
 // Textos (parte 2b): la IA los define según el tema -- "lo que le falta"
 // al anuncio/publicación y lo que aparece como arreglo. Por defecto, los
 // textos de siempre (consejo del botón de contacto).
-// Sin "icono" en el guion se dibuja IconoMegafono (nunca un emoji fijo).
+// Sin "icono" en el guion se dibuja el megáfono del catálogo.
 export const TEXTOS_ANUNCIO_BOTON_POR_DEFECTO = { icono: undefined as string | undefined, etiqueta: "Anuncio", texto_problema: "Sin botón de contacto", texto_arreglo: "Enviar mensaje" };
 
 export function AnuncioBotonVisual({
@@ -79,11 +79,7 @@ export function AnuncioBotonVisual({
         }}
       >
         <span style={{ position: "absolute", top: 20, left: 20, background: "rgba(0,0,0,0.35)", color: "#fff", fontSize: 24, fontWeight: 700, padding: "8px 18px", borderRadius: 999 }}>{t.etiqueta}</span>
-        {t.icono ? (
-          <span style={{ fontSize: 110, opacity: 0.6, filter: "drop-shadow(0 8px 16px rgba(0,0,0,0.2))" }}>{t.icono}</span>
-        ) : (
-          <IconoMegafono tamano={110} estilo={{ opacity: 0.6, filter: "drop-shadow(0 8px 16px rgba(0,0,0,0.2))" }} />
-        )}
+        <IconoCatalogo valor={t.icono ?? "megafono"} tamano={120} tema={tema} variante="sobre_marca" estilo={{ opacity: 0.85, filter: "drop-shadow(0 8px 16px rgba(0,0,0,0.2))" }} />
       </div>
       <div style={{ padding: "22px 26px" }}>
         {!activa ? (

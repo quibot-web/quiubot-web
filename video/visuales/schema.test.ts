@@ -56,10 +56,12 @@ describe("parte 2c: comparacion e icono_palabra", () => {
     expect(VisualSchema.safeParse({ tipo: "comparacion", texto_mal: "a".repeat(LIMITES_TEXTO_VISUAL.comparacion.texto + 1), texto_bien: "b", eventos: evento }).success).toBe(false);
   });
 
-  it("icono_palabra exige los 2 íconos (un emoji cada uno) y las 2 palabras, con su límite", () => {
-    const base = { tipo: "icono_palabra", icono_antes: "🌑", palabra_antes: "Oscura", icono_despues: "☀️", palabra_despues: "Con luz", eventos: evento };
+  it("icono_palabra exige los 2 íconos (nombres del catálogo) y las 2 palabras, con su límite", () => {
+    const base = { tipo: "icono_palabra", icono_antes: "luna", palabra_antes: "Oscura", icono_despues: "sol", palabra_despues: "Con luz", eventos: evento };
     expect(VisualSchema.safeParse(base).success).toBe(true);
-    expect(VisualSchema.safeParse({ ...base, icono_antes: "luna" }).success).toBe(false);
+    // Un emoji solo se acepta para que los guiones guardados sigan válidos.
+    expect(VisualSchema.safeParse({ ...base, icono_antes: "🌑" }).success).toBe(true);
+    expect(VisualSchema.safeParse({ ...base, icono_antes: "lunita" }).success).toBe(false);
     expect(VisualSchema.safeParse({ ...base, palabra_despues: "a".repeat(LIMITES_TEXTO_VISUAL.icono_palabra.palabra + 1) }).success).toBe(false);
     expect(VisualSchema.safeParse({ ...base, palabra_antes: "Mal ✗" }).success).toBe(false);
   });

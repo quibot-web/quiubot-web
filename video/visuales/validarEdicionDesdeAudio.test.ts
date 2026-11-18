@@ -143,6 +143,27 @@ describe("textos de botón sin glifos fuera de las fuentes", () => {
   });
 });
 
+describe("íconos del catálogo y textos sin emoji (generación nueva)", () => {
+  const conVisual = (visual: Guion["escenas"][number]["visual"]) => escenaConAudio("e2", "valor", "Toma la foto junto a una ventana con luz de día.", visual);
+
+  it("icono_palabra con nombres del catálogo: limpio", () => {
+    const escena = conVisual({ tipo: "icono_palabra", icono_antes: "luna", palabra_antes: "Oscura", icono_despues: "sol", palabra_despues: "Con luz", eventos: [{ palabra: 5, accion: "cambia_estado" }] });
+    expect(validarEdicionDesdeAudio([escena])).toHaveLength(0);
+  });
+
+  it("un emoji como ícono (aunque el schema lo acepte por los guiones viejos): hallazgo", () => {
+    const escena = conVisual({ tipo: "icono_palabra", icono_antes: "📅", palabra_antes: "Tarde", icono_despues: "sol", palabra_despues: "A tiempo", eventos: [{ palabra: 5, accion: "cambia_estado" }] });
+    expect(validarEdicionDesdeAudio([escena]).some((h) => h.mensaje.includes("catálogo de íconos"))).toBe(true);
+  });
+
+  it("emoji dentro de un texto o de un paso del checklist: hallazgo", () => {
+    const respuesta = conVisual({ tipo: "respuesta_lenta", respuesta: "¡Sí, aquí tienes! 😊", eventos: [{ palabra: 5, accion: "cambia_estado" }] });
+    const checklist = conVisual({ tipo: "checklist", items: ["Luz de día ☀️", "Fondo liso"], eventos: [{ palabra: 5, accion: "cambia_estado" }] });
+    expect(validarEdicionDesdeAudio([respuesta]).some((h) => h.mensaje.includes("sin emoji"))).toBe(true);
+    expect(validarEdicionDesdeAudio([checklist]).some((h) => h.mensaje.includes("sin emoji"))).toBe(true);
+  });
+});
+
 describe("validarEstructuraConsejosNumeradosAudio", () => {
   it("la estructura aprobada (gancho + 3 valor + marca + cta, gancho/marca en celular_chat) no dispara hallazgos", () => {
     const escenas = [GANCHO_OK, VALOR_1_OK, VALOR_2_OK, VALOR_3_OK, MARCA_OK, CTA_OK];

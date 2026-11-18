@@ -1,7 +1,8 @@
 // Visual de 2 estados "ícono + palabra grande" (parte 2c, 18 nov 2026 --
-// catálogo de la Fase B). Una tarjeta blanca con un emoji enorme y UNA
-// palabra (o 2-3) gigante: "antes" el problema en rojo (ej. 🌑 OSCURA),
-// "después" el arreglo en verde (ej. ☀️ CON LUZ). El ícono y la palabra
+// catálogo de la Fase B). Una tarjeta blanca con un ícono dibujado
+// enorme (catálogo, colores de marca) y UNA palabra (o 2-3) gigante:
+// "antes" el problema en rojo (ej. luna + OSCURA), "después" el arreglo
+// en verde (ej. sol + CON LUZ). El ícono y la palabra
 // cambian juntos con un pequeño "pop".
 //
 // La palabra se ajusta al ancho real con fitText() contra el ancho REAL
@@ -13,6 +14,7 @@ import { COLOR_ALERTA, COLOR_EXITO, COLOR_EXITO_BLOQUE } from "./acento";
 import { TARJETA_ALTURA_PORCENTAJE, TARJETA_ANCHO_PORCENTAJE, TARJETA_TOP_PORCENTAJE } from "./geometria";
 import { familiaDeFuenteSinCargar } from "./tamanos";
 import type { TemaGuion } from "../tema";
+import { IconoCatalogo } from "../iconosCatalogo";
 
 const ANCHO_TARJETA_PX = (TARJETA_ANCHO_PORCENTAJE / 100) * 1080;
 const PADDING_HORIZONTAL_PX = 48;
@@ -72,7 +74,7 @@ export function IconoPalabraVisual({
         padding: `0 ${PADDING_HORIZONTAL_PX}px`,
       }}
     >
-      <span style={{ fontSize: 170, lineHeight: 1 }}>{icono}</span>
+      <IconoCatalogo valor={icono} tamano={200} tema={tema} />
       <span style={{ fontSize: tamano, fontWeight: 900, lineHeight: 1.05, whiteSpace: "nowrap", textTransform: "uppercase", color: despues ? COLOR_EXITO_BLOQUE : COLOR_ALERTA }}>{palabra}</span>
     </div>
   );

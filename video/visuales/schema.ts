@@ -1,4 +1,5 @@
 import { z } from "zod";
+import { esNombreIcono } from "../nombresIconos";
 
 // Fase B v2.0 (ver docs/diseno/plan_contenido_organico_fase_b_v2.md,
 // punto 6). Schema con los visuales ya aprobados en
@@ -44,15 +45,19 @@ export function TextoVisual(maximo: number) {
     });
 }
 
-// Un solo emoji (con sus modificadores/uniones) -- el ícono grande de la
-// tarjeta en anuncio_boton/conexion_whatsapp, para que calce con la
-// etiqueta (📷 para "Publicación" de fotos, 🛍️ para "Catálogo"...): un
-// 📣 fijo con la etiqueta "Catálogo" contradice lo que dice el visual.
+// Ícono de un visual (anuncio_boton/conexion_whatsapp "icono",
+// icono_palabra icono_antes/icono_despues): un NOMBRE del catálogo de
+// íconos dibujados (video/nombresIconos.ts, 18 nov 2026). Un solo emoji
+// se sigue aceptando SOLO para que los guiones guardados antes sigan
+// siendo válidos -- al pintar se traduce al ícono equivalente, nunca se
+// dibuja el emoji; lo nuevo que genera la IA tiene que ser un nombre
+// (lo exige validarEdicionDesdeAudio).
 export const PATRON_UN_EMOJI = /^\p{Extended_Pictographic}\ufe0f?(\u200d\p{Extended_Pictographic}\ufe0f?)*$/u;
+export const PATRON_EMOJI_EN_TEXTO = /\p{Extended_Pictographic}/u;
 export const IconoVisual = z
   .string()
   .trim()
-  .refine((t) => PATRON_UN_EMOJI.test(t), { message: "debe ser un solo emoji" });
+  .refine((t) => esNombreIcono(t) || PATRON_UN_EMOJI.test(t), { message: "debe ser un nombre del catálogo de íconos" });
 
 // Límites de largo de cada texto, en un solo lugar: el prompt los cita
 // y el banco de pruebas visual (video/BancoVisuales.tsx) los renderiza

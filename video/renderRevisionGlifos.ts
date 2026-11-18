@@ -35,6 +35,14 @@ const TOMAS_BANCO: TomaBanco[] = [
   { nombre: "comparacion-marcas", bloque: "valor", frame: 60, visual: { tipo: "comparacion", texto_mal: "Foto con flash", texto_bien: "Luz de ventana", eventos: [{ palabra: 0, accion: "cambia_estado" }] } },
   { nombre: "foto-mal", bloque: "gancho", frame: 30, visual: { tipo: "comparacion_foto", media_id: "foto-demo", texto_mal: "Así nadie la compra", texto_bien: "Así sí", eventos: [] } },
   { nombre: "foto-bien", bloque: "marca", frame: 60, visual: { tipo: "comparacion_foto", media_id: "foto-demo", texto_mal: "Así nadie la compra", texto_bien: "Así se ve el detalle", eventos: [{ palabra: 0, accion: "cambia_estado" }] } },
+  // Catálogo de íconos (colores de marca) y guiones viejos con emoji.
+  { nombre: "icono-luna", bloque: "gancho", frame: 30, visual: { tipo: "icono_palabra", icono_antes: "luna", palabra_antes: "Oscura", icono_despues: "sol", palabra_despues: "Con luz", eventos: [] } },
+  { nombre: "icono-sol", bloque: "marca", frame: 60, visual: { tipo: "icono_palabra", icono_antes: "luna", palabra_antes: "Oscura", icono_despues: "sol", palabra_despues: "Con luz", eventos: [{ palabra: 0, accion: "cambia_estado" }] } },
+  { nombre: "icono-viejo-emoji-calendario", bloque: "gancho", frame: 30, visual: { tipo: "icono_palabra", icono_antes: "📅", palabra_antes: "Tarde", icono_despues: "⏳", palabra_despues: "A tiempo", eventos: [] } },
+  { nombre: "icono-reloj-arena-a-check", bloque: "marca", frame: 60, visual: { tipo: "icono_palabra", icono_antes: "reloj_arena", palabra_antes: "Esperando", icono_despues: "etiqueta_precio", palabra_despues: "Con precio", eventos: [{ palabra: 0, accion: "cambia_estado" }] } },
+  { nombre: "anuncio-icono-camara", bloque: "gancho", frame: 30, visual: { tipo: "anuncio_boton", icono: "camara", etiqueta: "Publicación", texto_problema: "Sin precio", texto_arreglo: "Desde $45.000", eventos: [] } },
+  { nombre: "conexion-icono-bolsa", bloque: "gancho", frame: 30, visual: { tipo: "conexion_whatsapp", icono: "bolsa", etiqueta: "Catálogo", texto_problema: "Sin precios", mensaje: "Hola, quiero la taza", eventos: [] } },
+  { nombre: "respuesta-vieja-con-emoji", bloque: "marca", frame: 60, visual: { tipo: "respuesta_lenta", pregunta_cliente: "¿Cuánto vale?", respuesta: "¡Sí, aquí tienes! 😊", confirmacion: "¡Me la llevo! 🙌", eventos: [{ palabra: 0, accion: "cambia_estado" }] } },
   { nombre: "foto-sin-medio", bloque: "gancho", frame: 30, visual: { tipo: "comparacion_foto", media_id: "no-existe", texto_mal: "Así nadie la compra", texto_bien: "Así sí", eventos: [] } },
 ];
 
@@ -47,7 +55,7 @@ const TOMAS_FIXTURE: { nombre: string; id: string; guion: Guion; escena: (e: Gui
   { nombre: "viejo-cta-whatsapp-mano", id: "venta-directa-whatsapp", guion: fixtureVentaDirectaWhatsapp, escena: (e) => e.tipo === "cta" },
   { nombre: "viejo-cta-comentar-burbuja", id: "organico-pregunta-comunidad", guion: fixturePreguntaComunidad, escena: (e) => e.tipo === "cta" },
   { nombre: "viejo-cta-seguir-persona", id: "organico-consejos-numerados", guion: fixtureConsejosNumerados, escena: (e) => e.tipo === "cta" },
-  { nombre: "viejo-chip-bucle", id: "organico-consejos-numerados", guion: fixtureConsejosNumerados, escena: (_e) => true },
+  { nombre: "viejo-chip-bucle", id: "organico-consejos-numerados", guion: fixtureConsejosNumerados, escena: () => true },
 ];
 
 async function main() {
