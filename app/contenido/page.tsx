@@ -20,6 +20,7 @@ import { hoyBogota, fechaBogota } from "@/app/lib/fechaBogota";
 import { urlMiniaturaReel } from "@/app/lib/cloudinaryUrl";
 import { construirTemaDesdeAdn, colorTextoSobre, type AdnMarcaParaTema } from "@/video/tema";
 import SelectorAlbum, { type ItemAlbum } from "@/app/components/SelectorAlbum";
+import { EtiquetaAnalisis } from "@/app/components/album/AlbumUI";
 import SelectorProducto, { resolverProductoAlUsar, valorVacioSelectorProducto, type ValorSelectorProducto } from "@/app/components/SelectorProducto";
 import ColaDeRender from "./ColaDeRender";
 import ConfirmarEliminarReel from "./ConfirmarEliminarReel";
@@ -664,7 +665,16 @@ function FormularioAgregarReel({ fechaInicial, onCerrar, onCreado }: { fechaInic
   }
 
   function elegirPiezasDelAlbum(items: ItemAlbum[]) {
-    setPiezasElegidas((prev) => [...prev, ...items].slice(0, MAX_PIEZAS_POR_REEL));
+    // Sin repetidas; si con lo que ya había se pasa del máximo, se avisa
+    // y se toman solo las primeras.
+    const sinRepetir = items.filter((it) => !piezasElegidas.some((p) => p.id && p.id === it.id));
+    const total = piezasElegidas.length + sinRepetir.length;
+    if (total > MAX_PIEZAS_POR_REEL) {
+      setError(`Elegiste ${total} piezas; un reel usa hasta ${MAX_PIEZAS_POR_REEL}, así que se tomaron las primeras ${MAX_PIEZAS_POR_REEL}.`);
+    } else {
+      setError(null);
+    }
+    setPiezasElegidas((prev) => [...prev, ...sinRepetir].slice(0, MAX_PIEZAS_POR_REEL));
     setMostrarSelectorAlbum(false);
   }
 
@@ -767,22 +777,28 @@ function FormularioAgregarReel({ fechaInicial, onCerrar, onCreado }: { fechaInic
         <label style={{ ...etiquetaCampo, marginTop: 16 }}>
           Fotos o video del álbum (hasta {MAX_PIEZAS_POR_REEL}){recetaExigeMedia ? " -- obligatorio para esta receta" : ""}
         </label>
+        <p style={{ fontSize: 11.5, color: "#666", margin: "0 0 8px" }}>
+          Elige del álbum o súbelas desde tu computador. Las fotos &ldquo;Apta para fondo&rdquo; (sin texto) son las que el reel puede usar de fondo en el estilo Foto.
+        </p>
         <div style={{ display: "flex", gap: 8, flexWrap: "wrap", marginBottom: 8 }}>
           {piezasElegidas.map((p) => (
-            <div key={p.id} style={{ position: "relative", width: 64, height: 64 }}>
-              {p.tipo === "video" ? (
-                <video src={p.url_imagen} style={{ width: 64, height: 64, borderRadius: 8, objectFit: "cover", background: "#000" }} muted />
-              ) : (
-                // eslint-disable-next-line @next/next/no-img-element
-                <img src={p.url_imagen} alt="" style={{ width: 64, height: 64, borderRadius: 8, objectFit: "cover" }} />
-              )}
-              <button
-                type="button"
-                onClick={() => quitarPieza(p.id)}
-                style={{ position: "absolute", top: -6, right: -6, width: 20, height: 20, borderRadius: "50%", border: "none", background: "#b91c1c", color: "#fff", fontSize: 11, cursor: "pointer" }}
-              >
-                ✕
-              </button>
+            <div key={p.id} style={{ display: "flex", flexDirection: "column", alignItems: "center", gap: 4 }}>
+              <div style={{ position: "relative", width: 64, height: 64 }}>
+                {p.tipo === "video" ? (
+                  <video src={p.url_imagen} style={{ width: 64, height: 64, borderRadius: 8, objectFit: "cover", background: "#000" }} muted />
+                ) : (
+                  // eslint-disable-next-line @next/next/no-img-element
+                  <img src={p.url_imagen} alt="" style={{ width: 64, height: 64, borderRadius: 8, objectFit: "cover" }} />
+                )}
+                <button
+                  type="button"
+                  onClick={() => quitarPieza(p.id)}
+                  style={{ position: "absolute", top: -6, right: -6, width: 20, height: 20, borderRadius: "50%", border: "none", background: "#b91c1c", color: "#fff", fontSize: 11, cursor: "pointer" }}
+                >
+                  ✕
+                </button>
+              </div>
+              <EtiquetaAnalisis item={p} compacta />
             </div>
           ))}
           {piezasElegidas.length < MAX_PIEZAS_POR_REEL && (
@@ -810,9 +826,11 @@ function FormularioAgregarReel({ fechaInicial, onCerrar, onCreado }: { fechaInic
 
       {mostrarSelectorAlbum && (
         <SelectorAlbum
-          titulo={`Elige hasta ${MAX_PIEZAS_POR_REEL - piezasElegidas.length} piezas del álbum`}
+          titulo={`Elige o sube hasta ${MAX_PIEZAS_POR_REEL - piezasElegidas.length} pieza${MAX_PIEZAS_POR_REEL - piezasElegidas.length !== 1 ? "s" : ""}`}
           onElegir={() => {}}
           multiple
+          subirDesdeComputador
+          mostrarAnalisis
           maxSeleccion={MAX_PIEZAS_POR_REEL - piezasElegidas.length}
           onElegirVarios={elegirPiezasDelAlbum}
           onCerrar={() => setMostrarSelectorAlbum(false)}

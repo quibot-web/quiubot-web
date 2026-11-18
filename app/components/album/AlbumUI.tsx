@@ -69,7 +69,10 @@ export function agruparPorFecha(items: ItemAlbum[]) {
 // (tipo de archivo, dimensión mínima de imagen, duración de video) --
 // reusadas tal cual acá para que subir desde el álbum exija lo mismo,
 // en vez de aceptar cualquier archivo sin revisar nada.
-export async function subirArchivoValidado(file: File): Promise<{ ok: true } | { ok: false; error: string }> {
+// Devuelve la pieza creada (con su id) para que quien sube pueda dejarla
+// seleccionada; el análisis de texto lo hace el servidor solo, unos
+// segundos después (analisis: null hasta entonces).
+export async function subirArchivoValidado(file: File): Promise<{ ok: true; item?: ItemAlbum } | { ok: false; error: string }> {
   const esVideo = file.type.startsWith("video/");
   const validacion = esVideo ? await validarVideoPropio(file) : await validarImagenPropia(file);
   if (!validacion.ok) return { ok: false, error: validacion.error };
@@ -79,7 +82,40 @@ export async function subirArchivoValidado(file: File): Promise<{ ok: true } | {
   const res = await fetch("/api/album/subir", { method: "POST", body: formData });
   const data = await res.json().catch(() => ({}));
   if (!res.ok) return { ok: false, error: data.error || "No se pudo subir el archivo." };
-  return { ok: true };
+  const item: ItemAlbum | undefined = data.id
+    ? { id: data.id, url_imagen: data.url, tipo: data.tipo, public_id: data.public_id ?? data.id, creado_en: new Date().toISOString(), analisis: null }
+    : undefined;
+  return { ok: true, item };
+}
+
+// Si una imagen sirve para el estilo Foto de los reels (análisis de texto
+// de gpt-4o, app/lib/analisisAlbum.ts). null = no aplica (video) o no se
+// sabe (pieza que no vino con su análisis, ej. fotos de un producto).
+export type EstadoAnalisisPieza = "apta" | "texto" | "sin_analizar";
+export function estadoAnalisisPieza(item: Pick<ItemAlbum, "tipo" | "analisis">): EstadoAnalisisPieza | null {
+  if (item.tipo === "video" || item.analisis === undefined) return null;
+  if (item.analisis === null) return "sin_analizar";
+  return item.analisis.tiene_texto ? "texto" : "apta";
+}
+
+const ETIQUETAS_ANALISIS: Record<EstadoAnalisisPieza, { texto: string; fondo: string; color: string }> = {
+  apta: { texto: "Apta para fondo", fondo: "#E7F6EE", color: "#0F6B3A" },
+  texto: { texto: "Tiene texto", fondo: "#F1F0F4", color: "#4A4757" },
+  sin_analizar: { texto: "Sin analizar", fondo: "#FFF6E5", color: "#8A5A00" },
+};
+
+export function EtiquetaAnalisis({ item, compacta }: { item: Pick<ItemAlbum, "tipo" | "analisis">; compacta?: boolean }) {
+  const estado = estadoAnalisisPieza(item);
+  if (!estado) return null;
+  const e = ETIQUETAS_ANALISIS[estado];
+  return (
+    <span
+      title={estado === "apta" ? "Sin texto: se puede usar de fondo en el estilo Foto" : estado === "texto" ? "Tiene texto: no se usa de fondo en el estilo Foto" : "Todavía no se sabe si tiene texto"}
+      style={{ display: "inline-block", fontSize: compacta ? 9.5 : 11, fontWeight: 800, lineHeight: 1.2, borderRadius: 999, padding: compacta ? "2px 5px" : "3px 8px", background: e.fondo, color: e.color, whiteSpace: "nowrap" }}
+    >
+      {e.texto}
+    </span>
+  );
 }
 
 export function ChipsFiltro({ filtro, onCambiar }: { filtro: Filtro; onCambiar: (f: Filtro) => void }) {
@@ -111,12 +147,16 @@ export function TarjetaAlbum({
   modoSeleccion,
   seleccionado,
   yaUsadaEn,
+  mostrarAnalisis,
   onClick,
 }: {
   item: ItemAlbum;
   modoSeleccion?: boolean;
   seleccionado?: boolean;
   yaUsadaEn?: string;
+  // Etiqueta "Apta para fondo / Tiene texto / Sin analizar" (selector de
+  // "Agregar reel" en /contenido).
+  mostrarAnalisis?: boolean;
   onClick: () => void;
 }) {
   const esVideo = item.tipo === "video";
@@ -180,9 +220,10 @@ export function TarjetaAlbum({
       {yaUsadaEn ? (
         <div className="qb-album-usada">Ya usada en {yaUsadaEn}</div>
       ) : (
-        item.creado_en && (
-          <div className="qb-album-abajo">
-            <span>{formatearFechaCorta(item.creado_en)}</span>
+        (item.creado_en || mostrarAnalisis) && (
+          <div className="qb-album-abajo" style={mostrarAnalisis ? { justifyContent: "space-between", gap: 6 } : undefined}>
+            {mostrarAnalisis && <EtiquetaAnalisis item={item} />}
+            {item.creado_en && <span>{formatearFechaCorta(item.creado_en)}</span>}
           </div>
         )
       )}

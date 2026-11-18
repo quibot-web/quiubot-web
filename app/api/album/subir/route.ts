@@ -87,7 +87,9 @@ export async function POST(req: NextRequest) {
       });
     }
 
-    return NextResponse.json({ ok: true, url: upload.secure_url, tipo: esVideo ? "video" : "imagen" });
+    // id/public_id: para que quien sube (ej. el selector de "Agregar reel")
+    // deje la pieza ya seleccionada sin tener que buscarla en el álbum.
+    return NextResponse.json({ ok: true, id: insertado?.id ?? null, url: upload.secure_url, public_id: upload.public_id, tipo: esVideo ? "video" : "imagen" });
   } catch (err: any) {
     // Antes, todo lo que estaba fuera del try original (parseo de
     // formData, archivo.arrayBuffer(), etc.) no tenia manejo de errores --

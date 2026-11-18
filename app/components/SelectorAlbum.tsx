@@ -35,13 +35,33 @@ type Props = {
   multiple?: boolean;
   onElegirVarios?: (items: ItemAlbum[]) => void;
   maxSeleccion?: number;
+  // "Subir desde mi computador" en el encabezado (varios archivos a la
+  // vez, mismas validaciones y análisis de /album): lo subido queda en el
+  // álbum y ya seleccionado. Solo con multiple. Hoy lo usa "Agregar reel".
+  subirDesdeComputador?: boolean;
+  // Etiqueta de análisis en cada miniatura (apta para fondo / tiene texto
+  // / sin analizar).
+  mostrarAnalisis?: boolean;
 };
 
-export default function SelectorAlbum({ titulo, onElegir, onCerrar, yaUsadaPorUrl, multiple, onElegirVarios, maxSeleccion }: Props) {
+export default function SelectorAlbum({ titulo, onElegir, onCerrar, yaUsadaPorUrl, multiple, onElegirVarios, maxSeleccion, subirDesdeComputador, mostrarAnalisis }: Props) {
   const album = useAlbumPaginado();
   const [subiendo, setSubiendo] = useState(false);
   const [errorSubida, setErrorSubida] = useState<string | null>(null);
   const [seleccionIds, setSeleccionIds] = useState<Set<string>>(new Set());
+  // Piezas recién subidas desde este selector (por si todavía no aparecen
+  // en la página cargada del álbum al confirmar).
+  const [subidas, setSubidas] = useState<ItemAlbum[]>([]);
+  const [avisoTope, setAvisoTope] = useState<string | null>(null);
+  const [progresoSubida, setProgresoSubida] = useState<string | null>(null);
+  const multipleFileRef = useRef<HTMLInputElement>(null);
+  const montadoRef = useRef(true);
+  useEffect(() => {
+    montadoRef.current = true;
+    return () => {
+      montadoRef.current = false;
+    };
+  }, []);
 
   const scrollRef = useRef<HTMLDivElement>(null);
   const centinelaRef = useRef<HTMLDivElement>(null);
@@ -81,6 +101,48 @@ export default function SelectorAlbum({ titulo, onElegir, onCerrar, yaUsadaPorUr
     if (fileRef.current) fileRef.current.value = "";
   };
 
+  // Varios archivos a la vez: se suben uno por uno con las mismas
+  // validaciones de /album y quedan seleccionados. Si eligen más de los
+  // que caben, se avisa y se suben solo los primeros.
+  const handleSubirVarios = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const archivos = Array.from(e.target.files ?? []);
+    if (multipleFileRef.current) multipleFileRef.current.value = "";
+    if (archivos.length === 0) return;
+    const restantes = Math.max(0, (maxSeleccion ?? Infinity) - seleccionIds.size);
+    if (restantes === 0) {
+      setAvisoTope(`Ya elegiste el máximo (${maxSeleccion}). Quita una para subir otra.`);
+      return;
+    }
+    const aSubir = archivos.slice(0, restantes);
+    setAvisoTope(archivos.length > restantes ? `Elegiste ${archivos.length} archivos; solo caben ${restantes}, así que se suben los primeros ${restantes}.` : null);
+    setSubiendo(true);
+    setErrorSubida(null);
+    const nuevas: ItemAlbum[] = [];
+    const errores: string[] = [];
+    for (const [i, archivo] of aSubir.entries()) {
+      setProgresoSubida(`Subiendo ${i + 1} de ${aSubir.length}…`);
+      const resultado = await subirArchivoValidado(archivo);
+      if (resultado.ok && resultado.item) nuevas.push(resultado.item);
+      else if (!resultado.ok) errores.push(`${archivo.name}: ${resultado.error}`);
+    }
+    setProgresoSubida(null);
+    setSubiendo(false);
+    if (errores.length > 0) setErrorSubida(errores.join(" · "));
+    if (nuevas.length === 0) return;
+    setSubidas((prev) => [...prev, ...nuevas]);
+    setSeleccionIds((prev) => {
+      const next = new Set(prev);
+      for (const n of nuevas) if (n.id) next.add(n.id);
+      return next;
+    });
+    await album.recargar();
+    // El análisis de texto corre en el servidor unos segundos después de
+    // subir: se vuelve a pedir el álbum para actualizar las etiquetas.
+    setTimeout(() => {
+      if (montadoRef.current) album.recargar();
+    }, 9000);
+  };
+
   const grupos = agruparPorFecha(album.items);
   const vacio = !album.cargandoInicial && album.items.length === 0 && !album.errorMsg;
   const tope = maxSeleccion ?? Infinity;
@@ -95,16 +157,23 @@ export default function SelectorAlbum({ titulo, onElegir, onCerrar, yaUsadaPorUr
       const next = new Set(prev);
       if (next.has(item.id!)) {
         next.delete(item.id!);
+        setAvisoTope(null);
       } else if (next.size < tope) {
         next.add(item.id!);
+      } else {
+        setAvisoTope(`Puedes elegir hasta ${tope}. Quita una para elegir otra.`);
       }
       return next;
     });
   }
 
   function confirmarSeleccionMultiple() {
-    const elegidos = album.items.filter((it) => it.id && seleccionIds.has(it.id));
-    onElegirVarios?.(elegidos);
+    // Piezas de la página cargada (con su análisis al día) + las recién
+    // subidas que todavía no aparezcan ahí, en el orden en que se eligieron.
+    const porId = new Map<string, ItemAlbum>();
+    for (const it of [...subidas, ...album.items]) if (it.id) porId.set(it.id, it);
+    const elegidos = [...seleccionIds].map((id) => porId.get(id)).filter((it): it is ItemAlbum => !!it);
+    onElegirVarios?.(elegidos.slice(0, tope));
   }
 
   return (
@@ -119,7 +188,22 @@ export default function SelectorAlbum({ titulo, onElegir, onCerrar, yaUsadaPorUr
       >
         <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", padding: "1.25rem 1.5rem 0.75rem", flexShrink: 0 }}>
           <p style={{ fontSize: 14, fontWeight: 600, color: "#1B1A22", margin: 0 }}>{titulo}</p>
-          <button onClick={onCerrar} style={{ background: "none", border: "none", color: "#6B6880", cursor: "pointer", fontSize: 16 }}>✕</button>
+          <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
+            {multiple && subirDesdeComputador && (
+              <>
+                <button
+                  onClick={() => multipleFileRef.current?.click()}
+                  disabled={subiendo}
+                  style={{ display: "inline-flex", alignItems: "center", gap: 6, background: "#5546B8", color: "#fff", border: "none", padding: "8px 14px", borderRadius: 10, fontSize: 13, fontWeight: 700, cursor: subiendo ? "not-allowed" : "pointer" }}
+                >
+                  {subiendo ? <Loader2 size={14} className="qb-album-spin" /> : <Upload size={14} />}
+                  {subiendo ? progresoSubida ?? "Subiendo…" : "Subir desde mi computador"}
+                </button>
+                <input ref={multipleFileRef} type="file" accept="image/*,video/*" multiple style={{ display: "none" }} onChange={handleSubirVarios} />
+              </>
+            )}
+            <button onClick={onCerrar} style={{ background: "none", border: "none", color: "#6B6880", cursor: "pointer", fontSize: 16 }}>✕</button>
+          </div>
         </div>
 
         <div style={{ position: "sticky", top: 0, zIndex: 1, background: "#fff", padding: "0 1.5rem 0.75rem", borderBottom: `1px solid #E9E7EE`, flexShrink: 0 }}>
@@ -127,6 +211,10 @@ export default function SelectorAlbum({ titulo, onElegir, onCerrar, yaUsadaPorUr
         </div>
 
         <div ref={scrollRef} style={{ overflowY: "auto", padding: "1rem 1.5rem 1.5rem", flex: 1 }}>
+          {avisoTope && (
+            <div style={{ background: "#FFF6E5", border: "1px solid #F0C36D", borderRadius: 10, padding: "10px 14px", fontSize: 13, color: "#8A5A00", marginBottom: 14 }}>{avisoTope}</div>
+          )}
+
           {(album.errorMsg || errorSubida) && (
             <div style={{ background: "#FEF2F2", border: "1px solid #FCA5A5", borderRadius: 10, padding: "10px 14px", fontSize: 13, color: "#991B1B", marginBottom: 14 }}>
               {errorSubida || album.errorMsg}
@@ -171,6 +259,7 @@ export default function SelectorAlbum({ titulo, onElegir, onCerrar, yaUsadaPorUr
                         yaUsadaEn={yaUsadaPorUrl?.[item.url_imagen]}
                         modoSeleccion={multiple}
                         seleccionado={!!item.id && seleccionIds.has(item.id)}
+                        mostrarAnalisis={mostrarAnalisis}
                         onClick={() => alTocarPieza(item)}
                       />
                     ))}
