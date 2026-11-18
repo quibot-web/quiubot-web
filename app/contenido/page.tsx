@@ -13,6 +13,7 @@ import {
   esFechaFutura,
   idsQuePrometenParte2SinCumplir,
   piezaSinVideoProxima,
+  evaluarEliminacion,
   type PublicacionOrganica,
 } from "@/app/lib/contenido";
 import { hoyBogota, fechaBogota } from "@/app/lib/fechaBogota";
@@ -21,6 +22,7 @@ import { construirTemaDesdeAdn, colorTextoSobre, type AdnMarcaParaTema } from "@
 import SelectorAlbum, { type ItemAlbum } from "@/app/components/SelectorAlbum";
 import SelectorProducto, { resolverProductoAlUsar, valorVacioSelectorProducto, type ValorSelectorProducto } from "@/app/components/SelectorProducto";
 import ColaDeRender from "./ColaDeRender";
+import ConfirmarEliminarReel from "./ConfirmarEliminarReel";
 import type { RecetaOrganicaId } from "@/video/guion.schema";
 
 const MAX_PIEZAS_POR_REEL = 3;
@@ -106,6 +108,7 @@ export default function ContenidoPage() {
   const [mostrarFormulario, setMostrarFormulario] = useState(false);
   const [fechaFormulario, setFechaFormulario] = useState<string>(hoyBogota());
   const [arrastrandoId, setArrastrandoId] = useState<string | null>(null);
+  const [eliminandoId, setEliminandoId] = useState<string | null>(null);
   const [errorMsg, setErrorMsg] = useState<string | null>(null);
 
   const tema = construirTemaDesdeAdn(adnMarca);
@@ -329,6 +332,7 @@ export default function ContenidoPage() {
                 onAgregar={abrirFormulario}
                 onDropDia={(f) => reprogramarPieza(arrastrandoId!, f)}
                 onDragStartPieza={setArrastrandoId}
+                onEliminarPieza={setEliminandoId}
               />
             ))}
           </div>
@@ -349,6 +353,7 @@ export default function ContenidoPage() {
                 onAgregar={abrirFormulario}
                 onDropDia={(f) => reprogramarPieza(arrastrandoId!, f)}
                 onDragStartPieza={setArrastrandoId}
+                onEliminarPieza={setEliminandoId}
               />
             ))}
           </div>
@@ -379,6 +384,7 @@ export default function ContenidoPage() {
                     onAgregar={abrirFormulario}
                     onDropDia={(f) => reprogramarPieza(arrastrandoId!, f)}
                     onDragStartPieza={setArrastrandoId}
+                    onEliminarPieza={setEliminandoId}
                   />
                 ))}
               </div>
@@ -387,6 +393,16 @@ export default function ContenidoPage() {
         )}
       </div>
 
+      {eliminandoId && (
+        <ConfirmarEliminarReel
+          piezaId={eliminandoId}
+          onCerrar={() => setEliminandoId(null)}
+          onEliminado={() => {
+            setEliminandoId(null);
+            refrescar();
+          }}
+        />
+      )}
       {mostrarFormulario && (
         <FormularioAgregarReel
           fechaInicial={fechaFormulario}
@@ -415,6 +431,7 @@ function DiaCelda({
   onAgregar,
   onDropDia,
   onDragStartPieza,
+  onEliminarPieza,
 }: {
   fecha: string;
   piezasDelDia: PublicacionOrganica[];
@@ -429,6 +446,7 @@ function DiaCelda({
   onAgregar: (fecha: string) => void;
   onDropDia: (fecha: string) => void;
   onDragStartPieza: (id: string) => void;
+  onEliminarPieza: (id: string) => void;
 }) {
   const [sobreDrop, setSobreDrop] = useState(false);
   return (
@@ -469,6 +487,7 @@ function DiaCelda({
             prometeParte2={idsPrometenParte2.has(p.id)}
             onDragStart={() => onDragStartPieza(p.id)}
             onClick={() => onClickPieza(p.id)}
+            onEliminar={() => onEliminarPieza(p.id)}
           />
         ))}
       </div>
@@ -503,6 +522,7 @@ function TarjetaPieza({
   prometeParte2,
   onDragStart,
   onClick,
+  onEliminar,
 }: {
   pieza: PublicacionOrganica;
   tema: ReturnType<typeof construirTemaDesdeAdn>;
@@ -511,7 +531,10 @@ function TarjetaPieza({
   prometeParte2: boolean;
   onDragStart: () => void;
   onClick: () => void;
+  onEliminar: () => void;
 }) {
+  const [menuAbierto, setMenuAbierto] = useState(false);
+  const eliminacion = evaluarEliminacion(pieza.estado);
   const dot = colorPuntoEstado(pieza.estado);
   const hora = new Date(pieza.programada_para).toLocaleTimeString("es-CO", { hour: "2-digit", minute: "2-digit", timeZone: "America/Bogota" });
   const tieneVideo = !!pieza.url_video;
@@ -523,6 +546,7 @@ function TarjetaPieza({
       draggable={draggable}
       onDragStart={draggable ? onDragStart : undefined}
       onClick={onClick}
+      onMouseLeave={() => setMenuAbierto(false)}
       title={`${labelReceta(pieza.receta_organica)} · ${hora} · ${ESTADOS_INFO[pieza.estado].label}`}
       style={{
         position: "relative",
@@ -546,6 +570,53 @@ function TarjetaPieza({
         )
       )}
       <div style={{ position: "absolute", top: 4, right: 4, width: 9, height: 9, borderRadius: "50%", background: dot, border: "1.5px solid #fff" }} />
+      {/* Menú "⋯" (solo tarjeta grande; en la compacta del mes no cabe
+          -- ahí se elimina desde la pantalla de la pieza). */}
+      {!compacta && (
+        <button
+          type="button"
+          aria-label="Más opciones"
+          draggable={false}
+          onClick={(e) => {
+            e.stopPropagation();
+            setMenuAbierto((v) => !v);
+          }}
+          style={{ position: "absolute", top: 2, right: 16, width: 26, height: 22, borderRadius: 6, border: "none", background: "rgba(0,0,0,0.45)", color: "#fff", fontSize: 14, fontWeight: 800, lineHeight: "22px", padding: 0, cursor: "pointer" }}
+        >
+          ⋯
+        </button>
+      )}
+      {menuAbierto && (
+        <div
+          onClick={(e) => e.stopPropagation()}
+          style={{ position: "absolute", top: 26, right: 4, left: 4, background: "#fff", borderRadius: 8, boxShadow: "0 4px 14px rgba(0,0,0,0.25)", padding: 4, zIndex: 5, cursor: "default" }}
+        >
+          {eliminacion.permitido ? (
+            <button
+              type="button"
+              onClick={() => {
+                setMenuAbierto(false);
+                onEliminar();
+              }}
+              style={{ display: "block", width: "100%", textAlign: "left", padding: "7px 8px", border: "none", background: "none", fontSize: 12, fontWeight: 700, color: "#B91C1C", cursor: "pointer", borderRadius: 6 }}
+            >
+              {eliminacion.tipo === "quitar_del_calendario" ? "Quitar del calendario" : "Eliminar"}
+            </button>
+          ) : (
+            <p style={{ margin: 0, padding: "7px 8px", fontSize: 11, color: "#666" }}>{eliminacion.motivo}</p>
+          )}
+          <button
+            type="button"
+            onClick={() => {
+              setMenuAbierto(false);
+              onClick();
+            }}
+            style={{ display: "block", width: "100%", textAlign: "left", padding: "7px 8px", border: "none", background: "none", fontSize: 12, fontWeight: 600, color: "#1a1a1a", cursor: "pointer", borderRadius: 6 }}
+          >
+            {ESTADOS_NO_REPROGRAMABLES.includes(pieza.estado) ? "Abrir" : "Cambiar fecha y hora"}
+          </button>
+        </div>
+      )}
       {sinVideoProximo && (
         <div title="Publica en menos de 2h y todavía no tiene video" style={{ position: "absolute", top: 3, left: 3, fontSize: compacta ? 10 : 12 }}>
           ⏰

@@ -271,27 +271,34 @@ export async function rescatarAtascadas(ahora = new Date()): Promise<{ renderiza
 // para que el aviso salga sin importar quién lo vea primero.
 export async function vencerPiezasSinVideo(params: { userId?: string; ahora?: Date } = {}): Promise<number> {
   const ahora = params.ahora ?? new Date();
-  let consulta = supabaseAdmin
-    .from("publicaciones_organicas")
-    .update({ estado: "vencida", actualizado_en: ahora.toISOString() })
-    .in("estado", ESTADOS_SIN_VIDEO_AUN)
-    .lt("programada_para", ahora.toISOString());
-  if (params.userId) consulta = consulta.eq("user_id", params.userId);
-  const { data, error } = await consulta.select("id, user_id");
-  if (error) {
-    console.error("No se pudieron vencer piezas sin video:", error);
-    return 0;
+  const vencidas: { id: string; user_id: string }[] = [];
+  // Un update por estado de origen: así cada fila guarda en
+  // estado_antes_de_vencer el estado real que tenía (supabase-js no
+  // puede copiar una columna en otra dentro de un mismo update).
+  for (const estadoPrevio of ESTADOS_SIN_VIDEO_AUN) {
+    let consulta = supabaseAdmin
+      .from("publicaciones_organicas")
+      .update({ estado: "vencida", estado_antes_de_vencer: estadoPrevio, actualizado_en: ahora.toISOString() })
+      .eq("estado", estadoPrevio)
+      .lt("programada_para", ahora.toISOString());
+    if (params.userId) consulta = consulta.eq("user_id", params.userId);
+    const { data, error } = await consulta.select("id, user_id");
+    if (error) {
+      console.error(`No se pudieron vencer piezas en "${estadoPrevio}":`, error);
+      continue;
+    }
+    vencidas.push(...((data ?? []) as { id: string; user_id: string }[]));
   }
-  for (const pieza of data ?? []) {
+  for (const pieza of vencidas) {
     await avisarPublicador({
-      userId: pieza.user_id as string,
-      piezaId: pieza.id as string,
+      userId: pieza.user_id,
+      piezaId: pieza.id,
       tipoEvento: "reel_vencido",
       contenido: textoReelVencido({ motivo: "sin_video" }),
       sufijo: "sin_video",
     });
   }
-  return data?.length ?? 0;
+  return vencidas.length;
 }
 
 // 3. "lista" ya vencidas que el Publicador NO puede tomar -- se quedan

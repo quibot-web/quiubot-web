@@ -15,6 +15,8 @@ let pistaActual: Record<string, unknown> | null = null;
 let countPistasConLicenciaActual = 1;
 let filasUpdateActual: { id: string }[] | null = [{ id: "pieza-1" }];
 let updatesRealizados: Record<string, unknown>[] = [];
+// Consulta "¿hay una parte 2 activa que continúa esta pieza?" (eliminar).
+let partes2Actual: { id: string }[] = [];
 
 function chainUsuarios(data: unknown) {
   const obj = { select: () => obj, eq: () => obj, single: async () => ({ data, error: null }) };
@@ -44,12 +46,18 @@ fromMock.mockImplementation((tabla: unknown) => {
   }
   if (tabla === "publicaciones_organicas") {
     let huboSelectTrasUpdate = false;
+    let esConsultaPartes2 = false;
     const obj = {
       select: () => {
         huboSelectTrasUpdate = true;
         return obj;
       },
       eq: () => obj,
+      neq: () => obj,
+      limit: () => {
+        esConsultaPartes2 = true;
+        return obj;
+      },
       maybeSingle: async () => ({ data: piezaActual }),
       update: (valores: Record<string, unknown>) => {
         huboSelectTrasUpdate = false;
@@ -57,6 +65,7 @@ fromMock.mockImplementation((tabla: unknown) => {
         return obj;
       },
       then: (resolve: (v: { data: unknown; error: unknown }) => void) => {
+        if (esConsultaPartes2) return resolve({ data: partes2Actual, error: null });
         resolve(huboSelectTrasUpdate ? { data: filasUpdateActual, error: null } : { data: null, error: null });
       },
     };
@@ -427,11 +436,138 @@ describe("PATCH /api/contenido/[id] -- reprogramar (arrastrar en el calendario)"
     expect(res.status).toBe(409);
   });
 
-  it("pieza vencida: al reprogramarla vuelve a borrador (se revisa de nuevo antes de aprobar)", async () => {
-    piezaActual = { id: "pieza-1", estado: "vencida" };
+  it("vencida sin video y sin estado previo guardado (vencida antes de la columna): vuelve a borrador", async () => {
+    piezaActual = { id: "pieza-1", estado: "vencida", url_video: null, estado_antes_de_vencer: null };
     const res = await PATCH(patchReq({ accion: "reprogramar", programada_para: isoEnElFuturo(24) }), contexto());
     expect(res.status).toBe(200);
+    expect(updatesRealizados[0]).toMatchObject({ estado: "borrador", estado_antes_de_vencer: null });
+  });
+
+  it("vencida sin video que estaba en borrador: vuelve a borrador (nunca se salta la aprobación)", async () => {
+    piezaActual = { id: "pieza-1", estado: "vencida", url_video: null, estado_antes_de_vencer: "borrador" };
+    await PATCH(patchReq({ accion: "reprogramar", programada_para: isoEnElFuturo(24) }), contexto());
     expect(updatesRealizados[0]).toMatchObject({ estado: "borrador" });
+  });
+
+  it("vencida sin video que ya estaba aprobada (o renderizando): vuelve a aprobada", async () => {
+    for (const previo of ["aprobada", "renderizando"]) {
+      updatesRealizados = [];
+      piezaActual = { id: "pieza-1", estado: "vencida", url_video: null, estado_antes_de_vencer: previo };
+      await PATCH(patchReq({ accion: "reprogramar", programada_para: isoEnElFuturo(24) }), contexto());
+      expect(updatesRealizados[0]).toMatchObject({ estado: "aprobada", estado_antes_de_vencer: null });
+    }
+  });
+
+  it("vencida con video: vuelve a lista", async () => {
+    piezaActual = { id: "pieza-1", estado: "vencida", url_video: "https://res.cloudinary.com/demo/video/upload/v1/r.mp4", estado_antes_de_vencer: "renderizando" };
+    await PATCH(patchReq({ accion: "reprogramar", programada_para: isoEnElFuturo(24) }), contexto());
+    expect(updatesRealizados[0]).toMatchObject({ estado: "lista" });
+  });
+
+  it("estado no vencido: nunca cambia de estado, y siempre pone actualizado_en", async () => {
+    piezaActual = { id: "pieza-1", estado: "lista", url_video: "x" };
+    await PATCH(patchReq({ accion: "reprogramar", programada_para: isoEnElFuturo(24) }), contexto());
+    expect(updatesRealizados[0]).toMatchObject({ estado: "lista" });
+    expect(updatesRealizados[0]).not.toHaveProperty("estado_antes_de_vencer");
+    expect(typeof updatesRealizados[0].actualizado_en).toBe("string");
+  });
+
+  it("publicando, procesando, publicada o cancelada: 400, nunca se reprograma", async () => {
+    for (const estado of ["publicando", "procesando", "publicada", "cancelada"]) {
+      piezaActual = { id: "pieza-1", estado };
+      const res = await PATCH(patchReq({ accion: "reprogramar", programada_para: isoEnElFuturo(24) }), contexto());
+      expect(res.status).toBe(400);
+    }
+    expect(updatesRealizados.length).toBe(0);
+  });
+
+  it("fecha inválida o hace un minuto: 400", async () => {
+    for (const programada_para of ["no-es-fecha", new Date(Date.now() - 60 * 1000).toISOString(), undefined]) {
+      const res = await PATCH(patchReq({ accion: "reprogramar", programada_para }), contexto());
+      expect(res.status).toBe(400);
+    }
+    expect(updatesRealizados.length).toBe(0);
+  });
+});
+
+describe("PATCH /api/contenido/[id] -- previa_eliminar / eliminar (borrado suave)", () => {
+  beforeEach(() => {
+    fromMock.mockClear();
+    authMock.mockResolvedValue({ user: { email: "marca@quiubot.com" } });
+    usuarioActual = USUARIO_ADMIN;
+    filasUpdateActual = [{ id: "pieza-1" }];
+    updatesRealizados = [];
+    partes2Actual = [];
+    piezaActual = { id: "pieza-1", estado: "lista", tipo_error: null };
+  });
+
+  it("eliminar: pasa a 'cancelada' con actualizado_en, sin tocar el video ni el álbum", async () => {
+    const res = await PATCH(patchReq({ accion: "eliminar" }), contexto());
+    expect(res.status).toBe(200);
+    expect(updatesRealizados).toHaveLength(1);
+    expect(Object.keys(updatesRealizados[0]).sort()).toEqual(["actualizado_en", "estado"]);
+    expect(updatesRealizados[0].estado).toBe("cancelada");
+    expect(fromMock).not.toHaveBeenCalledWith("album_creativos");
+  });
+
+  it("se puede eliminar en cualquier estado previo a publicar (incluido error y vencida)", async () => {
+    for (const estado of ["borrador", "generando", "aprobada", "renderizando", "lista", "error", "vencida"]) {
+      updatesRealizados = [];
+      piezaActual = { id: "pieza-1", estado };
+      const res = await PATCH(patchReq({ accion: "eliminar" }), contexto());
+      expect(res.status).toBe(200);
+      expect(updatesRealizados[0]).toMatchObject({ estado: "cancelada" });
+    }
+  });
+
+  it("publicando o procesando: 400 'Se está publicando en este momento', nunca actualiza", async () => {
+    for (const estado of ["publicando", "procesando"]) {
+      piezaActual = { id: "pieza-1", estado };
+      for (const accion of ["previa_eliminar", "eliminar"]) {
+        const res = await PATCH(patchReq({ accion }), contexto());
+        expect(res.status).toBe(400);
+        expect((await res.json()).error).toBe("Se está publicando en este momento.");
+      }
+    }
+    expect(updatesRealizados.length).toBe(0);
+  });
+
+  it("ya cancelada: 400", async () => {
+    piezaActual = { id: "pieza-1", estado: "cancelada" };
+    const res = await PATCH(patchReq({ accion: "eliminar" }), contexto());
+    expect(res.status).toBe(400);
+  });
+
+  it("el estado cambió mientras tanto (ej. el cron la reclamó): 409, no se cancela a ciegas", async () => {
+    filasUpdateActual = [];
+    const res = await PATCH(patchReq({ accion: "eliminar" }), contexto());
+    expect(res.status).toBe(409);
+  });
+
+  it("previa: pieza normal -> '¿Eliminar este reel? No se publicará.', sin actualizar nada", async () => {
+    const res = await PATCH(patchReq({ accion: "previa_eliminar" }), contexto());
+    const body = await res.json();
+    expect(body).toMatchObject({ tipo: "eliminar", titulo: "¿Eliminar este reel? No se publicará.", boton: "Eliminar" });
+    expect(updatesRealizados.length).toBe(0);
+  });
+
+  it("previa: publicada -> 'Quitar del calendario', aclarando que no la borra de Instagram", async () => {
+    piezaActual = { id: "pieza-1", estado: "publicada" };
+    const body = await (await PATCH(patchReq({ accion: "previa_eliminar" }), contexto())).json();
+    expect(body).toMatchObject({ tipo: "quitar_del_calendario", boton: "Quitar del calendario" });
+    expect(body.detalles.join(" ")).toContain("no lo borra de Instagram");
+  });
+
+  it("previa: parte 1 de una serie con su parte 2 activa -> avisa que la parte 2 queda sin su anterior", async () => {
+    partes2Actual = [{ id: "parte-2" }];
+    const body = await (await PATCH(patchReq({ accion: "previa_eliminar" }), contexto())).json();
+    expect(body.detalles.join(" ")).toContain("la parte 2 queda sin su anterior");
+  });
+
+  it("previa: error 'revisar_publicacion' -> pide revisar Instagram antes", async () => {
+    piezaActual = { id: "pieza-1", estado: "error", tipo_error: "revisar_publicacion" };
+    const body = await (await PATCH(patchReq({ accion: "previa_eliminar" }), contexto())).json();
+    expect(body.detalles.join(" ")).toContain("Revisa tu Instagram");
   });
 });
 

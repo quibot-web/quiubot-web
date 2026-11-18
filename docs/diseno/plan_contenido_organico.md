@@ -77,6 +77,11 @@ Sin cambios de fondo respecto al original — confirmado como pantalla nueva, no
 
 ---
 
+### Eliminar y cambiar la hora de un reel (18 nov 2026, pedido de Juan José)
+
+- **Eliminar = borrado suave:** la pieza pasa a `cancelada`, desaparece del calendario (`GET /api/contenido` excluye canceladas) y su video se queda en el álbum. Menú "⋯" en la tarjeta grande del calendario y botón en la pieza, con confirmación cuyo texto arma el servidor (`previa_eliminar`). Bloqueado en `publicando`/`procesando` ("Se está publicando en este momento"). Una `publicada` dice "Quitar del calendario" y aclara que no la borra de Instagram. Si es la parte 1 de una serie con parte 2 activa, lo avisa.
+- **Cambiar fecha y hora:** selector en la pieza además del arrastre; nunca en el pasado; bloqueado en `publicando`/`procesando`/`publicada`/`cancelada`. Una `vencida` dice "Reprogramar": con video vuelve a `lista`; sin video, a `aprobada` solo si ya lo estaba antes de vencerse (columna `estado_antes_de_vencer`, `docs/sql/contenido_organico_eliminar_reprogramar.sql`), si no a `borrador`.
+
 ## 3. Recetas orgánicas (`video/recetas/organico/`)
 
 Mismo enfoque: gancho → bucle abierto → desarrollo → cierre del bucle → CTA, con valor en vez de venta. Tabla sin cambios:

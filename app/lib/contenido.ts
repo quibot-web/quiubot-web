@@ -60,6 +60,9 @@ export interface PublicacionOrganica {
   // aprobado" -- nunca se trata como una aprobación real.
   control_calidad: { aprobado?: boolean; forzado?: boolean; hallazgos?: unknown[]; publicarIgual?: boolean; crudo?: unknown; forzarSinCalidad?: boolean } | null;
   intentos: number;
+  // Estado que tenía al pasar a "vencida" (lo llena el código, ver
+  // vencerPiezasSinVideo) -- decide a dónde vuelve al reprogramarla.
+  estado_antes_de_vencer: EstadoContenido | null;
   semana: string;
   continua_de_id: string | null;
   creado_en: string;
@@ -104,6 +107,7 @@ export const COLUMNAS_PUBLICACIONES_ORGANICAS = [
   "tipo_error",
   "control_calidad",
   "intentos",
+  "estado_antes_de_vencer",
   "semana",
   "continua_de_id",
   "creado_en",
@@ -240,7 +244,58 @@ export function elegirGanchoTipoMenosUsado(tiposYaUsados: (string | null | undef
 // día en el calendario -- el recorrido con Instagram ya arrancó o
 // terminó. Compartido entre la API (PATCH .../reprogramar) y la UI
 // (decide si una tarjeta es draggable).
-export const ESTADOS_NO_REPROGRAMABLES: EstadoContenido[] = ["publicada", "publicando", "procesando"];
+// "cancelada" tampoco: una pieza eliminada no vuelve al calendario
+// moviéndole la fecha (no aparece en él para poder arrastrarla, y la
+// API lo rechaza igual).
+export const ESTADOS_NO_REPROGRAMABLES: EstadoContenido[] = ["publicada", "publicando", "procesando", "cancelada"];
+
+// Eliminar un reel (borrado suave: estado "cancelada", el video se queda
+// en el álbum). Una sola fuente de verdad para la API y la pantalla.
+export type EvaluacionEliminar =
+  | { permitido: false; motivo: string }
+  | { permitido: true; tipo: "eliminar" | "quitar_del_calendario" };
+
+export function evaluarEliminacion(estado: EstadoContenido): EvaluacionEliminar {
+  if (estado === "publicando" || estado === "procesando") return { permitido: false, motivo: "Se está publicando en este momento." };
+  if (estado === "cancelada") return { permitido: false, motivo: "Este reel ya fue eliminado." };
+  if (estado === "publicada") return { permitido: true, tipo: "quitar_del_calendario" };
+  return { permitido: true, tipo: "eliminar" };
+}
+
+// Texto de la confirmación -- lo arma el servidor (sabe si hay una
+// parte 2 aunque esté fuera de la semana/mes que se está mirando).
+export function textosConfirmacionEliminar(params: {
+  tipo: "eliminar" | "quitar_del_calendario";
+  tieneParte2: boolean;
+  publicacionSinConfirmar: boolean;
+}): { titulo: string; detalles: string[]; boton: string } {
+  const detalles: string[] = [];
+  if (params.tipo === "quitar_del_calendario") {
+    detalles.push("Ya está publicado: esto solo lo quita del calendario, no lo borra de Instagram.");
+  }
+  if (params.publicacionSinConfirmar) {
+    detalles.push("No pudimos confirmar si este reel quedó publicado. Revisa tu Instagram: si salió, bórralo desde allá.");
+  }
+  if (params.tieneParte2) {
+    detalles.push("Es la parte 1 de una serie: la parte 2 queda sin su anterior.");
+  }
+  if (params.tipo === "eliminar") detalles.push("El video se queda en tu álbum.");
+  return params.tipo === "quitar_del_calendario"
+    ? { titulo: "¿Quitar este reel del calendario?", detalles, boton: "Quitar del calendario" }
+    : { titulo: "¿Eliminar este reel? No se publicará.", detalles, boton: "Eliminar" };
+}
+
+// A qué estado vuelve una pieza al reprogramarla. Solo "vencida"
+// cambia de estado: con video vuelve a "lista" (conserva su control de
+// calidad y su "Publicar de todos modos"); sin video vuelve a
+// "aprobada" solo si ya lo estaba antes de vencerse -- si no, a
+// "borrador", para que nunca se salte la aprobación de un humano.
+export function estadoAlReprogramar(pieza: Pick<PublicacionOrganica, "estado" | "url_video" | "estado_antes_de_vencer">): EstadoContenido {
+  if (pieza.estado !== "vencida") return pieza.estado;
+  if (pieza.url_video) return "lista";
+  if (pieza.estado_antes_de_vencer === "aprobada" || pieza.estado_antes_de_vencer === "renderizando") return "aprobada";
+  return "borrador";
+}
 
 // Punto de color del calendario (rediseño estilo Meta Business Suite/
 // Metricool, sección 2 del plan) -- agrupa por progreso, no 1 color

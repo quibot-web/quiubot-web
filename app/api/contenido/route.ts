@@ -44,7 +44,9 @@ export async function GET(req: NextRequest) {
   const desdeParam = req.nextUrl.searchParams.get("desde");
   const hastaParam = req.nextUrl.searchParams.get("hasta");
 
-  let consulta = supabaseAdmin.from("publicaciones_organicas").select("*").eq("user_id", usuario!.id);
+  // Las eliminadas ("cancelada", borrado suave) nunca se muestran en
+  // el calendario -- siguen en la base, y su video en el álbum.
+  let consulta = supabaseAdmin.from("publicaciones_organicas").select("*").eq("user_id", usuario!.id).neq("estado", "cancelada");
   let semana = "";
 
   if (desdeParam && hastaParam) {

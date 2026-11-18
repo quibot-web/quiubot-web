@@ -420,7 +420,7 @@ describe("atascadas y vencidas", () => {
   it("pieza sin video a la que se le pasó la hora: vencida + aviso 'vencido' una sola vez", async () => {
     tablas.publicaciones_organicas.push(pieza({ estado: "aprobada", url_video: null }));
     expect(await vencerPiezasSinVideo()).toBe(1);
-    expect(piezaDb().estado).toBe("vencida");
+    expect(piezaDb()).toMatchObject({ estado: "vencida", estado_antes_de_vencer: "aprobada" });
     expect(mensajes()).toHaveLength(1);
     expect(mensajes()[0]).toMatchObject({ asistente: "publicador", tipo_evento: "reel_vencido" });
   });

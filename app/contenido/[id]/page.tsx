@@ -4,7 +4,9 @@ import { useEffect, useState, useCallback, use } from "react";
 import dynamic from "next/dynamic";
 import { useRouter } from "next/navigation";
 import EditorEscena from "@/app/video/EditorEscena";
-import { labelReceta, formatoFechaLarga, type PublicacionOrganica } from "@/app/lib/contenido";
+import { labelReceta, formatoFechaLarga, evaluarEliminacion, type PublicacionOrganica } from "@/app/lib/contenido";
+import ConfirmarEliminarReel from "../ConfirmarEliminarReel";
+import SelectorFechaHora from "../SelectorFechaHora";
 import { urlDescargaCloudinary } from "@/app/lib/cloudinaryUrl";
 import type { Guion, Escena } from "@/video/guion.schema";
 import type { MediosResueltos } from "@/video/escenas/tipos";
@@ -41,6 +43,7 @@ export default function RevisionPiezaPage({ params }: { params: Promise<{ id: st
   const [esPiezaConVoz, setEsPiezaConVoz] = useState(false);
   const [vozDesactualizada, setVozDesactualizada] = useState(false);
   const [regenerandoVoz, setRegenerandoVoz] = useState(false);
+  const [confirmandoEliminar, setConfirmandoEliminar] = useState(false);
   // Guardado explícito (no solo "ya pasó el gate de arriba") para que,
   // el día que esta pantalla se abra a clientes, la distinción
   // admin/cliente de generarGuion() siga siendo correcta sin tener que
@@ -251,14 +254,33 @@ export default function RevisionPiezaPage({ params }: { params: Promise<{ id: st
   return (
     <div style={{ minHeight: "100vh", background: "#f9f9f8", fontFamily: "system-ui, sans-serif", padding: "24px 20px" }}>
       <div style={{ maxWidth: 1000, margin: "0 auto" }}>
-        <button type="button" onClick={() => router.push("/contenido")} style={{ ...botonSecundario, marginBottom: 16 }}>
-          ← Volver al calendario
-        </button>
+        <div style={{ display: "flex", gap: 8, flexWrap: "wrap", justifyContent: "space-between", marginBottom: 16 }}>
+          <button type="button" onClick={() => router.push("/contenido")} style={botonSecundario}>
+            ← Volver al calendario
+          </button>
+          {pieza.estado !== "cancelada" && (
+            <button
+              type="button"
+              onClick={() => setConfirmandoEliminar(true)}
+              disabled={evaluarEliminacion(pieza.estado).permitido === false}
+              title={evaluarEliminacion(pieza.estado).permitido ? undefined : "Se está publicando en este momento."}
+              style={{ ...botonSecundario, borderColor: "#E8A0A0", color: "#B91C1C", opacity: evaluarEliminacion(pieza.estado).permitido ? 1 : 0.5 }}
+            >
+              {pieza.estado === "publicada" ? "Quitar del calendario" : "Eliminar reel"}
+            </button>
+          )}
+        </div>
 
         <h1 style={{ fontSize: 20, fontWeight: 800, color: "#1a1a1a", margin: "0 0 4px" }}>{labelReceta(pieza.receta_organica)}</h1>
         <p style={{ fontSize: 13, color: "#666", margin: "0 0 20px" }}>
-          Programada para {formatoFechaLarga(pieza.programada_para)}
+          {pieza.estado === "cancelada" ? "Eliminado -- ya no aparece en el calendario ni se publicará." : `Programada para ${formatoFechaLarga(pieza.programada_para)}`}
         </p>
+
+        <SelectorFechaHora key={`${pieza.programada_para}-${pieza.estado}`} pieza={pieza} onGuardado={cargar} />
+
+        {confirmandoEliminar && (
+          <ConfirmarEliminarReel piezaId={pieza.id} onCerrar={() => setConfirmandoEliminar(false)} onEliminado={() => router.push("/contenido")} />
+        )}
 
         {errorMsg && <p style={{ color: "#b91c1c", fontSize: 13, marginBottom: 16, whiteSpace: "pre-line" }}>{errorMsg}</p>}
 

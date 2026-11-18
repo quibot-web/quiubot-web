@@ -3,7 +3,16 @@ import { NextRequest, NextResponse } from "next/server";
 import { supabaseAdmin } from "@/lib/supabase";
 import { desencriptarSiHaceFalta } from "@/lib/crypto";
 import { GuionSchema, type Guion } from "@/video/guion.schema";
-import { ESTADOS_NO_REPROGRAMABLES, esFechaFutura, lunesDeLaSemana, type EstadoContenido, type PublicacionOrganica } from "@/app/lib/contenido";
+import {
+  ESTADOS_NO_REPROGRAMABLES,
+  esFechaFutura,
+  lunesDeLaSemana,
+  evaluarEliminacion,
+  textosConfirmacionEliminar,
+  estadoAlReprogramar,
+  type EstadoContenido,
+  type PublicacionOrganica,
+} from "@/app/lib/contenido";
 import { fechaBogota } from "@/app/lib/fechaBogota";
 import { infoAdicionalEsSuficiente } from "@/video/promptGuionOrganico";
 import { urlPistaMusical } from "@/app/lib/cloudinaryUrl";
@@ -324,6 +333,54 @@ export async function PATCH(req: NextRequest, { params }: { params: Promise<{ id
     return NextResponse.json({ ok: true });
   }
 
+  if (cuerpo?.accion === "previa_eliminar" || cuerpo?.accion === "eliminar") {
+    // Borrado suave: la pieza pasa a "cancelada" (oculta del calendario,
+    // ver GET /api/contenido) y el video se queda en el álbum. Nunca
+    // mientras se está publicando: ahí Instagram puede estar a mitad de
+    // camino. "previa_eliminar" solo responde si se puede y con qué
+    // texto confirmar (el servidor sabe si hay una parte 2 aunque esté
+    // fuera de la semana/mes que se mira en el calendario).
+    const { data: piezaActual } = await supabaseAdmin
+      .from("publicaciones_organicas")
+      .select("id, estado, tipo_error")
+      .eq("id", id)
+      .eq("user_id", usuario!.id)
+      .maybeSingle();
+    if (!piezaActual) return NextResponse.json({ error: "Pieza no encontrada." }, { status: 404 });
+
+    const evaluacion = evaluarEliminacion(piezaActual.estado as EstadoContenido);
+    if (!evaluacion.permitido) return NextResponse.json({ error: evaluacion.motivo }, { status: 400 });
+
+    if (cuerpo.accion === "previa_eliminar") {
+      const { data: partes2 } = await supabaseAdmin
+        .from("publicaciones_organicas")
+        .select("id")
+        .eq("user_id", usuario!.id)
+        .eq("continua_de_id", id)
+        .neq("estado", "cancelada")
+        .limit(1);
+      const confirmacion = textosConfirmacionEliminar({
+        tipo: evaluacion.tipo,
+        tieneParte2: (partes2 ?? []).length > 0,
+        publicacionSinConfirmar: piezaActual.estado === "error" && piezaActual.tipo_error === "revisar_publicacion",
+      });
+      return NextResponse.json({ ok: true, tipo: evaluacion.tipo, ...confirmacion });
+    }
+
+    const { data: filas, error: errorUpdate } = await supabaseAdmin
+      .from("publicaciones_organicas")
+      .update({ estado: "cancelada", actualizado_en: new Date().toISOString() })
+      .eq("id", id)
+      .eq("user_id", usuario!.id)
+      .eq("estado", piezaActual.estado)
+      .select("id");
+    if (errorUpdate) return NextResponse.json({ error: "No se pudo eliminar el reel en este momento." }, { status: 503 });
+    if (!filas || filas.length === 0) {
+      return NextResponse.json({ error: "Este reel cambió de estado mientras tanto (puede que se esté publicando). Recarga e intenta de nuevo." }, { status: 409 });
+    }
+    return NextResponse.json({ ok: true });
+  }
+
   if (cuerpo?.accion === "reprogramar") {
     // Arrastrar y soltar en el calendario (sección 2 del plan) -- solo
     // cambia programada_para/semana, nunca el estado. Mismo
@@ -335,7 +392,7 @@ export async function PATCH(req: NextRequest, { params }: { params: Promise<{ id
 
     const { data: piezaActual } = await supabaseAdmin
       .from("publicaciones_organicas")
-      .select("id, estado")
+      .select("*") // "*" a propósito: sigue funcionando aunque estado_antes_de_vencer todavía no exista en la base (queda undefined -> "borrador")
       .eq("id", id)
       .eq("user_id", usuario!.id)
       .maybeSingle();
@@ -348,13 +405,20 @@ export async function PATCH(req: NextRequest, { params }: { params: Promise<{ id
     }
 
     const semana = lunesDeLaSemana(fechaBogota(new Date(nuevaFecha)));
-    // Una pieza "vencida" que se reprograma vuelve a "borrador" --
-    // ya perdió su hora una vez, se revisa de nuevo antes de volver a
-    // aprobarla (el guion/caption que ya tenía, si tenía, no se toca).
-    const nuevoEstado = piezaActual.estado === "vencida" ? "borrador" : piezaActual.estado;
+    // Solo una pieza "vencida" cambia de estado al reprogramarla (ver
+    // estadoAlReprogramar): con video vuelve a "lista", sin video a
+    // "aprobada" solo si ya lo estaba antes de vencerse, si no a
+    // "borrador". El guion/caption que ya tenía no se toca.
+    const nuevoEstado = estadoAlReprogramar(piezaActual as Pick<PublicacionOrganica, "estado" | "url_video" | "estado_antes_de_vencer">);
     const { data: filas, error: errorUpdate } = await supabaseAdmin
       .from("publicaciones_organicas")
-      .update({ programada_para: nuevaFecha, semana, estado: nuevoEstado, actualizado_en: new Date().toISOString() })
+      .update({
+        programada_para: nuevaFecha,
+        semana,
+        estado: nuevoEstado,
+        ...(piezaActual.estado === "vencida" ? { estado_antes_de_vencer: null } : {}),
+        actualizado_en: new Date().toISOString(),
+      })
       .eq("id", id)
       .eq("user_id", usuario!.id)
       .eq("estado", piezaActual.estado)
