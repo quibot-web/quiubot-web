@@ -42,9 +42,14 @@ function Zona({ children, paleta, gap = 24 }: { children: React.ReactNode; palet
       }}
     >
       {paleta.placa ? (
+        // La placa ocupa todo el alto del bloque (revisión: en Color pleno
+        // el objeto quedaba arriba, con un hueco hasta los subtítulos).
         <div
           style={{
             width: "100%",
+            height: "100%",
+            display: "flex",
+            alignItems: "center",
             background: paleta.placa.fondo,
             border: `6px solid ${paleta.placa.borde}`,
             borderRadius: 32,
@@ -432,7 +437,9 @@ export function PantallaDividida({
   );
   return (
     <AbsoluteFill>
-      {mitad("mal", etiquetaMal, textoMal, fondoMal, 0, { top: "20%", opacity: interpolate(progreso, [0, 1], [1, 0.75]) })}
+      {/* Antes del cambio, la mitad "mal" va sola y centrada en el bloque;
+          con el cambio sube y entra la mitad "bien" debajo. */}
+      {mitad("mal", etiquetaMal, textoMal, fondoMal, 0, { top: `${interpolate(progreso, [0, 1], [28.5, 20])}%`, opacity: interpolate(progreso, [0, 1], [1, 0.75]) })}
       {mitad("bien", etiquetaBien, textoBien, fondoBien, 1, { top: "37%", opacity: progreso, transform: `translateX(${interpolate(progreso, [0, 1], [100, 0])}%)` })}
     </AbsoluteFill>
   );

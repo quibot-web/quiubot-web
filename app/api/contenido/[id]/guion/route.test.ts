@@ -67,6 +67,8 @@ fromMock.mockImplementation((tabla: unknown) => {
       eq: () => obj,
       neq: () => obj,
       not: () => obj,
+      order: () => obj,
+      limit: () => obj,
       maybeSingle: async () => ({ data: piezaActual }),
       update: (valores: Record<string, unknown>) => {
         updatesRealizados.push(valores);

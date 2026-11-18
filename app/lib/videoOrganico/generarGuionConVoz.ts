@@ -1,5 +1,5 @@
 import "server-only";
-import { asignarEstilo } from "@/video/estilos/estilos";
+import { asignarEstilo, elegirEstilo, estilosDisponibles, idsFotosSinTexto } from "@/video/estilos/estilos";
 import { GuionSchema, idsDeMediaUsados, type Guion, type RecetaOrganicaId } from "@/video/guion.schema";
 import type { TemaGuion } from "@/video/tema";
 import { validarContraRecetaOrganica, type RecetaOrganica } from "@/video/recetas/organico";
@@ -68,6 +68,10 @@ export type ParametrosGenerarGuionConVoz = {
   recetaId: RecetaOrganicaId;
   erroresPrevios?: string[];
   maxReintentos?: number;
+  // Estilos de las piezas anteriores de la cuenta, la más reciente
+  // primero (rotación de estilos, paso 3). Sin historial: el primero
+  // disponible.
+  historialEstilos?: (string | null)[];
 };
 
 export type ResultadoGenerarGuionConVoz =
@@ -226,9 +230,21 @@ export async function generarGuionConVoz(params: ParametrosGenerarGuionConVoz): 
     return resultadoVoz;
   }
 
-  // Estilo visual y layout por escena (sistema de estilos, paso 1): los
-  // decide el código, nunca la IA, y quedan en el guion para medirlos.
-  const guionFinal: Guion = { ...resultado.guion, ...resultadoVoz.campos, estilo: asignarEstilo(resultado.guion.escenas) };
+  // Estilo visual y layout por escena: los decide el código, nunca la IA,
+  // y quedan en el guion para medirlos (O2). Rotación: el menos usado en
+  // las últimas piezas, nunca igual al anterior; "foto" solo si la pieza
+  // tiene una foto real sin texto. El análisis de las fotos de la pieza
+  // queda en el guion para que el render sepa cuáles sirven de fondo.
+  const analisisDeLaPieza = Object.fromEntries(Object.entries(params.entrada.analisisPiezas).filter(([id]) => params.entrada.piezas.some((p) => p.id === id)));
+  const mediosDeLaPieza = Object.fromEntries(params.entrada.piezas.map((p) => [p.id, { tipo: p.tipo }]));
+  const fotosSinTexto = idsFotosSinTexto(mediosDeLaPieza, analisisDeLaPieza);
+  const estiloElegido = elegirEstilo(params.historialEstilos ?? [], estilosDisponibles(fotosSinTexto.length > 0));
+  const guionFinal: Guion = {
+    ...resultado.guion,
+    ...resultadoVoz.campos,
+    ...(Object.keys(analisisDeLaPieza).length > 0 ? { analisisPiezas: analisisDeLaPieza } : {}),
+    estilo: asignarEstilo(resultado.guion.escenas, estiloElegido, { fotosSinTexto }),
+  };
 
   return { ok: true, guion: guionFinal, puntajeAlineacion: resultadoVoz.puntajeAlineacion, intentosGuion, crudo: resultadoVoz.crudo };
 }

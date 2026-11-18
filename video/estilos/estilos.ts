@@ -18,7 +18,8 @@ export type EstiloVisualId = (typeof ESTILOS_VISUALES)[number];
 // Sube cuando cambie cómo se ve un estilo, para que O2 no mezcle
 // métricas de dos versiones distintas. v2: tarjetas con los colores del
 // estilo, objeto centrado, texto gigante corto.
-export const VERSION_ESTILOS = 2;
+// v3: Color pleno alterna oscuro/claro + acento; Foto solo con fotos sin texto.
+export const VERSION_ESTILOS = 3;
 
 export const LAYOUTS_ESCENA = ["palabra_gigante", "objeto_protagonista", "tarjeta_flotante", "pantalla_dividida", "golpe_de_dato", "foto_borde_a_borde"] as const;
 export type LayoutEscena = (typeof LAYOUTS_ESCENA)[number];
@@ -38,44 +39,76 @@ export type EstiloGuion = z.infer<typeof EstiloGuionSchema>;
 export const VISUALES_PROTAGONISTA = ["icono_palabra", "contador", "checklist", "comparacion", "comparacion_foto"] as const;
 const PROTAGONISTA = new Set<string>(VISUALES_PROTAGONISTA);
 
-type EscenaParaEstilo = { id: string; bloque: string; tipo: string; visual?: { tipo: string } };
+type EscenaParaEstilo = { id: string; bloque: string; tipo: string; visual?: { tipo: string; media_id?: string } };
+
+// Fotos que sirven de fondo o de borde a borde: imágenes del álbum cuyo
+// análisis (gpt-4o, app/lib/analisisPieza.ts) dice que NO tienen texto.
+// Caso real (revisión del estilo Foto): una captura de la web de Quiubot
+// de fondo dejaba frases gigantes cortadas detrás del contenido. Sin
+// análisis no se usa (no se puede saber si tiene texto).
+export function idsFotosSinTexto(medios: Record<string, { tipo: string }>, analisis: Record<string, { tiene_texto: boolean }> | undefined): string[] {
+  return Object.entries(medios)
+    .filter(([id, m]) => m.tipo === "imagen" && analisis?.[id] !== undefined && !analisis[id].tiene_texto)
+    .map(([id]) => id);
+}
 
 // Cómo se dibuja un visual en cada estilo (también el visual que entra
 // DESPUÉS de la palabra gigante del gancho).
-export function layoutDelVisual(tipoVisual: string | undefined, estilo: EstiloVisualId = "noche"): LayoutEscena {
+export function layoutDelVisual(tipoVisual: string | undefined, estilo: EstiloVisualId = "noche", fotoSinTexto = false): LayoutEscena {
   if (!tipoVisual || !PROTAGONISTA.has(tipoVisual)) return "tarjeta_flotante";
   if (estilo === "color_pleno") {
     if (tipoVisual === "contador") return "golpe_de_dato";
     if (tipoVisual === "comparacion" || tipoVisual === "comparacion_foto") return "pantalla_dividida";
   }
   if (estilo === "foto") {
-    if (tipoVisual === "comparacion_foto") return "foto_borde_a_borde";
+    // La foto a pantalla completa solo si es una foto real sin texto.
+    if (tipoVisual === "comparacion_foto") return fotoSinTexto ? "foto_borde_a_borde" : "objeto_protagonista";
     if (tipoVisual === "comparacion") return "pantalla_dividida";
   }
   return "objeto_protagonista";
 }
 
-export function layoutDeEscena(escena: EscenaParaEstilo, estilo: EstiloVisualId = "noche"): LayoutEscena {
+export function layoutDeEscena(escena: EscenaParaEstilo, estilo: EstiloVisualId = "noche", fotosSinTexto: string[] = []): LayoutEscena {
   if (escena.bloque === "gancho" && escena.tipo === "gancho_texto") return "palabra_gigante";
-  return layoutDelVisual(escena.visual?.tipo, estilo);
+  const mediaId = escena.visual?.media_id;
+  return layoutDelVisual(escena.visual?.tipo, estilo, !!mediaId && fotosSinTexto.includes(mediaId));
 }
 
 // Estilos que admite una pieza: "foto" solo si tiene al menos una foto
-// (con Noche + Foto, una marca sin fotos se quedaría sin rotación --
-// decisión de Juan José: los iniciales son Noche y Color pleno).
-export function estilosDisponibles(tieneFotos: boolean): EstiloVisualId[] {
-  return tieneFotos ? ["noche", "color_pleno", "foto"] : ["noche", "color_pleno"];
+// real SIN texto (idsFotosSinTexto). Si no, rota entre Noche y Color
+// pleno (con Noche + Foto, una marca sin fotos se quedaría sin rotación).
+export function estilosDisponibles(tieneFotosSinTexto: boolean): EstiloVisualId[] {
+  return tieneFotosSinTexto ? ["noche", "color_pleno", "foto"] : ["noche", "color_pleno"];
 }
 
-// Paso 1-2: la generación sigue asignando "noche" (la rotación entre
-// estilos llega en el paso 3). El estilo se puede pedir explícito (mp4 de
-// revisión); "foto" sin fotos cae a "noche".
-export function asignarEstilo(escenas: EscenaParaEstilo[], estilo: EstiloVisualId = "noche", opciones: { tieneFotos?: boolean } = {}): EstiloGuion {
-  const id: EstiloVisualId = estilo === "foto" && !opciones.tieneFotos ? "noche" : estilo;
+// Rotación (paso 3): de los estilos disponibles, el menos usado en las
+// últimas VENTANA_ROTACION piezas de la cuenta, y nunca el mismo de la
+// pieza anterior (para que el perfil no se vea repetido). Empate: el que
+// se usó hace más tiempo; nunca usado gana, en el orden de "disponibles".
+// historial: estilos de las piezas anteriores, la más reciente primero
+// (null = pieza sin estilo).
+export const VENTANA_ROTACION = 6;
+export function elegirEstilo(historial: (string | null | undefined)[], disponibles: EstiloVisualId[]): EstiloVisualId {
+  const recientes = historial.slice(0, VENTANA_ROTACION);
+  const anterior = recientes[0];
+  const candidatos = disponibles.length > 1 ? disponibles.filter((e) => e !== anterior) : disponibles;
+  const usos = (e: EstiloVisualId) => recientes.filter((h) => h === e).length;
+  const ultimaVez = (e: EstiloVisualId) => {
+    const i = recientes.indexOf(e);
+    return i === -1 ? Number.POSITIVE_INFINITY : i;
+  };
+  return [...candidatos].sort((a, b) => usos(a) - usos(b) || ultimaVez(b) - ultimaVez(a))[0] ?? "noche";
+}
+
+// El estilo se puede pedir explícito (mp4 de revisión); "foto" sin fotos
+// sin texto cae a "noche".
+export function asignarEstilo(escenas: EscenaParaEstilo[], estilo: EstiloVisualId = "noche", opciones: { fotosSinTexto?: string[] } = {}): EstiloGuion {
+  const fotosSinTexto = opciones.fotosSinTexto ?? [];
+  const id: EstiloVisualId = estilo === "foto" && fotosSinTexto.length === 0 ? "noche" : estilo;
   return {
     id,
     version: VERSION_ESTILOS,
-    layouts: Object.fromEntries(escenas.map((e) => [e.id, layoutDeEscena(e, id)])),
+    layouts: Object.fromEntries(escenas.map((e) => [e.id, layoutDeEscena(e, id, fotosSinTexto)])),
   };
 }
 
@@ -173,9 +206,40 @@ function paletaOscura(id: "noche" | "foto", colores: { color_primario: string; c
   };
 }
 
-// Fondos de Color pleno, uno por escena: primario, secundario y un tono
-// derivado, siempre ajustados para que el texto (blanco o tinta) llegue a
-// 4,5:1.
+// Fondos de Color pleno (revisión: con paletas de tonos cercanos -- el
+// lila sobre lila de Quiubot -- las escenas se veían iguales o lavadas).
+// Escenas consecutivas alternan OSCURO (texto blanco) y CLARO (texto
+// tinta), y la mitad usa un ACENTO derivado: el complementario del
+// primario. Todos con contraste de texto >= 4,5:1 verificado.
+function aHsl(hex: string): [number, number, number] {
+  const n = parseInt(hex.replace("#", "").padEnd(6, "0").slice(0, 6), 16);
+  const [r, g, b] = [(n >> 16) & 255, (n >> 8) & 255, n & 255].map((c) => c / 255);
+  const max = Math.max(r, g, b);
+  const min = Math.min(r, g, b);
+  const l = (max + min) / 2;
+  if (max === min) return [0, 0, l];
+  const d = max - min;
+  const sat = l > 0.5 ? d / (2 - max - min) : d / (max + min);
+  const h = max === r ? (g - b) / d + (g < b ? 6 : 0) : max === g ? (b - r) / d + 2 : (r - g) / d + 4;
+  return [h * 60, sat, l];
+}
+
+function desdeHsl(h: number, sat: number, l: number): string {
+  const c = (1 - Math.abs(2 * l - 1)) * sat;
+  const x = c * (1 - Math.abs(((h / 60) % 2) - 1));
+  const m = l - c / 2;
+  const [r, g, b] = h < 60 ? [c, x, 0] : h < 120 ? [x, c, 0] : h < 180 ? [0, c, x] : h < 240 ? [0, x, c] : h < 300 ? [x, 0, c] : [c, 0, x];
+  const aHex = (v: number) => Math.round((v + m) * 255).toString(16).padStart(2, "0");
+  return `#${aHex(r)}${aHex(g)}${aHex(b)}`;
+}
+
+// Complementario del primario (tono +180°), con saturación suficiente
+// para que se note aunque la marca sea gris.
+export function acentoComplementario(color: string): string {
+  const [h, sat] = aHsl(color);
+  return desdeHsl((h + 180) % 360, Math.max(sat, 0.6), 0.5);
+}
+
 export function fondoLegible(color: string): string {
   for (let t = 0; t <= 1; t += 0.05) {
     for (const hacia of ["#000000", "#FFFFFF"]) {
@@ -186,8 +250,43 @@ export function fondoLegible(color: string): string {
   return "#000000";
 }
 
+// Oscuro y claro de verdad, lejos uno del otro: blanco >= 9:1 sobre el
+// oscuro y tinta >= 11:1 sobre el claro garantizan ~5:1 entre escenas
+// seguidas aunque la marca tenga un solo color.
+export function fondoOscuro(color: string): string {
+  for (let t = 0.2; t <= 1; t += 0.05) {
+    const c = mezclarColoresHex(color, "#000000", t);
+    if (contrasteHex("#FFFFFF", c) >= 9) return c;
+  }
+  return "#000000";
+}
+
+export function fondoClaro(color: string): string {
+  for (let t = 0.45; t <= 1; t += 0.05) {
+    const c = mezclarColoresHex(color, "#FFFFFF", t);
+    if (contrasteHex(TINTA, c) >= 11) return c;
+  }
+  return "#FFFFFF";
+}
+
+// Versión OSCURA del acento: amarillos y naranjas (tono 30°-100°) se
+// enturbian al oscurecerlos (el complementario del morado de Quiubot daba
+// un verde oliva barroso). Se prueba el complementario y, si cae ahí, los
+// siguientes tonos armónicos (complementarios divididos, triádicos).
+export function acentoParaOscuro(color: string): string {
+  const [h, sat] = aHsl(color);
+  for (const giro of [180, 210, 150, 240, 120]) {
+    const tono = (h + giro) % 360;
+    if (tono < 30 || tono > 100) return desdeHsl(tono, Math.max(sat, 0.6), 0.5);
+  }
+  return acentoComplementario(color);
+}
+
 export function fondosColorPleno(colores: { color_primario: string; color_secundario: string }): string[] {
-  return [colores.color_primario, colores.color_secundario, mezclarColoresHex(colores.color_primario, "#000000", 0.45), mezclarColoresHex(colores.color_primario, colores.color_secundario, 0.5)].map(fondoLegible);
+  const acento = acentoComplementario(colores.color_primario);
+  // Oscuro, claro, oscuro, claro... (índice par = oscuro): nunca dos
+  // escenas seguidas del mismo brillo; el acento en la mitad.
+  return [fondoOscuro(colores.color_primario), fondoClaro(colores.color_secundario), fondoOscuro(acentoParaOscuro(colores.color_primario)), fondoClaro(acento)];
 }
 
 function paletaColorPleno(tema: { color_primario: string; color_secundario: string }): PaletaEstilo {

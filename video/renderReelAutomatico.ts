@@ -12,7 +12,7 @@ import path from "node:path";
 import { bundle } from "@remotion/bundler";
 import { renderMedia, selectComposition } from "@remotion/renderer";
 import { GuionSchema } from "./guion.schema";
-import { ESTILOS_VISUALES, asignarEstilo, type EstiloVisualId } from "./estilos/estilos";
+import { ESTILOS_VISUALES, asignarEstilo, idsFotosSinTexto, type EstiloVisualId } from "./estilos/estilos";
 
 function argumento(nombre: string): string | null {
   const i = process.argv.indexOf(nombre);
@@ -28,9 +28,9 @@ async function main() {
   const estilo = argumento("--estilo");
   if (estilo) {
     if (!(ESTILOS_VISUALES as readonly string[]).includes(estilo)) throw new Error(`Estilo desconocido: ${estilo} (${ESTILOS_VISUALES.join(", ")})`);
-    const tieneFotos = Object.values(medios).some((m) => m.tipo === "imagen");
-    guion.estilo = asignarEstilo(guion.escenas, estilo as EstiloVisualId, { tieneFotos });
-    if (guion.estilo.id !== estilo) console.log(`Aviso: "${estilo}" no aplica a esta pieza (sin fotos); se usa "${guion.estilo.id}".`);
+    const fotosSinTexto = idsFotosSinTexto(medios, guion.analisisPiezas);
+    guion.estilo = asignarEstilo(guion.escenas, estilo as EstiloVisualId, { fotosSinTexto });
+    if (guion.estilo.id !== estilo) console.log(`Aviso: "${estilo}" no aplica a esta pieza (sin fotos sin texto); se usa "${guion.estilo.id}".`);
   }
 
   const serveUrl = await bundle({ entryPoint: path.join(process.cwd(), "video", "Root.tsx") });

@@ -24,6 +24,7 @@ import { elegirGanchoTipoMenosUsado, elegirPistaMusicalOrganica } from "@/app/li
 import type { RecetaOrganicaId } from "@/video/guion.schema";
 import { obtenerSaludInstagram } from "@/app/lib/metaInstagramSalud";
 import { generarGuionConVoz } from "@/app/lib/videoOrganico/generarGuionConVoz";
+import { VENTANA_ROTACION } from "@/video/estilos/estilos";
 
 // Receta que ya pasó al pipeline nuevo (narración + voz real, ver
 // app/lib/videoOrganico/generarGuionConVoz.ts -- el mismo código que
@@ -329,6 +330,19 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
     }
 
     const voz = (marca.voz_tts as string | null) || VOZ_POR_DEFECTO;
+
+    // Rotación de estilos (paso 3): estilos de las últimas piezas de la
+    // cuenta (sin esta misma, sin canceladas), la más reciente primero.
+    // Si la consulta falla, se genera igual (sin historial).
+    const { data: piezasAnteriores } = await supabaseAdmin
+      .from("publicaciones_organicas")
+      .select("estilo:guion->estilo->>id")
+      .eq("user_id", usuario.id)
+      .neq("id", id)
+      .neq("estado", "cancelada")
+      .order("creado_en", { ascending: false })
+      .limit(VENTANA_ROTACION);
+    const historialEstilos = (piezasAnteriores ?? []).map((p) => ((p as { estilo?: string | null }).estilo ?? null));
     const recetaConAudio = recetaParaPromptConAudio(entrada);
 
     try {
@@ -344,6 +358,7 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
         duracionObjetivoS: duracionS,
         recetaId,
         maxReintentos: MAX_REINTENTOS,
+        historialEstilos,
       });
 
       if (!resultado.ok) {

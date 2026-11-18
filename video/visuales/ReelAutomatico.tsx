@@ -1,5 +1,5 @@
 import { AbsoluteFill, Sequence, spring, useCurrentFrame } from "remotion";
-import { layoutDeEscena, layoutDelVisual, paletaDeEstilo, type EstiloVisualId, type LayoutEscena } from "../estilos/estilos";
+import { idsFotosSinTexto, layoutDeEscena, layoutDelVisual, paletaDeEstilo, type EstiloVisualId, type LayoutEscena } from "../estilos/estilos";
 import { FondoNoche } from "../estilos/FondoNoche";
 import { FondoColorPleno, FondoFoto, fondoColorPlenoDeEscena } from "../estilos/FondosEstilo";
 import { textoGiganteDeRespaldo } from "../estilos/textoGigante";
@@ -25,6 +25,7 @@ import { CapaEfectos, type EfectoSonido } from "./CapaEfectos";
 import { renderizarVisual } from "./index";
 import { SubtitulosSincronizados, type PalabraEnCuadros } from "./SubtitulosSincronizados";
 import { duracionReelAutomaticoEnCuadros } from "./duracionReel";
+import { MAX_SEGUNDOS_SIN_CAMBIO, golpesDeRelleno } from "../estilos/ritmo";
 
 export { duracionReelAutomaticoEnCuadros };
 
@@ -110,6 +111,7 @@ function EscenaConEstilo({
   inicioEscena_s,
   duracionCuadros,
   medios,
+  analisisPiezas,
 }: {
   escena: Guion["escenas"][number];
   indiceEscena: number;
@@ -121,6 +123,7 @@ function EscenaConEstilo({
   inicioEscena_s: number;
   duracionCuadros: number;
   medios?: MediosResueltos;
+  analisisPiezas?: Record<string, { tiene_texto: boolean }>;
 }) {
   const frame = useCurrentFrame();
   const paleta = paletaDeEstilo(estiloId, tema);
@@ -130,17 +133,30 @@ function EscenaConEstilo({
   const esPalabraGigante = layout === "palabra_gigante" && escena.tipo === "gancho_texto";
   // El visual que entra tras la palabra gigante se dibuja con su propio
   // layout (protagonista si lo admite), nunca como tarjeta chica.
-  const layoutVisual = layout === "palabra_gigante" ? layoutDelVisual(visual?.tipo, estiloId) : layout;
+  // Fotos que pueden ir de fondo o de borde a borde: solo imágenes sin
+  // texto según el análisis del álbum (nunca una captura de pantalla).
+  const idsSinTexto = idsFotosSinTexto(medios ?? {}, analisisPiezas);
+  const mediaVisual = visual && "media_id" in visual ? visual.media_id : undefined;
+  const fotoVisualSinTexto = !!mediaVisual && idsSinTexto.includes(mediaVisual);
+  const layoutCalculado = layout === "palabra_gigante" ? layoutDelVisual(visual?.tipo, estiloId, fotoVisualSinTexto) : layout;
+  // Defensa: aunque el layout guardado diga "borde a borde", una foto con
+  // texto nunca va a pantalla completa.
+  const layoutVisual = layoutCalculado === "foto_borde_a_borde" && !fotoVisualSinTexto ? "objeto_protagonista" : layoutCalculado;
   const ctx = { tema, bloque: escena.bloque, frame, fps, palabras, inicioEscena_s, medios, estilo: { paleta, layout: layoutVisual, colorTextoSobreFondo } };
   const cuadroSalida = esPalabraGigante ? cuadroSalidaPalabraGigante(palabras, inicioEscena_s, fps) : null;
-  const primerEvento = visual && visual.eventos.length > 0 ? visual.eventos[0].palabra : null;
-  const cuadroEvento = primerEvento !== null && palabras[primerEvento] ? Math.round((palabras[primerEvento].inicio_s - inicioEscena_s) * fps) : null;
-  const cuadroGolpe = cuadroSalida ?? cuadroEvento;
+  // Control "cambio visual cada 2 s" (ritmo.ts): los cambios reales de
+  // la escena (salida de la palabra gigante, eventos del visual, cada
+  // casilla del checklist) + golpes de relleno donde falten.
+  const cuadroDePalabra = (i: number) => (palabras[i] ? Math.round((palabras[i].inicio_s - inicioEscena_s) * fps) : null);
+  const cuadrosEventos = (visual?.eventos ?? []).map((e) => cuadroDePalabra(e.palabra)).filter((c): c is number => c !== null);
+  const cuadrosChecklist =
+    visual?.tipo === "checklist" && cuadrosEventos.length > 0 ? visual.items.map((_, i) => cuadrosEventos[0] + Math.round(i * 0.25 * fps)) : [];
+  const cambios = [...(cuadroSalida !== null ? [cuadroSalida] : []), ...cuadrosEventos, ...cuadrosChecklist];
+  const iniciosPalabras = palabras.map((_, i) => cuadroDePalabra(i)).filter((c): c is number => c !== null);
+  const cuadrosGolpe = [...cambios, ...golpesDeRelleno(cambios, duracionCuadros, iniciosPalabras, MAX_SEGUNDOS_SIN_CAMBIO * fps)];
   // En la palabra gigante, el visual entra recién en la salida del texto.
   const entradaVisual = cuadroSalida === null ? 1 : frame >= cuadroSalida ? spring({ frame: frame - cuadroSalida, fps, config: { damping: 13 } }) : 0;
-  const fotos = Object.values(medios ?? {})
-    .filter((m) => m.tipo === "imagen")
-    .map((m) => m.url);
+  const fotos = idsSinTexto.map((id) => medios![id].url);
   // La foto a pantalla completa ya es el fondo de esa escena.
   const fondoPropio = layoutVisual === "foto_borde_a_borde" && entradaVisual >= 1;
 
@@ -149,7 +165,7 @@ function EscenaConEstilo({
       {estiloId === "noche" && <FondoNoche paleta={paleta} indiceEscena={indiceEscena} frame={frame} fps={fps} />}
       {estiloId === "color_pleno" && <FondoColorPleno colores={tema} indiceEscena={indiceEscena} frame={frame} fps={fps} />}
       {estiloId === "foto" && !fondoPropio && <FondoFoto urlsFotos={fotos} paleta={paleta} indiceEscena={indiceEscena} frame={frame} fps={fps} duracionCuadros={duracionCuadros} />}
-      <CamaraEscena frame={frame} fps={fps} duracionCuadros={duracionCuadros} cuadroGolpe={cuadroGolpe}>
+      <CamaraEscena frame={frame} fps={fps} duracionCuadros={duracionCuadros} cuadrosGolpe={cuadrosGolpe}>
         {visual && (
           <AbsoluteFill style={{ opacity: entradaVisual, transform: `scale(${0.88 + 0.12 * entradaVisual})` }}>{renderizarVisual(visual, ctx)}</AbsoluteFill>
         )}
@@ -249,6 +265,7 @@ export function ReelAutomatico({ guion, medios, pistaMusicaUrl, efectos = [], mo
               inicioEscena_s={inicioEscena_s}
               duracionCuadros={duracionEscenaCuadros}
               medios={medios}
+              analisisPiezas={guion.analisisPiezas}
             />
           ) : (
             <>
