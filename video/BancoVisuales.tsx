@@ -14,6 +14,9 @@ import { ComparacionVisual } from "./visuales/ComparacionVisual";
 import { IconoPalabraVisual } from "./visuales/IconoPalabraVisual";
 import { ChecklistVisual } from "./visuales/ChecklistVisual";
 import { ComparacionFotoVisual } from "./visuales/ComparacionFotoVisual";
+import { renderizarVisual, type PalabraConTiempoVisual } from "./visuales/index";
+import type { Visual } from "./visuales/schema";
+import type { BloqueGuion } from "./guion.schema";
 
 export type PropsBancoVisuales = {
   tipo: "anuncio_boton" | "conexion_whatsapp" | "respuesta_lenta" | "comparacion" | "icono_palabra" | "checklist" | "comparacion_foto";
@@ -73,6 +76,26 @@ export function BancoVisuales({ tipo, estado, textos, tema = TEMA_BANCO }: Props
           textoBien={textos.texto_bien}
         />
       )}
+    </AbsoluteFill>
+  );
+}
+
+// Parte 2e: el mismo visual pasado por renderizarVisual() (el camino
+// real del reel), en el bloque que se pida -- para revisar el gancho
+// (estado "problema", sin eventos, con su movimiento de entrada) y el
+// cierre (mismo visual, cambio en la palabra 0) con el render real.
+// Narración simulada: 10 palabras de 0.4s desde el segundo 0.
+export type PropsBancoGanchoCierre = { visual: Visual; bloque: BloqueGuion; tema?: TemaGuion };
+
+const PALABRAS_SIMULADAS: PalabraConTiempoVisual[] = Array.from({ length: 10 }, (_, i) => ({ texto: `palabra${i}`, inicio_s: i * 0.4, fin_s: i * 0.4 + 0.35 }));
+
+export function BancoGanchoCierre({ visual, bloque, tema = TEMA_BANCO }: PropsBancoGanchoCierre) {
+  const frame = useCurrentFrame();
+  const { fps } = useVideoConfig();
+  const medios = { "foto-demo": { tipo: "imagen" as const, url: staticFile("demo-organico/foto-producto-ceramica.jpg") } };
+  return (
+    <AbsoluteFill style={{ background: `linear-gradient(160deg, ${tema.color_primario}, #1a1530)`, fontFamily: familiaDeFuente(tema.fuente) }}>
+      {renderizarVisual(visual, { tema, bloque, frame, fps, palabras: PALABRAS_SIMULADAS, inicioEscena_s: 0, medios })}
     </AbsoluteFill>
   );
 }

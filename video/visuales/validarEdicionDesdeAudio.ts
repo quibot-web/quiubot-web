@@ -63,6 +63,9 @@ const MAX_PALABRAS_GANCHO = 12;
 // que FRACCION_MINIMA_ANTES_DEL_CAMBIO pero INVERTIDO -- acá lo que
 // importa es que quede tiempo DESPUÉS del cambio, no antes.
 const FRACCION_MAXIMA_CLIC_CTA = 0.5;
+// Parte 2e: en el cierre con un visual de 2 estados, el arreglo debe
+// llegar en el primer 30% de la narración de "marca".
+const FRACCION_MAXIMA_CAMBIO_CIERRE = 0.3;
 
 // Únicos tipos de 2 estados (problema->arreglo) de verdad -- boton_estado/
 // cursor_clic quedan afuera a propósito (pedido explícito, 3ra
@@ -127,9 +130,21 @@ export function validarEstructuraConsejosNumeradosAudio(escenas: Guion["escenas"
     });
   }
 
-  if (gancho.visual?.tipo !== "celular_chat") {
-    hallazgos.push({ escenaId: gancho.id, mensaje: `El gancho debe usar visual "celular_chat" (arranca en 0 mensajes) -- llegó "${gancho.visual?.tipo ?? "sin visual"}".` });
-  } else {
+  // Parte 2e (18 nov 2026): el gancho y el cierre ya no están amarrados
+  // a celular_chat ("¿cero mensajes?" no sirve para un reel sobre fotos
+  // o precios). Dos opciones:
+  // - celular_chat en el gancho (congelado en 0) y en la marca (sube);
+  // - un visual de 2 estados: el gancho muestra SOLO el estado
+  //   "problema" (eventos: []), y la marca repite el MISMO visual con los
+  //   MISMOS textos y el cambio al principio -- termina "arreglado".
+  const tipoGancho = gancho.visual?.tipo;
+  const ganchoEsDosEstados = !!tipoGancho && TIPOS_VISUAL_VALOR.has(tipoGancho);
+  if (tipoGancho !== "celular_chat" && !ganchoEsDosEstados) {
+    hallazgos.push({
+      escenaId: gancho.id,
+      mensaje: `El gancho debe usar "celular_chat" o uno de los visuales de 2 estados (${[...TIPOS_VISUAL_VALOR].join(", ")}) en su estado "problema" -- llegó "${tipoGancho ?? "sin visual"}".`,
+    });
+  } else if (gancho.visual?.tipo === "celular_chat") {
     // Ronda J: corrige una confusión real de la ronda anterior -- "que
     // el gancho se quede en 0" no era sobre el AUDIO (eso ya arrancaba
     // en 0s), era sobre este VISUAL. Caso real que lo motivó: la
@@ -146,12 +161,40 @@ export function validarEstructuraConsejosNumeradosAudio(escenas: Guion["escenas"
         mensaje: `El "celular_chat" del gancho debe quedarse congelado en 0 (sin eventos "numero_sube" ni "notificacion_llega") -- la narración del gancho presenta el problema tal cual, nunca lo resuelve. Esos eventos son de las escenas "marca"/"cta", donde sí se cumple la promesa. Quita los eventos de esta escena (eventos: []).`,
       });
     }
+  } else if (gancho.visual && gancho.visual.eventos.length > 0) {
+    hallazgos.push({
+      escenaId: gancho.id,
+      mensaje: `El "${tipoGancho}" del gancho debe quedarse en el estado "problema" (eventos: []) -- el gancho presenta el problema, nunca lo resuelve. El arreglo se muestra en la escena "marca", con el mismo visual.`,
+    });
   }
-  if (marca.visual?.tipo !== "celular_chat") {
+
+  if (tipoGancho && (tipoGancho === "celular_chat" || ganchoEsDosEstados) && marca.visual?.tipo !== tipoGancho) {
     hallazgos.push({
       escenaId: marca.id,
-      mensaje: `La escena "marca" cierra el bucle del gancho y debe reusar visual "celular_chat" (el MISMO celular del gancho, ahora con el contador ya arriba) -- llegó "${marca.visual?.tipo ?? "sin visual"}".`,
+      mensaje: `La escena "marca" cierra el bucle del gancho y debe repetir su MISMO visual "${tipoGancho}"${tipoGancho === "celular_chat" ? " (ahora con el contador ya arriba)" : " con los mismos textos, ahora en el estado arreglado"} -- llegó "${marca.visual?.tipo ?? "sin visual"}".`,
     });
+  } else if (ganchoEsDosEstados && gancho.visual && marca.visual) {
+    const sinEventos = (v: object) => JSON.stringify(Object.fromEntries(Object.entries(v).filter(([k]) => k !== "eventos").sort(([a], [b]) => a.localeCompare(b))));
+    const eventosMarca = marca.visual.eventos;
+    if (sinEventos(gancho.visual) !== sinEventos(marca.visual)) {
+      hallazgos.push({
+        escenaId: marca.id,
+        mensaje: `El "${tipoGancho}" de la escena "marca" debe llevar EXACTAMENTE los mismos textos que el del gancho (es el mismo visual, ahora arreglado) -- copia todos sus campos menos "eventos".`,
+      });
+    }
+    const totalPalabrasMarca = contarPalabras(marca.narracion ?? "");
+    const limite = Math.floor(totalPalabrasMarca * FRACCION_MAXIMA_CAMBIO_CIERRE);
+    if (eventosMarca.length === 0) {
+      hallazgos.push({
+        escenaId: marca.id,
+        mensaje: `El "${tipoGancho}" de la escena "marca" necesita su evento de cambio (el arreglo) al principio de la narracion -- palabra 0 a ${limite}. Sin él, el cierre repite el problema del gancho en vez de resolverlo.`,
+      });
+    } else if (Math.max(...eventosMarca.map((e) => e.palabra)) > limite) {
+      hallazgos.push({
+        escenaId: marca.id,
+        mensaje: `El cambio del "${tipoGancho}" en la escena "marca" cae tarde -- el cierre debe verse arreglado casi toda la escena. Ponlo entre la palabra 0 y la ${limite} de "${marca.narracion}".`,
+      });
+    }
   }
 
   if (cta?.visual && (cta.visual.tipo === "boton_estado" || cta.visual.tipo === "cursor_clic")) {
@@ -200,6 +243,12 @@ export function validarEstructuraConsejosNumeradosAudio(escenas: Guion["escenas"
         escenaId: escena.id,
         mensaje: `Cada escena "valor" muestra el consejo con un visual de 2 estados (problema->arreglo): ${[...TIPOS_VISUAL_VALOR].join(", ")} -- llegó "${visual.tipo}". Un botón o cursor sueltos no muestran el antes y el después del consejo, cámbialo por uno de esos tipos.`,
       });
+    } else if (visual && visual.eventos.length === 0) {
+      tiposVisualValorUsados.push({ escenaId: escena.id, tipo: visual.tipo });
+      hallazgos.push({
+        escenaId: escena.id,
+        mensaje: `El "${visual.tipo}" de este consejo no tiene evento -- se queda en el problema y nunca muestra el arreglo. Agrega su evento en la palabra de "${narracion}" donde se da la solución.`,
+      });
     } else if (visual) {
       tiposVisualValorUsados.push({ escenaId: escena.id, tipo: visual.tipo });
       const totalPalabras = contarPalabras(narracion);
@@ -230,6 +279,19 @@ export function validarEstructuraConsejosNumeradosAudio(escenas: Guion["escenas"
       escenaId: tiposRepetidos[0].escenaId,
       mensaje: `Las escenas ${escenasAfectadas.join(" y ")} usan el mismo visual "${tiposRepetidos[0].tipo}" -- es señal de que los 2 consejos atacan el mismo problema (ej. "pon WhatsApp como botón" y "conecta el anuncio a WhatsApp" son el mismo tema). Los 3 consejos deben atacar 3 problemas DISTINTOS, cada uno con su propio tipo de visual de 2 estados.`,
     });
+  }
+
+  // Parte 2e: si el gancho/cierre usa un visual de 2 estados, ningún
+  // consejo puede repetirlo -- se leería como si el bucle se cerrara en
+  // medio del reel.
+  if (ganchoEsDosEstados) {
+    const repiteGancho = tiposVisualValorUsados.find((t) => t.tipo === tipoGancho);
+    if (repiteGancho) {
+      hallazgos.push({
+        escenaId: repiteGancho.escenaId,
+        mensaje: `Este consejo usa "${tipoGancho}", el mismo visual del gancho y del cierre -- cada consejo necesita un visual distinto al del gancho. Cambia el visual del consejo (o el del gancho y la marca).`,
+      });
+    }
   }
 
   return hallazgos;

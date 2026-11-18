@@ -18,7 +18,7 @@ import { fixturePreguntaComunidad } from "./fixtures/organico/preguntaComunidad"
 import { fixtureDetrasDeMarca } from "./fixtures/organico/detrasDeMarca";
 import { ReelConsejosNumerados, duracionReelConsejosNumeradosEnCuadros } from "./fixtures/organico/referencia/ReelConsejosNumerados";
 import { ReelMitoVerdad, duracionReelMitoVerdadEnCuadros } from "./fixtures/organico/referencia/ReelMitoVerdad";
-import { BancoVisuales, type PropsBancoVisuales } from "./BancoVisuales";
+import { BancoGanchoCierre, BancoVisuales, type PropsBancoGanchoCierre, type PropsBancoVisuales } from "./BancoVisuales";
 
 // Placeholder para "demo-1" (data URI, sin archivos nuevos en public/):
 // solo para ver en Studio cómo se comporta producto_hero y el gancho con
@@ -131,6 +131,17 @@ function RemotionRoot() {
         width={1080}
         height={1920}
         defaultProps={{ tipo: "anuncio_boton", estado: "antes", textos: {} } satisfies PropsBancoVisuales}
+      />
+      {/* Parte 2e: un visual por el camino real (renderizarVisual), como
+          gancho (problema) o cierre (arreglado). */}
+      <Composition
+        id="banco-gancho-cierre"
+        component={BancoGanchoCierre}
+        durationInFrames={120}
+        fps={30}
+        width={1080}
+        height={1920}
+        defaultProps={{ visual: { tipo: "comparacion", texto_mal: "Foto con flash", texto_bien: "Luz de ventana", eventos: [] }, bloque: "gancho" } satisfies PropsBancoGanchoCierre}
       />
     </>
   );

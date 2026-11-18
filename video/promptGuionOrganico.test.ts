@@ -81,11 +81,30 @@ describe("eje del reel: tema y producto de la pieza", () => {
   });
 
   it("el prompt ofrece todos los visuales de 2 estados para los consejos, cada uno con sus textos", () => {
-    const prompt = construirPromptGuionOrganicoConAudio(entrada({ tema: "fotos de producto" }));
+    const prompt = construirPromptGuionOrganicoConAudio(entrada({ tema: "fotos de producto", piezas: [{ id: "foto-1", tipo: "imagen" }] }));
+    expect(prompt).toContain("hay 8 y son los ÚNICOS válidos para un consejo");
     for (const tipo of ["comparacion", "icono_palabra", "checklist", "comparacion_foto", "anuncio_boton", "respuesta_lenta", "conexion_whatsapp", "contador"]) {
       expect(prompt).toContain(tipo);
     }
     expect(prompt).not.toContain('Para el consejo "pon un botón de contacto en tu anuncio"');
     expect(prompt).not.toContain('Para el consejo "responde rápido"');
+  });
+
+  it("parte 2e: sin fotos en la pieza, comparacion_foto ni se ofrece (7 opciones)", () => {
+    for (const piezas of [[], [{ id: "video-1", tipo: "video" as const }]]) {
+      const prompt = construirPromptGuionOrganicoConAudio(entrada({ tema: "precios", piezas }));
+      expect(prompt).not.toContain("comparacion_foto");
+      expect(prompt).toContain("hay 7 y son los ÚNICOS válidos para un consejo");
+      expect(prompt).not.toContain("{{");
+    }
+  });
+
+  it("parte 2e: gancho y cierre ya no están amarrados a celular_chat", () => {
+    const prompt = construirPromptGuionOrganicoConAudio(entrada({ tema: "precios" }));
+    expect(prompt).toContain('Un visual de 2 estados');
+    expect(prompt).toContain("se queda quieto en su estado \"problema\"");
+    expect(prompt).toContain("SOLO si el eje es sobre recibir mensajes o clientes");
+    expect(prompt).toContain("CIERRA EL BUCLE con el MISMO visual del gancho");
+    expect(prompt).not.toContain('vuelve a visual "celular_chat", el MISMO tipo que el gancho');
   });
 });

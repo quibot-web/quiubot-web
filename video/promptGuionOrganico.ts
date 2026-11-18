@@ -195,7 +195,8 @@ function seccionPiezas(piezas: PiezaDisponible[], analisisPiezas: Record<string,
       return `- ${p.id} (${p.tipo}): foto limpia, sin texto -- puede usar cualquier tratamiento, incluida "completa".`;
     })
     .join("\n");
-  return `PIEZAS DISPONIBLES DEL ÁLBUM (usa el id EXACTO como media_id en producto_hero, nunca inventes uno ni pongas una URL):\n${lista}`;
+  const usos = piezaTieneFotos(piezas) ? "producto_hero o comparacion_foto (este último solo con una imagen)" : "producto_hero";
+  return `PIEZAS DISPONIBLES DEL ÁLBUM (usa el id EXACTO como media_id en ${usos}, nunca inventes uno ni pongas una URL):\n${lista}`;
 }
 
 // Fase B v2.0 (docs/diseno/plan_contenido_organico_fase_b_v2.md,
@@ -206,30 +207,53 @@ function seccionPiezas(piezas: PiezaDisponible[], analisisPiezas: Record<string,
 // privadas de este archivo (negocio, receta, gancho, piezas,
 // REFERENCIA_ESCENAS) -- solo cambia el encabezado, agrega la sección
 // de narración/visual, y pide esos 2 campos en el JSON de salida.
-const EVENTOS_POR_VISUAL = `TIPOS DE VISUAL (elige UNO por escena, el que mejor "muestre" la idea en vez de solo decirla) y su "eventos" -- cada evento tiene "palabra": el ÍNDICE (empieza en 0) de una palabra DENTRO de la narración de ESA MISMA escena (nunca un segundo, nunca un índice de otra escena -- si la narración de esta escena tiene 10 palabras, los índices válidos son 0 a 9), y "accion", restringida a las de cada tipo. Los eventos deben repartirse a lo largo de TODA la narración (no todos al principio) -- el visual cambia cada 1-2 segundos, nunca se queda estático toda la escena:
-- celular_chat: {"tipo":"celular_chat","eventos":[{"palabra":N,"accion":"notificacion_llega"}|{"palabra":N,"accion":"numero_sube"}, ...]} (1 a 6 eventos) -- celular con notificaciones/mensajes llegando y un número grande que sube. Úsalo SOLO en el gancho y en la escena "marca" (abre y cierra el bucle con el mismo celular, nunca en escenas de consejo).
+// Parte 2e: comparacion_foto solo se ofrece si la pieza trae al menos
+// una IMAGEN del álbum (difumina y aclara una foto real -- sin foto no
+// hay qué mostrar, y un video no sirve).
+export function piezaTieneFotos(piezas: PiezaDisponible[]): boolean {
+  return piezas.some((p) => p.tipo === "imagen");
+}
+
+export function tiposVisualDisponibles(piezas: PiezaDisponible[]): string[] {
+  return TIPOS_VISUAL_DOS_ESTADOS.filter((t) => t !== "comparacion_foto" || piezaTieneFotos(piezas));
+}
+
+const DESCRIPCION_COMPARACION_FOTO = `- comparacion_foto: {"tipo":"comparacion_foto","media_id":"<id exacto>","texto_mal":"...","texto_bien":"...","eventos":[{"palabra":N,"accion":"cambia_estado"}]} (1 evento; [] solo en el gancho) -- una foto REAL del negocio (media_id: SOLO un id de "PIEZAS DISPONIBLES DEL ÁLBUM" de tipo imagen) que pasa de oscura y borrosa (❌ texto_mal) a nítida (✔️ texto_bien), cada texto máx. 30 caracteres. Para consejos sobre cómo se ve el producto o la foto.`;
+
+function seccionVisuales(piezas: PiezaDisponible[]): string {
+  const disponibles = tiposVisualDisponibles(piezas);
+  return EVENTOS_POR_VISUAL.replace("{{CANTIDAD_DOS_ESTADOS}}", String(disponibles.length)).replace(
+    "{{COMPARACION_FOTO}}\n",
+    piezaTieneFotos(piezas) ? `${DESCRIPCION_COMPARACION_FOTO}\n` : ""
+  );
+}
+
+const EVENTOS_POR_VISUAL = `TIPOS DE VISUAL (elige UNO por escena, el que mejor "muestre" la idea en vez de solo decirla) y su "eventos" -- cada evento tiene "palabra": el ÍNDICE (empieza en 0) de una palabra DENTRO de la narración de ESA MISMA escena (nunca un segundo, nunca un índice de otra escena -- si la narración de esta escena tiene 10 palabras, los índices válidos son 0 a 9), y "accion", restringida a las de cada tipo. Los eventos deben repartirse a lo largo de TODA la narración (no todos al principio) -- el visual cambia cada 1-2 segundos, nunca se queda estático toda la escena (la única excepción es el visual de 2 estados del gancho, que se queda en su "antes"):
+- celular_chat: {"tipo":"celular_chat","eventos":[{"palabra":N,"accion":"notificacion_llega"}|{"palabra":N,"accion":"numero_sube"}, ...]} (1 a 6 eventos) -- celular con notificaciones/mensajes llegando y un número grande que sube. Es UNA opción para el par gancho/marca (abre y cierra el bucle con el mismo celular), nunca en escenas de consejo. Elígelo solo si el eje del reel de verdad es sobre recibir mensajes o clientes -- si el eje es otro (fotos, precios, un producto...), abre y cierra con un visual de 2 estados.
 - boton_estado: {"tipo":"boton_estado","texto":"<=28 car.","texto_activo":"<=28 car.","eventos":[{"palabra":N,"accion":"aparece"},{"palabra":N,"accion":"clic"|"cambia_estado"}, ...]} (1 a 4 eventos) -- botón que cambia de texto/estado. Úsalo SOLO en el cta (ej. "Seguir" -> "Siguiendo ✓"), nunca en escenas de consejo (es de 1 estado, no muestra un antes/después real).
 - cursor_clic: {"tipo":"cursor_clic","texto_boton":"<=28 car.","eventos":[{"palabra":N,"accion":"aparece"},{"palabra":N,"accion":"clic"}]} -- un botón con un cursor que lo clickea. Úsalo SOLO en el cta, nunca en escenas de consejo (mismo motivo que boton_estado).
 
-Para escenas "valor" (una por consejo) usa SIEMPRE uno de estos 4, los únicos de 2 estados (problema->arreglo) -- el "antes" se ve hasta el evento, el "después" desde ahí:
-- anuncio_boton: {"tipo":"anuncio_boton","icono":"📷","etiqueta":"...","texto_problema":"...","texto_arreglo":"...","eventos":[{"palabra":N,"accion":"cambia_estado"}]} (exactamente 1 evento) -- antes: una tarjeta (anuncio, publicación, perfil...) a la que LE FALTA algo, con un recuadro rojo que dice texto_problema; después: aparece texto_arreglo como un botón y un cursor lo toca. Sirve para CUALQUIER consejo de "agrega lo que falta" (ej. texto_problema "Sin precio" -> texto_arreglo "Desde $45.000"; "Sin horario" -> "Abierto 8am-6pm"). etiqueta (máx. 16): qué es la tarjeta ("Anuncio", "Publicación", "Perfil"). texto_problema máx. 26, texto_arreglo máx. 20 caracteres.
-- conexion_whatsapp: {"tipo":"conexion_whatsapp","icono":"🛍️","etiqueta":"...","texto_problema":"...","mensaje":"...","eventos":[{"palabra":N,"accion":"cambia_estado"}]} (exactamente 1 evento) -- antes: un origen (etiqueta, máx. 16: "Anuncio", "Catálogo", "Historia", "Bio"...) desconectado del chat, con texto_problema (máx. 18) en rojo; después: se conecta y llega al celular un mensaje de cliente (mensaje, máx. 36). Para consejos de llevar a la gente de un lugar a la conversación.
-- respuesta_lenta: {"tipo":"respuesta_lenta","pregunta_cliente":"...","respuesta":"...","confirmacion":"...","eventos":[{"palabra":N,"accion":"cambia_estado"}]} (exactamente 1 evento) -- antes: el cliente pregunta (pregunta_cliente, máx. 40 -- una pregunta REAL de un cliente de ESTE rubro, ej. "¿Hacen envíos a Cali?") y el chat queda en "Visto" con un reloj corriendo; después: llega la respuesta del negocio (respuesta, máx. 36) y el cliente confirma (confirmacion, máx. 28). Para consejos de atención, tiempos o qué responder.
-- comparacion: {"tipo":"comparacion","texto_mal":"...","texto_bien":"...","etiqueta_mal":"Así no","etiqueta_bien":"Así sí","eventos":[{"palabra":N,"accion":"cambia_estado"}]} (exactamente 1 evento) -- antes: una tarjeta ❌ con lo que la gente hace mal (texto_mal); después: aparece debajo la tarjeta ✔️ con cómo hacerlo bien (texto_bien). Cada texto máx. 44 caracteres; etiquetas opcionales máx. 14. Para cualquier consejo "así no / así sí".
-- icono_palabra: {"tipo":"icono_palabra","icono_antes":"🌑","palabra_antes":"Oscura","icono_despues":"☀️","palabra_despues":"Con luz","eventos":[{"palabra":N,"accion":"cambia_estado"}]} (exactamente 1 evento) -- un emoji enorme y UNA palabra gigante (máx. 16 caracteres, ideal 1-2 palabras) que cambian juntos del problema (rojo) al arreglo (verde). Para consejos que se resumen en una idea corta.
-- checklist: {"tipo":"checklist","titulo":"...","items":["...","...","..."],"eventos":[{"palabra":N,"accion":"cambia_estado"}]} (exactamente 1 evento) -- 2 o 3 pasos cortos (cada uno máx. 26 caracteres; titulo opcional máx. 24) con la casilla vacía; en la palabra del evento se marcan uno por uno. Para consejos que son una lista corta de cosas a revisar o preparar.
-- comparacion_foto: {"tipo":"comparacion_foto","media_id":"<id exacto>","texto_mal":"...","texto_bien":"...","eventos":[{"palabra":N,"accion":"cambia_estado"}]} (exactamente 1 evento) -- una foto REAL del negocio (media_id: SOLO un id de "PIEZAS DISPONIBLES DEL ÁLBUM" de tipo imagen; si no hay ninguna, NO uses este visual) que pasa de oscura y borrosa (❌ texto_mal) a nítida (✔️ texto_bien), cada texto máx. 30 caracteres. Para consejos sobre cómo se ve el producto o la foto.
+VISUALES DE 2 ESTADOS (problema->arreglo) -- hay {{CANTIDAD_DOS_ESTADOS}} y son los ÚNICOS válidos para un consejo ("valor"); también sirven para el gancho y el cierre (ver la estructura). El "antes" se ve hasta el evento, el "después" desde ahí. En un consejo llevan exactamente 1 evento; en el gancho van SIN eventos ([]), quietos en el "antes":
+- anuncio_boton: {"tipo":"anuncio_boton","icono":"📷","etiqueta":"...","texto_problema":"...","texto_arreglo":"...","eventos":[{"palabra":N,"accion":"cambia_estado"}]} (1 evento; [] solo en el gancho) -- antes: una tarjeta (anuncio, publicación, perfil...) a la que LE FALTA algo, con un recuadro rojo que dice texto_problema; después: aparece texto_arreglo como un botón y un cursor lo toca. Sirve para CUALQUIER consejo de "agrega lo que falta" (ej. texto_problema "Sin precio" -> texto_arreglo "Desde $45.000"; "Sin horario" -> "Abierto 8am-6pm"). etiqueta (máx. 16): qué es la tarjeta ("Anuncio", "Publicación", "Perfil"). texto_problema máx. 26, texto_arreglo máx. 20 caracteres.
+- conexion_whatsapp: {"tipo":"conexion_whatsapp","icono":"🛍️","etiqueta":"...","texto_problema":"...","mensaje":"...","eventos":[{"palabra":N,"accion":"cambia_estado"}]} (1 evento; [] solo en el gancho) -- antes: un origen (etiqueta, máx. 16: "Anuncio", "Catálogo", "Historia", "Bio"...) desconectado del chat, con texto_problema (máx. 18) en rojo; después: se conecta y llega al celular un mensaje de cliente (mensaje, máx. 36). Para consejos de llevar a la gente de un lugar a la conversación.
+- respuesta_lenta: {"tipo":"respuesta_lenta","pregunta_cliente":"...","respuesta":"...","confirmacion":"...","eventos":[{"palabra":N,"accion":"cambia_estado"}]} (1 evento; [] solo en el gancho) -- antes: el cliente pregunta (pregunta_cliente, máx. 40 -- una pregunta REAL de un cliente de ESTE rubro, ej. "¿Hacen envíos a Cali?") y el chat queda en "Visto" con un reloj corriendo; después: llega la respuesta del negocio (respuesta, máx. 36) y el cliente confirma (confirmacion, máx. 28). Para consejos de atención, tiempos o qué responder.
+- comparacion: {"tipo":"comparacion","texto_mal":"...","texto_bien":"...","etiqueta_mal":"Así no","etiqueta_bien":"Así sí","eventos":[{"palabra":N,"accion":"cambia_estado"}]} (1 evento; [] solo en el gancho) -- antes: una tarjeta ❌ con lo que la gente hace mal (texto_mal); después: aparece debajo la tarjeta ✔️ con cómo hacerlo bien (texto_bien). Cada texto máx. 44 caracteres; etiquetas opcionales máx. 14. Para cualquier consejo "así no / así sí".
+- icono_palabra: {"tipo":"icono_palabra","icono_antes":"🌑","palabra_antes":"Oscura","icono_despues":"☀️","palabra_despues":"Con luz","eventos":[{"palabra":N,"accion":"cambia_estado"}]} (1 evento; [] solo en el gancho) -- un emoji enorme y UNA palabra gigante (máx. 16 caracteres, ideal 1-2 palabras) que cambian juntos del problema (rojo) al arreglo (verde). Para consejos que se resumen en una idea corta.
+- checklist: {"tipo":"checklist","titulo":"...","items":["...","...","..."],"eventos":[{"palabra":N,"accion":"cambia_estado"}]} (1 evento; [] solo en el gancho) -- 2 o 3 pasos cortos (cada uno máx. 26 caracteres; titulo opcional máx. 24) con la casilla vacía; en la palabra del evento se marcan uno por uno. Para consejos que son una lista corta de cosas a revisar o preparar.
+{{COMPARACION_FOTO}}
 - "icono" (anuncio_boton y conexion_whatsapp): UN solo emoji que represente lo que dice "etiqueta" (ej. 📷 Publicación, 🛍️ Catálogo, 📣 Anuncio, 👤 Perfil).
-- Textos de estos 3 visuales: escríbelos SIEMPRE según el eje del reel (si no los mandas, sale un texto genérico de WhatsApp que casi nunca calza). Solo letras, números, puntuación común o emoji -- nunca flechas ni símbolos sueltos como → ✓ ✗ (usa ➡️ ✔️ ❌ si hace falta).
-- contador: {"tipo":"contador","desde":0,"hasta":N (entero positivo, SIEMPRE ilustrativo -- ej. cuántos pasos/trucos hay en la lista -- NUNCA una cifra de resultado real de Quiubot),"etiqueta":"<=28 car., dice QUÉ cuenta (ej. 'mensajes nuevos', 'fotos revisadas') -- un número SOLO, sin etiqueta, no muestra nada","eventos":[{"palabra":N,"accion":"sube"}, ...]} (1 a 4 eventos) -- número grande que sube de "desde" a "hasta", con su etiqueta. Para un consejo que se mide con una cifra ilustrativa.
+- Textos de anuncio_boton, conexion_whatsapp y respuesta_lenta: escríbelos SIEMPRE según el eje del reel (si no los mandas, sale un texto genérico de WhatsApp que casi nunca calza). Solo letras, números, puntuación común o emoji -- nunca flechas ni símbolos sueltos como → ✓ ✗ (usa ➡️ ✔️ ❌ si hace falta).
+- contador: {"tipo":"contador","desde":0,"hasta":N (entero positivo, SIEMPRE ilustrativo -- ej. cuántos pasos/trucos hay en la lista -- NUNCA una cifra de resultado real de Quiubot),"etiqueta":"<=28 car., dice QUÉ cuenta (ej. 'mensajes nuevos', 'fotos revisadas') -- un número SOLO, sin etiqueta, no muestra nada","eventos":[{"palabra":N,"accion":"sube"}, ...]} (1 a 4 eventos; [] solo en el gancho, se queda en "desde") -- número grande que sube de "desde" a "hasta", con su etiqueta. Para un consejo que se mide con una cifra ilustrativa.
 
-En los 4 de arriba, la palabra del evento (o la del ÚLTIMO evento en "contador") tiene que caer DESPUÉS de al menos el primer 30% de la narración de esa escena -- si cae en las primeras palabras, el "antes" del consejo nunca llega a verse.`;
+En un consejo, la palabra del evento (o la del ÚLTIMO evento en "contador") tiene que caer DESPUÉS de al menos el primer 30% de la narración de esa escena -- si cae en las primeras palabras, el "antes" del consejo nunca llega a verse.`;
 
-const SECCION_NARRACION_Y_VISUAL = `NARRACIÓN Y VISUAL POR ESCENA (edición desde el audio -- este reel SÍ lleva voz): cada escena, ADEMÁS de sus "params" de siempre, lleva dos campos nuevos:
+const SECCION_NARRACION_Y_VISUAL_BASE = `NARRACIÓN Y VISUAL POR ESCENA (edición desde el audio -- este reel SÍ lleva voz): cada escena, ADEMÁS de sus "params" de siempre, lleva dos campos nuevos:
 - "narracion": el texto que se narra en VOZ (distinto del texto grande en pantalla -- es lo que se ESCUCHA). Entre 7 y 16 palabras por escena (unos 3 a 6 segundos hablados a ritmo natural), frases cortas, UNA idea por escena. Nunca dígitos (números en letras: "tres", nunca "3"). El gancho (primera escena) tiene que tener su palabra más fuerte en la PRIMERA palabra -- nunca un arranque lento tipo "en Quiubot...".
-- "visual": el visual que ACOMPAÑA esa narración (ver tipos abajo) -- elige el que mejor la MUESTRE en vez de solo decirla.
+- "visual": el visual que ACOMPAÑA esa narración (ver tipos abajo) -- elige el que mejor la MUESTRE en vez de solo decirla.`;
 
-${EVENTOS_POR_VISUAL}`;
+function seccionNarracionYVisual(piezas: PiezaDisponible[]): string {
+  return `${SECCION_NARRACION_Y_VISUAL_BASE}\n\n${seccionVisuales(piezas)}`;
+}
 
 // Caso real (16 nov 2026, revisión de staging): con la receta de
 // siempre (gancho -> valor -> marca -> cta, 4 escenas, "valor" es UNA
@@ -253,14 +277,22 @@ export function recetaParaPromptConAudio(entrada: EntradaGuionOrganico): RecetaO
   return entrada.receta;
 }
 
-const ESTRUCTURA_CONSEJOS_NUMERADOS_AUDIO = `ESTRUCTURA OBLIGATORIA PARA "consejos_numerados" CON VOZ -- EXACTAMENTE 6 escenas, en este orden (nunca menos, nunca los 3 consejos juntos en una sola escena):
-1. "gancho": visual "celular_chat", congelado en 0 -- "eventos": SIEMPRE un array vacío ([]), NUNCA "numero_sube" ni "notificacion_llega" en esta escena. El gancho presenta el problema tal cual, sin resolverlo todavía (caso real que se rechazó: la narración decía "¿Cero mensajes...?" y el visual igual subía el contador en la misma escena -- se contradice a sí mismo). Esos 2 eventos son exclusivos de la escena "marca" (punto 5), donde sí se cumple la promesa. La narracion del gancho debe ser CORTA -- máximo 10-12 palabras (unos 3 segundos hablados), la frase más fuerte posible, nunca un gancho largo que tarda en enganchar.
-2, 3, 4. TRES escenas "valor", UNA POR CADA CONSEJO, y los 3 consejos deben atacar 3 PROBLEMAS DISTINTOS (nunca 2 consejos sobre lo mismo con otras palabras -- ej. "pon WhatsApp como botón" y "conecta el anuncio a WhatsApp" son el MISMO problema, eso cuenta como repetido aunque la frase suene distinta). Cada una:
-   - Es UN solo consejo, concreto y accionable, en una frase COMPLETA (ej. "Responde cada mensaje en menos de un minuto" -- nunca un fragmento vago como "elige mensajes" o "sé más rápido" que no se entiende por sí solo).
-   - Preferible (no obligatorio, pero evítalo si puedes): UNA sola acción, no varias cosas que verificar o revisar a la vez -- mejor "Responde cada mensaje en menos de un minuto" que "Verifica que respondas rápido y que uses fotos reales" (eso mezcla 2 acciones en una).
-   - Tiene su propio problema->arreglo visual: SIEMPRE uno de los de 2 estados (${TIPOS_VISUAL_DOS_ESTADOS.join(", ")} -- ver arriba), el que mejor MUESTRE ese consejo puntual (con sus textos escritos para ESE consejo), nunca el mismo tipo en las 3, y NUNCA boton_estado/cursor_clic/celular_chat acá (esos son de 1 estado o son del gancho/marca/cta, no muestran un antes->después del consejo).
-5. "marca": CIERRA EL BUCLE -- vuelve a visual "celular_chat", el MISMO tipo que el gancho (nunca otro), ahora con eventos que suben el contador (el resultado real de aplicar los 3 consejos).
-6. "cta": visual "boton_estado" o "cursor_clic" (nunca celular_chat ni los 4 de 2 estados -- esos quedan solo para gancho/marca/consejos). El evento "clic"/"cambia_estado" debe caer como máximo a la MITAD de la narracion de esta escena (nunca en la última palabra) -- "Siguiendo ✓" necesita tiempo visible en pantalla antes de que termine la escena.`;
+function estructuraConsejosNumeradosAudio(piezas: PiezaDisponible[]): string {
+  const disponibles = tiposVisualDisponibles(piezas).join(", ");
+  return `ESTRUCTURA OBLIGATORIA PARA "consejos_numerados" CON VOZ -- EXACTAMENTE 6 escenas, en este orden (nunca menos, nunca los 3 consejos juntos en una sola escena):
+1. "gancho": presenta el PROBLEMA del eje tal cual, sin resolverlo todavía. Su visual es UNA de estas 2 opciones:
+   a) Un visual de 2 estados (${disponibles}) SIN eventos ("eventos": []) -- se queda quieto en su estado "problema" (ej. eje "fotos de producto": icono_palabra con 🌑 "Oscura"; eje "precios": anuncio_boton con texto_problema "Sin precio"). El que mejor muestre el problema del eje.
+   b) "celular_chat" congelado en 0 ("eventos": [] -- NUNCA "numero_sube" ni "notificacion_llega" en esta escena) -- SOLO si el eje es sobre recibir mensajes o clientes.
+   En los dos casos el visual del gancho nunca muestra el arreglo (caso real que se rechazó: la narración decía "¿Cero mensajes...?" y el visual igual subía el contador en la misma escena -- se contradice a sí mismo). La narracion del gancho debe ser CORTA -- máximo 10-12 palabras (unos 3 segundos hablados), la frase más fuerte posible, nunca un gancho largo que tarda en enganchar.
+2, 3, 4. TRES escenas "valor", UNA POR CADA CONSEJO, y los 3 consejos deben atacar 3 PROBLEMAS DISTINTOS del eje (nunca 2 consejos sobre lo mismo con otras palabras -- ej. "pon WhatsApp como botón" y "conecta el anuncio a WhatsApp" son el MISMO problema, eso cuenta como repetido aunque la frase suene distinta). Cada una:
+   - Es UN solo consejo, concreto y accionable, en una frase COMPLETA (ej. "Toma la foto junto a una ventana, con luz de día" -- nunca un fragmento vago como "mejora tus fotos" que no se entiende por sí solo).
+   - Preferible (no obligatorio, pero evítalo si puedes): UNA sola acción, no varias cosas que verificar o revisar a la vez.
+   - Tiene su propio problema->arreglo visual: SIEMPRE uno de los de 2 estados (${disponibles} -- ver arriba), el que mejor MUESTRE ese consejo puntual, con sus textos escritos para ESE consejo y exactamente 1 evento. Los 3 consejos usan 3 visuales DISTINTOS entre sí, y DISTINTOS al del gancho/cierre (si el gancho usa uno de 2 estados). NUNCA boton_estado/cursor_clic/celular_chat acá.
+5. "marca": CIERRA EL BUCLE con el MISMO visual del gancho (nunca otro), ahora resuelto:
+   - Si el gancho usó un visual de 2 estados: repítelo con EXACTAMENTE los mismos campos y textos, y UN evento en las primeras palabras de la narracion (palabra 0 a 3) -- el arreglo llega enseguida y la escena se ve arreglada casi entera. La narracion dice el resultado de aplicar los 3 consejos.
+   - Si el gancho usó "celular_chat": vuelve a "celular_chat", ahora con eventos que suben el contador.
+6. "cta": visual "boton_estado" o "cursor_clic" (nunca celular_chat ni los de 2 estados -- esos quedan para gancho/marca/consejos). El evento "clic"/"cambia_estado" debe caer como máximo a la MITAD de la narracion de esta escena (nunca en la última palabra) -- "Siguiendo ✓" necesita tiempo visible en pantalla antes de que termine la escena.`;
+}
 
 // EJE DEL REEL (18 nov 2026, caso real: los reels consejos_numerados
 // salían con los mismos 3 consejos -- botón de contacto, conexión a
@@ -305,12 +337,12 @@ export function construirPromptGuionOrganicoConAudio(entrada: EntradaGuionOrgani
     seccionNegocio(entrada.infoAdicionalMarca, entrada.productos),
     seccionEjeDelReel(entrada),
     seccionReceta({ ...entrada, receta: recetaParaPromptConAudio(entrada) }),
-    entrada.recetaId === "consejos_numerados" ? ESTRUCTURA_CONSEJOS_NUMERADOS_AUDIO : null,
+    entrada.recetaId === "consejos_numerados" ? estructuraConsejosNumeradosAudio(entrada.piezas) : null,
     seccionGancho(entrada.ganchoTipoAsignado),
     `VOZ DE MARCA (tono y estilo, NO son datos del negocio):\n- Titular del ADN: ${entrada.adnTitular || "(sin dato)"}\n- Frase corta de marca: ${entrada.adnFraseCorta || "(sin dato)"}`,
     seccionPiezas(entrada.piezas, entrada.analisisPiezas),
     REFERENCIA_ESCENAS,
-    SECCION_NARRACION_Y_VISUAL,
+    seccionNarracionYVisual(entrada.piezas),
     `Además del guion, escribe el caption para Instagram: "caption" (máx. 2200 caracteres, el gancho en la primera línea) y "hashtags" (entre 3 y 8, en español, del rubro real de este negocio -- el de QUÉ HACE ESTE NEGOCIO, nunca el que creas por el nombre -- cada uno empezando con #).`,
     `Responde ÚNICAMENTE con este JSON, sin texto adicional ni backticks ni comentarios (sin el campo "gancho_tipo" -- ya está decidido). Cada escena lleva "narracion" y "visual" ADEMÁS de "id","bloque","tipo","duracion_s","params":\n{"bucle": {"texto": "...", "abre_en": "e1", "cierra_en": "eN", "indicador": "..."}, "escenas": [ {"id": "e1", "bloque": "...", "tipo": "...", "duracion_s": 0, "params": {...}, "narracion": "...", "visual": {"tipo": "...", "eventos": [...]}} , ... ], "caption": "...", "hashtags": ["#...", "#..."]}`,
   ].filter((parte): parte is string => !!parte);

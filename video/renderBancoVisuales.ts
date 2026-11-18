@@ -4,7 +4,7 @@
 // con el render real que nada se corta, se sale o sale como cuadro
 // (memorias: width:% sin contenedor propio, glifos faltantes).
 //
-// Uso: npx tsx video/renderBancoVisuales.ts [carpeta-salida]
+// Uso: npx tsx video/renderBancoVisuales.ts [carpeta-salida] [--solo-gancho-cierre]
 // Import relativo a propósito, igual que render.ts: el bundler de
 // Remotion no entiende el alias "@/" de tsconfig.
 import fs from "node:fs";
@@ -12,7 +12,7 @@ import os from "node:os";
 import path from "node:path";
 import { bundle } from "@remotion/bundler";
 import { renderStill, selectComposition } from "@remotion/renderer";
-import { LIMITES_TEXTO_VISUAL } from "./visuales/schema";
+import { LIMITES_TEXTO_VISUAL, type Visual } from "./visuales/schema";
 
 // Texto realista (palabras largas de verdad, no "xxxx") recortado al
 // máximo exacto -- el peor caso real que puede mandar la IA.
@@ -103,18 +103,58 @@ const CASOS: { nombre: string; tipo: "anuncio_boton" | "conexion_whatsapp" | "re
   { nombre: "anuncio_boton-por-defecto", tipo: "anuncio_boton", textos: {} },
 ];
 
+// Parte 2e: cada visual de 2 estados como gancho (sin eventos, quieto en
+// el problema, con su movimiento de entrada) y como cierre (mismos
+// textos, cambio en la palabra 0), con textos realistas de los dos temas
+// de prueba ("fotos de producto" y "precios"). Cuadros: 0 y 8 del gancho
+// (tiene que haber movimiento desde el primero) y 60 de los dos.
+type SinEventos<T> = T extends unknown ? Omit<T, "eventos"> : never;
+const CASOS_GANCHO_CIERRE: { nombre: string; visual: SinEventos<Visual> }[] = [
+  { nombre: "fotos-icono_palabra", visual: { tipo: "icono_palabra", icono_antes: "🌑", palabra_antes: "Oscura", icono_despues: "☀️", palabra_despues: "Con luz" } },
+  { nombre: "fotos-comparacion_foto", visual: { tipo: "comparacion_foto", media_id: "foto-demo", texto_mal: "Así nadie la compra", texto_bien: "Así se ve el detalle" } },
+  { nombre: "fotos-checklist", visual: { tipo: "checklist", titulo: "Antes de publicar", items: ["Luz de ventana", "Fondo liso", "Producto en uso"] } },
+  { nombre: "fotos-comparacion", visual: { tipo: "comparacion", texto_mal: "Foto con flash y fondo desordenado", texto_bien: "Luz de ventana y fondo liso" } },
+  { nombre: "precios-anuncio_boton", visual: { tipo: "anuncio_boton", icono: "📷", etiqueta: "Publicación", texto_problema: "Sin precio", texto_arreglo: "Desde $45.000" } },
+  { nombre: "precios-respuesta_lenta", visual: { tipo: "respuesta_lenta", pregunta_cliente: "¿Cuánto vale la taza azul?", respuesta: "Vale $45.000, envío gratis", confirmacion: "¡Me la llevo!" } },
+  { nombre: "precios-conexion_whatsapp", visual: { tipo: "conexion_whatsapp", icono: "🛍️", etiqueta: "Catálogo", texto_problema: "Sin precios", mensaje: "Hola, quiero la taza de $45.000" } },
+  { nombre: "precios-contador", visual: { tipo: "contador", desde: 0, hasta: 3, etiqueta: "productos con precio" } },
+];
+
+function conEventos(visual: SinEventos<Visual>, palabra: number | null): Visual {
+  if (palabra === null) return { ...visual, eventos: [] } as Visual;
+  const accion = visual.tipo === "contador" ? "sube" : "cambia_estado";
+  return { ...visual, eventos: [{ palabra, accion }] } as Visual;
+}
+
 async function main() {
-  const salida = process.argv[2] || path.join(os.homedir(), "Desktop", "videos_quiubot", "banco_visuales");
+  const salida = process.argv.slice(2).find((a) => !a.startsWith("--")) || path.join(os.homedir(), "Desktop", "videos_quiubot", "banco_visuales");
   fs.mkdirSync(salida, { recursive: true });
   const serveUrl = await bundle({ entryPoint: path.join(process.cwd(), "video", "Root.tsx") });
 
-  for (const caso of CASOS) {
+  const soloGanchoCierre = process.argv.includes("--solo-gancho-cierre");
+  for (const caso of soloGanchoCierre ? [] : CASOS) {
     for (const estado of ["antes", "despues"] as const) {
       const inputProps = { tipo: caso.tipo, estado, textos: caso.textos };
       const composition = await selectComposition({ serveUrl, id: "banco-visuales", inputProps });
       const archivo = path.join(salida, `${caso.nombre}-${estado}.png`);
       await renderStill({ composition, serveUrl, output: archivo, frame: 45, inputProps });
       console.log(archivo, JSON.stringify(caso.textos));
+    }
+  }
+
+  for (const caso of CASOS_GANCHO_CIERRE) {
+    const tomas: { bloque: "gancho" | "marca"; frame: number; visual: Visual }[] = [
+      { bloque: "gancho", frame: 0, visual: conEventos(caso.visual, null) },
+      { bloque: "gancho", frame: 8, visual: conEventos(caso.visual, null) },
+      { bloque: "gancho", frame: 60, visual: conEventos(caso.visual, null) },
+      { bloque: "marca", frame: 60, visual: conEventos(caso.visual, 0) },
+    ];
+    for (const toma of tomas) {
+      const inputProps = { visual: toma.visual, bloque: toma.bloque };
+      const composition = await selectComposition({ serveUrl, id: "banco-gancho-cierre", inputProps });
+      const archivo = path.join(salida, `${caso.nombre}-${toma.bloque}-f${toma.frame}.png`);
+      await renderStill({ composition, serveUrl, output: archivo, frame: toma.frame, inputProps });
+      console.log(archivo);
     }
   }
 }

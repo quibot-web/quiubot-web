@@ -67,6 +67,13 @@ export const LIMITES_TEXTO_VISUAL = {
   comparacion_foto: { texto: 30 },
 } as const;
 
+// Parte 2e: 0 o 1 evento. En un consejo ("valor") siempre es exactamente
+// 1 (lo exige validarEstructuraConsejosNumeradosAudio); 0 eventos solo
+// tiene sentido en el gancho, que muestra el estado "problema" quieto
+// sin resolverlo. Antes era length(1) fijo: relajarlo no invalida ningún
+// guion ya guardado.
+const EventosDosEstados = z.array(Evento.extend({ accion: z.literal("cambia_estado") })).max(1);
+
 export const VisualSchema = z.discriminatedUnion("tipo", [
   z.object({
     tipo: z.literal("celular_chat"),
@@ -95,7 +102,7 @@ export const VisualSchema = z.discriminatedUnion("tipo", [
     // entiende ("mensajes nuevos", nunca una cifra de resultado real
     // de Quiubot, mismo criterio que "hasta").
     etiqueta: z.string().min(1).max(28),
-    eventos: z.array(Evento.extend({ accion: z.literal("sube") })).min(1).max(4),
+    eventos: z.array(Evento.extend({ accion: z.literal("sube") })).max(4),
   }),
   z.object({
     tipo: z.literal("boton_estado"),
@@ -118,7 +125,7 @@ export const VisualSchema = z.discriminatedUnion("tipo", [
     etiqueta: TextoVisual(LIMITES_TEXTO_VISUAL.anuncio_boton.etiqueta).optional(),
     texto_problema: TextoVisual(LIMITES_TEXTO_VISUAL.anuncio_boton.texto_problema).optional(),
     texto_arreglo: TextoVisual(LIMITES_TEXTO_VISUAL.anuncio_boton.texto_arreglo).optional(),
-    eventos: z.array(Evento.extend({ accion: z.literal("cambia_estado") })).length(1),
+    eventos: EventosDosEstados,
   }),
   z.object({
     tipo: z.literal("conexion_whatsapp"),
@@ -126,7 +133,7 @@ export const VisualSchema = z.discriminatedUnion("tipo", [
     etiqueta: TextoVisual(LIMITES_TEXTO_VISUAL.conexion_whatsapp.etiqueta).optional(),
     texto_problema: TextoVisual(LIMITES_TEXTO_VISUAL.conexion_whatsapp.texto_problema).optional(),
     mensaje: TextoVisual(LIMITES_TEXTO_VISUAL.conexion_whatsapp.mensaje).optional(),
-    eventos: z.array(Evento.extend({ accion: z.literal("cambia_estado") })).length(1),
+    eventos: EventosDosEstados,
   }),
   // Parte 2c: visuales genéricos de 2 estados del catálogo de la Fase B,
   // sin ningún consejo escrito en el dibujo -- todo el texto lo pone la
@@ -137,7 +144,7 @@ export const VisualSchema = z.discriminatedUnion("tipo", [
     texto_mal: TextoVisual(LIMITES_TEXTO_VISUAL.comparacion.texto),
     etiqueta_bien: TextoVisual(LIMITES_TEXTO_VISUAL.comparacion.etiqueta).optional(),
     texto_bien: TextoVisual(LIMITES_TEXTO_VISUAL.comparacion.texto),
-    eventos: z.array(Evento.extend({ accion: z.literal("cambia_estado") })).length(1),
+    eventos: EventosDosEstados,
   }),
   z.object({
     tipo: z.literal("icono_palabra"),
@@ -145,7 +152,7 @@ export const VisualSchema = z.discriminatedUnion("tipo", [
     palabra_antes: TextoVisual(LIMITES_TEXTO_VISUAL.icono_palabra.palabra),
     icono_despues: IconoVisual,
     palabra_despues: TextoVisual(LIMITES_TEXTO_VISUAL.icono_palabra.palabra),
-    eventos: z.array(Evento.extend({ accion: z.literal("cambia_estado") })).length(1),
+    eventos: EventosDosEstados,
   }),
   // Parte 2d: checklist que se completa, y antes/después con una foto
   // REAL del álbum (media_id validado contra las piezas de la pieza, solo
@@ -154,21 +161,21 @@ export const VisualSchema = z.discriminatedUnion("tipo", [
     tipo: z.literal("checklist"),
     titulo: TextoVisual(LIMITES_TEXTO_VISUAL.checklist.titulo).optional(),
     items: z.array(TextoVisual(LIMITES_TEXTO_VISUAL.checklist.item)).min(2).max(3),
-    eventos: z.array(Evento.extend({ accion: z.literal("cambia_estado") })).length(1),
+    eventos: EventosDosEstados,
   }),
   z.object({
     tipo: z.literal("comparacion_foto"),
     media_id: z.string().min(1),
     texto_mal: TextoVisual(LIMITES_TEXTO_VISUAL.comparacion_foto.texto),
     texto_bien: TextoVisual(LIMITES_TEXTO_VISUAL.comparacion_foto.texto),
-    eventos: z.array(Evento.extend({ accion: z.literal("cambia_estado") })).length(1),
+    eventos: EventosDosEstados,
   }),
   z.object({
     tipo: z.literal("respuesta_lenta"),
     pregunta_cliente: TextoVisual(LIMITES_TEXTO_VISUAL.respuesta_lenta.pregunta_cliente).optional(),
     respuesta: TextoVisual(LIMITES_TEXTO_VISUAL.respuesta_lenta.respuesta).optional(),
     confirmacion: TextoVisual(LIMITES_TEXTO_VISUAL.respuesta_lenta.confirmacion).optional(),
-    eventos: z.array(Evento.extend({ accion: z.literal("cambia_estado") })).length(1),
+    eventos: EventosDosEstados,
   }),
 ]);
 

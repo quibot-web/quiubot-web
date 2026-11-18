@@ -1,5 +1,5 @@
 import { AbsoluteFill, spring } from "remotion";
-import type { TemaGuion } from "../tema";
+import { respiracion, type TemaGuion } from "../tema";
 import type { BloqueGuion } from "../guion.schema";
 import type { Visual } from "./schema";
 import { CelularChat } from "./CelularChat";
@@ -89,7 +89,43 @@ function colorDeBloque(bloque: BloqueGuion): string {
   return bloque === "gancho" || bloque === "problema" ? COLOR_ALERTA : COLOR_EXITO_BLOQUE;
 }
 
+// Parte 2e: un visual de 2 estados SIN evento (el gancho, que muestra
+// solo el "problema") cambia en un cuadro que nunca llega dentro de la
+// escena -- 3s después de la última palabra, nunca Infinity (spring() e
+// interpolate() necesitan números finitos, y el reloj de respuesta_lenta
+// sigue corriendo a lo largo de toda la escena).
+const SEGUNDOS_FUERA_DE_ESCENA = 3;
+function cuadroDelCambio(eventos: { palabra: number }[], ctx: ContextoVisual): number {
+  if (eventos.length > 0) return cuadroDePalabra(eventos[0].palabra, ctx);
+  const ultima = ctx.palabras[ctx.palabras.length - 1];
+  const finEscena_s = ultima ? ultima.fin_s - ctx.inicioEscena_s : 0;
+  return Math.round((finEscena_s + SEGUNDOS_FUERA_DE_ESCENA) * ctx.fps);
+}
+
+// Parte 2e: el gancho puede usar el estado "problema" de un visual de 2
+// estados, que en ese estado es casi quieto (solo celular_chat,
+// respuesta_lenta y conexion_whatsapp respiran). Ronda M pidió
+// movimiento desde el primer cuadro: entra con un pop corto y después
+// respira, igual que el celular del gancho de siempre.
+function MovimientoGancho({ frame, fps, children }: { frame: number; fps: number; children: React.ReactNode }) {
+  const entrada = spring({ frame, fps, config: { damping: 12, stiffness: 160 } });
+  const escala = (0.9 + 0.1 * entrada) * respiracion(frame, fps);
+  return <AbsoluteFill style={{ transform: `scale(${escala})` }}>{children}</AbsoluteFill>;
+}
+
 export function renderizarVisual(visual: Visual, ctx: ContextoVisual) {
+  const nodo = renderizarVisualSinMovimiento(visual, ctx);
+  if (ctx.bloque === "gancho" && visual.tipo !== "celular_chat") {
+    return (
+      <MovimientoGancho frame={ctx.frame} fps={ctx.fps}>
+        {nodo}
+      </MovimientoGancho>
+    );
+  }
+  return nodo;
+}
+
+function renderizarVisualSinMovimiento(visual: Visual, ctx: ContextoVisual) {
   switch (visual.tipo) {
     case "celular_chat": {
       // El componente promovido solo conoce "notificaciones" (cuadros
@@ -147,7 +183,8 @@ export function renderizarVisual(visual: Visual, ctx: ContextoVisual) {
     }
 
     case "contador": {
-      const cuadros = visual.eventos.map((evento) => cuadroDePalabra(evento.palabra, ctx));
+      // Sin eventos (gancho, parte 2e): se queda en "desde".
+      const cuadros = visual.eventos.length > 0 ? visual.eventos.map((evento) => cuadroDePalabra(evento.palabra, ctx)) : [cuadroDelCambio([], ctx)];
       const cuadroInicio = Math.min(...cuadros);
       const cuadroFin = Math.max(...cuadros);
       const valor = valorContadorEnFrame(ctx.frame, cuadroInicio, cuadroFin, visual.desde, visual.hasta);
@@ -188,7 +225,7 @@ export function renderizarVisual(visual: Visual, ctx: ContextoVisual) {
     // dentro de ZonaVisual/TarjetaSimple, ya traen su propia tarjeta
     // (o, en conexion_whatsapp, 2 tarjetas apiladas).
     case "anuncio_boton": {
-      const cuadroCambia = cuadroDePalabra(visual.eventos[0].palabra, ctx);
+      const cuadroCambia = cuadroDelCambio(visual.eventos, ctx);
       return (
         <AnuncioBotonVisual
           frame={ctx.frame}
@@ -201,7 +238,7 @@ export function renderizarVisual(visual: Visual, ctx: ContextoVisual) {
     }
 
     case "conexion_whatsapp": {
-      const cuadroCambia = cuadroDePalabra(visual.eventos[0].palabra, ctx);
+      const cuadroCambia = cuadroDelCambio(visual.eventos, ctx);
       return (
         <ConexionWhatsappVisual
           frame={ctx.frame}
@@ -214,7 +251,7 @@ export function renderizarVisual(visual: Visual, ctx: ContextoVisual) {
     }
 
     case "comparacion": {
-      const cuadroCambia = cuadroDePalabra(visual.eventos[0].palabra, ctx);
+      const cuadroCambia = cuadroDelCambio(visual.eventos, ctx);
       return (
         <ComparacionVisual
           frame={ctx.frame}
@@ -229,7 +266,7 @@ export function renderizarVisual(visual: Visual, ctx: ContextoVisual) {
     }
 
     case "icono_palabra": {
-      const cuadroCambia = cuadroDePalabra(visual.eventos[0].palabra, ctx);
+      const cuadroCambia = cuadroDelCambio(visual.eventos, ctx);
       return (
         <IconoPalabraVisual
           frame={ctx.frame}
@@ -245,19 +282,19 @@ export function renderizarVisual(visual: Visual, ctx: ContextoVisual) {
     }
 
     case "checklist": {
-      const cuadroCambia = cuadroDePalabra(visual.eventos[0].palabra, ctx);
+      const cuadroCambia = cuadroDelCambio(visual.eventos, ctx);
       return <ChecklistVisual frame={ctx.frame} fps={ctx.fps} cuadroCambia={cuadroCambia} titulo={visual.titulo} items={visual.items} />;
     }
 
     case "comparacion_foto": {
-      const cuadroCambia = cuadroDePalabra(visual.eventos[0].palabra, ctx);
+      const cuadroCambia = cuadroDelCambio(visual.eventos, ctx);
       const medio = ctx.medios?.[visual.media_id];
       const urlFoto = medio && medio.tipo === "imagen" ? medio.url : null;
       return <ComparacionFotoVisual frame={ctx.frame} fps={ctx.fps} cuadroCambia={cuadroCambia} urlFoto={urlFoto} textoMal={visual.texto_mal} textoBien={visual.texto_bien} />;
     }
 
     case "respuesta_lenta": {
-      const cuadroCambia = cuadroDePalabra(visual.eventos[0].palabra, ctx);
+      const cuadroCambia = cuadroDelCambio(visual.eventos, ctx);
       return (
         <RespuestaLentaVisual
           frame={ctx.frame}

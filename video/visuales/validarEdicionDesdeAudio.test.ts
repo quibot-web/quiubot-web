@@ -174,17 +174,29 @@ describe("validarEstructuraConsejosNumeradosAudio", () => {
     expect(hallazgos[0].mensaje).toContain("exactamente 6 escenas");
   });
 
-  it("gancho sin celular_chat: hallazgo específico", () => {
+  it("gancho con un visual de 1 estado (ni celular_chat ni de 2 estados): hallazgo específico", () => {
     const ganchoMalo = escenaConAudio("e1", "gancho", "¿Sabes por qué pierdes clientes sin darte cuenta?", {
-      tipo: "contador",
-      desde: 0,
-      hasta: 1,
-      etiqueta: "mensajes nuevos",
-      eventos: [{ palabra: 0, accion: "sube" }],
+      tipo: "boton_estado",
+      texto: "Clientes",
+      texto_activo: "Perdidos",
+      eventos: [{ palabra: 0, accion: "aparece" }],
     });
     const escenas = [ganchoMalo, VALOR_1_OK, VALOR_2_OK, VALOR_3_OK, MARCA_OK, CTA_OK];
     const hallazgos = validarEstructuraConsejosNumeradosAudio(escenas);
     expect(hallazgos.some((h) => h.escenaId === "e1" && h.mensaje.includes("celular_chat"))).toBe(true);
+  });
+
+  it("parte 2e: gancho de 2 estados que ya muestra el arreglo (con evento): hallazgo, debe quedarse en el problema", () => {
+    const ganchoResuelto = escenaConAudio("e1", "gancho", "¿Tus fotos espantan a los clientes?", {
+      tipo: "icono_palabra",
+      icono_antes: "🌑",
+      palabra_antes: "Oscura",
+      icono_despues: "☀️",
+      palabra_despues: "Con luz",
+      eventos: [{ palabra: 2, accion: "cambia_estado" }],
+    });
+    const hallazgos = validarEstructuraConsejosNumeradosAudio([ganchoResuelto, VALOR_1_OK, VALOR_2_OK, VALOR_3_OK, MARCA_OK, CTA_OK]);
+    expect(hallazgos.some((h) => h.escenaId === "e1" && h.mensaje.includes('estado "problema"'))).toBe(true);
   });
 
   it("ronda J -- caso real: gancho con celular_chat pero con numero_sube (contradice 'Cero mensajes...'): hallazgo específico", () => {
@@ -376,5 +388,89 @@ describe("validarEstructuraConsejosNumeradosAudio", () => {
     const escenas = [GANCHO_OK, VALOR_1_OK, VALOR_2_OK, VALOR_3_OK, MARCA_OK, CTA_OK];
     const hallazgos = validarEstructuraConsejosNumeradosAudio(escenas);
     expect(hallazgos.some((h) => h.mensaje.includes("mismo visual"))).toBe(false);
+  });
+
+  describe("parte 2e: gancho y cierre con un visual de 2 estados", () => {
+    const VISUAL_FOTO_PROBLEMA = {
+      tipo: "icono_palabra" as const,
+      icono_antes: "🌑",
+      palabra_antes: "Oscura",
+      icono_despues: "☀️",
+      palabra_despues: "Con luz",
+    };
+    const GANCHO_FOTO = escenaConAudio("e1", "gancho", "¿Tus fotos espantan a los clientes?", { ...VISUAL_FOTO_PROBLEMA, eventos: [] });
+    const MARCA_FOTO = escenaConAudio("e5", "marca", "Con esos tres cambios tus fotos ya venden solas.", {
+      ...VISUAL_FOTO_PROBLEMA,
+      eventos: [{ palabra: 0, accion: "cambia_estado" }],
+    });
+    const valorComparacion = escenaConAudio("e2", "valor", "Saca la foto junto a una ventana, nunca con flash.", {
+      tipo: "comparacion",
+      texto_mal: "Foto con flash",
+      texto_bien: "Luz de ventana",
+      eventos: [{ palabra: 5, accion: "cambia_estado" }],
+    });
+    const valorChecklist = escenaConAudio("e3", "valor", "Antes de publicar revisa fondo, luz y enfoque.", {
+      tipo: "checklist",
+      items: ["Fondo liso", "Luz de día", "Enfocada"],
+      eventos: [{ palabra: 4, accion: "cambia_estado" }],
+    });
+    const valorAnuncio = escenaConAudio("e4", "valor", "Pon el precio en la publicación de cada foto.", {
+      tipo: "anuncio_boton",
+      etiqueta: "Publicación",
+      texto_problema: "Sin precio",
+      texto_arreglo: "Desde $45.000",
+      eventos: [{ palabra: 4, accion: "cambia_estado" }],
+    });
+    const base = [GANCHO_FOTO, valorComparacion, valorChecklist, valorAnuncio, MARCA_FOTO, CTA_OK];
+
+    it("gancho en el problema + marca con el mismo visual arreglado al principio: pasa limpio", () => {
+      expect(validarEstructuraConsejosNumeradosAudio(base)).toHaveLength(0);
+    });
+
+    it("marca con otro tipo de visual: hallazgo de cierre del bucle", () => {
+      const escenas = base.map((e) => (e.id === "e5" ? { ...e, visual: MARCA_OK.visual } : e));
+      const hallazgos = validarEstructuraConsejosNumeradosAudio(escenas);
+      expect(hallazgos.some((h) => h.escenaId === "e5" && h.mensaje.includes("cierra el bucle"))).toBe(true);
+    });
+
+    it("marca con textos distintos a los del gancho: hallazgo", () => {
+      const escenas = base.map((e) => (e.id === "e5" ? { ...e, visual: { ...VISUAL_FOTO_PROBLEMA, palabra_despues: "Nítida", eventos: [{ palabra: 0, accion: "cambia_estado" as const }] } } : e));
+      const hallazgos = validarEstructuraConsejosNumeradosAudio(escenas);
+      expect(hallazgos.some((h) => h.escenaId === "e5" && h.mensaje.includes("mismos textos"))).toBe(true);
+    });
+
+    it("marca con los mismos textos en otro orden de campos: pasa limpio", () => {
+      const reordenado = { eventos: [{ palabra: 0, accion: "cambia_estado" as const }], palabra_despues: "Con luz", icono_despues: "☀️", palabra_antes: "Oscura", icono_antes: "🌑", tipo: "icono_palabra" as const };
+      const escenas = base.map((e) => (e.id === "e5" ? { ...e, visual: reordenado } : e));
+      expect(validarEstructuraConsejosNumeradosAudio(escenas)).toHaveLength(0);
+    });
+
+    it("marca sin evento (repite el problema): hallazgo", () => {
+      const escenas = base.map((e) => (e.id === "e5" ? { ...e, visual: { ...VISUAL_FOTO_PROBLEMA, eventos: [] } } : e));
+      const hallazgos = validarEstructuraConsejosNumeradosAudio(escenas);
+      expect(hallazgos.some((h) => h.escenaId === "e5" && h.mensaje.includes("necesita su evento"))).toBe(true);
+    });
+
+    it("marca con el arreglo tarde: hallazgo", () => {
+      const escenas = base.map((e) => (e.id === "e5" ? { ...e, visual: { ...VISUAL_FOTO_PROBLEMA, eventos: [{ palabra: 7, accion: "cambia_estado" as const }] } } : e));
+      const hallazgos = validarEstructuraConsejosNumeradosAudio(escenas);
+      expect(hallazgos.some((h) => h.escenaId === "e5" && h.mensaje.includes("cae tarde"))).toBe(true);
+    });
+
+    it("un consejo repite el visual del gancho: hallazgo en ese consejo", () => {
+      const repetido = escenaConAudio("e3", "valor", "Toma la foto de día, con la luz de la ventana.", {
+        ...VISUAL_FOTO_PROBLEMA,
+        eventos: [{ palabra: 5, accion: "cambia_estado" }],
+      });
+      const escenas = base.map((e) => (e.id === "e3" ? repetido : e));
+      const hallazgos = validarEstructuraConsejosNumeradosAudio(escenas);
+      expect(hallazgos.some((h) => h.escenaId === "e3" && h.mensaje.includes("mismo visual del gancho"))).toBe(true);
+    });
+
+    it("un consejo de 2 estados sin evento (nunca muestra el arreglo): hallazgo", () => {
+      const escenas = base.map((e) => (e.id === "e2" ? { ...e, visual: { tipo: "comparacion" as const, texto_mal: "Foto con flash", texto_bien: "Luz de ventana", eventos: [] } } : e));
+      const hallazgos = validarEstructuraConsejosNumeradosAudio(escenas);
+      expect(hallazgos.some((h) => h.escenaId === "e2" && h.mensaje.includes("no tiene evento"))).toBe(true);
+    });
   });
 });
