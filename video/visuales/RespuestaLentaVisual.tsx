@@ -9,6 +9,7 @@ import { respiracion } from "../tema";
 import { interpolarSeguro } from "../interpolarSeguro";
 import { COLOR_ALERTA, COLOR_EXITO } from "./acento";
 import { TARJETA_ALTURA_PORCENTAJE, TARJETA_ANCHO_PORCENTAJE, TARJETA_TOP_PORCENTAJE } from "./geometria";
+import { IconoDobleCheck, IconoReloj } from "../iconos";
 
 // mm:ss -- 5s, 2:30 y 15:00 son puntos de paso de una interpolación
 // (no un conteo real en vivo), igual que en la referencia aprobada.
@@ -20,7 +21,7 @@ function formatoReloj(totalSegundos: number): string {
 
 // Textos (parte 2b): la pregunta real que hace un cliente de ESE rubro,
 // la respuesta del negocio y la confirmación del cliente.
-export const TEXTOS_RESPUESTA_POR_DEFECTO = { pregunta_cliente: "Hola, ¿tienen disponible?", respuesta: "¡Sí, aquí tienes! 😊", confirmacion: "Perfecto, lo quiero" };
+export const TEXTOS_RESPUESTA_POR_DEFECTO = { pregunta_cliente: "Hola, ¿tienen disponible?", respuesta: "¡Sí, aquí tienes!", confirmacion: "Perfecto, lo quiero" };
 
 export function RespuestaLentaVisual({
   frame,
@@ -68,10 +69,10 @@ export function RespuestaLentaVisual({
           <div style={{ flexGrow: 1, display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", gap: 10 }}>
             <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
               <span style={{ fontSize: 22, fontWeight: 800, color: COLOR_ALERTA }}>Visto</span>
-              <span style={{ fontSize: 22, color: COLOR_ALERTA }}>✓✓</span>
+              <IconoDobleCheck tamano={24} color={COLOR_ALERTA} />
             </div>
             <div style={{ display: "flex", alignItems: "center", gap: 14 }}>
-              <span style={{ fontSize: 48, display: "inline-block", transform: `rotate(${rotacionReloj}deg)` }}>🕐</span>
+              <IconoReloj tamano={48} color={COLOR_ALERTA} estilo={{ transform: `rotate(${rotacionReloj}deg)` }} />
               <span style={{ fontSize: 64, fontWeight: 900, color: COLOR_ALERTA, fontVariantNumeric: "tabular-nums" }}>{formatoReloj(segundosReloj)}</span>
             </div>
             <span style={{ fontSize: 20, fontWeight: 700, color: "#999" }}>sin responder...</span>

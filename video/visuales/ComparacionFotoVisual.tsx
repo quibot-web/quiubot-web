@@ -15,6 +15,7 @@
 import { Img, interpolate, spring } from "remotion";
 import { COLOR_ALERTA, COLOR_EXITO, COLOR_EXITO_BLOQUE } from "./acento";
 import { TARJETA_ALTURA_PORCENTAJE, TARJETA_ANCHO_PORCENTAJE, TARJETA_TOP_PORCENTAJE } from "./geometria";
+import { IconoImagen, IconoMarca } from "../iconos";
 
 export function ComparacionFotoVisual({
   frame,
@@ -57,7 +58,9 @@ export function ComparacionFotoVisual({
           style={{ position: "absolute", inset: 0, width: "100%", height: "100%", objectFit: "cover", filter: `blur(${borrosidad}px) brightness(${brillo})` }}
         />
       ) : (
-        <div style={{ position: "absolute", inset: 0, display: "flex", alignItems: "center", justifyContent: "center", background: "#2a2a2a", fontSize: 120 }}>🖼️</div>
+        <div style={{ position: "absolute", inset: 0, display: "flex", alignItems: "center", justifyContent: "center", background: "#2a2a2a" }}>
+          <IconoImagen tamano={120} color="#777" />
+        </div>
       )}
       <div
         style={{
@@ -74,7 +77,7 @@ export function ComparacionFotoVisual({
           gap: 14,
         }}
       >
-        <span style={{ fontSize: 36, flexShrink: 0 }}>{nitida ? "✔️" : "❌"}</span>
+        <IconoMarca tipo={nitida ? "bien" : "mal"} tamano={38} />
         <span style={{ fontSize: 34, fontWeight: 800, lineHeight: 1.15, color: nitida ? COLOR_EXITO_BLOQUE : COLOR_ALERTA }}>{nitida ? textoBien : textoMal}</span>
       </div>
     </div>

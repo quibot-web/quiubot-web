@@ -1,6 +1,8 @@
 import { AbsoluteFill, useCurrentFrame } from "remotion";
 import type { Guion } from "../guion.schema";
 import { cuadrosPorItemListaNumerada } from "../escenas/tipos";
+import { IconoOjos } from "../iconos";
+import { MARCA_OJOS } from "../visuales/CapaBucleAudio";
 
 // Esquina superior izquierda (CapaLogo ocupa la derecha).
 export function CapaBucle({ guion }: { guion: Guion }) {
@@ -33,12 +35,12 @@ export function CapaBucle({ guion }: { guion: Guion }) {
 
   let contenido: string;
   if (bucle.indicador === "espera_final") {
-    contenido = "👀 espera al final";
+    contenido = `${MARCA_OJOS}espera al final`;
   } else if (frame < inicioEscenaCierre) {
     // Antes de llegar a la lista que cuenta, el chip muestra la
     // promesa en sí ("👀 3 trucos para que tu café dure más"), no un
     // "0/3" que todavía no significa nada.
-    contenido = `👀 ${bucle.texto}`;
+    contenido = `${MARCA_OJOS}${bucle.texto}`;
   } else {
     // El zod ya exige que la escena de cierre sea lista_numerada cuando
     // indicador es "contador" (ver guion.schema.ts), así que siempre
@@ -67,7 +69,14 @@ export function CapaBucle({ guion }: { guion: Guion }) {
           maxWidth: "80%",
         }}
       >
-        {contenido}
+        {contenido.startsWith(MARCA_OJOS) ? (
+          <>
+            <IconoOjos tamano={42} estilo={{ marginRight: 12, verticalAlign: "-0.15em" }} />
+            {contenido.slice(MARCA_OJOS.length)}
+          </>
+        ) : (
+          contenido
+        )}
       </div>
     </AbsoluteFill>
   );

@@ -5,12 +5,14 @@
 // se apaga, y entra la tarjeta de lo correcto debajo. Sirve para
 // cualquier consejo del tipo "así no / así sí".
 //
-// Marcas con emoji (❌ ✔️), nunca los glifos de texto ✗ ✓: no están en
-// las fuentes cargadas (memoria feedback_glifos_faltantes_en_fuentes_cargadas).
+// Marcas dibujadas (IconoMarca, video/iconos.tsx), nunca texto ni emoji:
+// ✗ ✓ ❌ ✔️ no están en las fuentes cargadas y dependen de una fuente de
+// respaldo que el computador del cliente puede no tener.
 // Las dos tarjetas son position:absolute dentro del cajón de siempre
 // (TARJETA_TOP/ALTURA) -- nunca un flex que pueda encoger una a 0.
 import { interpolate, spring } from "remotion";
 import { COLOR_ALERTA, COLOR_EXITO, COLOR_EXITO_BLOQUE } from "./acento";
+import { IconoMarca } from "../iconos";
 import { TARJETA_ALTURA_PORCENTAJE, TARJETA_ANCHO_PORCENTAJE, TARJETA_TOP_PORCENTAJE } from "./geometria";
 
 const ALTO_TARJETA_PORCENTAJE = 46;
@@ -19,7 +21,7 @@ const SEPARACION_PORCENTAJE = 100 - ALTO_TARJETA_PORCENTAJE * 2;
 // centrada en el cajón mientras la otra no existe.
 const DESPLAZAMIENTO_CENTRADO = ((ALTO_TARJETA_PORCENTAJE + SEPARACION_PORCENTAJE) / 2 / ALTO_TARJETA_PORCENTAJE) * 100;
 
-function Tarjeta({ marca, etiqueta, texto, color, colorEtiqueta, estilo }: { marca: string; etiqueta: string; texto: string; color: string; colorEtiqueta: string; estilo: React.CSSProperties }) {
+function Tarjeta({ marca, etiqueta, texto, color, colorEtiqueta, estilo }: { marca: "mal" | "bien"; etiqueta: string; texto: string; color: string; colorEtiqueta: string; estilo: React.CSSProperties }) {
   return (
     <div
       style={{
@@ -40,7 +42,7 @@ function Tarjeta({ marca, etiqueta, texto, color, colorEtiqueta, estilo }: { mar
       }}
     >
       <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
-        <span style={{ fontSize: 34 }}>{marca}</span>
+        <IconoMarca tipo={marca} tamano={36} />
         <span style={{ fontSize: 26, fontWeight: 800, color: colorEtiqueta, textTransform: "uppercase", letterSpacing: "0.03em" }}>{etiqueta}</span>
       </div>
       <div style={{ fontSize: 36, fontWeight: 800, color: "#141414", lineHeight: 1.18 }}>{texto}</div>
@@ -79,7 +81,7 @@ export function ComparacionVisual({
       }}
     >
       <Tarjeta
-        marca="❌"
+        marca="mal"
         etiqueta={etiquetaMal}
         texto={textoMal}
         color={COLOR_ALERTA}
@@ -91,7 +93,7 @@ export function ComparacionVisual({
         }}
       />
       <Tarjeta
-        marca="✔️"
+        marca="bien"
         etiqueta={etiquetaBien}
         texto={textoBien}
         color={COLOR_EXITO}

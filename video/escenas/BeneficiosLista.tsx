@@ -3,6 +3,7 @@ import { colorMasContraste, colorTextoSobre } from "../tema";
 import { FondoMarca } from "../capas/FondoMarca";
 import { ZONA_SEGURA } from "../capas/ZonaSegura";
 import type { PropsEscena } from "./tipos";
+import { IconoCheck } from "../iconos";
 
 export function BeneficiosLista({ escena, tema, uso, medioDeFondo }: PropsEscena<"beneficios_lista">) {
   const frame = useCurrentFrame();
@@ -36,7 +37,7 @@ export function BeneficiosLista({ escena, tema, uso, medioDeFondo }: PropsEscena
                 marginBottom: 32,
               }}
             >
-              <span style={{ color: colorCheck, fontSize: 72, flexShrink: 0 }}>✓</span>
+              <IconoCheck tamano={64} color={colorCheck} />
               <span style={{ color: colorTexto, fontSize: 72, fontWeight: 700, lineHeight: 1.08 }}>{item}</span>
             </div>
           );

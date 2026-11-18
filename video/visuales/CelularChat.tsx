@@ -6,6 +6,7 @@ import { respiracion, type TemaGuion } from "../tema";
 import { ContadorBadge } from "./Contador";
 import { TARJETA_ALTURA_PORCENTAJE, TARJETA_ANCHO_PORCENTAJE, TARJETA_TOP_PORCENTAJE } from "./geometria";
 import { TAMANO_FUENTE_MENSAJE, TAMANO_FUENTE_NOTIFICACION, TAMANO_FUENTE_NUMERO_GIGANTE, TAMANO_FUENTE_ETIQUETA_NUMERO_GIGANTE } from "./tamanos";
+import { IconoBurbuja } from "../iconos";
 
 const COLOR_WHATSAPP = "#25D366";
 
@@ -130,7 +131,7 @@ function FranjaNotificacion({ cuadroLlegada, frame, fps, compacta }: { cuadroLle
         transform: `translateY(${interpolate(progreso, [0, 1], [-20, 0])}px)`,
       }}
     >
-      <span style={{ fontSize: compacta ? 26 : 42 }}>💬</span>
+      <IconoBurbuja tamano={compacta ? 26 : 42} color={COLOR_WHATSAPP} />
       <span style={{ fontSize: compacta ? 22 : TAMANO_FUENTE_NOTIFICACION, fontWeight: 700, color: "#222" }}>Nuevo mensaje de un cliente</span>
     </div>
   );
@@ -179,7 +180,7 @@ export function CelularChat({
           </div>
         ) : vacio ? (
           <div style={{ flexGrow: 1, display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", gap: 22, opacity: 0.55 * opacidadParpadeo }}>
-            <span style={{ fontSize: 90 }}>💬</span>
+            <IconoBurbuja tamano={90} color="#9a9a9a" />
             <span style={{ fontSize: 40, fontWeight: 800, color: "#444" }}>{textoVacio}</span>
           </div>
         ) : notificaciones ? (

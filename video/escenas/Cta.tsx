@@ -4,6 +4,7 @@ import { interpolarSeguro } from "../interpolarSeguro";
 import { FondoMarca } from "../capas/FondoMarca";
 import type { PropsEscena } from "./tipos";
 import type { TemaGuion } from "../tema";
+import { IconoBurbuja, IconoCheck, IconoMano, IconoPersona } from "../iconos";
 
 const COLOR_WHATSAPP = "#25D366";
 // El botón SIEMPRE mide 80% del ancho de la zona segura (88% del cuadro
@@ -99,7 +100,7 @@ export function CursorClic({ frame, fps, duracionCuadros }: { frame: number; fps
         filter: "drop-shadow(0 4px 6px rgba(0,0,0,0.4))",
       }}
     >
-      👆
+      <IconoMano tamano={104} />
     </div>
   );
 }
@@ -197,7 +198,7 @@ function CampoFormulario({ etiqueta, frame, fps, inicio, tema }: { etiqueta: str
       }}
     >
       <span style={{ opacity: 0.75 }}>{etiqueta}</span>
-      {lleno >= 1 ? <span style={{ color: tema.color_secundario, fontWeight: 800 }}>✓</span> : null}
+      {lleno >= 1 ? <IconoCheck tamano={34} color={tema.color_secundario} /> : null}
     </div>
   );
 }
@@ -274,7 +275,7 @@ function CtaSeguir({ escena, tema, uso }: PropsEscena<"cta">) {
           {tema.logo_url ? (
             <Img src={tema.logo_url} style={{ width: "70%", height: "70%", objectFit: "contain" }} />
           ) : (
-            <span style={{ fontSize: 96 }}>👤</span>
+            <IconoPersona tamano={96} color="#9a9a9a" />
           )}
         </div>
         {usuario && <div style={{ fontSize: 44, color: colorTexto, marginBottom: 28, fontWeight: 700 }}>{usuario}</div>}
@@ -372,7 +373,7 @@ function CtaComentar({ escena, tema, uso }: PropsEscena<"cta">) {
           transform: `scale(${Math.min(progreso, 1) * escalaRespiracion})`,
         }}
       >
-        <span style={{ fontSize: 40 }}>💬</span>
+        <IconoBurbuja tamano={40} color="#25D366" />
         <span style={{ fontSize: 42, fontWeight: 800, color: "#111" }}>
           {palabra.slice(0, letrasVisibles)}
           <span style={{ opacity: cursorVisible ? 1 : 0 }}>|</span>

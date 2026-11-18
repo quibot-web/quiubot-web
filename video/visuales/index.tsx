@@ -210,11 +210,11 @@ function renderizarVisualSinMovimiento(visual: Visual, ctx: ContextoVisual) {
       // haya inventado en visual.texto/texto_activo. En cualquier otro
       // bloque que use boton_estado, el texto de la IA sigue intacto.
       const textoIdle = ctx.bloque === "cta" ? (ctx.tema.instagramUsuario ? `Seguir @${ctx.tema.instagramUsuario}` : "Seguir") : visual.texto;
-      const textoActivo = ctx.bloque === "cta" ? (ctx.tema.instagramUsuario ? `Siguiendo @${ctx.tema.instagramUsuario} ✓` : "Siguiendo ✓") : visual.texto_activo;
+      const textoActivo = ctx.bloque === "cta" ? (ctx.tema.instagramUsuario ? `Siguiendo @${ctx.tema.instagramUsuario}` : "Siguiendo") : visual.texto_activo;
       return (
         <ZonaVisual>
           <TarjetaSimple>
-            <BotonEstado texto={activo ? textoActivo : textoIdle} tema={ctx.tema} progreso={progreso} activo={activo} colorActivo={COLOR_EXITO_BLOQUE} />
+            <BotonEstado texto={activo ? textoActivo : textoIdle} conCheck={activo && ctx.bloque === "cta"} tema={ctx.tema} progreso={progreso} activo={activo} colorActivo={COLOR_EXITO_BLOQUE} />
           </TarjetaSimple>
         </ZonaVisual>
       );

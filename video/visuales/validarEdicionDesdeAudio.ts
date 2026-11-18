@@ -1,7 +1,7 @@
 import type { BloqueGuion, Guion } from "../guion.schema";
 import { contarPalabras } from "../guion.schema";
 import { eventosDeVisual } from "./schema";
-import { TIPOS_VISUAL_DOS_ESTADOS } from "./schema";
+import { PATRON_TEXTO_VISUAL_SEGURO, TIPOS_VISUAL_DOS_ESTADOS } from "./schema";
 
 // Validación ESTRICTA de la Fase B v2.0 (edición desde el audio), a
 // propósito separada de GuionSchema -- GuionSchema es la base
@@ -24,6 +24,22 @@ export function validarEdicionDesdeAudio(escenas: Guion["escenas"]): HallazgoEdi
     if (!escena.visual) {
       hallazgos.push({ escenaId: escena.id, mensaje: "Falta visual -- la Fase B v2.0 exige un visual con eventos en cada escena." });
       continue;
+    }
+
+    // Textos de botón que escribe la IA: no pasan por TextoVisual en el
+    // schema (los guiones guardados podrían traer "Siguiendo ✓"), así que
+    // se exige acá, solo para lo que se genera de ahora en adelante. Un ✓
+    // fuera de nuestras fuentes sale como cuadro blanco en el computador
+    // de un cliente sin fuente de respaldo.
+    const textosBoton =
+      escena.visual.tipo === "cursor_clic" ? [escena.visual.texto_boton] : escena.visual.tipo === "boton_estado" ? [escena.visual.texto, escena.visual.texto_activo] : [];
+    for (const texto of textosBoton) {
+      if (!PATRON_TEXTO_VISUAL_SEGURO.test(texto)) {
+        hallazgos.push({
+          escenaId: escena.id,
+          mensaje: `El texto de botón "${texto}" usa un símbolo que no se puede dibujar -- solo letras, números, puntuación común o emoji (nada de ✓ ✗ →; el chulo de "Siguiendo" lo pone el video solo).`,
+        });
+      }
     }
 
     const totalPalabras = contarPalabras(escena.narracion);

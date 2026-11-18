@@ -8,6 +8,7 @@ import { fitText } from "@remotion/layout-utils";
 import { colorTextoSobre, type TemaGuion } from "../tema";
 import { ANCHO_BOTON_PORCENTAJE_NUM, TAMANO_FUENTE_BOTON, familiaDeFuenteSinCargar } from "./tamanos";
 import { TARJETA_ANCHO_PORCENTAJE } from "./geometria";
+import { IconoCheck } from "../iconos";
 
 // Fórmula exacta copiada del molde aprobado (molde.tsx) -- no un
 // porcentaje redondeado a mano: 88% de la zona segura (ANCHO_MAX_PX
@@ -30,17 +31,31 @@ const PADDING_HORIZONTAL_BOTON_PX = 28;
 // era el real.
 const ANCHO_BOTON_PX = (ANCHO_BOTON_PORCENTAJE_NUM / 100) * (TARJETA_ANCHO_PORCENTAJE / 100) * 1080;
 
-// Margen chico de respaldo (no la causa principal, ya corregida arriba):
-// un carácter como "✓" puede no tener glifo en la fuente de marca y
-// pintarse con una fuente de respaldo del sistema que fitText() no
-// puede medir -- esto absorbe esa diferencia menor sin volver a
-// adivinar el ancho base completo.
+// Margen chico de respaldo (no la causa principal, ya corregida arriba)
+// para diferencias menores de medición de fitText().
 const MARGEN_SEGURIDAD_GLIFO_PX = 16;
 
-function calcularFuenteBotonQueCabe(texto: string, familia: string): number {
+// "Siguiendo" + chulo (CTA): el carácter U+2713 NO está en nuestras fuentes y en el
+// computador de un cliente sin fuente de respaldo sale como cuadro
+// blanco. Un ✓/✔ al final del texto se quita y se dibuja con IconoCheck
+// -- cubre los textos que arma el código y los guiones ya guardados.
+const PATRON_CHECK_FINAL = /\s*[\u2713\u2714]\ufe0f?\s*$/u;
+export function separarCheckFinal(texto: string): { texto: string; conCheck: boolean } {
+  const conCheck = PATRON_CHECK_FINAL.test(texto);
+  return { texto: conCheck ? texto.replace(PATRON_CHECK_FINAL, "") : texto, conCheck };
+}
+
+// Ancho del ícono (con su separación), en múltiplos del tamaño de fuente.
+const ANCHO_CHECK_EN_EM = 1.25;
+
+// fitText() mide solo el texto, que escala lineal con la fuente
+// (ancho = k * fuente, con k = disponible / fuenteQueCabe). Con el
+// ícono: k*f + 1.25*f <= disponible  =>  f = disponible / (k + 1.25).
+export function calcularFuenteBotonQueCabe(texto: string, familia: string, conCheck = false): number {
   const anchoDisponible = ANCHO_BOTON_PX - PADDING_HORIZONTAL_BOTON_PX * 2 - MARGEN_SEGURIDAD_GLIFO_PX;
   const { fontSize } = fitText({ text: texto, withinWidth: anchoDisponible, fontFamily: familia, fontWeight: 800 });
-  return Math.min(TAMANO_FUENTE_BOTON, Math.floor(fontSize));
+  const fuente = conCheck ? anchoDisponible / (anchoDisponible / fontSize + ANCHO_CHECK_EN_EM) : fontSize;
+  return Math.min(TAMANO_FUENTE_BOTON, Math.floor(fuente));
 }
 
 export function BotonEstado({
@@ -50,9 +65,12 @@ export function BotonEstado({
   activo,
   colorActivo,
   escalaExtra = 1,
+  conCheck: conCheckPedido = false,
   children,
 }: {
   texto: string;
+  // Dibuja el chulo de "Siguiendo" (IconoCheck) al final del texto.
+  conCheck?: boolean;
   tema: TemaGuion;
   progreso: number;
   activo?: boolean;
@@ -91,7 +109,10 @@ export function BotonEstado({
   // sin excepción.
   const colorBoton = activo ? colorActivo : tema.color_primario;
   const colorTexto = colorTextoSobre(colorBoton);
-  const fontSize = calcularFuenteBotonQueCabe(texto, familiaDeFuenteSinCargar(tema.fuente));
+  const separado = separarCheckFinal(texto);
+  const textoSinCheck = separado.texto;
+  const conCheck = conCheckPedido || separado.conCheck;
+  const fontSize = calcularFuenteBotonQueCabe(textoSinCheck, familiaDeFuenteSinCargar(tema.fuente), conCheck);
   // Ronda L (revisión real en staging): "progreso*escalaExtra" arranca
   // en escala 0 -- el botón es invisible/imperceptible durante toda la
   // rampa del spring (~0.5s), aunque su evento "aparece" ya dispare en
@@ -118,7 +139,8 @@ export function BotonEstado({
           transform: `scale(${escalaEntrada * escalaExtra})`,
         }}
       >
-        {texto}
+        {textoSinCheck}
+        {conCheck && <IconoCheck tamano={Math.round(fontSize * 0.95)} color={colorTexto} estilo={{ marginLeft: fontSize * 0.25, verticalAlign: "-0.12em" }} />}
       </div>
       {children}
     </div>

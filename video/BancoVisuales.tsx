@@ -16,7 +16,8 @@ import { ChecklistVisual } from "./visuales/ChecklistVisual";
 import { ComparacionFotoVisual } from "./visuales/ComparacionFotoVisual";
 import { renderizarVisual, type PalabraConTiempoVisual } from "./visuales/index";
 import type { Visual } from "./visuales/schema";
-import type { BloqueGuion } from "./guion.schema";
+import type { BloqueGuion, Guion } from "./guion.schema";
+import { CapaBucleAudio } from "./visuales/CapaBucleAudio";
 
 export type PropsBancoVisuales = {
   tipo: "anuncio_boton" | "conexion_whatsapp" | "respuesta_lenta" | "comparacion" | "icono_palabra" | "checklist" | "comparacion_foto";
@@ -85,17 +86,30 @@ export function BancoVisuales({ tipo, estado, textos, tema = TEMA_BANCO }: Props
 // (estado "problema", sin eventos, con su movimiento de entrada) y el
 // cierre (mismo visual, cambio en la palabra 0) con el render real.
 // Narración simulada: 10 palabras de 0.4s desde el segundo 0.
-export type PropsBancoGanchoCierre = { visual: Visual; bloque: BloqueGuion; tema?: TemaGuion };
+export type PropsBancoGanchoCierre = { visual: Visual; bloque: BloqueGuion; tema?: TemaGuion; chipBucle?: { indicador: "espera_final" | "contador"; texto: string } };
 
 const PALABRAS_SIMULADAS: PalabraConTiempoVisual[] = Array.from({ length: 10 }, (_, i) => ({ texto: `palabra${i}`, inicio_s: i * 0.4, fin_s: i * 0.4 + 0.35 }));
 
-export function BancoGanchoCierre({ visual, bloque, tema = TEMA_BANCO }: PropsBancoGanchoCierre) {
+export function BancoGanchoCierre({ visual, bloque, tema = TEMA_BANCO, chipBucle }: PropsBancoGanchoCierre) {
   const frame = useCurrentFrame();
   const { fps } = useVideoConfig();
   const medios = { "foto-demo": { tipo: "imagen" as const, url: staticFile("demo-organico/foto-producto-ceramica.jpg") } };
   return (
     <AbsoluteFill style={{ background: `linear-gradient(160deg, ${tema.color_primario}, #1a1530)`, fontFamily: familiaDeFuente(tema.fuente) }}>
       {renderizarVisual(visual, { tema, bloque, frame, fps, palabras: PALABRAS_SIMULADAS, inicioEscena_s: 0, medios })}
+      {chipBucle && <CapaBucleAudio guion={guionSoloChip(chipBucle, bloque, tema, fps)} />}
     </AbsoluteFill>
   );
+}
+
+// Lo mínimo que CapaBucleAudio lee de un guion: una sola escena del
+// bloque pedido, de 10 s, con el bucle dado.
+function guionSoloChip(chip: NonNullable<PropsBancoGanchoCierre["chipBucle"]>, bloque: BloqueGuion, tema: TemaGuion, fps: number): Guion {
+  return {
+    fps,
+    tema,
+    bucle: { texto: chip.texto, abre_en: "e1", cierra_en: "e1", indicador: chip.indicador },
+    escenas: [{ id: "e1", bloque }],
+    tiemposRender: [{ escena_id: "e1", inicio_s: 0, fin_s: 10 }],
+  } as unknown as Guion;
 }

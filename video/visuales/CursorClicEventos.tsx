@@ -9,6 +9,7 @@
 // adivinar un 60%.
 import { spring } from "remotion";
 import { interpolarSeguro } from "../interpolarSeguro";
+import { IconoMano } from "../iconos";
 
 // Bug real encontrado con una prueba real en navegador (16 nov 2026):
 // interpolate() exige un eje de entrada ESTRICTAMENTE creciente --
@@ -47,7 +48,7 @@ export function CursorClicEventos({ frame, fps, cuadroAparece, cuadroClic }: { f
         filter: "drop-shadow(0 4px 6px rgba(0,0,0,0.4))",
       }}
     >
-      👆
+      <IconoMano tamano={104} />
     </div>
   );
 }

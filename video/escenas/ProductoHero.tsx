@@ -6,6 +6,7 @@ import { FondoMarca } from "../capas/FondoMarca";
 import { MediaCelular, MediaTarjeta } from "../capas/TratamientoMedia";
 import { colorTextoSobre } from "../tema";
 import type { PropsEscena } from "./tipos";
+import { IconoCheck } from "../iconos";
 
 export function ProductoHero({ escena, tema, medios, analisisPiezas, uso }: PropsEscena<"producto_hero">) {
   const frame = useCurrentFrame();
@@ -74,7 +75,7 @@ export function ProductoHero({ escena, tema, medios, analisisPiezas, uso }: Prop
             alignSelf: "flex-start",
           }}
         >
-          <span style={{ color: tema.color_primario, fontSize: 36 }}>✓</span>
+          <IconoCheck tamano={34} color={tema.color_primario} />
           <span style={{ color: colorTexto, fontSize: 40, fontWeight: 700 }}>{nombre}</span>
         </div>
         {etiqueta && <div style={{ color: colorTexto, fontSize: 26, marginTop: 10 }}>{etiqueta}</div>}

@@ -20,11 +20,13 @@ import { respiracion, type TemaGuion } from "../tema";
 import { interpolarSeguro } from "../interpolarSeguro";
 import { COLOR_ALERTA, COLOR_EXITO } from "./acento";
 import { TARJETA_ALTURA_PORCENTAJE, TARJETA_TOP_PORCENTAJE } from "./geometria";
+import { IconoCruz, IconoMegafono } from "../iconos";
 
 // Textos (parte 2b): "etiqueta" es el origen (anuncio, perfil, catálogo,
 // historia...), "texto_problema" lo que pasa mientras está desconectado,
 // "mensaje" lo que llega al chat al conectarse.
-export const TEXTOS_CONEXION_POR_DEFECTO = { icono: "📣", etiqueta: "Anuncio", texto_problema: "Sin conexión", mensaje: "Hola, ¿tienen disponible?" };
+// Sin "icono" en el guion se dibuja IconoMegafono (nunca un emoji fijo).
+export const TEXTOS_CONEXION_POR_DEFECTO = { icono: undefined as string | undefined, etiqueta: "Anuncio", texto_problema: "Sin conexión", mensaje: "Hola, ¿tienen disponible?" };
 
 export function ConexionWhatsappVisual({
   frame,
@@ -66,7 +68,7 @@ export function ConexionWhatsappVisual({
           justifyContent: "center",
         }}
       >
-        <span style={{ fontSize: 60 }}>{t.icono}</span>
+        {t.icono ? <span style={{ fontSize: 60 }}>{t.icono}</span> : <IconoMegafono tamano={60} />}
         <span style={{ position: "absolute", top: 10, left: 14, background: "rgba(0,0,0,0.3)", color: "#fff", fontSize: 18, fontWeight: 700, padding: "5px 14px", borderRadius: 999 }}>{t.etiqueta}</span>
       </div>
 
@@ -93,7 +95,7 @@ export function ConexionWhatsappVisual({
               boxShadow: "0 10px 26px rgba(0,0,0,0.4)",
             }}
           >
-            ✗
+            <IconoCruz tamano={34} color="#fff" />
           </div>
         </>
       ) : (

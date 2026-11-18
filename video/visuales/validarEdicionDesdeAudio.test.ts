@@ -126,8 +126,21 @@ const MARCA_OK = escenaConAudio("e5", "marca", "Así ganas la confianza de quien
 const CTA_OK = escenaConAudio("e6", "cta", "Síguenos para más consejos como este.", {
   tipo: "boton_estado",
   texto: "Seguir",
-  texto_activo: "Siguiendo ✓",
+  texto_activo: "Siguiendo",
   eventos: [{ palabra: 0, accion: "aparece" }, { palabra: 2, accion: "clic" }],
+});
+
+describe("textos de botón sin glifos fuera de las fuentes", () => {
+  it("un chulo de texto en el botón de la CTA: hallazgo; sin él, limpio", () => {
+    const conChulo = escenaConAudio("e6", "cta", "Síguenos para más consejos como este.", {
+      tipo: "cursor_clic",
+      texto_boton: "Listo \u2713",
+      eventos: [{ palabra: 0, accion: "aparece" }, { palabra: 2, accion: "clic" }],
+    });
+    expect(validarEdicionDesdeAudio([conChulo]).some((h) => h.mensaje.includes("no se puede dibujar"))).toBe(true);
+    const limpio = { ...conChulo, visual: { ...conChulo.visual!, texto_boton: "Seguir" } } as typeof conChulo;
+    expect(validarEdicionDesdeAudio([limpio])).toHaveLength(0);
+  });
 });
 
 describe("validarEstructuraConsejosNumeradosAudio", () => {
@@ -355,7 +368,7 @@ describe("validarEstructuraConsejosNumeradosAudio", () => {
     const ctaClicTardio = escenaConAudio("e6", "cta", "Síguenos para más consejos como este.", {
       tipo: "boton_estado",
       texto: "Seguir",
-      texto_activo: "Siguiendo ✓",
+      texto_activo: "Siguiendo",
       eventos: [{ palabra: 0, accion: "aparece" }, { palabra: 5, accion: "clic" }],
     });
     const escenas = [GANCHO_OK, VALOR_1_OK, VALOR_2_OK, VALOR_3_OK, MARCA_OK, ctaClicTardio];

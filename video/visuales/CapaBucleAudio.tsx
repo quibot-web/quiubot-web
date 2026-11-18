@@ -2,6 +2,7 @@ import { AbsoluteFill, useCurrentFrame } from "remotion";
 import { fitText } from "@remotion/layout-utils";
 import type { BloqueGuion, Guion } from "../guion.schema";
 import { familiaDeFuenteSinCargar, TAMANO_FUENTE_CHIP_BUCLE } from "./tamanos";
+import { IconoOjos } from "../iconos";
 
 // Bucle persistente para ReelAutomatico.tsx -- NO es capas/Bucle.tsx
 // (esa queda intacta, la usan las 6 recetas de siempre sin voz).
@@ -47,10 +48,10 @@ export function contenidoBucleAudio(frame: number, bucle: Guion["bucle"], limite
   const indiceValor = escenasValor.findIndex((l) => l.id === escenaActual.id);
 
   if (indiceValor !== -1) {
-    return bucle.indicador === "contador" ? `${indiceValor + 1}/${escenasValor.length}` : `👀 ${bucle.texto}`;
+    return bucle.indicador === "contador" ? `${indiceValor + 1}/${escenasValor.length}` : `${MARCA_OJOS}${bucle.texto}`;
   }
   if (escenaActual.bloque === "gancho") {
-    return bucle.indicador === "espera_final" ? "👀 espera al final" : `👀 ${bucle.texto}`;
+    return bucle.indicador === "espera_final" ? `${MARCA_OJOS}espera al final` : `${MARCA_OJOS}${bucle.texto}`;
   }
   return null;
 }
@@ -68,10 +69,18 @@ export function contenidoBucleAudio(frame: number, bucle: Guion["bucle"], limite
 const ANCHO_CHIP_PX = 1080 * 0.8;
 const PADDING_HORIZONTAL_CHIP_PX = 26;
 
-function calcularFuenteChipQueCabe(texto: string, familia: string): number {
+// El 👀 del chip NO se pinta como emoji (no está en nuestras fuentes; en
+// un computador sin fuente de emoji sale un cuadro blanco): el texto
+// lógico lo conserva como marca (los tests y capas/Bucle.tsx lo usan
+// igual), y al pintar se cambia por IconoOjos.
+export const MARCA_OJOS = "\u{1F440} ";
+const ANCHO_OJOS_EN_EM = 1.7;
+
+function calcularFuenteChipQueCabe(texto: string, familia: string, conOjos: boolean): number {
   const anchoDisponible = ANCHO_CHIP_PX - PADDING_HORIZONTAL_CHIP_PX * 2;
   const { fontSize } = fitText({ text: texto, withinWidth: anchoDisponible, fontFamily: familia, fontWeight: 800 });
-  return Math.min(TAMANO_FUENTE_CHIP_BUCLE, Math.floor(fontSize));
+  const fuente = conOjos ? anchoDisponible / (anchoDisponible / fontSize + ANCHO_OJOS_EN_EM) : fontSize;
+  return Math.min(TAMANO_FUENTE_CHIP_BUCLE, Math.floor(fuente));
 }
 
 export function CapaBucleAudio({ guion }: { guion: Guion }) {
@@ -80,7 +89,9 @@ export function CapaBucleAudio({ guion }: { guion: Guion }) {
   const contenido = contenidoBucleAudio(frame, guion.bucle, limites);
   if (!contenido) return null;
 
-  const fontSize = calcularFuenteChipQueCabe(contenido, familiaDeFuenteSinCargar(guion.tema.fuente));
+  const conOjos = contenido.startsWith(MARCA_OJOS);
+  const texto = conOjos ? contenido.slice(MARCA_OJOS.length) : contenido;
+  const fontSize = calcularFuenteChipQueCabe(texto, familiaDeFuenteSinCargar(guion.tema.fuente), conOjos);
 
   return (
     <AbsoluteFill style={{ pointerEvents: "none" }}>
@@ -101,7 +112,8 @@ export function CapaBucleAudio({ guion }: { guion: Guion }) {
           textOverflow: "ellipsis",
         }}
       >
-        {contenido}
+        {conOjos && <IconoOjos tamano={Math.round(fontSize * 1.05)} estilo={{ marginRight: fontSize * 0.3, verticalAlign: "-0.15em" }} />}
+        {texto}
       </div>
     </AbsoluteFill>
   );
