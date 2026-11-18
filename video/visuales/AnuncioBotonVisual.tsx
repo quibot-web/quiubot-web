@@ -15,9 +15,10 @@
 import { interpolate, spring } from "remotion";
 import { colorTextoSobre, mezclarColoresHex, type TemaGuion } from "../tema";
 import { CursorClicEventos } from "./CursorClicEventos";
-import { COLOR_ALERTA, COLOR_EXITO } from "./acento";
+import { COLOR_EXITO } from "./acento";
 import { TARJETA_ALTURA_PORCENTAJE, TARJETA_ANCHO_PORCENTAJE, TARJETA_TOP_PORCENTAJE } from "./geometria";
 import { IconoCatalogo } from "../iconosCatalogo";
+import { estiloTarjeta, useSuperficie } from "../estilos/superficie";
 
 // Textos (parte 2b): la IA los define según el tema -- "lo que le falta"
 // al anuncio/publicación y lo que aparece como arreglo. Por defecto, los
@@ -47,6 +48,7 @@ export function AnuncioBotonVisual({
   // (invisible, se leía como texto suelto). Mismo bug y misma fórmula
   // de arreglo que ya tiene BotonEstado.tsx: el color de marca real
   // como fondo, el color de contraste como texto encima de ESE fondo.
+  const s = useSuperficie();
   const colorBoton = tema.color_primario;
   const colorTextoBoton = colorTextoSobre(colorBoton);
 
@@ -59,9 +61,8 @@ export function AnuncioBotonVisual({
         width: `${TARJETA_ANCHO_PORCENTAJE}%`,
         height: `${TARJETA_ALTURA_PORCENTAJE}%`,
         transform: "translateX(-50%)",
-        background: "#fff",
+        ...estiloTarjeta(s, activa ? `${s.sombra}, 0 0 0 6px ${COLOR_EXITO}55` : undefined),
         borderRadius: 32,
-        boxShadow: activa ? `0 30px 80px rgba(0,0,0,0.5), 0 0 0 6px ${COLOR_EXITO}55` : "0 30px 80px rgba(0,0,0,0.5)",
         overflow: "hidden",
         display: "flex",
         flexDirection: "column",
@@ -70,7 +71,7 @@ export function AnuncioBotonVisual({
       <div
         style={{
           flexGrow: 1,
-          background: `linear-gradient(145deg, ${mezclarColoresHex(tema.color_primario, tema.color_secundario, 0.4)}, ${tema.color_secundario})`,
+          background: s.cabecera ? s.cabecera(tema) : `linear-gradient(145deg, ${mezclarColoresHex(tema.color_primario, tema.color_secundario, 0.4)}, ${tema.color_secundario})`,
           position: "relative",
           display: "flex",
           alignItems: "center",
@@ -85,12 +86,12 @@ export function AnuncioBotonVisual({
         {!activa ? (
           <div
             style={{
-              border: `3px dashed ${COLOR_ALERTA}`,
+              border: `3px dashed ${s.alerta}`,
               borderRadius: 16,
               padding: "16px 0",
               textAlign: "center",
-              color: COLOR_ALERTA,
-              fontSize: 32,
+              color: s.alerta,
+              fontSize: 40,
               fontWeight: 800,
               lineHeight: 1.15,
             }}
@@ -110,7 +111,7 @@ export function AnuncioBotonVisual({
                 padding: "20px 0",
                 width: "100%",
                 textAlign: "center",
-                fontSize: 32,
+                fontSize: 40,
                 fontWeight: 800,
                 whiteSpace: "nowrap",
                 transform: `scale(${interpolate(progreso, [0, 1], [0.85, 1])})`,

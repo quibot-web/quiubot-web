@@ -7,6 +7,7 @@ import { ContadorBadge } from "./Contador";
 import { TARJETA_ALTURA_PORCENTAJE, TARJETA_ANCHO_PORCENTAJE, TARJETA_TOP_PORCENTAJE } from "./geometria";
 import { TAMANO_FUENTE_MENSAJE, TAMANO_FUENTE_NOTIFICACION, TAMANO_FUENTE_NUMERO_GIGANTE, TAMANO_FUENTE_ETIQUETA_NUMERO_GIGANTE } from "./tamanos";
 import { IconoBurbuja } from "../iconos";
+import { useSuperficie } from "../estilos/superficie";
 
 const COLOR_WHATSAPP = "#25D366";
 
@@ -42,6 +43,7 @@ export interface CelularChatProps {
 }
 
 function Tarjeta({ children, escalaCamara = 1 }: { children: React.ReactNode; escalaCamara?: number }) {
+  const s = useSuperficie();
   return (
     <div
       style={{
@@ -51,14 +53,15 @@ function Tarjeta({ children, escalaCamara = 1 }: { children: React.ReactNode; es
         width: `${TARJETA_ANCHO_PORCENTAJE}%`,
         height: `${TARJETA_ALTURA_PORCENTAJE}%`,
         transform: `translateX(-50%) scale(${escalaCamara})`,
-        background: "#0a0a0a",
+        background: s.marco,
+        border: s.borde ? `5px solid ${s.borde}` : undefined,
         borderRadius: 36,
         padding: "10px 10px 0 10px",
-        boxShadow: "0 30px 80px rgba(0,0,0,0.5)",
+        boxShadow: s.sombra,
         overflow: "hidden",
       }}
     >
-      <div style={{ width: "100%", height: "100%", borderRadius: "26px 26px 0 0", overflow: "hidden", background: "#fff", display: "flex", flexDirection: "column" }}>
+      <div style={{ width: "100%", height: "100%", borderRadius: "26px 26px 0 0", overflow: "hidden", background: s.tarjeta, display: "flex", flexDirection: "column" }}>
         {children}
       </div>
     </div>
@@ -66,8 +69,9 @@ function Tarjeta({ children, escalaCamara = 1 }: { children: React.ReactNode; es
 }
 
 function Encabezado({ tema, nuevos, mostrarContadorNuevos }: { tema: TemaGuion; nuevos: number; mostrarContadorNuevos?: boolean }) {
+  const s = useSuperficie();
   return (
-    <div style={{ display: "flex", alignItems: "center", gap: 18, padding: "26px 30px", flexShrink: 0, borderBottom: "2px solid #eee" }}>
+    <div style={{ display: "flex", alignItems: "center", gap: 18, padding: "26px 30px", flexShrink: 0, borderBottom: `2px solid ${s.separador}` }}>
       <div
         style={{
           width: 52,
@@ -84,21 +88,22 @@ function Encabezado({ tema, nuevos, mostrarContadorNuevos }: { tema: TemaGuion; 
       >
         {tema.logo_url ? <Img src={tema.logo_url} style={{ width: "100%", height: "100%", objectFit: "contain" }} /> : <span style={{ color: "#fff", fontWeight: 900, fontSize: 24 }}>Q</span>}
       </div>
-      <div style={{ fontSize: 30, fontWeight: 800, color: "#111", flexGrow: 1 }}>{tema.nombre_marca || "Nuestro negocio"}</div>
+      <div style={{ fontSize: 30, fontWeight: 800, color: s.texto, flexGrow: 1 }}>{tema.nombre_marca || "Nuestro negocio"}</div>
       {mostrarContadorNuevos && <ContadorBadge valor={nuevos} color={COLOR_WHATSAPP} colorTexto="#fff" tamano={54} />}
     </div>
   );
 }
 
 function BurbujaMensaje({ mensaje, frame, fps }: { mensaje: MensajeChat; frame: number; fps: number }) {
+  const s = useSuperficie();
   const progreso = spring({ frame: frame - mensaje.cuadroLlegada, fps, config: { damping: 14 } });
   if (frame < mensaje.cuadroLlegada - 5) return null;
   return (
     <div
       style={{
         alignSelf: mensaje.propio ? "flex-end" : "flex-start",
-        background: mensaje.propio ? COLOR_WHATSAPP : "#f0f0f0",
-        color: mensaje.propio ? "#fff" : "#111",
+        background: mensaje.propio ? COLOR_WHATSAPP : s.burbuja,
+        color: mensaje.propio ? "#fff" : s.textoBurbuja,
         borderRadius: mensaje.propio ? "22px 22px 6px 22px" : "22px 22px 22px 6px",
         padding: "20px 26px",
         fontSize: TAMANO_FUENTE_MENSAJE,
@@ -116,6 +121,7 @@ function BurbujaMensaje({ mensaje, frame, fps }: { mensaje: MensajeChat; frame: 
 // `compacta`: cuando entra detrás del número gigante, más chica para no
 // competirle el espacio.
 function FranjaNotificacion({ cuadroLlegada, frame, fps, compacta }: { cuadroLlegada: number; frame: number; fps: number; compacta?: boolean }) {
+  const s = useSuperficie();
   const progreso = spring({ frame: frame - cuadroLlegada, fps, config: { damping: 16 } });
   if (frame < cuadroLlegada - 5) return null;
   return (
@@ -124,7 +130,7 @@ function FranjaNotificacion({ cuadroLlegada, frame, fps, compacta }: { cuadroLle
         display: "flex",
         alignItems: "center",
         gap: compacta ? 12 : 16,
-        background: "#f5f5f7",
+        background: s.burbuja,
         borderRadius: compacta ? 14 : 18,
         padding: compacta ? "10px 16px" : "18px 24px",
         opacity: progreso,
@@ -132,16 +138,17 @@ function FranjaNotificacion({ cuadroLlegada, frame, fps, compacta }: { cuadroLle
       }}
     >
       <IconoBurbuja tamano={compacta ? 26 : 42} color={COLOR_WHATSAPP} />
-      <span style={{ fontSize: compacta ? 22 : TAMANO_FUENTE_NOTIFICACION, fontWeight: 700, color: "#222" }}>Nuevo mensaje de un cliente</span>
+      <span style={{ fontSize: compacta ? 22 : TAMANO_FUENTE_NOTIFICACION, fontWeight: 700, color: s.textoBurbuja }}>Nuevo mensaje de un cliente</span>
     </div>
   );
 }
 
 function NumeroGigante({ valor, color, opacidad }: { valor: number; color: string; opacidad: number }) {
+  const s = useSuperficie();
   return (
     <div style={{ flexGrow: 1, display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", gap: 6, opacity: opacidad }}>
       <span style={{ fontSize: TAMANO_FUENTE_NUMERO_GIGANTE, fontWeight: 900, color, lineHeight: 1 }}>{valor}</span>
-      <span style={{ fontSize: TAMANO_FUENTE_ETIQUETA_NUMERO_GIGANTE, fontWeight: 800, color: "#444" }}>mensajes nuevos</span>
+      <span style={{ fontSize: TAMANO_FUENTE_ETIQUETA_NUMERO_GIGANTE, fontWeight: 800, color: s.textoSuave }}>mensajes nuevos</span>
     </div>
   );
 }
@@ -161,6 +168,7 @@ export function CelularChat({
 }: CelularChatProps) {
   const nuevos = notificaciones ? notificaciones.filter((c) => frame >= c).length : mensajes.filter((m) => frame >= m.cuadroLlegada).length;
   const escalaRespiracion = respiracion(frame, fps);
+  const superficie = useSuperficie();
   const opacidadParpadeo = parpadear ? 0.45 + Math.abs(Math.sin((frame / fps / 0.6) * Math.PI)) * 0.55 : 1;
 
   return (
@@ -181,7 +189,7 @@ export function CelularChat({
         ) : vacio ? (
           <div style={{ flexGrow: 1, display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", gap: 22, opacity: 0.55 * opacidadParpadeo }}>
             <IconoBurbuja tamano={90} color="#9a9a9a" />
-            <span style={{ fontSize: 40, fontWeight: 800, color: "#444" }}>{textoVacio}</span>
+            <span style={{ fontSize: 40, fontWeight: 800, color: superficie.textoSuave }}>{textoVacio}</span>
           </div>
         ) : notificaciones ? (
           <div style={{ flexGrow: 1, display: "flex", flexDirection: "column", gap: 16, padding: "28px 26px", overflow: "hidden", justifyContent: "flex-start" }}>

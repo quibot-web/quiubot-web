@@ -90,10 +90,14 @@ function escenaConAudio(id: string, bloque: Guion["escenas"][number]["bloque"], 
 // Ronda J: el gancho se queda CONGELADO en 0 -- eventos vacío, nunca
 // "numero_sube"/"notificacion_llega" (esos cuentan la resolución, que
 // es de la escena "marca", nunca del gancho).
-const GANCHO_OK = escenaConAudio("e1", "gancho", "¿Sabes por qué pierdes clientes sin darte cuenta?", {
-  tipo: "celular_chat",
-  eventos: [],
-});
+// Sistema de estilos: el gancho trae su texto gigante.
+const GANCHO_OK = {
+  ...escenaConAudio("e1", "gancho", "¿Sabes por qué pierdes clientes sin darte cuenta?", {
+    tipo: "celular_chat",
+    eventos: [],
+  }),
+  texto_gigante: "¿Sin clientes?",
+};
 // Los 3 consejos usan los 3 tipos de 2 estados (problema->arreglo) --
 // pedido explícito (3ra revisión de staging): boton_estado/cursor_clic
 // ya NO valen para escenas "valor" (son de 1 estado, no muestran un
@@ -376,10 +380,13 @@ describe("validarEstructuraConsejosNumeradosAudio", () => {
   });
 
   it("gancho de 12 palabras exactas: pasa (el límite es inclusivo)", () => {
-    const ganchoLimite = escenaConAudio("e1", "gancho", "¿Sabes por qué muchos negocios pierden clientes todos los días sin razón?", {
-      tipo: "celular_chat",
-      eventos: [],
-    });
+    const ganchoLimite = {
+      ...escenaConAudio("e1", "gancho", "¿Sabes por qué muchos negocios pierden clientes todos los días sin razón?", {
+        tipo: "celular_chat",
+        eventos: [],
+      }),
+      texto_gigante: "¿Sin clientes?",
+    };
     const escenas = [ganchoLimite, VALOR_1_OK, VALOR_2_OK, VALOR_3_OK, MARCA_OK, CTA_OK];
     const hallazgos = validarEstructuraConsejosNumeradosAudio(escenas);
     expect(hallazgos.some((h) => h.escenaId === "e1" && h.mensaje.includes("palabras"))).toBe(false);
@@ -432,7 +439,7 @@ describe("validarEstructuraConsejosNumeradosAudio", () => {
       icono_despues: "☀️",
       palabra_despues: "Con luz",
     };
-    const GANCHO_FOTO = escenaConAudio("e1", "gancho", "¿Tus fotos espantan a los clientes?", { ...VISUAL_FOTO_PROBLEMA, eventos: [] });
+    const GANCHO_FOTO = { ...escenaConAudio("e1", "gancho", "¿Tus fotos espantan a los clientes?", { ...VISUAL_FOTO_PROBLEMA, eventos: [] }), texto_gigante: "¿Fotos oscuras?" };
     const MARCA_FOTO = escenaConAudio("e5", "marca", "Con esos tres cambios tus fotos ya venden solas.", {
       ...VISUAL_FOTO_PROBLEMA,
       eventos: [{ palabra: 0, accion: "cambia_estado" }],
@@ -506,5 +513,11 @@ describe("validarEstructuraConsejosNumeradosAudio", () => {
       const hallazgos = validarEstructuraConsejosNumeradosAudio(escenas);
       expect(hallazgos.some((h) => h.escenaId === "e2" && h.mensaje.includes("no tiene evento"))).toBe(true);
     });
+  });
+
+  it("sistema de estilos: el gancho sin texto_gigante tiene hallazgo", () => {
+    const ganchoSinTexto = { ...GANCHO_OK, texto_gigante: undefined };
+    const hallazgos = validarEstructuraConsejosNumeradosAudio([ganchoSinTexto, VALOR_1_OK, VALOR_2_OK, VALOR_3_OK, MARCA_OK, CTA_OK]);
+    expect(hallazgos.some((h) => h.escenaId === "e1" && h.mensaje.includes("texto_gigante"))).toBe(true);
   });
 });

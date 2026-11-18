@@ -1,7 +1,17 @@
 import { AbsoluteFill, spring } from "remotion";
 import { hexConAlfa, respiracion, type TemaGuion } from "../tema";
-import type { LayoutEscena, PaletaNoche } from "../estilos/estilos";
-import { ChecklistNoche, ComparacionFotoNoche, ComparacionNoche, ContadorNoche, IconoPalabraNoche } from "../estilos/VisualesNoche";
+import type { LayoutEscena, PaletaEstilo } from "../estilos/estilos";
+import {
+  ChecklistEstilo,
+  ComparacionEstilo,
+  ComparacionFotoEstilo,
+  ContadorEstilo,
+  FotoBordeABorde,
+  GolpeDeDato,
+  IconoPalabraEstilo,
+  PantallaDividida,
+} from "../estilos/VisualesEstilo";
+import { ProveedorSuperficie } from "../estilos/superficie";
 import { quitarGlifosFueraDeFuentes } from "../glifos";
 import type { BloqueGuion } from "../guion.schema";
 import type { Visual } from "./schema";
@@ -19,7 +29,7 @@ import { ChecklistVisual } from "./ChecklistVisual";
 import { ComparacionFotoVisual } from "./ComparacionFotoVisual";
 import type { MediosResueltos } from "../escenas/tipos";
 import { COLOR_ALERTA, COLOR_EXITO_BLOQUE } from "./acento";
-import { TARJETA_ALTURA_PORCENTAJE, TARJETA_TOP_PORCENTAJE } from "./geometria";
+import { CENTRO_PROTAGONISTA_PORCENTAJE, TARJETA_ALTURA_PORCENTAJE, TARJETA_TOP_PORCENTAJE } from "./geometria";
 
 // Fase B v2.0 (docs/diseno/plan_contenido_organico_fase_b_v2.md,
 // punto 6). Dispatcher real -- análogo a video/escenas/index.tsx
@@ -55,9 +65,11 @@ export type ContextoVisual = {
   // Fotos/videos del álbum ya resueltos a URL (parte 2d, para
   // comparacion_foto). Opcional: el arnés admin no los tiene.
   medios?: MediosResueltos;
-  // Sistema de estilos (paso 1): estilo Noche y layout de ESTA escena.
-  // Sin él, el visual se dibuja como siempre.
-  estilo?: { paleta: PaletaNoche; layout: LayoutEscena };
+  // Sistema de estilos: paleta del estilo activo y layout de ESTA escena.
+  // colorTextoSobreFondo: texto legible directo sobre el fondo de la
+  // escena (golpe de dato en Color pleno). Sin estilo, el visual se
+  // dibuja como siempre.
+  estilo?: { paleta: PaletaEstilo; layout: LayoutEscena; colorTextoSobreFondo: string };
 };
 
 function cuadroDePalabra(indicePalabra: number, ctx: ContextoVisual): number {
@@ -138,17 +150,28 @@ function limpiarTextosVisual(visual: Visual): Visual {
 export function renderizarVisual(visualGuardado: Visual, ctx: ContextoVisual) {
   const visual = limpiarTextosVisual(visualGuardado);
   if (ctx.estilo) {
-    const protagonista = ctx.estilo.layout === "objeto_protagonista" ? renderizarProtagonistaNoche(visual, ctx, ctx.estilo.paleta) : null;
-    if (protagonista) return protagonista;
-    // Tarjeta flotante sobre el fondo oscuro: la misma tarjeta, con el
-    // resplandor de la luz de la marca alrededor.
-    // El botón de la CTA va sin tarjeta: se agranda para ser el protagonista
-    // (608px -> ~790px, dentro de la zona segura).
+    const { paleta } = ctx.estilo;
+    const conEstilo = renderizarConEstilo(visual, ctx, ctx.estilo);
+    if (conEstilo) return conEstilo;
+    // Tarjeta flotante: la maqueta con los colores del estilo (contexto de
+    // superficie), centrada en la zona segura como el objeto protagonista
+    // (la tarjeta de siempre queda centrada en 35,5%) y un poco más grande.
+    // En los estilos oscuros, con el brillo de la marca alrededor. El botón
+    // de la CTA va sin tarjeta y se agranda para ser el protagonista.
     const esBoton = visual.tipo === "boton_estado" || visual.tipo === "cursor_clic";
+    const bajada = ((CENTRO_PROTAGONISTA_PORCENTAJE - (TARJETA_TOP_PORCENTAJE + TARJETA_ALTURA_PORCENTAJE / 2)) / 100) * 1920;
     return (
-      <AbsoluteFill style={{ filter: `drop-shadow(0 0 48px ${hexConAlfa(ctx.estilo.paleta.luz, 0.35)})`, transform: esBoton ? "scale(1.3)" : undefined, transformOrigin: "50% 35%" }}>
-        {renderizarVisualSinMovimiento(visual, ctx)}
-      </AbsoluteFill>
+      <ProveedorSuperficie value={paleta.tarjetas}>
+        <AbsoluteFill
+          style={{
+            filter: paleta.placa ? undefined : `drop-shadow(0 0 48px ${hexConAlfa(paleta.luz, 0.35)})`,
+            transform: `translateY(${bajada}px) scale(${esBoton ? 1.3 : 1.08})`,
+            transformOrigin: `50% ${TARJETA_TOP_PORCENTAJE + TARJETA_ALTURA_PORCENTAJE / 2}%`,
+          }}
+        >
+          {renderizarVisualSinMovimiento(visual, ctx)}
+        </AbsoluteFill>
+      </ProveedorSuperficie>
     );
   }
   const nodo = renderizarVisualSinMovimiento(visual, ctx);
@@ -162,15 +185,43 @@ export function renderizarVisual(visualGuardado: Visual, ctx: ContextoVisual) {
   return nodo;
 }
 
-// Layout "objeto protagonista" en Noche: sin tarjeta, directo sobre el
-// fondo (video/estilos/VisualesNoche.tsx). null = este visual no tiene
-// esa variante (las maquetas de interfaz van como tarjeta flotante).
-function renderizarProtagonistaNoche(visual: Visual, ctx: ContextoVisual, paleta: PaletaNoche) {
+// Visuales de 2 estados en los layouts del sistema de estilos
+// (video/estilos/VisualesEstilo.tsx). null = este visual no tiene variante
+// para ese layout (las maquetas de interfaz van como tarjeta flotante).
+function renderizarConEstilo(visual: Visual, ctx: ContextoVisual, estilo: NonNullable<ContextoVisual["estilo"]>) {
+  const { paleta, layout } = estilo;
   const base = { frame: ctx.frame, fps: ctx.fps, paleta };
+  const urlDe = (mediaId: string) => {
+    const medio = ctx.medios?.[mediaId];
+    return medio && medio.tipo === "imagen" ? medio.url : null;
+  };
+  if (layout === "golpe_de_dato" && visual.tipo === "contador") {
+    const cuadros = visual.eventos.length > 0 ? visual.eventos.map((e) => cuadroDePalabra(e.palabra, ctx)) : [cuadroDelCambio([], ctx)];
+    const valor = valorContadorEnFrame(ctx.frame, Math.min(...cuadros), Math.max(...cuadros), visual.desde, visual.hasta);
+    return <GolpeDeDato frame={ctx.frame} fps={ctx.fps} cuadroCambia={Math.max(...cuadros)} valor={valor} etiqueta={visual.etiqueta} colorTexto={estilo.colorTextoSobreFondo} />;
+  }
+  if (layout === "pantalla_dividida" && (visual.tipo === "comparacion" || visual.tipo === "comparacion_foto")) {
+    return (
+      <PantallaDividida
+        {...base}
+        tema={ctx.tema}
+        cuadroCambia={cuadroDelCambio(visual.eventos, ctx)}
+        textoMal={visual.texto_mal}
+        textoBien={visual.texto_bien}
+        etiquetaMal={visual.tipo === "comparacion" ? visual.etiqueta_mal : undefined}
+        etiquetaBien={visual.tipo === "comparacion" ? visual.etiqueta_bien : undefined}
+        urlFoto={visual.tipo === "comparacion_foto" ? urlDe(visual.media_id) : undefined}
+      />
+    );
+  }
+  if (layout === "foto_borde_a_borde" && visual.tipo === "comparacion_foto") {
+    return <FotoBordeABorde {...base} cuadroCambia={cuadroDelCambio(visual.eventos, ctx)} urlFoto={urlDe(visual.media_id)} textoMal={visual.texto_mal} textoBien={visual.texto_bien} />;
+  }
+  if (layout === "tarjeta_flotante") return null;
   switch (visual.tipo) {
     case "icono_palabra":
       return (
-        <IconoPalabraNoche
+        <IconoPalabraEstilo
           {...base}
           tema={ctx.tema}
           cuadroCambia={cuadroDelCambio(visual.eventos, ctx)}
@@ -184,13 +235,13 @@ function renderizarProtagonistaNoche(visual: Visual, ctx: ContextoVisual, paleta
       const cuadros = visual.eventos.length > 0 ? visual.eventos.map((e) => cuadroDePalabra(e.palabra, ctx)) : [cuadroDelCambio([], ctx)];
       const valor = valorContadorEnFrame(ctx.frame, Math.min(...cuadros), Math.max(...cuadros), visual.desde, visual.hasta);
       const color = ctx.bloque === "gancho" ? paleta.alerta : paleta.exito;
-      return <ContadorNoche valor={valor} etiqueta={visual.etiqueta} color={color} paleta={paleta} />;
+      return <ContadorEstilo valor={valor} etiqueta={visual.etiqueta} color={color} paleta={paleta} />;
     }
     case "checklist":
-      return <ChecklistNoche {...base} tema={ctx.tema} cuadroCambia={cuadroDelCambio(visual.eventos, ctx)} titulo={visual.titulo} items={visual.items} />;
+      return <ChecklistEstilo {...base} tema={ctx.tema} cuadroCambia={cuadroDelCambio(visual.eventos, ctx)} titulo={visual.titulo} items={visual.items} />;
     case "comparacion":
       return (
-        <ComparacionNoche
+        <ComparacionEstilo
           {...base}
           tema={ctx.tema}
           cuadroCambia={cuadroDelCambio(visual.eventos, ctx)}
@@ -200,11 +251,8 @@ function renderizarProtagonistaNoche(visual: Visual, ctx: ContextoVisual, paleta
           etiquetaBien={visual.etiqueta_bien}
         />
       );
-    case "comparacion_foto": {
-      const medio = ctx.medios?.[visual.media_id];
-      const urlFoto = medio && medio.tipo === "imagen" ? medio.url : null;
-      return <ComparacionFotoNoche {...base} cuadroCambia={cuadroDelCambio(visual.eventos, ctx)} urlFoto={urlFoto} textoMal={visual.texto_mal} textoBien={visual.texto_bien} />;
-    }
+    case "comparacion_foto":
+      return <ComparacionFotoEstilo {...base} cuadroCambia={cuadroDelCambio(visual.eventos, ctx)} urlFoto={urlDe(visual.media_id)} textoMal={visual.texto_mal} textoBien={visual.texto_bien} />;
     default:
       return null;
   }

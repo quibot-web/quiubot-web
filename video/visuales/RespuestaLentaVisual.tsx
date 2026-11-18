@@ -7,9 +7,10 @@
 import { interpolate, spring } from "remotion";
 import { respiracion } from "../tema";
 import { interpolarSeguro } from "../interpolarSeguro";
-import { COLOR_ALERTA, COLOR_EXITO } from "./acento";
+import { COLOR_EXITO, COLOR_EXITO_BLOQUE } from "./acento";
 import { TARJETA_ALTURA_PORCENTAJE, TARJETA_ANCHO_PORCENTAJE, TARJETA_TOP_PORCENTAJE } from "./geometria";
 import { IconoDobleCheck, IconoReloj } from "../iconos";
+import { useSuperficie } from "../estilos/superficie";
 
 // mm:ss -- 5s, 2:30 y 15:00 son puntos de paso de una interpolación
 // (no un conteo real en vivo), igual que en la referencia aprobada.
@@ -43,6 +44,8 @@ export function RespuestaLentaVisual({
 
   const segundosReloj = interpolarSeguro(frame, [0, Math.max(cuadroCambia * 0.5, 1), Math.max(cuadroCambia, 2)], [5, 150, 900], { extrapolateLeft: "clamp", extrapolateRight: "clamp" });
   const rotacionReloj = rapida ? 0 : Math.sin(frame / 6) * 10;
+  const s = useSuperficie();
+  const alerta = s.alerta;
 
   return (
     <div
@@ -53,29 +56,30 @@ export function RespuestaLentaVisual({
         width: `${TARJETA_ANCHO_PORCENTAJE}%`,
         height: `${TARJETA_ALTURA_PORCENTAJE}%`,
         transform: `translateX(-50%) scale(${escalaRespiracion})`,
-        background: "#0a0a0a",
+        background: s.marco,
+        border: s.borde ? `5px solid ${s.borde}` : undefined,
         borderRadius: 32,
         padding: "8px 8px 0 8px",
-        boxShadow: rapida ? `0 30px 80px rgba(0,0,0,0.5), 0 0 0 6px ${COLOR_EXITO}55` : "0 30px 80px rgba(0,0,0,0.5)",
+        boxShadow: rapida ? `${s.sombra}, 0 0 0 6px ${COLOR_EXITO}55` : s.sombra,
         overflow: "hidden",
       }}
     >
-      <div style={{ width: "100%", height: "100%", borderRadius: "22px 22px 0 0", overflow: "hidden", background: "#fff", display: "flex", flexDirection: "column", padding: "20px 22px", gap: 14 }}>
-        <div style={{ background: "#f0f0f0", color: "#111", borderRadius: "20px 20px 20px 5px", padding: "18px 22px", fontSize: 32, fontWeight: 700, alignSelf: "flex-start", maxWidth: "90%" }}>
+      <div style={{ width: "100%", height: "100%", borderRadius: "22px 22px 0 0", overflow: "hidden", background: s.tarjeta, display: "flex", flexDirection: "column", padding: "20px 22px", gap: 14 }}>
+        <div style={{ background: s.burbuja, color: s.textoBurbuja, borderRadius: "20px 20px 20px 5px", padding: "16px 22px", fontSize: 40, fontWeight: 700, alignSelf: "flex-start", maxWidth: "90%" }}>
           {t.pregunta_cliente}
         </div>
 
         {!rapida && (
           <div style={{ flexGrow: 1, display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", gap: 10 }}>
             <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
-              <span style={{ fontSize: 22, fontWeight: 800, color: COLOR_ALERTA }}>Visto</span>
-              <IconoDobleCheck tamano={24} color={COLOR_ALERTA} />
+              <span style={{ fontSize: 40, fontWeight: 800, color: alerta }}>Visto</span>
+              <IconoDobleCheck tamano={40} color={alerta} />
             </div>
             <div style={{ display: "flex", alignItems: "center", gap: 14 }}>
-              <IconoReloj tamano={48} color={COLOR_ALERTA} estilo={{ transform: `rotate(${rotacionReloj}deg)` }} />
-              <span style={{ fontSize: 64, fontWeight: 900, color: COLOR_ALERTA, fontVariantNumeric: "tabular-nums" }}>{formatoReloj(segundosReloj)}</span>
+              <IconoReloj tamano={56} color={alerta} estilo={{ transform: `rotate(${rotacionReloj}deg)` }} />
+              <span style={{ fontSize: 64, fontWeight: 900, color: alerta, fontVariantNumeric: "tabular-nums" }}>{formatoReloj(segundosReloj)}</span>
             </div>
-            <span style={{ fontSize: 20, fontWeight: 700, color: "#999" }}>sin responder...</span>
+            <span style={{ fontSize: 40, fontWeight: 700, color: s.textoSuave }}>sin responder...</span>
           </div>
         )}
 
@@ -83,11 +87,13 @@ export function RespuestaLentaVisual({
           <>
             <div
               style={{
-                background: COLOR_EXITO,
+                // Verde de bloque (5,43:1 con blanco); el verde de WhatsApp
+                // daba 1,98:1 con el texto blanco encima.
+                background: COLOR_EXITO_BLOQUE,
                 color: "#fff",
                 borderRadius: "20px 20px 5px 20px",
-                padding: "18px 22px",
-                fontSize: 32,
+                padding: "16px 22px",
+                fontSize: 40,
                 fontWeight: 700,
                 alignSelf: "flex-end",
                 maxWidth: "90%",
@@ -99,11 +105,11 @@ export function RespuestaLentaVisual({
             </div>
             <div
               style={{
-                background: "#f0f0f0",
-                color: "#111",
+                background: s.burbuja,
+                color: s.textoBurbuja,
                 borderRadius: "20px 20px 20px 5px",
-                padding: "18px 22px",
-                fontSize: 32,
+                padding: "16px 22px",
+                fontSize: 40,
                 fontWeight: 700,
                 alignSelf: "flex-start",
                 maxWidth: "90%",

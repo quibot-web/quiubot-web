@@ -34,10 +34,17 @@ export const TARJETA_ANCHO_PORCENTAJE = 80;
 // para que el texto de 40px o más quepa sin verse apretado.
 export const TARJETA_ANCHO_AMPLIO_PORCENTAJE = 85;
 
-// Layout "objeto protagonista" (sistema de estilos, paso 1): sin tarjeta,
-// el visual se dibuja directo sobre el fondo y ocupa más -- desde debajo
-// del chip/logo (16%) hasta justo antes de la franja de subtítulos (54%),
-// con el ancho completo de la zona segura (6% por lado).
+// Layout "objeto protagonista" (sistema de estilos): sin tarjeta, el
+// visual se dibuja directo sobre el fondo y ocupa más. Centrado en la zona
+// segura entre el letrero de arriba (termina ~20%) y los subtítulos, que
+// van justo debajo (FRANJA_SUBTITULOS_ESTILO). Revisión de Noche: antes
+// el objeto quedaba en el 15-40% de la altura con mucho vacío abajo.
 export const PROTAGONISTA_TOP_PORCENTAJE = 20;
-export const PROTAGONISTA_ALTURA_PORCENTAJE = 33; // termina en 53%
+export const PROTAGONISTA_ALTURA_PORCENTAJE = 34; // termina en 54%
 export const PROTAGONISTA_ANCHO_PORCENTAJE = 88;
+// Subtítulos con estilo: justo debajo del objeto (antes 54%-65%, con el
+// objeto terminando en 49%).
+export const FRANJA_SUBTITULOS_ESTILO = { top: 55, alto: 8 };
+// Centro vertical del objeto (37%) vs. el de la tarjeta de siempre
+// (TARJETA_TOP + ALTURA/2 = 35,5%): cuánto bajan las tarjetas flotantes.
+export const CENTRO_PROTAGONISTA_PORCENTAJE = PROTAGONISTA_TOP_PORCENTAJE + PROTAGONISTA_ALTURA_PORCENTAJE / 2;

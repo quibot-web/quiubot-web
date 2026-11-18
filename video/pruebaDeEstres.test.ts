@@ -12,6 +12,7 @@
 // Cta.navegador.test.ts para BotonGrande/CursorClic, pero sin
 // Playwright: acá solo importa que no lance, no medir layout real.
 import { describe, it, expect } from "vitest";
+import { createElement } from "react";
 import { renderToStaticMarkup } from "react-dom/server";
 import { valorContadorEnFrame } from "./visuales/Contador";
 import { calcularLlegadaCursor, CursorClicEventos } from "./visuales/CursorClicEventos";
@@ -100,9 +101,9 @@ describe("prueba de estrés -- tiempos extremos, nada debe lanzar", () => {
 
   it("AnuncioBotonVisual / ConexionWhatsappVisual / RespuestaLentaVisual: cuadroCambia=0 y frame muy por delante o muy por detrás", () => {
     for (const { frame, cuadroCambia } of CASOS_FRAME_FPS) {
-      expect(() => renderToStaticMarkup(AnuncioBotonVisual({ frame, fps: 30, tema: TEMA, cuadroCambia }))).not.toThrow();
-      expect(() => renderToStaticMarkup(ConexionWhatsappVisual({ frame, fps: 30, tema: TEMA, cuadroCambia }))).not.toThrow();
-      expect(() => renderToStaticMarkup(RespuestaLentaVisual({ frame, fps: 30, cuadroCambia }))).not.toThrow();
+      expect(() => renderToStaticMarkup(createElement(AnuncioBotonVisual, { frame, fps: 30, tema: TEMA, cuadroCambia }))).not.toThrow();
+      expect(() => renderToStaticMarkup(createElement(ConexionWhatsappVisual, { frame, fps: 30, tema: TEMA, cuadroCambia }))).not.toThrow();
+      expect(() => renderToStaticMarkup(createElement(RespuestaLentaVisual, { frame, fps: 30, cuadroCambia }))).not.toThrow();
     }
   });
 });

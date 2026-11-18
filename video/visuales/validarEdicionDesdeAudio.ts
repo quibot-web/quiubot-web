@@ -3,6 +3,7 @@ import { contarPalabras } from "../guion.schema";
 import { eventosDeVisual } from "./schema";
 import { PATRON_EMOJI_EN_TEXTO, PATRON_TEXTO_VISUAL_SEGURO, TIPOS_VISUAL_DOS_ESTADOS } from "./schema";
 import { esNombreIcono } from "../nombresIconos";
+import { LIMITES_TEXTO_GIGANTE } from "../estilos/textoGigante";
 
 const CAMPOS_ICONO = new Set(["icono", "icono_antes", "icono_despues"]);
 
@@ -164,6 +165,15 @@ export function validarEstructuraConsejosNumeradosAudio(escenas: Guion["escenas"
   }
 
   const [gancho, , , , marca, cta] = escenas;
+
+  // Sistema de estilos: el gancho trae su texto gigante (la idea en
+  // pantalla, máx. 4 palabras), aparte de la narración completa.
+  if (!gancho.texto_gigante) {
+    hallazgos.push({
+      escenaId: gancho.id,
+      mensaje: `Falta "texto_gigante" en el gancho: la idea del gancho en pantalla, máximo ${LIMITES_TEXTO_GIGANTE.palabras} palabras y ${LIMITES_TEXTO_GIGANTE.caracteres} caracteres (ej. "¿Fotos oscuras?", "¿Sin precio?").`,
+    });
+  }
 
   const palabrasGancho = contarPalabras(gancho.narracion ?? "");
   if (palabrasGancho > MAX_PALABRAS_GANCHO) {

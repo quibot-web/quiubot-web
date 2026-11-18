@@ -10,6 +10,7 @@ import { COPY_QUE_VENDE } from "./reglasCopy";
 import type { PiezaDisponible } from "./promptGuion";
 import { TIPOS_VISUAL_DOS_ESTADOS } from "./visuales/schema";
 import { NOMBRES_ICONOS } from "./nombresIconos";
+import { LIMITES_TEXTO_GIGANTE } from "./estilos/textoGigante";
 
 // Resumen de un producto/servicio del catálogo (app/lib/productos.ts)
 // -- solo los campos que describen QUÉ es, nunca más (ver seccionNegocio).
@@ -285,6 +286,7 @@ function estructuraConsejosNumeradosAudio(piezas: PiezaDisponible[]): string {
 1. "gancho": presenta el PROBLEMA del eje tal cual, sin resolverlo todavía. Su visual es UNA de estas 2 opciones:
    a) Un visual de 2 estados (${disponibles}) SIN eventos ("eventos": []) -- se queda quieto en su estado "problema" (ej. eje "fotos de producto": icono_palabra con luna y "Oscura"; eje "precios": anuncio_boton con texto_problema "Sin precio"). El que mejor muestre el problema del eje.
    b) "celular_chat" congelado en 0 ("eventos": [] -- NUNCA "numero_sube" ni "notificacion_llega" en esta escena) -- SOLO si el eje es sobre recibir mensajes o clientes.
+   Además, el gancho lleva el campo "texto_gigante" (al nivel de "narracion", no dentro de params): la idea del gancho que se ve en pantalla en letra gigante, distinta de la narración (que dice la frase completa). Máximo ${LIMITES_TEXTO_GIGANTE.palabras} palabras y ${LIMITES_TEXTO_GIGANTE.caracteres} caracteres contando espacios, ninguna palabra de más de ${LIMITES_TEXTO_GIGANTE.palabraMasLarga} caracteres (contando signos), sin emoji. Ej.: "¿Fotos oscuras?", "¿Sin precio?", "Nadie te escribe".
    En los dos casos el visual del gancho nunca muestra el arreglo (caso real que se rechazó: la narración decía "¿Cero mensajes...?" y el visual igual subía el contador en la misma escena -- se contradice a sí mismo). La narracion del gancho debe ser CORTA -- máximo 10-12 palabras (unos 3 segundos hablados), la frase más fuerte posible, nunca un gancho largo que tarda en enganchar.
 2, 3, 4. TRES escenas "valor", UNA POR CADA CONSEJO, y los 3 consejos deben atacar 3 PROBLEMAS DISTINTOS del eje (nunca 2 consejos sobre lo mismo con otras palabras -- ej. "pon WhatsApp como botón" y "conecta el anuncio a WhatsApp" son el MISMO problema, eso cuenta como repetido aunque la frase suene distinta). Cada una:
    - Es UN solo consejo, concreto y accionable, en una frase COMPLETA (ej. "Toma la foto junto a una ventana, con luz de día" -- nunca un fragmento vago como "mejora tus fotos" que no se entiende por sí solo).

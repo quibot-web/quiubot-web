@@ -65,7 +65,9 @@ function paginaDeCuadro(paginas: PalabraEnCuadros[][], frame: number): PalabraEn
   return paginas[0] ?? [];
 }
 
-export function SubtitulosSincronizados({ palabras, tema }: { palabras: PalabraEnCuadros[]; tema: TemaGuion }) {
+// franja: con estilo (sistema de estilos), justo debajo del objeto
+// centrado; sin él, la franja de siempre (54%-65%).
+export function SubtitulosSincronizados({ palabras, tema, franja = { top: 54, alto: 11 } }: { palabras: PalabraEnCuadros[]; tema: TemaGuion; franja?: { top: number; alto: number } }) {
   const frame = useCurrentFrame();
   const colorTextoActivo = colorTextoSobre(tema.color_primario);
 
@@ -87,8 +89,8 @@ export function SubtitulosSincronizados({ palabras, tema }: { palabras: PalabraE
   return (
     <AbsoluteFill
       style={{
-        top: "54%",
-        height: "11%",
+        top: `${franja.top}%`,
+        height: `${franja.alto}%`,
         display: "flex",
         alignItems: "center",
         justifyContent: "center",

@@ -1,3 +1,44 @@
+import { caracterEnFuentes } from "../glifos";
+
+// Texto gigante del gancho (layout "palabra gigante", 18 nov 2026): una
+// idea corta en pantalla aunque la narración diga la frase completa
+// ("¿Fotos oscuras?", "¿Sin precio?"). Límites medidos con fontTools sobre
+// las 4 fuentes en mayúsculas a 160px: una palabra de 8 caracteres
+// ("OSCURAS?") mide 879-921px y cabe en los 950px útiles; las de 9 ya
+// pasan de 1000. Con estos límites cabe en 1-2 líneas a 160px o más.
+export const LIMITES_TEXTO_GIGANTE = { palabras: 4, caracteres: 16, palabraMasLarga: 8 } as const;
+
+export function problemasTextoGigante(texto: string): string[] {
+  const limpio = texto.trim();
+  const palabras = limpio.split(/\s+/).filter(Boolean);
+  const problemas: string[] = [];
+  if (palabras.length === 0) problemas.push("está vacío");
+  if (palabras.length > LIMITES_TEXTO_GIGANTE.palabras) problemas.push(`tiene ${palabras.length} palabras (máximo ${LIMITES_TEXTO_GIGANTE.palabras})`);
+  if (limpio.length > LIMITES_TEXTO_GIGANTE.caracteres) problemas.push(`tiene ${limpio.length} caracteres (máximo ${LIMITES_TEXTO_GIGANTE.caracteres}, con espacios)`);
+  const larga = palabras.find((p) => p.length > LIMITES_TEXTO_GIGANTE.palabraMasLarga);
+  if (larga) problemas.push(`"${larga}" tiene ${larga.length} caracteres (máximo ${LIMITES_TEXTO_GIGANTE.palabraMasLarga} por palabra, contando signos)`);
+  if ([...limpio].some((c) => !caracterEnFuentes(c))) problemas.push("usa símbolos o emoji (solo letras, números y puntuación)");
+  return problemas;
+}
+
+// Guiones guardados antes del campo texto_gigante: la primera frase del
+// texto del gancho si cumple los límites ("¿Fotos oscuras?"), si no la
+// palabra clave; si nada cumple, las primeras palabras de la clave que sí.
+export function textoGiganteDeRespaldo(texto: string, palabraClave: string): string {
+  const primeraFrase = texto.split(/(?<=[?.!])\s+/)[0] ?? "";
+  for (const candidato of [primeraFrase, palabraClave]) {
+    if (candidato && problemasTextoGigante(candidato).length === 0) return candidato.trim();
+  }
+  const palabras = palabraClave.split(/\s+/).filter((p) => p.length <= LIMITES_TEXTO_GIGANTE.palabraMasLarga);
+  let resultado = "";
+  for (const p of palabras.slice(0, LIMITES_TEXTO_GIGANTE.palabras)) {
+    const siguiente = resultado ? `${resultado} ${p}` : p;
+    if (siguiente.length > LIMITES_TEXTO_GIGANTE.caracteres) break;
+    resultado = siguiente;
+  }
+  return resultado || palabraClave.slice(0, LIMITES_TEXTO_GIGANTE.palabraMasLarga);
+}
+
 // Reparte un texto en líneas con el tamaño de letra más grande que quepa
 // en una caja (layout "palabra gigante"). Función pura: recibe cómo medir
 // (en el render es measureText de @remotion/layout-utils; en los tests,

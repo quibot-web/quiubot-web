@@ -1,6 +1,10 @@
 import { AbsoluteFill, Sequence, spring, useCurrentFrame } from "remotion";
-import { layoutDeEscena, layoutDelVisual, paletaNoche, type LayoutEscena } from "../estilos/estilos";
+import { layoutDeEscena, layoutDelVisual, paletaDeEstilo, type EstiloVisualId, type LayoutEscena } from "../estilos/estilos";
 import { FondoNoche } from "../estilos/FondoNoche";
+import { FondoColorPleno, FondoFoto, fondoColorPlenoDeEscena } from "../estilos/FondosEstilo";
+import { textoGiganteDeRespaldo } from "../estilos/textoGigante";
+import { FRANJA_SUBTITULOS_ESTILO } from "./geometria";
+import { colorTextoSobre } from "../tema";
 import { CamaraEscena } from "../estilos/CamaraEscena";
 import { PalabraGigante } from "../estilos/PalabraGigante";
 import { familiaDeFuenteSinCargar } from "./tamanos";
@@ -92,12 +96,13 @@ function cuadroSalidaPalabraGigante(palabras: PalabraConTiempoVisual[], inicioEs
   return Math.round(Math.min(2, Math.max(1, t)) * fps);
 }
 
-// Escena en el sistema de estilos (paso 1, estilo Noche): fondo, cámara
-// y layout. Separado de ContenidoEscena para no tocar el camino de
-// siempre (guiones sin estilo).
-function EscenaNoche({
+// Escena en el sistema de estilos: fondo del estilo, cámara y layout.
+// Separado de ContenidoEscena para no tocar el camino de siempre
+// (guiones sin estilo).
+function EscenaConEstilo({
   escena,
   indiceEscena,
+  estiloId,
   layout,
   tema,
   fps,
@@ -108,6 +113,7 @@ function EscenaNoche({
 }: {
   escena: Guion["escenas"][number];
   indiceEscena: number;
+  estiloId: EstiloVisualId;
   layout: LayoutEscena;
   tema: TemaGuion;
   fps: number;
@@ -117,40 +123,54 @@ function EscenaNoche({
   medios?: MediosResueltos;
 }) {
   const frame = useCurrentFrame();
-  const paleta = paletaNoche(tema);
+  const paleta = paletaDeEstilo(estiloId, tema);
   const visual = escena.visual;
+  const fondoColor = estiloId === "color_pleno" ? fondoColorPlenoDeEscena(tema, indiceEscena) : null;
+  const colorTextoSobreFondo = fondoColor ? colorTextoSobre(fondoColor) : paleta.texto;
   const esPalabraGigante = layout === "palabra_gigante" && escena.tipo === "gancho_texto";
   // El visual que entra tras la palabra gigante se dibuja con su propio
   // layout (protagonista si lo admite), nunca como tarjeta chica.
-  const layoutVisual = layout === "palabra_gigante" ? layoutDelVisual(visual?.tipo) : layout;
-  const ctx = { tema, bloque: escena.bloque, frame, fps, palabras, inicioEscena_s, medios, estilo: { paleta, layout: layoutVisual } };
+  const layoutVisual = layout === "palabra_gigante" ? layoutDelVisual(visual?.tipo, estiloId) : layout;
+  const ctx = { tema, bloque: escena.bloque, frame, fps, palabras, inicioEscena_s, medios, estilo: { paleta, layout: layoutVisual, colorTextoSobreFondo } };
   const cuadroSalida = esPalabraGigante ? cuadroSalidaPalabraGigante(palabras, inicioEscena_s, fps) : null;
   const primerEvento = visual && visual.eventos.length > 0 ? visual.eventos[0].palabra : null;
   const cuadroEvento = primerEvento !== null && palabras[primerEvento] ? Math.round((palabras[primerEvento].inicio_s - inicioEscena_s) * fps) : null;
   const cuadroGolpe = cuadroSalida ?? cuadroEvento;
   // En la palabra gigante, el visual entra recién en la salida del texto.
   const entradaVisual = cuadroSalida === null ? 1 : frame >= cuadroSalida ? spring({ frame: frame - cuadroSalida, fps, config: { damping: 13 } }) : 0;
+  const fotos = Object.values(medios ?? {})
+    .filter((m) => m.tipo === "imagen")
+    .map((m) => m.url);
+  // La foto a pantalla completa ya es el fondo de esa escena.
+  const fondoPropio = layoutVisual === "foto_borde_a_borde" && entradaVisual >= 1;
 
   return (
     <>
-      <FondoNoche paleta={paleta} indiceEscena={indiceEscena} frame={frame} fps={fps} />
+      {estiloId === "noche" && <FondoNoche paleta={paleta} indiceEscena={indiceEscena} frame={frame} fps={fps} />}
+      {estiloId === "color_pleno" && <FondoColorPleno colores={tema} indiceEscena={indiceEscena} frame={frame} fps={fps} />}
+      {estiloId === "foto" && !fondoPropio && <FondoFoto urlsFotos={fotos} paleta={paleta} indiceEscena={indiceEscena} frame={frame} fps={fps} duracionCuadros={duracionCuadros} />}
       <CamaraEscena frame={frame} fps={fps} duracionCuadros={duracionCuadros} cuadroGolpe={cuadroGolpe}>
         {visual && (
           <AbsoluteFill style={{ opacity: entradaVisual, transform: `scale(${0.88 + 0.12 * entradaVisual})` }}>{renderizarVisual(visual, ctx)}</AbsoluteFill>
         )}
-        {esPalabraGigante && escena.tipo === "gancho_texto" && (
-          <PalabraGigante
-            texto={escena.params.texto}
-            palabraClave={escena.params.palabra_clave}
-            sticker={escena.params.sticker}
-            familia={familiaDeFuenteSinCargar(tema.fuente)}
-            paleta={paleta}
-            frame={frame}
-            fps={fps}
-            cuadroSalida={cuadroSalida ?? duracionCuadros}
-          />
-        )}
       </CamaraEscena>
+      {/* Fuera de la cámara: el acercamiento no la recorta contra los bordes. */}
+      {esPalabraGigante && escena.tipo === "gancho_texto" && (
+        <PalabraGigante
+          texto={escena.texto_gigante ?? textoGiganteDeRespaldo(escena.params.texto, escena.params.palabra_clave)}
+          palabraClave={escena.params.palabra_clave}
+          sticker={escena.params.sticker}
+          familia={familiaDeFuenteSinCargar(tema.fuente)}
+          colores={
+            fondoColor
+              ? { texto: colorTextoSobre(fondoColor), clave: colorTextoSobre(fondoColor), brillo: null, stickerFondo: "#FFFFFF", stickerTexto: "#141414", sombraDura: true }
+              : { texto: paleta.texto, clave: paleta.luz, brillo: paleta.luz, stickerFondo: paleta.luz, stickerTexto: colorTextoSobre(paleta.luz), sombraDura: false }
+          }
+          frame={frame}
+          fps={fps}
+          cuadroSalida={cuadroSalida ?? duracionCuadros}
+        />
+      )}
     </>
   );
 }
@@ -217,11 +237,12 @@ export function ReelAutomatico({ guion, medios, pistaMusicaUrl, efectos = [], mo
     return (
       <Sequence key={escena.id} from={desdeEscena} durationInFrames={duracionEscenaCuadros}>
         <AbsoluteFill>
-          {guion.estilo?.id === "noche" ? (
-            <EscenaNoche
+          {guion.estilo ? (
+            <EscenaConEstilo
               escena={escena}
               indiceEscena={i}
-              layout={guion.estilo.layouts[escena.id] ?? layoutDeEscena(escena)}
+              estiloId={guion.estilo.id}
+              layout={guion.estilo.layouts[escena.id] ?? layoutDeEscena(escena, guion.estilo.id)}
               tema={tema}
               fps={fps}
               palabras={palabras}
@@ -237,7 +258,7 @@ export function ReelAutomatico({ guion, medios, pistaMusicaUrl, efectos = [], mo
               )}
             </>
           )}
-          <SubtitulosSincronizados palabras={palabrasEnCuadros} tema={tema} />
+          <SubtitulosSincronizados palabras={palabrasEnCuadros} tema={tema} franja={guion.estilo ? FRANJA_SUBTITULOS_ESTILO : undefined} />
           {guion.vozUrl &&
             tiempo &&
             tramos.map((tramo, iTramo) => {

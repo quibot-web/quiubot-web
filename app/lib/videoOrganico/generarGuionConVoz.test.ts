@@ -54,7 +54,7 @@ const GUION_CON_AUDIO_VALIDO = {
   gancho_tipo: "pregunta",
   bucle: { texto: "3 ajustes", abre_en: "e1", cierra_en: "e4", indicador: "contador" },
   escenas: [
-    { id: "e1", bloque: "gancho", tipo: "gancho_texto", duracion_s: 2.2, narracion: "Hola a todos los que venden hoy", visual: { tipo: "celular_chat", eventos: [] }, params: { texto: "Hola a todos", palabra_clave: "todos" } },
+    { id: "e1", bloque: "gancho", tipo: "gancho_texto", duracion_s: 2.2, texto_gigante: "¿Vendes hoy?", narracion: "Hola a todos los que venden hoy", visual: { tipo: "celular_chat", eventos: [] }, params: { texto: "Hola a todos", palabra_clave: "todos" } },
     {
       id: "e2",
       bloque: "valor",

@@ -5,6 +5,7 @@ import { z } from "zod";
 import { AnalisisPiezaSchema } from "../app/lib/analisisPieza";
 import { VisualSchema } from "./visuales/schema";
 import { EstiloGuionSchema } from "./estilos/estilos";
+import { problemasTextoGigante } from "./estilos/textoGigante";
 
 // Ids reales de objetivos_config (ver app/lib/metas.ts -- OBJETIVOS_CATALOGO,
 // confirmados contra la tabla objetivos_config). Cada uno tiene su receta en
@@ -228,6 +229,20 @@ const EscenaBase = {
   // valida contra la cantidad real de palabras en el superRefine de
   // GuionSchema, porque necesita leer "narracion" de la MISMA escena.
   visual: VisualSchema.optional(),
+  // Layout "palabra gigante" (sistema de estilos): la idea del gancho en
+  // pantalla, corta para que la letra sea realmente grande (>= 160px en
+  // 1-2 líneas). Límites en video/estilos/textoGigante.ts. Opcional: los
+  // guiones guardados usan un respaldo; la generación nueva lo exige en
+  // el gancho (validarEstructuraConsejosNumeradosAudio).
+  texto_gigante: z
+    .string()
+    .trim()
+    .min(1)
+    .optional()
+    .superRefine((t, ctx) => {
+      if (t === undefined) return;
+      for (const p of problemasTextoGigante(t)) ctx.addIssue({ code: "custom", message: `texto_gigante ${p}` });
+    }),
 };
 
 export const EscenaSchema = z.discriminatedUnion("tipo", [

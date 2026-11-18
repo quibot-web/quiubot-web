@@ -254,6 +254,7 @@ export function IconoCatalogo({
   variante = "sobre_blanco",
   colorLuz,
   colorSuperficie,
+  colorIcono = "#ffffff",
   estilo,
 }: {
   valor: string | undefined | null;
@@ -264,6 +265,7 @@ export function IconoCatalogo({
   // superficie del círculo.
   colorLuz?: string;
   colorSuperficie?: string;
+  colorIcono?: string;
   estilo?: CSSProperties;
 }) {
   const nombre = resolverIcono(valor) ?? ICONO_GENERICO;
@@ -288,7 +290,7 @@ export function IconoCatalogo({
           ...estilo,
         }}
       >
-        <Componente size={Math.round(tamano * 0.58)} color="#ffffff" strokeWidth={2} aria-hidden />
+        <Componente size={Math.round(tamano * 0.58)} color={colorIcono} strokeWidth={2} aria-hidden />
       </div>
     );
   }

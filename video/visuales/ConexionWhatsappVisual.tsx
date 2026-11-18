@@ -18,10 +18,11 @@
 import { AbsoluteFill, interpolate, spring } from "remotion";
 import { respiracion, type TemaGuion } from "../tema";
 import { interpolarSeguro } from "../interpolarSeguro";
-import { COLOR_ALERTA, COLOR_EXITO } from "./acento";
+import { COLOR_EXITO } from "./acento";
 import { TARJETA_ALTURA_PORCENTAJE, TARJETA_TOP_PORCENTAJE } from "./geometria";
 import { IconoCruz } from "../iconos";
 import { IconoCatalogo } from "../iconosCatalogo";
+import { useSuperficie } from "../estilos/superficie";
 
 // Textos (parte 2b): "etiqueta" es el origen (anuncio, perfil, catálogo,
 // historia...), "texto_problema" lo que pasa mientras está desconectado,
@@ -47,7 +48,8 @@ export function ConexionWhatsappVisual({
   const progresoMensaje = spring({ frame: frame - cuadroCambia, fps, config: { damping: 14 } });
   const progresoViaje = interpolarSeguro(frame, [cuadroCambia, cuadroCambia + Math.round(fps * 0.35)], [0, 1], { extrapolateLeft: "clamp", extrapolateRight: "clamp" });
   const escalaRespiracion = respiracion(frame, fps);
-  const color = conectado ? COLOR_EXITO : COLOR_ALERTA;
+  const s = useSuperficie();
+  const color = conectado ? COLOR_EXITO : s.alerta;
 
   return (
     <AbsoluteFill style={{ top: `${TARJETA_TOP_PORCENTAJE}%`, height: `${TARJETA_ALTURA_PORCENTAJE}%`, transform: `scale(${escalaRespiracion})` }}>
@@ -62,8 +64,9 @@ export function ConexionWhatsappVisual({
           width: "68%",
           height: "40%",
           borderRadius: 24,
-          background: `linear-gradient(145deg, ${tema.color_primario}, ${tema.color_secundario})`,
-          boxShadow: "0 20px 50px rgba(0,0,0,0.4)",
+          background: s.cabecera ? s.cabecera(tema) : `linear-gradient(145deg, ${tema.color_primario}, ${tema.color_secundario})`,
+          border: s.borde ? `5px solid ${s.borde}` : undefined,
+          boxShadow: s.borde ? s.sombra : "0 20px 50px rgba(0,0,0,0.4)",
           display: "flex",
           alignItems: "center",
           justifyContent: "center",
@@ -128,22 +131,23 @@ export function ConexionWhatsappVisual({
           width: "80%",
           height: "40%",
           transform: "translateX(-50%)",
-          background: "#0a0a0a",
+          background: s.marco,
+          border: s.borde ? `5px solid ${s.borde}` : undefined,
           borderRadius: 30,
           padding: "8px 8px 0 8px",
-          boxShadow: conectado ? `0 30px 80px rgba(0,0,0,0.5), 0 0 0 6px ${COLOR_EXITO}55` : "0 30px 80px rgba(0,0,0,0.5)",
+          boxShadow: conectado ? `${s.sombra}, 0 0 0 6px ${COLOR_EXITO}55` : s.sombra,
           overflow: "hidden",
         }}
       >
-        <div style={{ width: "100%", height: "100%", borderRadius: "22px 22px 0 0", overflow: "hidden", background: "#fff", display: "flex", alignItems: "center", justifyContent: "center", padding: 20 }}>
+        <div style={{ width: "100%", height: "100%", borderRadius: "22px 22px 0 0", overflow: "hidden", background: s.tarjeta, display: "flex", alignItems: "center", justifyContent: "center", padding: 20 }}>
           {conectado ? (
             <div
               style={{
-                background: "#f0f0f0",
-                color: "#111",
+                background: s.burbuja,
+                color: s.textoBurbuja,
                 borderRadius: "20px 20px 20px 5px",
                 padding: "18px 24px",
-                fontSize: 32,
+                fontSize: 40,
                 fontWeight: 700,
                 opacity: progresoMensaje,
                 transform: `translateY(${interpolate(progresoMensaje, [0, 1], [16, 0])}px)`,
@@ -152,7 +156,7 @@ export function ConexionWhatsappVisual({
               {t.mensaje}
             </div>
           ) : (
-            <span style={{ fontSize: 38, fontWeight: 800, color: COLOR_ALERTA, textAlign: "center" }}>{t.texto_problema}</span>
+            <span style={{ fontSize: 40, fontWeight: 800, color: s.alerta, textAlign: "center" }}>{t.texto_problema}</span>
           )}
         </div>
       </div>
