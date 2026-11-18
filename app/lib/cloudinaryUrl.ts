@@ -22,8 +22,12 @@ export function urlOptimizadaCloudinary(url: string, anchoMaximo: number): strin
 // mejor para quien lo pida". Mismo motivo por el que el publicador de
 // Instagram (Fase O1 de contenido orgánico) también debe pedir el video
 // con esta función, nunca con urlOptimizadaCloudinary.
+// ac_aac explícito (18 nov 2026, revisión del publicador): Instagram
+// exige audio AAC; Cloudinary ya lo daba por defecto con f_mp4, pero el
+// requisito queda fijo en la URL. Medido con ffprobe sobre un reel real:
+// H.264 High 4:2:0, AAC-LC 48 kHz estéreo, moov al inicio (fast start).
 export function urlVideoCompatible(url: string, anchoMaximo: number): string {
-  return url.replace("/upload/", `/upload/f_mp4,vc_h264,q_auto,w_${anchoMaximo}/`);
+  return url.replace("/upload/", `/upload/f_mp4,vc_h264,ac_aac,q_auto,w_${anchoMaximo}/`);
 }
 
 // Fondo difuminado resuelto por Cloudinary (e_blur), no con filter:blur()

@@ -10,7 +10,7 @@ import {
   evaluarEliminacion,
   textosConfirmacionEliminar,
   estadoAlReprogramar,
-  puedePublicarAhora,
+  puedePublicarAhora, LIMPIEZA_TRAS_ERROR_PUBLICACION,
   type EstadoContenido,
   type PublicacionOrganica,
 } from "@/app/lib/contenido";
@@ -391,8 +391,8 @@ export async function PATCH(req: NextRequest, { params }: { params: Promise<{ id
     // a Meta desde acá.
     const { data: piezaActual } = await supabaseAdmin.from("publicaciones_organicas").select("*").eq("id", id).eq("user_id", usuario!.id).maybeSingle();
     if (!piezaActual) return NextResponse.json({ error: "Pieza no encontrada." }, { status: 404 });
-    if (!puedePublicarAhora(piezaActual as Pick<PublicacionOrganica, "estado" | "url_video" | "plataforma">)) {
-      return NextResponse.json({ error: "Solo se puede publicar ahora un reel de Instagram vencido que ya tiene su video." }, { status: 400 });
+    if (!puedePublicarAhora(piezaActual as Pick<PublicacionOrganica, "estado" | "url_video" | "plataforma" | "tipo_error">)) {
+      return NextResponse.json({ error: "Solo se puede publicar ahora un reel de Instagram vencido o con error de publicación que ya tiene su video." }, { status: 400 });
     }
     const ahora = new Date();
     const { data: filas, error: errorUpdate } = await supabaseAdmin
@@ -402,11 +402,12 @@ export async function PATCH(req: NextRequest, { params }: { params: Promise<{ id
         programada_para: ahora.toISOString(),
         semana: lunesDeLaSemana(fechaBogota(ahora)),
         estado_antes_de_vencer: null,
+        ...(piezaActual.estado === "error" ? LIMPIEZA_TRAS_ERROR_PUBLICACION : {}),
         actualizado_en: ahora.toISOString(),
       })
       .eq("id", id)
       .eq("user_id", usuario!.id)
-      .eq("estado", "vencida")
+      .eq("estado", piezaActual.estado)
       .select("id");
     if (errorUpdate) return NextResponse.json({ error: "No se pudo programar la publicación en este momento." }, { status: 503 });
     if (!filas || filas.length === 0) return NextResponse.json({ error: "Este reel cambió de estado mientras tanto. Recarga e intenta de nuevo." }, { status: 409 });
@@ -441,7 +442,7 @@ export async function PATCH(req: NextRequest, { params }: { params: Promise<{ id
     // estadoAlReprogramar): con video vuelve a "lista", sin video a
     // "aprobada" solo si ya lo estaba antes de vencerse, si no a
     // "borrador". El guion/caption que ya tenía no se toca.
-    const nuevoEstado = estadoAlReprogramar(piezaActual as Pick<PublicacionOrganica, "estado" | "url_video" | "estado_antes_de_vencer">);
+    const nuevoEstado = estadoAlReprogramar(piezaActual as Pick<PublicacionOrganica, "estado" | "url_video" | "estado_antes_de_vencer" | "tipo_error">);
     const { data: filas, error: errorUpdate } = await supabaseAdmin
       .from("publicaciones_organicas")
       .update({
@@ -449,6 +450,7 @@ export async function PATCH(req: NextRequest, { params }: { params: Promise<{ id
         semana,
         estado: nuevoEstado,
         ...(piezaActual.estado === "vencida" ? { estado_antes_de_vencer: null } : {}),
+        ...(piezaActual.estado === "error" && nuevoEstado !== "error" ? LIMPIEZA_TRAS_ERROR_PUBLICACION : {}),
         actualizado_en: new Date().toISOString(),
       })
       .eq("id", id)

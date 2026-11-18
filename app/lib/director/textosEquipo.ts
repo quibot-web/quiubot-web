@@ -113,10 +113,13 @@ export function textoReelPublicado(params: { permalink: string | null }): Mensaj
 export function textoReelPublicacionError(params: { motivo: "reconexion" | "revisar" | "otro" }): MensajeEquipoContenido {
   if (params.motivo === "reconexion") {
     return {
-      texto: "El Publicador no pudo subir tu reel: tu conexión con Meta venció o le falta un permiso.",
+      texto: "El Publicador no pudo subir tu reel: tu conexión con Meta venció o le falta un permiso. Reconecta Meta y después reintenta el reel desde Contenido -- no se perdió.",
       textoInterno: "Director, no pude publicar el reel -- la conexión con Meta venció o le falta un permiso.",
       respuestaDirector: "Entendido, le aviso para que reconecte.",
-      acciones: [{ label: "Reconectar Meta", tipo: "link", href: "/api/meta/conectar" }],
+      acciones: [
+        { label: "Reconectar Meta", tipo: "link", href: "/api/meta/conectar" },
+        { label: "Ver en Contenido", tipo: "link", href: "/contenido" },
+      ],
     };
   }
   if (params.motivo === "revisar") {

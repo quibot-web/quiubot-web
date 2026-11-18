@@ -26,7 +26,7 @@ describe("urlReducidaParaIA", () => {
 describe("urlVideoCompatible", () => {
   it("fuerza el contenedor mp4 y el códec h264, nunca f_auto", () => {
     const url = urlVideoCompatible("https://res.cloudinary.com/demo/video/upload/v1/pieza.mp4", 1080);
-    expect(url).toBe("https://res.cloudinary.com/demo/video/upload/f_mp4,vc_h264,q_auto,w_1080/v1/pieza.mp4");
+    expect(url).toBe("https://res.cloudinary.com/demo/video/upload/f_mp4,vc_h264,ac_aac,q_auto,w_1080/v1/pieza.mp4");
     expect(url).not.toContain("f_auto");
   });
 });

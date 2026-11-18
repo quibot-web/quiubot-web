@@ -472,6 +472,30 @@ describe("PATCH /api/contenido/[id] -- reprogramar (arrastrar en el calendario)"
     expect(typeof updatesRealizados[0].actualizado_en).toBe("string");
   });
 
+  it("error de publicación con video (token, Instagram rechazó, revisar): vuelve a lista y se limpia el error -- reintento", async () => {
+    for (const tipo of ["reconexion", "meta_rechazo", "revisar_publicacion", "sin_instagram"]) {
+      updatesRealizados = [];
+      piezaActual = { id: "pieza-1", estado: "error", tipo_error: tipo, error: "algo", ig_container_id: "c1", intentos: 2, url_video: "https://res.cloudinary.com/demo/video/upload/v1/r.mp4" };
+      const res = await PATCH(patchReq({ accion: "reprogramar", programada_para: isoEnElFuturo(1) }), contexto());
+      expect(res.status).toBe(200);
+      expect(updatesRealizados[0]).toMatchObject({ estado: "lista", error: null, tipo_error: null, ig_container_id: null, intentos: 0 });
+    }
+  });
+
+  it("error de control de calidad: no cambia de estado (tiene su propio camino, Forzar de todos modos)", async () => {
+    piezaActual = { id: "pieza-1", estado: "error", tipo_error: "calidad", url_video: null };
+    await PATCH(patchReq({ accion: "reprogramar", programada_para: isoEnElFuturo(1) }), contexto());
+    expect(updatesRealizados[0]).toMatchObject({ estado: "error" });
+    expect(updatesRealizados[0]).not.toHaveProperty("tipo_error");
+  });
+
+  it("Reintentar publicación (publicar_ahora) desde un error de publicación: vuelve a lista ahora, sin el error ni el contenedor viejo", async () => {
+    piezaActual = { id: "pieza-1", estado: "error", plataforma: "instagram", tipo_error: "meta_rechazo", error: "x", ig_container_id: "c1", url_video: "https://res.cloudinary.com/demo/video/upload/v1/r.mp4" };
+    const res = await PATCH(patchReq({ accion: "publicar_ahora" }), contexto());
+    expect(res.status).toBe(200);
+    expect(updatesRealizados[0]).toMatchObject({ estado: "lista", error: null, tipo_error: null, ig_container_id: null, intentos: 0 });
+  });
+
   it("publicando, procesando, publicada o cancelada: 400, nunca se reprograma", async () => {
     for (const estado of ["publicando", "procesando", "publicada", "cancelada"]) {
       piezaActual = { id: "pieza-1", estado };

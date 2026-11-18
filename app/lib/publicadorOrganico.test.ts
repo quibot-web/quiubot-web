@@ -250,7 +250,7 @@ describe("reclamar → contenedor", () => {
       media_type: "REELS",
       share_to_feed: true,
       caption: "Hola\n\n#ventas #marketing",
-      video_url: "https://res.cloudinary.com/demo/video/upload/f_mp4,vc_h264,q_auto,w_1080/v1/reel.mp4",
+      video_url: "https://res.cloudinary.com/demo/video/upload/f_mp4,vc_h264,ac_aac,q_auto,w_1080/v1/reel.mp4",
     });
   });
 

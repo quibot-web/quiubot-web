@@ -254,12 +254,28 @@ export function elegirGanchoTipoMenosUsado(tiposYaUsados: (string | null | undef
 export const RETRASO_MAXIMO_PUBLICACION_HORAS = 2;
 export const RETRASO_MAXIMO_PUBLICACION_MS = RETRASO_MAXIMO_PUBLICACION_HORAS * 60 * 60 * 1000;
 
-// "Publicar ahora" (solo piezas vencidas que ya tienen video y son de
-// Instagram): vuelve a "lista" con la hora actual, y el Publicador la
-// toma en su siguiente vuelta con los mismos bloqueos de siempre.
-export function puedePublicarAhora(pieza: Pick<PublicacionOrganica, "estado" | "url_video" | "plataforma">): boolean {
-  return pieza.estado === "vencida" && !!pieza.url_video && pieza.plataforma === "instagram";
+// Una pieza en "error" de PUBLICACIÓN (token, Instagram rechazó el
+// video, tiempo de procesamiento...) se puede reintentar: su video sigue
+// ahí. Las de control de calidad ("calidad") tienen su propio camino
+// ("Forzar de todos modos"). Revisión de punta a punta del publicador
+// (18 nov 2026): antes una pieza en error no salía nunca de ese estado.
+export function esErrorDePublicacionReintentable(pieza: Pick<PublicacionOrganica, "estado" | "tipo_error">): boolean {
+  return pieza.estado === "error" && pieza.tipo_error !== "calidad";
 }
+
+// "Publicar ahora" / "Reintentar publicación" (piezas de Instagram con
+// video, vencidas o con error de publicación): vuelve a "lista" con la
+// hora actual, y el Publicador la toma en su siguiente vuelta con los
+// mismos bloqueos de siempre.
+export function puedePublicarAhora(pieza: Pick<PublicacionOrganica, "estado" | "url_video" | "plataforma"> & Partial<Pick<PublicacionOrganica, "tipo_error">>): boolean {
+  if (!pieza.url_video || pieza.plataforma !== "instagram") return false;
+  return pieza.estado === "vencida" || esErrorDePublicacionReintentable({ estado: pieza.estado, tipo_error: pieza.tipo_error ?? null });
+}
+
+// Campos que se limpian al volver a "lista" desde un error de
+// publicación: el contenedor viejo de Instagram (ya inservible), el
+// mensaje y los intentos pasajeros.
+export const LIMPIEZA_TRAS_ERROR_PUBLICACION = { error: null, tipo_error: null, ig_container_id: null, intentos: 0 } as const;
 
 // "cancelada" tampoco: una pieza eliminada no vuelve al calendario
 // moviéndole la fecha (no aparece en él para poder arrastrarla, y la
@@ -302,12 +318,16 @@ export function textosConfirmacionEliminar(params: {
     : { titulo: "¿Eliminar este reel? No se publicará.", detalles, boton: "Eliminar" };
 }
 
-// A qué estado vuelve una pieza al reprogramarla. Solo "vencida"
-// cambia de estado: con video vuelve a "lista" (conserva su control de
-// calidad y su "Publicar de todos modos"); sin video vuelve a
-// "aprobada" solo si ya lo estaba antes de vencerse -- si no, a
-// "borrador", para que nunca se salte la aprobación de un humano.
-export function estadoAlReprogramar(pieza: Pick<PublicacionOrganica, "estado" | "url_video" | "estado_antes_de_vencer">): EstadoContenido {
+// A qué estado vuelve una pieza al reprogramarla. "vencida": con video
+// vuelve a "lista" (conserva su control de calidad y su "Publicar de
+// todos modos"); sin video vuelve a "aprobada" solo si ya lo estaba antes
+// de vencerse -- si no, a "borrador", para que nunca se salte la
+// aprobación de un humano. "error" de publicación: con video vuelve a
+// "lista" (reintento); sin video, a "aprobada" (falta renderizarla).
+export function estadoAlReprogramar(pieza: Pick<PublicacionOrganica, "estado" | "url_video" | "estado_antes_de_vencer"> & Partial<Pick<PublicacionOrganica, "tipo_error">>): EstadoContenido {
+  if (pieza.estado === "error" && esErrorDePublicacionReintentable({ estado: pieza.estado, tipo_error: pieza.tipo_error ?? null })) {
+    return pieza.url_video ? "lista" : "aprobada";
+  }
   if (pieza.estado !== "vencida") return pieza.estado;
   if (pieza.url_video) return "lista";
   if (pieza.estado_antes_de_vencer === "aprobada" || pieza.estado_antes_de_vencer === "renderizando") return "aprobada";

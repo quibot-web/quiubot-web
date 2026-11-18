@@ -287,7 +287,11 @@ export default function RevisionPiezaPage({ params }: { params: Promise<{ id: st
         {puedePublicarAhora(pieza) && (
           <div style={{ background: "#FEF6E7", border: "1px solid #F0C36D", borderRadius: 14, padding: 16, marginBottom: 12, display: "flex", gap: 10, alignItems: "center", flexWrap: "wrap" }}>
             <span style={{ fontSize: 13, color: "#8A6416", fontWeight: 700, flex: 1 }}>
-              Este reel ya tiene su video pero se pasó su hora. Publícalo ahora (sale en los próximos minutos) o elige una nueva fecha abajo.
+              {pieza.estado === "error"
+                ? pieza.tipo_error === "revisar_publicacion"
+                  ? "Antes de reintentar, revisa tu Instagram: si el reel ya salió, no lo vuelvas a publicar. Si no salió, reinténtalo ahora (sale en los próximos minutos) o elige una nueva fecha abajo."
+                  : "Cuando hayas resuelto el problema de arriba, reintenta la publicación (sale en los próximos minutos) o elige una nueva fecha abajo."
+                : "Este reel ya tiene su video pero se pasó su hora. Publícalo ahora (sale en los próximos minutos) o elige una nueva fecha abajo."}
             </span>
             <button
               type="button"
@@ -308,7 +312,7 @@ export default function RevisionPiezaPage({ params }: { params: Promise<{ id: st
                 }
               }}
             >
-              {publicandoAhora ? "Programando…" : "Publicar ahora"}
+              {publicandoAhora ? "Programando…" : pieza.estado === "error" ? "Reintentar publicación" : "Publicar ahora"}
             </button>
           </div>
         )}
