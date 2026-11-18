@@ -139,9 +139,22 @@ function EscenaConEstilo({
   const mediaVisual = visual && "media_id" in visual ? visual.media_id : undefined;
   const fotoVisualSinTexto = !!mediaVisual && idsSinTexto.includes(mediaVisual);
   const layoutCalculado = layout === "palabra_gigante" ? layoutDelVisual(visual?.tipo, estiloId, fotoVisualSinTexto) : layout;
+  const fotos = idsSinTexto.map((id) => medios![id].url);
+  // "Foto de borde a borde" en una escena que no es comparacion_foto: la
+  // foto nítida de fondo (protagonista) y el visual encima con su propio
+  // layout, en un panel translúcido.
+  const esComparacionFoto = visual?.tipo === "comparacion_foto";
+  const fondoNitido = estiloId === "foto" && layoutCalculado === "foto_borde_a_borde" && !esComparacionFoto && fotos.length > 0;
   // Defensa: aunque el layout guardado diga "borde a borde", una foto con
   // texto nunca va a pantalla completa.
-  const layoutVisual = layoutCalculado === "foto_borde_a_borde" && !fotoVisualSinTexto ? "objeto_protagonista" : layoutCalculado;
+  const layoutVisual =
+    layoutCalculado !== "foto_borde_a_borde"
+      ? layoutCalculado
+      : esComparacionFoto
+        ? fotoVisualSinTexto
+          ? "foto_borde_a_borde"
+          : "objeto_protagonista"
+        : layoutDelVisual(visual?.tipo, estiloId, false);
   const ctx = { tema, bloque: escena.bloque, frame, fps, palabras, inicioEscena_s, medios, estilo: { paleta, layout: layoutVisual, colorTextoSobreFondo } };
   const cuadroSalida = esPalabraGigante ? cuadroSalidaPalabraGigante(palabras, inicioEscena_s, fps) : null;
   // Control "cambio visual cada 2 s" (ritmo.ts): los cambios reales de
@@ -156,7 +169,6 @@ function EscenaConEstilo({
   const cuadrosGolpe = [...cambios, ...golpesDeRelleno(cambios, duracionCuadros, iniciosPalabras, MAX_SEGUNDOS_SIN_CAMBIO * fps)];
   // En la palabra gigante, el visual entra recién en la salida del texto.
   const entradaVisual = cuadroSalida === null ? 1 : frame >= cuadroSalida ? spring({ frame: frame - cuadroSalida, fps, config: { damping: 13 } }) : 0;
-  const fotos = idsSinTexto.map((id) => medios![id].url);
   // La foto a pantalla completa ya es el fondo de esa escena.
   const fondoPropio = layoutVisual === "foto_borde_a_borde" && entradaVisual >= 1;
 
@@ -164,7 +176,9 @@ function EscenaConEstilo({
     <>
       {estiloId === "noche" && <FondoNoche paleta={paleta} indiceEscena={indiceEscena} frame={frame} fps={fps} />}
       {estiloId === "color_pleno" && <FondoColorPleno colores={tema} indiceEscena={indiceEscena} frame={frame} fps={fps} />}
-      {estiloId === "foto" && !fondoPropio && <FondoFoto urlsFotos={fotos} paleta={paleta} indiceEscena={indiceEscena} frame={frame} fps={fps} duracionCuadros={duracionCuadros} />}
+      {estiloId === "foto" && !fondoPropio && (
+        <FondoFoto urlsFotos={fotos} paleta={paleta} indiceEscena={indiceEscena} frame={frame} fps={fps} duracionCuadros={duracionCuadros} modo={fondoNitido ? "nitido" : "textura"} />
+      )}
       <CamaraEscena frame={frame} fps={fps} duracionCuadros={duracionCuadros} cuadrosGolpe={cuadrosGolpe}>
         {visual && (
           <AbsoluteFill style={{ opacity: entradaVisual, transform: `scale(${0.88 + 0.12 * entradaVisual})` }}>{renderizarVisual(visual, ctx)}</AbsoluteFill>

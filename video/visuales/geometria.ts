@@ -39,12 +39,18 @@ export const TARJETA_ANCHO_AMPLIO_PORCENTAJE = 85;
 // segura entre el letrero de arriba (termina ~20%) y los subtítulos, que
 // van justo debajo (FRANJA_SUBTITULOS_ESTILO). Revisión de Noche: antes
 // el objeto quedaba en el 15-40% de la altura con mucho vacío abajo.
-export const PROTAGONISTA_TOP_PORCENTAJE = 20;
-export const PROTAGONISTA_ALTURA_PORCENTAJE = 34; // termina en 54%
+// Revisión del paso 3: el bloque vivía arriba y dejaba ~40% vacío abajo.
+// Baja un poco: objeto 24%-59%, subtítulos 60%-68%. El 20% inferior lo
+// tapa la interfaz de Instagram (caption y botones): el bloque termina en
+// 68%, con margen.
+export const PROTAGONISTA_TOP_PORCENTAJE = 24;
+export const PROTAGONISTA_ALTURA_PORCENTAJE = 35; // termina en 59%
 export const PROTAGONISTA_ANCHO_PORCENTAJE = 88;
 // Subtítulos con estilo: justo debajo del objeto (antes 54%-65%, con el
 // objeto terminando en 49%).
-export const FRANJA_SUBTITULOS_ESTILO = { top: 55, alto: 8 };
+export const FRANJA_SUBTITULOS_ESTILO = { top: 60, alto: 8 };
+// Límite inferior del contenido con estilo: debajo lo tapa Instagram.
+export const LIMITE_INFERIOR_INSTAGRAM_PORCENTAJE = 80;
 // Centro vertical del objeto (37%) vs. el de la tarjeta de siempre
 // (TARJETA_TOP + ALTURA/2 = 35,5%): cuánto bajan las tarjetas flotantes.
 export const CENTRO_PROTAGONISTA_PORCENTAJE = PROTAGONISTA_TOP_PORCENTAJE + PROTAGONISTA_ALTURA_PORCENTAJE / 2;

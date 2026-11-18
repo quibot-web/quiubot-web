@@ -68,16 +68,43 @@ const ENCUADRES: [number, number][] = [
   [60, 55],
 ];
 
-export function FondoFoto({ urlsFotos, paleta, indiceEscena, frame, fps, duracionCuadros }: { urlsFotos: string[]; paleta: PaletaEstilo; indiceEscena: number; frame: number; fps: number; duracionCuadros: number }) {
+// modo "textura": desenfoque leve y oscurecido suave -- el producto se
+// sigue reconociendo (revisión: con blur 10px se veía gris, sin producto).
+// modo "nitido": la foto como protagonista, sin desenfoque; solo sombra
+// arriba (letrero) y abajo (subtítulos, interfaz de Instagram).
+export function FondoFoto({
+  urlsFotos,
+  paleta,
+  indiceEscena,
+  frame,
+  fps,
+  duracionCuadros,
+  modo = "textura",
+}: {
+  urlsFotos: string[];
+  paleta: PaletaEstilo;
+  indiceEscena: number;
+  frame: number;
+  fps: number;
+  duracionCuadros: number;
+  modo?: "textura" | "nitido";
+}) {
   if (urlsFotos.length === 0) return <FondoNoche paleta={paleta} indiceEscena={indiceEscena} frame={frame} fps={fps} />;
   const url = urlsFotos[indiceEscena % urlsFotos.length];
   const [x, y] = ENCUADRES[indiceEscena % ENCUADRES.length];
   const avance = duracionCuadros > 0 ? Math.min(1, frame / duracionCuadros) : 0;
-  const escala = 1.12 + 0.1 * avance;
+  const escala = (modo === "nitido" ? 1.02 : 1.12) + 0.08 * avance;
   return (
     <AbsoluteFill style={{ background: paleta.fondoProfundo, overflow: "hidden" }}>
-      <Img src={url} style={{ width: "100%", height: "100%", objectFit: "cover", transform: `scale(${escala})`, transformOrigin: `${x}% ${y}%`, filter: "blur(10px) saturate(1.2)" }} />
-      <AbsoluteFill style={{ background: `linear-gradient(180deg, ${hexConAlfa(paleta.fondo, 0.72)} 0%, ${hexConAlfa(paleta.fondo, 0.82)} 45%, ${hexConAlfa("#000000", 0.9)} 100%)` }} />
+      <Img
+        src={url}
+        style={{ width: "100%", height: "100%", objectFit: "cover", transform: `scale(${escala})`, transformOrigin: `${x}% ${y}%`, filter: modo === "nitido" ? undefined : "blur(3px) saturate(1.15)" }}
+      />
+      {modo === "nitido" ? (
+        <AbsoluteFill style={{ background: `linear-gradient(180deg, ${hexConAlfa("#000000", 0.55)} 0%, ${hexConAlfa("#000000", 0)} 22%, ${hexConAlfa("#000000", 0)} 55%, ${hexConAlfa("#000000", 0.75)} 100%)` }} />
+      ) : (
+        <AbsoluteFill style={{ background: `linear-gradient(180deg, ${hexConAlfa(paleta.fondo, 0.5)} 0%, ${hexConAlfa(paleta.fondo, 0.55)} 45%, ${hexConAlfa("#000000", 0.82)} 100%)` }} />
+      )}
     </AbsoluteFill>
   );
 }

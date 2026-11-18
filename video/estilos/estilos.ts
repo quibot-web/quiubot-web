@@ -19,7 +19,8 @@ export type EstiloVisualId = (typeof ESTILOS_VISUALES)[number];
 // métricas de dos versiones distintas. v2: tarjetas con los colores del
 // estilo, objeto centrado, texto gigante corto.
 // v3: Color pleno alterna oscuro/claro + acento; Foto solo con fotos sin texto.
-export const VERSION_ESTILOS = 3;
+// v4: Foto con escenas de foto nítida, sin saltos de layout, bloque más abajo.
+export const VERSION_ESTILOS = 4;
 
 export const LAYOUTS_ESCENA = ["palabra_gigante", "objeto_protagonista", "tarjeta_flotante", "pantalla_dividida", "golpe_de_dato", "foto_borde_a_borde"] as const;
 export type LayoutEscena = (typeof LAYOUTS_ESCENA)[number];
@@ -105,11 +106,26 @@ export function elegirEstilo(historial: (string | null | undefined)[], disponibl
 export function asignarEstilo(escenas: EscenaParaEstilo[], estilo: EstiloVisualId = "noche", opciones: { fotosSinTexto?: string[] } = {}): EstiloGuion {
   const fotosSinTexto = opciones.fotosSinTexto ?? [];
   const id: EstiloVisualId = estilo === "foto" && fotosSinTexto.length === 0 ? "noche" : estilo;
-  return {
-    id,
-    version: VERSION_ESTILOS,
-    layouts: Object.fromEntries(escenas.map((e) => [e.id, layoutDeEscena(e, id, fotosSinTexto)])),
-  };
+  const layouts: Record<string, LayoutEscena> = Object.fromEntries(escenas.map((e) => [e.id, layoutDeEscena(e, id, fotosSinTexto)]));
+  if (id === "foto") marcarEscenasFotoNitida(escenas, layouts);
+  return { id, version: VERSION_ESTILOS, layouts };
+}
+
+// Foto (revisión del paso 3: la foto quedaba borrosa y oscurecida casi
+// todo el video, el producto no se reconocía): la foto NÍTIDA es la
+// protagonista en el primer consejo que lo admita y en el cierre (la
+// revelación final). "foto_borde_a_borde" en una escena que no es
+// comparacion_foto = la foto nítida de fondo con el visual encima en un
+// panel translúcido. La pantalla dividida y el gancho no se tocan.
+function marcarEscenasFotoNitida(escenas: EscenaParaEstilo[], layouts: Record<string, LayoutEscena>) {
+  // Una comparacion_foto ya es "foto": cuenta solo si ya va de borde a
+  // borde (su foto no tiene texto); nunca se fuerza con una foto con texto.
+  const admite = (e: EscenaParaEstilo) =>
+    layouts[e.id] === "foto_borde_a_borde" || (e.visual?.tipo !== "comparacion_foto" && (layouts[e.id] === "objeto_protagonista" || layouts[e.id] === "tarjeta_flotante"));
+  const consejo = escenas.find((e) => e.bloque === "valor" && admite(e));
+  if (consejo) layouts[consejo.id] = "foto_borde_a_borde";
+  const cierre = escenas.find((e) => e.bloque === "marca" && admite(e));
+  if (cierre) layouts[cierre.id] = "foto_borde_a_borde";
 }
 
 // ---------------------------------------------------------------------
@@ -164,6 +180,9 @@ export type PaletaEstilo = {
   // Color pleno: los objetos van sobre una placa (fondo de color vivo
   // detrás); Noche/Foto: directo sobre el fondo oscuro.
   placa: { fondo: string; borde: string; sombra: string } | null;
+  // Foto: panel oscuro translúcido que abraza el contenido (la foto se ve
+  // alrededor); nunca ocupa todo el alto como la placa de Color pleno.
+  velo: { fondo: string; borde: string } | null;
   tarjetas: SuperficieTarjeta;
 };
 
@@ -190,6 +209,7 @@ function paletaOscura(id: "noche" | "foto", colores: { color_primario: string; c
     exito: COLOR_EXITO_NOCHE,
     superficie,
     placa: null,
+    velo: id === "foto" ? { fondo: "rgba(8, 8, 14, 0.72)", borde: mezclarColoresHex(luz, fondo, 0.3) } : null,
     tarjetas: {
       tarjeta: superficie,
       marco: mezclarColoresHex(fondo, "#000000", 0.6),
@@ -306,6 +326,7 @@ function paletaColorPleno(tema: { color_primario: string; color_secundario: stri
     exito: COLOR_EXITO_BLOQUE,
     superficie: "#FFFFFF",
     placa: { fondo: "#FFFFFF", borde: TINTA, sombra: `14px 14px 0 ${TINTA}` },
+    velo: null,
     tarjetas: {
       ...SUPERFICIE_CLASICA,
       borde: TINTA,

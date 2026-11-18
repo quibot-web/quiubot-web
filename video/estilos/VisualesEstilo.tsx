@@ -20,6 +20,10 @@ const ANCHO_PX = (PROTAGONISTA_ANCHO_PORCENTAJE / 100) * 1080;
 const LADO_PORCENTAJE = (100 - PROTAGONISTA_ANCHO_PORCENTAJE) / 2;
 const PADDING_PLACA_PX = 36;
 const TINTA_SOBRE_COLOR = "#0B0B12";
+// Chip de texto de las fotos: al pie del bloque, justo encima de los subtítulos.
+const TOP_CHIP_FOTO = PROTAGONISTA_TOP_PORCENTAJE + PROTAGONISTA_ALTURA_PORCENTAJE - 9;
+// Pantalla dividida: dos mitades dentro del bloque, con 1 punto de separación.
+const ALTO_MITAD = (PROTAGONISTA_ALTURA_PORCENTAJE - 1) / 2;
 
 // Caja del objeto, centrada en la zona segura. Con placa (Color pleno),
 // el contenido va sobre una placa blanca que se ajusta a su alto.
@@ -59,6 +63,8 @@ function Zona({ children, paleta, gap = 24 }: { children: React.ReactNode; palet
         >
           {contenido}
         </div>
+      ) : paleta.velo ? (
+        <div style={{ width: "100%", background: paleta.velo.fondo, border: `3px solid ${paleta.velo.borde}`, borderRadius: 32, padding: `${PADDING_PLACA_PX}px ${PADDING_PLACA_PX}px` }}>{contenido}</div>
       ) : (
         contenido
       )}
@@ -67,7 +73,7 @@ function Zona({ children, paleta, gap = 24 }: { children: React.ReactNode; palet
 }
 
 function anchoUtil(paleta: PaletaEstilo): number {
-  return paleta.placa ? ANCHO_PX - PADDING_PLACA_PX * 2 - 12 : ANCHO_PX;
+  return paleta.placa || paleta.velo ? ANCHO_PX - PADDING_PLACA_PX * 2 - 12 : ANCHO_PX;
 }
 
 function progresoCambio(frame: number, fps: number, cuadroCambia: number, damping = 13): number {
@@ -229,7 +235,7 @@ export function ChecklistEstilo({
         const cuadro = cuadroCambia + Math.round(i * SEGUNDOS_ENTRE_MARCAS * fps);
         const progreso = frame >= cuadro ? spring({ frame: frame - cuadro, fps, config: { damping: 12 } }) : 0;
         return (
-          <div key={i} style={{ display: "flex", alignItems: "center", gap: 28, alignSelf: "flex-start" }}>
+          <div key={i} data-estable={`checklist-${i}`} style={{ display: "flex", alignItems: "center", gap: 28, alignSelf: "flex-start" }}>
             <CasillaEstilo progreso={progreso} paleta={paleta} />
             <span style={{ fontSize: tamano, fontWeight: 800, lineHeight: 1.1, color: progreso > 0 ? paleta.texto : paleta.textoSuave }}>{item}</span>
           </div>
@@ -239,9 +245,10 @@ export function ChecklistEstilo({
   );
 }
 
-function Franja({ marca, etiqueta, texto, color, tamanoTexto, paleta, estilo }: { marca: "mal" | "bien"; etiqueta: string; texto: string; color: string; tamanoTexto: number; paleta: PaletaEstilo; estilo: React.CSSProperties }) {
+function Franja({ marca, etiqueta, texto, color, tamanoTexto, paleta, estilo, estable }: { marca: "mal" | "bien"; etiqueta: string; texto: string; color: string; tamanoTexto: number; paleta: PaletaEstilo; estilo: React.CSSProperties; estable?: string }) {
   return (
     <div
+      data-estable={estable}
       style={{
         position: "absolute",
         left: 0,
@@ -296,12 +303,13 @@ export function ComparacionEstilo({
   const familia = familiaDeFuenteSinCargar(tema.fuente);
   const anchoTexto = (ANCHO_PX - 14 - 60) * 1.8;
   const tamano = Math.min(tamanoQueCabe(textoMal, familia, anchoTexto, 42, 56, 800), tamanoQueCabe(textoBien, familia, anchoTexto, 42, 56, 800));
-  // Antes: solo el error, centrado. Después: sube y se apaga, entra lo correcto.
-  const bajada = interpolate(progreso, [0, 1], [56, 0]);
+  // La banda "mal" está en su lugar final desde el cuadro 0 (revisión: antes
+  // arrancaba centrada y saltaba al entrar la segunda); la "bien" aparece
+  // en el hueco ya reservado debajo. Solo cambia la opacidad.
   return (
     <div style={{ position: "absolute", top: `${PROTAGONISTA_TOP_PORCENTAJE}%`, height: `${PROTAGONISTA_ALTURA_PORCENTAJE}%`, left: `${LADO_PORCENTAJE}%`, width: `${PROTAGONISTA_ANCHO_PORCENTAJE}%` }}>
-      <Franja marca="mal" etiqueta={etiquetaMal} texto={textoMal} color={paleta.alerta} tamanoTexto={tamano} paleta={paleta} estilo={{ top: 0, transform: `translateY(${bajada}%)`, opacity: interpolate(progreso, [0, 1], [1, 0.5]) }} />
-      <Franja marca="bien" etiqueta={etiquetaBien} texto={textoBien} color={paleta.exito} tamanoTexto={tamano} paleta={paleta} estilo={{ bottom: 0, opacity: progreso, transform: `translateY(${interpolate(progreso, [0, 1], [40, 0])}px)` }} />
+      <Franja marca="mal" etiqueta={etiquetaMal} texto={textoMal} color={paleta.alerta} tamanoTexto={tamano} paleta={paleta} estable="comparacion-mal" estilo={{ top: 0, opacity: interpolate(progreso, [0, 1], [1, 0.5]) }} />
+      <Franja marca="bien" etiqueta={etiquetaBien} texto={textoBien} color={paleta.exito} tamanoTexto={tamano} paleta={paleta} estilo={{ bottom: 0, opacity: progreso, transform: `scale(${interpolate(progreso, [0, 1], [0.96, 1])})` }} />
     </div>
   );
 }
@@ -362,10 +370,10 @@ export function ComparacionFotoEstilo({ frame, fps, cuadroCambia, paleta, urlFot
   const progreso = progresoCambio(frame, fps, cuadroCambia, 14);
   return (
     <AbsoluteFill>
-      <div style={{ position: "absolute", top: "20%", height: "34%", left: 0, right: 0, overflow: "hidden", borderTop: paleta.placa ? `6px solid ${paleta.placa.borde}` : undefined, borderBottom: paleta.placa ? `6px solid ${paleta.placa.borde}` : undefined }}>
+      <div style={{ position: "absolute", top: `${PROTAGONISTA_TOP_PORCENTAJE}%`, height: `${PROTAGONISTA_ALTURA_PORCENTAJE}%`, left: 0, right: 0, overflow: "hidden", borderTop: paleta.placa ? `6px solid ${paleta.placa.borde}` : undefined, borderBottom: paleta.placa ? `6px solid ${paleta.placa.borde}` : undefined }}>
         <FotoCambio urlFoto={urlFoto} progreso={progreso} fondo={paleta.fondoProfundo} textoSuave={paleta.textoSuave} />
       </div>
-      <ChipTexto marca={nitida ? "bien" : "mal"} texto={nitida ? textoBien : textoMal} color={nitida ? paleta.exito : paleta.alerta} paleta={paleta} estilo={{ top: "46%" }} />
+      <ChipTexto marca={nitida ? "bien" : "mal"} texto={nitida ? textoBien : textoMal} color={nitida ? paleta.exito : paleta.alerta} paleta={paleta} estilo={{ top: `${TOP_CHIP_FOTO}%` }} />
     </AbsoluteFill>
   );
 }
@@ -380,7 +388,7 @@ export function FotoBordeABorde({ frame, fps, cuadroCambia, paleta, urlFoto, tex
       <FotoCambio urlFoto={urlFoto} progreso={progreso} fondo={paleta.fondoProfundo} textoSuave={paleta.textoSuave} />
       {/* Velo abajo para que el chip y los subtítulos se lean sobre cualquier foto. */}
       <AbsoluteFill style={{ background: "linear-gradient(180deg, rgba(0,0,0,0) 30%, rgba(0,0,0,0.55) 60%, rgba(0,0,0,0.75) 100%)" }} />
-      <ChipTexto marca={nitida ? "bien" : "mal"} texto={nitida ? textoBien : textoMal} color={nitida ? paleta.exito : paleta.alerta} paleta={paleta} estilo={{ top: "45%" }} />
+      <ChipTexto marca={nitida ? "bien" : "mal"} texto={nitida ? textoBien : textoMal} color={nitida ? paleta.exito : paleta.alerta} paleta={paleta} estilo={{ top: `${TOP_CHIP_FOTO}%` }} />
     </AbsoluteFill>
   );
 }
@@ -419,7 +427,7 @@ export function PantallaDividida({
   const fondoBien = paleta.placa ? paleta.exito : mezclarColoresHex(paleta.exito, paleta.fondo, 0.72);
   const conFoto = urlFoto !== undefined;
   const mitad = (marca: "mal" | "bien", etiqueta: string, texto: string, fondo: string, progresoFoto: number, estilo: React.CSSProperties) => (
-    <div style={{ position: "absolute", left: 0, right: 0, height: "17%", overflow: "hidden", background: fondo, borderTop: paleta.placa ? `6px solid ${paleta.placa.borde}` : undefined, borderBottom: paleta.placa ? `6px solid ${paleta.placa.borde}` : undefined, ...estilo }}>
+    <div data-estable={marca === "mal" ? "dividida-mal" : undefined} style={{ position: "absolute", left: 0, right: 0, height: `${ALTO_MITAD}%`, overflow: "hidden", background: fondo, borderTop: paleta.placa ? `6px solid ${paleta.placa.borde}` : undefined, borderBottom: paleta.placa ? `6px solid ${paleta.placa.borde}` : undefined, ...estilo }}>
       {conFoto && (
         <>
           <FotoCambio urlFoto={urlFoto ?? null} progreso={progresoFoto} fondo={paleta.fondoProfundo} textoSuave={paleta.textoSuave} />
@@ -437,10 +445,10 @@ export function PantallaDividida({
   );
   return (
     <AbsoluteFill>
-      {/* Antes del cambio, la mitad "mal" va sola y centrada en el bloque;
-          con el cambio sube y entra la mitad "bien" debajo. */}
-      {mitad("mal", etiquetaMal, textoMal, fondoMal, 0, { top: `${interpolate(progreso, [0, 1], [28.5, 20])}%`, opacity: interpolate(progreso, [0, 1], [1, 0.75]) })}
-      {mitad("bien", etiquetaBien, textoBien, fondoBien, 1, { top: "37%", opacity: progreso, transform: `translateX(${interpolate(progreso, [0, 1], [100, 0])}%)` })}
+      {/* La mitad "mal" está en su lugar final desde el cuadro 0 (nunca
+          salta); la "bien" entra en el hueco ya reservado debajo. */}
+      {mitad("mal", etiquetaMal, textoMal, fondoMal, 0, { top: `${PROTAGONISTA_TOP_PORCENTAJE}%`, opacity: interpolate(progreso, [0, 1], [1, 0.75]) })}
+      {mitad("bien", etiquetaBien, textoBien, fondoBien, 1, { top: `${PROTAGONISTA_TOP_PORCENTAJE + ALTO_MITAD + 1}%`, opacity: progreso, transform: `translateX(${interpolate(progreso, [0, 1], [100, 0])}%)` })}
     </AbsoluteFill>
   );
 }

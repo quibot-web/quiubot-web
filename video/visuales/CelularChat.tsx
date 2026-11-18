@@ -123,10 +123,13 @@ function BurbujaMensaje({ mensaje, frame, fps }: { mensaje: MensajeChat; frame: 
 function FranjaNotificacion({ cuadroLlegada, frame, fps, compacta }: { cuadroLlegada: number; frame: number; fps: number; compacta?: boolean }) {
   const s = useSuperficie();
   const progreso = spring({ frame: frame - cuadroLlegada, fps, config: { damping: 16 } });
-  if (frame < cuadroLlegada - 5) return null;
+  // Antes de llegar, la franja ya ocupa su lugar (invisible): si no, el
+  // número gigante de abajo se corría con cada notificación nueva.
+  const reservada = frame < cuadroLlegada - 5;
   return (
     <div
       style={{
+        visibility: reservada ? "hidden" : undefined,
         display: "flex",
         alignItems: "center",
         gap: compacta ? 12 : 16,
@@ -146,7 +149,7 @@ function FranjaNotificacion({ cuadroLlegada, frame, fps, compacta }: { cuadroLle
 function NumeroGigante({ valor, color, opacidad }: { valor: number; color: string; opacidad: number }) {
   const s = useSuperficie();
   return (
-    <div style={{ flexGrow: 1, display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", gap: 6, opacity: opacidad }}>
+    <div data-estable="celular-numero" style={{ flexGrow: 1, display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", gap: 6, opacity: opacidad }}>
       <span style={{ fontSize: TAMANO_FUENTE_NUMERO_GIGANTE, fontWeight: 900, color, lineHeight: 1 }}>{valor}</span>
       <span style={{ fontSize: TAMANO_FUENTE_ETIQUETA_NUMERO_GIGANTE, fontWeight: 800, color: s.textoSuave }}>mensajes nuevos</span>
     </div>

@@ -65,7 +65,7 @@ export function RespuestaLentaVisual({
       }}
     >
       <div style={{ width: "100%", height: "100%", borderRadius: "22px 22px 0 0", overflow: "hidden", background: s.tarjeta, display: "flex", flexDirection: "column", padding: "20px 22px", gap: 14 }}>
-        <div style={{ background: s.burbuja, color: s.textoBurbuja, borderRadius: "20px 20px 20px 5px", padding: "16px 22px", fontSize: 40, fontWeight: 700, alignSelf: "flex-start", maxWidth: "90%" }}>
+        <div data-estable="respuesta-pregunta" style={{ background: s.burbuja, color: s.textoBurbuja, borderRadius: "20px 20px 20px 5px", padding: "16px 22px", fontSize: 40, fontWeight: 700, alignSelf: "flex-start", maxWidth: "90%" }}>
           {t.pregunta_cliente}
         </div>
 

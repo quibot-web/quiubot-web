@@ -19,7 +19,7 @@ describe("asignarEstilo (paso 1: Noche)", () => {
     ]);
     expect(estilo).toEqual({
       id: "noche",
-      version: 3,
+      version: 4,
       layouts: { e1: "palabra_gigante", e2: "objeto_protagonista", e3: "tarjeta_flotante", e4: "objeto_protagonista", e5: "tarjeta_flotante", e6: "tarjeta_flotante" },
     });
   });
@@ -176,5 +176,25 @@ describe("acento oscuro sin tonos barrosos", () => {
     const [r, g, b] = [0, 2, 4].map((i) => parseInt(hex.slice(i, i + 2), 16));
     // Amarillo/naranja: rojo y verde altos con azul bajo.
     expect(r > 150 && g > 120 && b < 90).toBe(false);
+  });
+});
+
+describe("Foto: la foto nítida es protagonista, no solo en el cierre", () => {
+  it("el primer consejo que lo admite y el cierre van con la foto nítida; gancho y pantalla dividida no se tocan", () => {
+    const escenas = [
+      escena("e1", "gancho", "gancho_texto", "comparacion_foto", "f"),
+      escena("e2", "valor", "x", "comparacion"),
+      escena("e3", "valor", "x", "icono_palabra"),
+      escena("e4", "valor", "x", "checklist"),
+      escena("e5", "marca", "x", "anuncio_boton"),
+      escena("e6", "cta", "cta", "boton_estado"),
+    ];
+    const { layouts } = asignarEstilo(escenas, "foto", { fotosSinTexto: ["f"] });
+    expect(layouts.e1).toBe("palabra_gigante");
+    expect(layouts.e2).toBe("pantalla_dividida");
+    expect(layouts.e3).toBe("foto_borde_a_borde");
+    expect(layouts.e4).toBe("objeto_protagonista");
+    expect(layouts.e5).toBe("foto_borde_a_borde");
+    expect(layouts.e6).toBe("tarjeta_flotante");
   });
 });

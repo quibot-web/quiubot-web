@@ -30,14 +30,11 @@ function tamanoTexto(texto: string, familia: string): number {
   const { fontSize } = fitText({ text: texto, withinWidth: ANCHO_TEXTO_PX * 1.8, fontFamily: familia, fontWeight: 800 });
   return Math.max(TAMANO_FUENTE_MINIMO_VISUAL, Math.min(TAMANO_FUENTE_TEXTO_COMPARACION_MAX, Math.floor(fontSize)));
 }
-const SEPARACION_PORCENTAJE = 100 - ALTO_TARJETA_PORCENTAJE * 2;
-// Cuánto baja la tarjeta del error (en % de SU PROPIO alto) para quedar
-// centrada en el cajón mientras la otra no existe.
-const DESPLAZAMIENTO_CENTRADO = ((ALTO_TARJETA_PORCENTAJE + SEPARACION_PORCENTAJE) / 2 / ALTO_TARJETA_PORCENTAJE) * 100;
 
-function Tarjeta({ marca, etiqueta, texto, tamanoTexto, color, colorEtiqueta, estilo }: { marca: "mal" | "bien"; etiqueta: string; texto: string; tamanoTexto: number; color: string; colorEtiqueta: string; estilo: React.CSSProperties }) {
+function Tarjeta({ marca, etiqueta, texto, tamanoTexto, color, colorEtiqueta, estilo, estable }: { marca: "mal" | "bien"; etiqueta: string; texto: string; tamanoTexto: number; color: string; colorEtiqueta: string; estilo: React.CSSProperties; estable?: string }) {
   return (
     <div
+      data-estable={estable}
       style={{
         position: "absolute",
         left: 0,
@@ -106,9 +103,11 @@ export function ComparacionVisual({
         tamanoTexto={tamano}
         color={COLOR_ALERTA}
         colorEtiqueta={COLOR_ALERTA}
+        // En su lugar final desde el cuadro 0 (antes arrancaba centrada y
+        // saltaba arriba al entrar la otra tarjeta): solo se apaga.
+        estable="comparacion-clasica-mal"
         estilo={{
           top: 0,
-          transform: `translateY(${interpolate(progreso, [0, 1], [DESPLAZAMIENTO_CENTRADO, 0])}%) scale(${interpolate(progreso, [0, 1], [1, 0.96])})`,
           opacity: interpolate(progreso, [0, 1], [1, 0.55]),
         }}
       />
@@ -122,7 +121,7 @@ export function ComparacionVisual({
         estilo={{
           bottom: 0,
           opacity: progreso,
-          transform: `translateY(${interpolate(progreso, [0, 1], [30, 0])}px)`,
+          transform: `scale(${interpolate(progreso, [0, 1], [0.96, 1])})`,
         }}
       />
     </div>
