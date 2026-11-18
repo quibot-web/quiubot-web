@@ -194,7 +194,7 @@ function EscenaConEstilo({
           colores={
             fondoColor
               ? { texto: colorTextoSobre(fondoColor), clave: colorTextoSobre(fondoColor), brillo: null, stickerFondo: "#FFFFFF", stickerTexto: "#141414", sombraDura: true }
-              : { texto: paleta.texto, clave: paleta.luz, brillo: paleta.luz, stickerFondo: paleta.luz, stickerTexto: colorTextoSobre(paleta.luz), sombraDura: false }
+              : { texto: paleta.texto, clave: paleta.luz, brillo: paleta.luz, stickerFondo: paleta.luz, stickerTexto: colorTextoSobre(paleta.luz), sombraDura: false, panel: paleta.velo }
           }
           frame={frame}
           fps={fps}

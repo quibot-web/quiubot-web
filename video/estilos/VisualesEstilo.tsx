@@ -14,7 +14,14 @@ import { IconoCatalogo } from "../iconosCatalogo";
 import { IconoImagen, IconoMarca } from "../iconos";
 import { PROTAGONISTA_ALTURA_PORCENTAJE, PROTAGONISTA_ANCHO_PORCENTAJE, PROTAGONISTA_TOP_PORCENTAJE } from "../visuales/geometria";
 import { familiaDeFuenteSinCargar } from "../visuales/tamanos";
-import type { PaletaEstilo } from "./estilos";
+import { opacidadVeloLegible, type PaletaEstilo } from "./estilos";
+
+// Texto blanco sobre foto + velo: opacidad mínima para 4,5:1 aunque la
+// foto sea blanca detrás.
+const OPACIDAD_VELO_TEXTO_BLANCO = opacidadVeloLegible(["#FFFFFF"]);
+function colorVeloRgba(opacidad: number): string {
+  return `rgba(8, 8, 14, ${opacidad})`;
+}
 
 const ANCHO_PX = (PROTAGONISTA_ANCHO_PORCENTAJE / 100) * 1080;
 const LADO_PORCENTAJE = (100 - PROTAGONISTA_ANCHO_PORCENTAJE) / 2;
@@ -115,7 +122,9 @@ export function IconoPalabraEstilo({
   const pop = despues ? spring({ frame: frame - cuadroCambia, fps, config: { damping: 9, stiffness: 180 } }) : 1;
   const palabra = (despues ? palabraDespues : palabraAntes).toLocaleUpperCase("es");
   const color = despues ? paleta.exito : paleta.alerta;
-  const tamano = tamanoQueCabe(palabra, familiaDeFuenteSinCargar(tema.fuente), anchoUtil(paleta) - 30, 72, 220);
+  // Margen generoso a los lados (revisión: "LUZ LATERAL" casi tocaba los
+  // bordes del panel de Foto, con el pop y el acercamiento de cámara).
+  const tamano = tamanoQueCabe(palabra, familiaDeFuenteSinCargar(tema.fuente), anchoUtil(paleta) - 110, 64, 210);
   const icono = despues ? iconoDespues : iconoAntes;
   return (
     <Zona paleta={paleta} gap={30}>
@@ -431,7 +440,9 @@ export function PantallaDividida({
       {conFoto && (
         <>
           <FotoCambio urlFoto={urlFoto ?? null} progreso={progresoFoto} fondo={paleta.fondoProfundo} textoSuave={paleta.textoSuave} />
-          <AbsoluteFill style={{ background: "linear-gradient(90deg, rgba(0,0,0,0.7) 0%, rgba(0,0,0,0.2) 75%)" }} />
+          {/* Velo parejo de lado a lado (antes se aclaraba a la derecha y el
+              final del texto quedaba sin contraste sobre una foto clara). */}
+          <AbsoluteFill style={{ background: `linear-gradient(90deg, ${colorVeloRgba(Math.min(0.98, OPACIDAD_VELO_TEXTO_BLANCO + 0.1))} 0%, ${colorVeloRgba(OPACIDAD_VELO_TEXTO_BLANCO)} 100%)` }} />
         </>
       )}
       <div style={{ position: "absolute", left: "6%", right: "6%", top: 0, bottom: 0, display: "flex", flexDirection: "column", justifyContent: "center", gap: 8 }}>

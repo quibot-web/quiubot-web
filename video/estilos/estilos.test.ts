@@ -2,7 +2,7 @@ import { describe, expect, it } from "vitest";
 import { contrasteHex } from "../tema";
 import { GuionSchema } from "../guion.schema";
 import { fixtureConsejosNumerados } from "../fixtures/organico/consejosNumerados";
-import { acentoComplementario, acentoParaOscuro, asignarEstilo, elegirEstilo, estilosDisponibles, fondosColorPleno, idsFotosSinTexto, layoutDeEscena, paletaDeEstilo, paletaNoche } from "./estilos";
+import { acentoComplementario, acentoParaOscuro, asignarEstilo, colorVeloSobre, opacidadVeloLegible, elegirEstilo, estilosDisponibles, fondosColorPleno, idsFotosSinTexto, layoutDeEscena, paletaDeEstilo, paletaNoche } from "./estilos";
 import { colorTextoSobre } from "../tema";
 
 const escena = (id: string, bloque: string, tipo: string, visual?: string, mediaId?: string) => ({ id, bloque, tipo, ...(visual ? { visual: { tipo: visual, ...(mediaId ? { media_id: mediaId } : {}) } } : {}) });
@@ -198,3 +198,21 @@ describe("Foto: la foto nítida es protagonista, no solo en el cierre", () => {
     expect(layouts.e6).toBe("tarjeta_flotante");
   });
 });
+
+describe("Foto: contraste del texto sobre el panel + foto real detrás", () => {
+  it("con el peor caso (foto blanca detrás) todos los colores de texto del panel llegan a 4,5:1", () => {
+    for (const [p, sec] of [["#534AB7", "#B9B2FF"], ["#E63946", "#1D3557"], ["#FFF3C4", "#FFE08A"]]) {
+      const paleta = paletaDeEstilo("foto", { color_primario: p, color_secundario: sec });
+      const opacidad = Number(paleta.velo!.fondo.match(/([0-9.]+)\)$/)![1]);
+      for (const fondoFoto of ["#FFFFFF", "#808080", "#000000"]) {
+        const panel = colorVeloSobre(fondoFoto, opacidad);
+        for (const texto of [paleta.texto, paleta.textoSuave, paleta.alerta, paleta.exito, paleta.luz]) expect(contrasteHex(texto, panel)).toBeGreaterThanOrEqual(4.5);
+      }
+    }
+  });
+
+  it("la opacidad sube solo lo necesario (texto blanco solo: bastante menos que con el naranja de alerta)", () => {
+    expect(opacidadVeloLegible(["#FFFFFF"])).toBeLessThan(opacidadVeloLegible(["#FFFFFF", "#FF7A59"]));
+  });
+});
+

@@ -186,6 +186,23 @@ export type PaletaEstilo = {
   tarjetas: SuperficieTarjeta;
 };
 
+// Opacidad del panel translúcido de Foto (revisión: el contraste del
+// texto debe medirse contra panel + foto real detrás). Se calcula contra
+// el PEOR caso -- foto blanca detrás del panel -- para que cada color de
+// texto llegue a 4,5:1 con cualquier foto (con una foto oscura, el
+// contraste solo sube). Panel base #08080E.
+const COLOR_PANEL_VELO = "#08080E";
+export function colorVeloSobre(fondoHex: string, opacidad: number): string {
+  return mezclarColoresHex(fondoHex, COLOR_PANEL_VELO, opacidad);
+}
+export function opacidadVeloLegible(coloresTexto: string[], minimo = 4.5): number {
+  for (let a = 0.6; a <= 0.98; a += 0.01) {
+    const peorCaso = colorVeloSobre("#FFFFFF", a);
+    if (coloresTexto.every((c) => contrasteHex(c, peorCaso) >= minimo)) return Math.round(a * 100) / 100;
+  }
+  return 0.98;
+}
+
 export const COLOR_ALERTA_NOCHE = "#FF7A59";
 export const COLOR_EXITO_NOCHE = "#4ADE80";
 const NEGRO_NOCHE = "#05050A";
@@ -209,7 +226,7 @@ function paletaOscura(id: "noche" | "foto", colores: { color_primario: string; c
     exito: COLOR_EXITO_NOCHE,
     superficie,
     placa: null,
-    velo: id === "foto" ? { fondo: "rgba(8, 8, 14, 0.72)", borde: mezclarColoresHex(luz, fondo, 0.3) } : null,
+    velo: id === "foto" ? { fondo: `rgba(8, 8, 14, ${opacidadVeloLegible([luz, "#FFFFFF", "#C9C9D6", COLOR_ALERTA_NOCHE, COLOR_EXITO_NOCHE])})`, borde: mezclarColoresHex(luz, fondo, 0.3) } : null,
     tarjetas: {
       tarjeta: superficie,
       marco: mezclarColoresHex(fondo, "#000000", 0.6),

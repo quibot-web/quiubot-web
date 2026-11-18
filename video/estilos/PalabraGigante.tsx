@@ -28,6 +28,8 @@ export type ColoresPalabraGigante = {
   stickerTexto: string;
   // Color pleno: sombra dura en vez de brillo.
   sombraDura: boolean;
+  // Foto: panel translúcido detrás del texto (contraste sobre la foto).
+  panel?: { fondo: string; borde: string } | null;
 };
 
 export function PalabraGigante({
@@ -53,9 +55,11 @@ export function PalabraGigante({
   const medir = (t: string, tamano: number) => measureText({ text: t, fontFamily: familia, fontSize: tamano, fontWeight: "900" }).width;
   // 2 líneas a 140-260px; si algo no cabe (no debería, por los límites
   // del campo), hasta 3 líneas antes de bajar del mínimo.
-  const opciones = { ancho: ANCHO_PX, alto: ALTO_PX, tamanoMin: 140, tamanoMax: 260, interlineado: 1.0 };
+  // Con panel (Foto), su padding y borde le quitan ancho al texto.
+  const anchoTexto = colores.panel ? ANCHO_PX - 80 : ANCHO_PX;
+  const opciones = { ancho: anchoTexto, alto: ALTO_PX, tamanoMin: 140, tamanoMax: 260, interlineado: 1.0 };
   const ajuste2 = ajustarTextoGigante(textoMayus, medir, { ...opciones, maxLineas: 2 });
-  const cabeEn2 = ajuste2.lineas.length <= 2 && ajuste2.lineas.every((l) => medir(l, ajuste2.tamano) <= ANCHO_PX);
+  const cabeEn2 = ajuste2.lineas.length <= 2 && ajuste2.lineas.every((l) => medir(l, ajuste2.tamano) <= anchoTexto);
   const { tamano, lineas } = cabeEn2 ? ajuste2 : ajustarTextoGigante(textoMayus, medir, { ...opciones, tamanoMin: 96, maxLineas: 3 });
   const todas = textoMayus.split(/\s+/).filter(Boolean);
   const resaltadas = indicesPalabraClave(todas, palabraClave);
@@ -92,7 +96,14 @@ export function PalabraGigante({
             {sticker}
           </div>
         )}
-        <div style={{ display: "flex", flexDirection: "column", alignItems: "center" }}>
+        <div
+          style={{
+            display: "flex",
+            flexDirection: "column",
+            alignItems: "center",
+            ...(colores.panel ? { background: colores.panel.fondo, border: `3px solid ${colores.panel.borde}`, borderRadius: 32, padding: "22px 36px" } : {}),
+          }}
+        >
           {lineas.map((linea, l) => (
             <div key={l} style={{ fontSize: tamano, fontWeight: 900, lineHeight: 1.0, whiteSpace: "nowrap", textAlign: "center", textShadow: sombra }}>
               {linea.split(" ").map((palabra, p) => {
