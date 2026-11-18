@@ -141,7 +141,19 @@ export function textoReelPublicacionError(params: { motivo: "reconexion" | "revi
 // de todos modos") o "musica_sin_licencia" (la pista no tiene licencia
 // para Instagram). Los 2 últimos siguen en "lista": apenas se resuelva
 // el motivo, el Publicador lo sube en su siguiente vuelta.
-export function textoReelVencido(params: { motivo: "sin_video" | "requiere_confirmacion" | "musica_sin_licencia" }): MensajeEquipoContenido {
+export function textoReelVencido(params: {
+  motivo: "sin_video" | "requiere_confirmacion" | "musica_sin_licencia" | "atrasada";
+  piezaId?: string;
+  horasMaximas?: number;
+}): MensajeEquipoContenido {
+  if (params.motivo === "atrasada") {
+    return {
+      texto: `El Publicador no subió un reel porque su hora ya había pasado hace más de ${params.horasMaximas ?? 2} horas -- nunca publica algo viejo sin que lo decidas tú. Puedes publicarlo ahora o reprogramarlo.`,
+      textoInterno: "Director, no publiqué un reel porque estaba muy atrasado -- queda para que decidan si sale ahora o se reprograma.",
+      respuestaDirector: "Entendido, le pregunto qué prefiere.",
+      acciones: [{ label: "Publicar ahora o reprogramar", tipo: "link", href: params.piezaId ? `/contenido/${params.piezaId}` : "/contenido" }],
+    };
+  }
   if (params.motivo === "requiere_confirmacion") {
     return {
       texto: "El Publicador no subió tu reel a su hora: no pasó el control de calidad y espera que confirmes \"Publicar de todos modos\".",

@@ -4,7 +4,7 @@ import { useEffect, useState, useCallback, use } from "react";
 import dynamic from "next/dynamic";
 import { useRouter } from "next/navigation";
 import EditorEscena from "@/app/video/EditorEscena";
-import { labelReceta, formatoFechaLarga, evaluarEliminacion, type PublicacionOrganica } from "@/app/lib/contenido";
+import { labelReceta, formatoFechaLarga, evaluarEliminacion, puedePublicarAhora, type PublicacionOrganica } from "@/app/lib/contenido";
 import ConfirmarEliminarReel from "../ConfirmarEliminarReel";
 import SelectorFechaHora from "../SelectorFechaHora";
 import { urlDescargaCloudinary } from "@/app/lib/cloudinaryUrl";
@@ -44,6 +44,7 @@ export default function RevisionPiezaPage({ params }: { params: Promise<{ id: st
   const [vozDesactualizada, setVozDesactualizada] = useState(false);
   const [regenerandoVoz, setRegenerandoVoz] = useState(false);
   const [confirmandoEliminar, setConfirmandoEliminar] = useState(false);
+  const [publicandoAhora, setPublicandoAhora] = useState(false);
   // Guardado explícito (no solo "ya pasó el gate de arriba") para que,
   // el día que esta pantalla se abra a clientes, la distinción
   // admin/cliente de generarGuion() siga siendo correcta sin tener que
@@ -275,6 +276,35 @@ export default function RevisionPiezaPage({ params }: { params: Promise<{ id: st
         <p style={{ fontSize: 13, color: "#666", margin: "0 0 20px" }}>
           {pieza.estado === "cancelada" ? "Eliminado -- ya no aparece en el calendario ni se publicará." : `Programada para ${formatoFechaLarga(pieza.programada_para)}`}
         </p>
+
+        {puedePublicarAhora(pieza) && (
+          <div style={{ background: "#FEF6E7", border: "1px solid #F0C36D", borderRadius: 14, padding: 16, marginBottom: 12, display: "flex", gap: 10, alignItems: "center", flexWrap: "wrap" }}>
+            <span style={{ fontSize: 13, color: "#8A6416", fontWeight: 700, flex: 1 }}>
+              Este reel ya tiene su video pero se pasó su hora. Publícalo ahora (sale en los próximos minutos) o elige una nueva fecha abajo.
+            </span>
+            <button
+              type="button"
+              style={botonPrimario}
+              disabled={publicandoAhora}
+              onClick={async () => {
+                setPublicandoAhora(true);
+                setErrorMsg(null);
+                try {
+                  const res = await fetch(`/api/contenido/${id}`, { method: "PATCH", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ accion: "publicar_ahora" }) });
+                  const data = await res.json();
+                  if (!res.ok) setErrorMsg(data.error || "No se pudo programar la publicación.");
+                  await cargar();
+                } catch {
+                  setErrorMsg("No se pudo programar la publicación.");
+                } finally {
+                  setPublicandoAhora(false);
+                }
+              }}
+            >
+              {publicandoAhora ? "Programando…" : "Publicar ahora"}
+            </button>
+          </div>
+        )}
 
         <SelectorFechaHora key={`${pieza.programada_para}-${pieza.estado}`} pieza={pieza} onGuardado={cargar} />
 

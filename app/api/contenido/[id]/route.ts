@@ -10,6 +10,7 @@ import {
   evaluarEliminacion,
   textosConfirmacionEliminar,
   estadoAlReprogramar,
+  puedePublicarAhora,
   type EstadoContenido,
   type PublicacionOrganica,
 } from "@/app/lib/contenido";
@@ -378,6 +379,37 @@ export async function PATCH(req: NextRequest, { params }: { params: Promise<{ id
     if (!filas || filas.length === 0) {
       return NextResponse.json({ error: "Este reel cambió de estado mientras tanto (puede que se esté publicando). Recarga e intenta de nuevo." }, { status: 409 });
     }
+    return NextResponse.json({ ok: true });
+  }
+
+  if (cuerpo?.accion === "publicar_ahora") {
+    // Pieza vencida que ya tiene video (ej. el Publicador la venció por
+    // llegar con más de RETRASO_MAXIMO_PUBLICACION_HORAS de retraso):
+    // vuelve a "lista" con la hora actual, y la siguiente vuelta del
+    // Publicador la toma con los mismos bloqueos de siempre (control de
+    // calidad forzado sin confirmar, música sin licencia). Nunca llama
+    // a Meta desde acá.
+    const { data: piezaActual } = await supabaseAdmin.from("publicaciones_organicas").select("*").eq("id", id).eq("user_id", usuario!.id).maybeSingle();
+    if (!piezaActual) return NextResponse.json({ error: "Pieza no encontrada." }, { status: 404 });
+    if (!puedePublicarAhora(piezaActual as Pick<PublicacionOrganica, "estado" | "url_video" | "plataforma">)) {
+      return NextResponse.json({ error: "Solo se puede publicar ahora un reel de Instagram vencido que ya tiene su video." }, { status: 400 });
+    }
+    const ahora = new Date();
+    const { data: filas, error: errorUpdate } = await supabaseAdmin
+      .from("publicaciones_organicas")
+      .update({
+        estado: "lista",
+        programada_para: ahora.toISOString(),
+        semana: lunesDeLaSemana(fechaBogota(ahora)),
+        estado_antes_de_vencer: null,
+        actualizado_en: ahora.toISOString(),
+      })
+      .eq("id", id)
+      .eq("user_id", usuario!.id)
+      .eq("estado", "vencida")
+      .select("id");
+    if (errorUpdate) return NextResponse.json({ error: "No se pudo programar la publicación en este momento." }, { status: 503 });
+    if (!filas || filas.length === 0) return NextResponse.json({ error: "Este reel cambió de estado mientras tanto. Recarga e intenta de nuevo." }, { status: 409 });
     return NextResponse.json({ ok: true });
   }
 

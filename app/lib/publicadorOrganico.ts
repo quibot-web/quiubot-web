@@ -1,7 +1,7 @@
 import "server-only";
 import { supabaseAdmin } from "@/lib/supabase";
 import { registrarError } from "@/lib/registrarError";
-import { ESTADOS_SIN_VIDEO_AUN, type PublicacionOrganica } from "@/app/lib/contenido";
+import { ESTADOS_SIN_VIDEO_AUN, RETRASO_MAXIMO_PUBLICACION_HORAS, RETRASO_MAXIMO_PUBLICACION_MS, type PublicacionOrganica } from "@/app/lib/contenido";
 import { urlVideoCompatible } from "@/app/lib/cloudinaryUrl";
 import {
   resolverCuentaInstagramParaPublicar,
@@ -20,6 +20,9 @@ import type { MensajeEquipoContenido, TipoEventoEquipo } from "@/app/lib/directo
 // Cada vuelta, en este orden:
 //   1. Rescate de atascadas (30 min, sin reintento en publicando/procesando).
 //   2. Vencer piezas que llegaron a su hora sin video.
+//   2b. "lista" con más de RETRASO_MAXIMO_PUBLICACION_HORAS de retraso
+//      → "vencida" con aviso, sin tocar Meta (nunca publicar algo viejo,
+//      ni en la primera vuelta después de encender el publicador).
 //   3. Avisar (una sola vez) las "lista" vencidas que NO se pueden
 //      publicar solas (QC forzado sin confirmar, música sin licencia).
 //   4. Contenedores en "procesando": FINISHED → media_publish.
@@ -301,6 +304,38 @@ export async function vencerPiezasSinVideo(params: { userId?: string; ahora?: Da
   return vencidas.length;
 }
 
+// 2b. "lista" demasiado atrasadas → "vencida" + aviso, ANTES de que la
+// RPC pueda reclamarlas (la RPC además tiene la misma ventana como
+// respaldo). Cubre también la primera activación del publicador: todo
+// lo que quedó en "lista" de días anteriores se vence, nada sale solo.
+export async function vencerListasAtrasadas(ahora = new Date()): Promise<number> {
+  const limite = new Date(ahora.getTime() - RETRASO_MAXIMO_PUBLICACION_MS).toISOString();
+  const { data, error } = await supabaseAdmin
+    .from("publicaciones_organicas")
+    .update({ estado: "vencida", estado_antes_de_vencer: "lista", actualizado_en: ahora.toISOString() })
+    .eq("estado", "lista")
+    .lt("programada_para", limite)
+    .select("id, user_id, plataforma");
+  if (error) {
+    console.error("No se pudieron vencer piezas atrasadas:", error);
+    return 0;
+  }
+  for (const pieza of (data ?? []) as { id: string; user_id: string; plataforma: string }[]) {
+    // TikTok también llega a "lista" (se sube a mano): se vence igual
+    // para que no quede colgada, pero el aviso es del Publicador de
+    // Instagram, así que solo se manda para Instagram.
+    if (pieza.plataforma !== "instagram") continue;
+    await avisarPublicador({
+      userId: pieza.user_id,
+      piezaId: pieza.id,
+      tipoEvento: "reel_vencido",
+      contenido: textoReelVencido({ motivo: "atrasada", piezaId: pieza.id, horasMaximas: RETRASO_MAXIMO_PUBLICACION_HORAS }),
+      sufijo: `atrasada:${ahora.toISOString()}`,
+    });
+  }
+  return data?.length ?? 0;
+}
+
 // 3. "lista" ya vencidas que el Publicador NO puede tomar -- se quedan
 // en "lista" (apenas se confirme o se cambie la música, la siguiente
 // vuelta la publica), pero el usuario se entera una sola vez.
@@ -448,7 +483,10 @@ async function devolverALista(piezaId: string, intentos?: number) {
 // LOCKED, nunca la misma pieza en dos vueltas) → cupo → contenedor REELS.
 export async function reclamarYCrearContenedores(): Promise<{ reclamadas: number; contenedores: number; devueltas: number; conError: number; sinCupo: number }> {
   const resumen = { reclamadas: 0, contenedores: 0, devueltas: 0, conError: 0, sinCupo: 0 };
-  const { data, error } = await supabaseAdmin.rpc("reclamar_publicaciones_organicas_vencidas", { p_limite: LIMITE_POR_CORRIDA });
+  const { data, error } = await supabaseAdmin.rpc("reclamar_publicaciones_organicas_vencidas", {
+    p_limite: LIMITE_POR_CORRIDA,
+    p_retraso_maximo_minutos: RETRASO_MAXIMO_PUBLICACION_HORAS * 60,
+  });
   if (error) {
     console.error("Error reclamando piezas para publicar:", error);
     await registrarError({ origen: "publicador_organico", email: null, paso: "rpc_reclamar", errorMensaje: "No se pudieron reclamar piezas para publicar.", detalleTecnico: error.message });
@@ -562,8 +600,9 @@ export async function ejecutarPublicadorOrganico() {
   const ahora = new Date();
   const rescate = await rescatarAtascadas(ahora);
   const vencidas = await vencerPiezasSinVideo({ ahora });
+  const atrasadas = await vencerListasAtrasadas(ahora);
   const bloqueadasAvisadas = await avisarListasBloqueadas(ahora);
   const procesamiento = await procesarContenedores();
   const reclamo = await reclamarYCrearContenedores();
-  return { rescate, vencidas, bloqueadasAvisadas, procesamiento, reclamo };
+  return { rescate, vencidas, atrasadas, bloqueadasAvisadas, procesamiento, reclamo };
 }

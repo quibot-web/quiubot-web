@@ -490,6 +490,35 @@ describe("PATCH /api/contenido/[id] -- reprogramar (arrastrar en el calendario)"
   });
 });
 
+describe("PATCH /api/contenido/[id] -- publicar_ahora (vencida con video)", () => {
+  beforeEach(() => {
+    fromMock.mockClear();
+    authMock.mockResolvedValue({ user: { email: "marca@quiubot.com" } });
+    usuarioActual = USUARIO_ADMIN;
+    filasUpdateActual = [{ id: "pieza-1" }];
+    updatesRealizados = [];
+    piezaActual = { id: "pieza-1", estado: "vencida", url_video: "https://res.cloudinary.com/demo/video/upload/v1/r.mp4", plataforma: "instagram" };
+  });
+
+  it("vuelve a 'lista' con la hora actual (dentro de la ventana del Publicador), sin tocar el control de calidad", async () => {
+    const antes = Date.now();
+    const res = await PATCH(patchReq({ accion: "publicar_ahora" }), contexto());
+    expect(res.status).toBe(200);
+    expect(updatesRealizados[0]).toMatchObject({ estado: "lista", estado_antes_de_vencer: null });
+    expect(new Date(updatesRealizados[0].programada_para as string).getTime()).toBeGreaterThanOrEqual(antes);
+    expect(updatesRealizados[0]).not.toHaveProperty("control_calidad");
+  });
+
+  it("sin video, de TikTok, o que no está vencida: 400", async () => {
+    for (const extra of [{ url_video: null }, { plataforma: "tiktok" }, { estado: "lista" }, { estado: "publicada" }]) {
+      piezaActual = { id: "pieza-1", estado: "vencida", url_video: "x", plataforma: "instagram", ...extra };
+      const res = await PATCH(patchReq({ accion: "publicar_ahora" }), contexto());
+      expect(res.status).toBe(400);
+    }
+    expect(updatesRealizados.length).toBe(0);
+  });
+});
+
 describe("PATCH /api/contenido/[id] -- previa_eliminar / eliminar (borrado suave)", () => {
   beforeEach(() => {
     fromMock.mockClear();

@@ -38,11 +38,25 @@
 -- El mismo criterio está repetido en app/lib/publicadorOrganico.ts
 -- (motivoBloqueoPublicacion) como segunda barrera.
 --
+-- 4. Ventana de retraso (18-nov-2026, después del caso real en staging:
+--    la primera vuelta reclamó 2 piezas de prueba de hace 2-3 días):
+--    solo reclama piezas con programada_para dentro de los últimos
+--    p_retraso_maximo_minutos. Es RESPALDO -- el cron ya pasa a
+--    "vencida" las más atrasadas antes de llamar a esta función. El
+--    valor NO vive acá: lo manda el código
+--    (RETRASO_MAXIMO_PUBLICACION_HORAS en app/lib/contenido.ts), y el
+--    parámetro no tiene valor por defecto a propósito, para que nunca
+--    se llame sin ventana. Por eso primero se borra la firma vieja de
+--    1 solo parámetro (si no, quedarían las 2 versiones y la vieja, sin
+--    ventana, se podría seguir llamando).
+--
 -- Mismo criterio atómico de siempre (FOR UPDATE SKIP LOCKED, el UPDATE
 -- de afuera vuelve a filtrar estado='lista') -- solo cambian los
 -- filtros del SELECT de adentro.
 -- ============================================================
-create or replace function reclamar_publicaciones_organicas_vencidas(p_limite integer default 10)
+drop function if exists reclamar_publicaciones_organicas_vencidas(integer);
+
+create or replace function reclamar_publicaciones_organicas_vencidas(p_limite integer, p_retraso_maximo_minutos integer)
 returns setof publicaciones_organicas
 language plpgsql
 security invoker
@@ -57,6 +71,7 @@ begin
         select p.id from publicaciones_organicas p
         where p.estado = 'lista'
           and p.programada_para <= now()
+          and p.programada_para >= now() - make_interval(mins => p_retraso_maximo_minutos)
           and p.plataforma = 'instagram'
           and (
             p.control_calidad is null
@@ -94,7 +109,7 @@ begin
 end;
 $$;
 
-revoke all on function reclamar_publicaciones_organicas_vencidas from public, anon, authenticated;
-grant execute on function reclamar_publicaciones_organicas_vencidas to service_role;
+revoke all on function reclamar_publicaciones_organicas_vencidas(integer, integer) from public, anon, authenticated;
+grant execute on function reclamar_publicaciones_organicas_vencidas(integer, integer) to service_role;
 
 notify pgrst, 'reload schema';

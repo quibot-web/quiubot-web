@@ -62,11 +62,14 @@ function crearConsulta(tabla: string) {
 // Imita la RPC con los filtros del SQL nuevo... salvo cuando un test
 // quiere simular la RPC VIEJA (sin filtros) para probar la segunda barrera.
 let rpcSinFiltros = false;
-function rpcReclamar() {
+function rpcReclamar(args: { p_limite?: number; p_retraso_maximo_minutos?: number | null }) {
   const ahora = new Date().toISOString();
+  // Igual que el SQL: sin ventana (null/ausente) no reclama nada.
+  if (typeof args.p_retraso_maximo_minutos !== "number") return [];
+  const desde = new Date(Date.now() - args.p_retraso_maximo_minutos * 60 * 1000).toISOString();
   const pistas = tablas.pistas_musicales ?? [];
   const elegibles = (tablas.publicaciones_organicas ?? []).filter((p) => {
-    if (p.estado !== "lista" || String(p.programada_para) > ahora) return false;
+    if (p.estado !== "lista" || String(p.programada_para) > ahora || String(p.programada_para) < desde) return false;
     if (rpcSinFiltros) return true;
     if (p.plataforma !== "instagram") return false;
     const qc = p.control_calidad as { aprobado?: boolean; publicarIgual?: boolean } | null;
@@ -88,7 +91,7 @@ vi.mock("@/lib/supabase", () => ({
     rpc: async (nombre: string, args: unknown) => {
       rpcLlamadas.push({ nombre, args });
       if (rpcFalla) return { data: null, error: { message: "boom" } };
-      return { data: rpcReclamar(), error: null };
+      return { data: rpcReclamar(args as { p_retraso_maximo_minutos?: number }), error: null };
     },
   },
 }));
@@ -135,6 +138,7 @@ const {
   procesarContenedores,
   reclamarYCrearContenedores,
   vencerPiezasSinVideo,
+  vencerListasAtrasadas,
   avisarListasBloqueadas,
   MAX_INTENTOS_TRANSITORIOS,
 } = await import("./publicadorOrganico");
@@ -236,7 +240,7 @@ describe("reclamar → contenedor", () => {
     const r = await reclamarYCrearContenedores();
     expect(r.contenedores).toBe(1);
     expect(piezaDb()).toMatchObject({ estado: "procesando", ig_container_id: "cont1" });
-    expect(rpcLlamadas).toEqual([{ nombre: "reclamar_publicaciones_organicas_vencidas", args: { p_limite: 10 } }]);
+    expect(rpcLlamadas).toEqual([{ nombre: "reclamar_publicaciones_organicas_vencidas", args: { p_limite: 10, p_retraso_maximo_minutos: 120 } }]);
 
     const iCupo = llamadasMeta.findIndex((l) => l.url.includes("content_publishing_limit"));
     const iCrear = llamadasMeta.findIndex((l) => l.url.endsWith("/ig1/media"));
@@ -432,6 +436,49 @@ describe("atascadas y vencidas", () => {
     expect(mensajes()).toHaveLength(1);
     expect(mensajes()[0]).toMatchObject({ tipo_evento: "reel_vencido" });
     expect(piezaDb().estado).toBe("lista");
+  });
+});
+
+describe("protección contra publicar piezas viejas (ventana de 2 h)", () => {
+  it("pieza con 1 h de retraso: se publica normal", async () => {
+    tablas.publicaciones_organicas.push(pieza({ programada_para: haceMin(60) }));
+    await ejecutarPublicadorOrganico();
+    expect(piezaDb().estado).toBe("procesando");
+  });
+
+  it("pieza con 3 h de retraso: pasa a vencida (estado previo 'lista'), sin llamar a Meta, con aviso 'Publicar ahora'", async () => {
+    tablas.publicaciones_organicas.push(pieza({ programada_para: haceMin(180) }));
+    const r = await ejecutarPublicadorOrganico();
+    expect(r.atrasadas).toBe(1);
+    expect(piezaDb()).toMatchObject({ estado: "vencida", estado_antes_de_vencer: "lista" });
+    expect(llamadasMeta).toHaveLength(0);
+    expect(mensajes()).toHaveLength(1);
+    expect(mensajes()[0]).toMatchObject({ asistente: "publicador", tipo_evento: "reel_vencido" });
+    expect(JSON.stringify(mensajes()[0].contenido)).toContain("/contenido/p1");
+  });
+
+  it("primera activación (caso real de staging): piezas en 'lista' de días anteriores nunca crean contenedores", async () => {
+    tablas.publicaciones_organicas.push(
+      pieza({ id: "nov15", programada_para: haceMin(3 * 24 * 60) }),
+      pieza({ id: "nov16", programada_para: haceMin(2 * 24 * 60) })
+    );
+    await ejecutarPublicadorOrganico();
+    expect(["nov15", "nov16"].map((id) => piezaDb(id).estado)).toEqual(["vencida", "vencida"]);
+    expect(llamadasMeta.some((l) => l.url.endsWith("/media"))).toBe(false);
+  });
+
+  it("respaldo: aunque el paso de vencer no corra, la RPC nunca reclama fuera de la ventana", async () => {
+    tablas.publicaciones_organicas.push(pieza({ programada_para: haceMin(180) }));
+    const r = await reclamarYCrearContenedores();
+    expect(r.reclamadas).toBe(0);
+    expect(piezaDb().estado).toBe("lista");
+  });
+
+  it("TikTok atrasada: se vence igual, pero sin aviso del Publicador de Instagram", async () => {
+    tablas.publicaciones_organicas.push(pieza({ plataforma: "tiktok", programada_para: haceMin(180) }));
+    expect(await vencerListasAtrasadas()).toBe(1);
+    expect(piezaDb().estado).toBe("vencida");
+    expect(mensajes()).toHaveLength(0);
   });
 });
 

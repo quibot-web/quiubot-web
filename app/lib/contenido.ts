@@ -244,6 +244,23 @@ export function elegirGanchoTipoMenosUsado(tiposYaUsados: (string | null | undef
 // día en el calendario -- el recorrido con Instagram ya arrancó o
 // terminó. Compartido entre la API (PATCH .../reprogramar) y la UI
 // (decide si una tarjeta es draggable).
+// Protección contra publicar piezas viejas (18 nov 2026, caso real: al
+// encender el publicador en staging reclamó 2 piezas de prueba de hace
+// 2-3 días que seguían en "lista"). Una pieza con más de este retraso
+// NUNCA se publica sola: el Publicador la pasa a "vencida" con aviso y
+// la opción "Publicar ahora". ÚNICO lugar de este valor -- la RPC
+// reclamar_publicaciones_organicas_vencidas lo recibe como parámetro
+// (p_retraso_maximo_minutos), no tiene su propia copia.
+export const RETRASO_MAXIMO_PUBLICACION_HORAS = 2;
+export const RETRASO_MAXIMO_PUBLICACION_MS = RETRASO_MAXIMO_PUBLICACION_HORAS * 60 * 60 * 1000;
+
+// "Publicar ahora" (solo piezas vencidas que ya tienen video y son de
+// Instagram): vuelve a "lista" con la hora actual, y el Publicador la
+// toma en su siguiente vuelta con los mismos bloqueos de siempre.
+export function puedePublicarAhora(pieza: Pick<PublicacionOrganica, "estado" | "url_video" | "plataforma">): boolean {
+  return pieza.estado === "vencida" && !!pieza.url_video && pieza.plataforma === "instagram";
+}
+
 // "cancelada" tampoco: una pieza eliminada no vuelve al calendario
 // moviéndole la fecha (no aparece en él para poder arrastrarla, y la
 // API lo rechaza igual).
