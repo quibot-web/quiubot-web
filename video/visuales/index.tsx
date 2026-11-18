@@ -272,6 +272,7 @@ function renderizarVisualSinMovimiento(visual: Visual, ctx: ContextoVisual) {
       const cuadroCambia = cuadroDelCambio(visual.eventos, ctx);
       return (
         <ComparacionVisual
+          tema={ctx.tema}
           frame={ctx.frame}
           fps={ctx.fps}
           cuadroCambia={cuadroCambia}
@@ -301,7 +302,7 @@ function renderizarVisualSinMovimiento(visual: Visual, ctx: ContextoVisual) {
 
     case "checklist": {
       const cuadroCambia = cuadroDelCambio(visual.eventos, ctx);
-      return <ChecklistVisual frame={ctx.frame} fps={ctx.fps} cuadroCambia={cuadroCambia} titulo={visual.titulo} items={visual.items} />;
+      return <ChecklistVisual frame={ctx.frame} fps={ctx.fps} tema={ctx.tema} cuadroCambia={cuadroCambia} titulo={visual.titulo} items={visual.items} />;
     }
 
     case "comparacion_foto": {

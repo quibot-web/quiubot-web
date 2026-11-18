@@ -1,4 +1,4 @@
-import { TARJETA_ANCHO_PORCENTAJE } from "./geometria";
+import { TARJETA_ANCHO_AMPLIO_PORCENTAJE, TARJETA_ANCHO_PORCENTAJE } from "./geometria";
 import {
   TAMANO_FUENTE_SUBTITULOS,
   TAMANO_FUENTE_BOTON,
@@ -9,6 +9,9 @@ import {
   TAMANO_FUENTE_NUMERO_GIGANTE,
   TAMANO_FUENTE_ETIQUETA_NUMERO_GIGANTE,
   TAMANO_FUENTE_CHIP_BUCLE,
+  TAMANO_FUENTE_MINIMO_VISUAL,
+  TAMANO_FUENTE_ETIQUETA_COMPARACION,
+  TAMANO_FUENTE_TITULO_CHECKLIST,
 } from "./tamanos";
 
 // Regla de escala del molde aprobado, pedida explícita (revisión de
@@ -58,7 +61,8 @@ export function compararGeometria(anchoTarjetaPorcentaje: number, tamanosDeFuent
 }
 
 export function validarGeometriaMinima(): HallazgoGeometria[] {
-  return compararGeometria(TARJETA_ANCHO_PORCENTAJE, [
+  const amplia = compararGeometria(TARJETA_ANCHO_AMPLIO_PORCENTAJE, []).map((h) => ({ ...h, elemento: "TARJETA_ANCHO_AMPLIO_PORCENTAJE" }));
+  return [...amplia, ...compararGeometria(TARJETA_ANCHO_PORCENTAJE, [
     { nombre: "SubtitulosSincronizados.TAMANO_FUENTE_SUBTITULOS", valor: TAMANO_FUENTE_SUBTITULOS },
     { nombre: "BotonEstado.TAMANO_FUENTE_BOTON", valor: TAMANO_FUENTE_BOTON },
     { nombre: "Contador.TAMANO_FUENTE_CONTADOR_GIGANTE", valor: TAMANO_FUENTE_CONTADOR_GIGANTE },
@@ -68,5 +72,9 @@ export function validarGeometriaMinima(): HallazgoGeometria[] {
     { nombre: "CelularChat.TAMANO_FUENTE_NUMERO_GIGANTE", valor: TAMANO_FUENTE_NUMERO_GIGANTE },
     { nombre: "CelularChat.TAMANO_FUENTE_ETIQUETA_NUMERO_GIGANTE", valor: TAMANO_FUENTE_ETIQUETA_NUMERO_GIGANTE },
     { nombre: "CapaBucleAudio.TAMANO_FUENTE_CHIP_BUCLE", valor: TAMANO_FUENTE_CHIP_BUCLE },
-  ]);
+    // Piso de fitText en comparacion/checklist (nunca baja de acá).
+    { nombre: "Comparacion/Checklist.TAMANO_FUENTE_MINIMO_VISUAL", valor: TAMANO_FUENTE_MINIMO_VISUAL },
+    { nombre: "ComparacionVisual.TAMANO_FUENTE_ETIQUETA_COMPARACION", valor: TAMANO_FUENTE_ETIQUETA_COMPARACION },
+    { nombre: "ChecklistVisual.TAMANO_FUENTE_TITULO_CHECKLIST", valor: TAMANO_FUENTE_TITULO_CHECKLIST },
+  ])];
 }

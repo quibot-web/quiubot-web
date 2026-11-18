@@ -48,7 +48,7 @@ export function BancoVisuales({ tipo, estado, textos, tema = TEMA_BANCO }: Props
       {tipo === "conexion_whatsapp" && <ConexionWhatsappVisual frame={frame} fps={fps} tema={tema} cuadroCambia={cuadroCambia} textos={textos} />}
       {tipo === "respuesta_lenta" && <RespuestaLentaVisual frame={frame} fps={fps} cuadroCambia={cuadroCambia} textos={textos} />}
       {tipo === "comparacion" && (
-        <ComparacionVisual frame={frame} fps={fps} cuadroCambia={cuadroCambia} textoMal={textos.texto_mal} textoBien={textos.texto_bien} etiquetaMal={textos.etiqueta_mal} etiquetaBien={textos.etiqueta_bien} />
+        <ComparacionVisual tema={tema} frame={frame} fps={fps} cuadroCambia={cuadroCambia} textoMal={textos.texto_mal} textoBien={textos.texto_bien} etiquetaMal={textos.etiqueta_mal} etiquetaBien={textos.etiqueta_bien} />
       )}
       {tipo === "icono_palabra" && (
         <IconoPalabraVisual
@@ -63,7 +63,7 @@ export function BancoVisuales({ tipo, estado, textos, tema = TEMA_BANCO }: Props
         />
       )}
       {tipo === "checklist" && (
-        <ChecklistVisual frame={frame} fps={fps} cuadroCambia={cuadroCambia} titulo={textos.titulo || undefined} items={[textos.item1, textos.item2, textos.item3].filter(Boolean)} />
+        <ChecklistVisual tema={tema} frame={frame} fps={fps} cuadroCambia={cuadroCambia} titulo={textos.titulo || undefined} items={[textos.item1, textos.item2, textos.item3].filter(Boolean)} />
       )}
       {tipo === "comparacion_foto" && (
         // Foto de stock SOLO para el banco de pruebas (sin logos, ver la

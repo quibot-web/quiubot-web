@@ -18,6 +18,14 @@ export const TAMANO_FUENTE_NOTIFICACION = 40;
 export const TAMANO_FUENTE_NUMERO_GIGANTE = 260;
 export const TAMANO_FUENTE_ETIQUETA_NUMERO_GIGANTE = 44;
 export const TAMANO_FUENTE_CHIP_BUCLE = 40;
+// Comparacion y checklist (18 nov 2026, revisión en staging: "los
+// textos se ven chicos" -- iban a 26-36px). Mismo mínimo del molde (40px
+// en 1080); el texto se ajusta con fitText entre el mínimo y el máximo.
+export const TAMANO_FUENTE_MINIMO_VISUAL = 40;
+export const TAMANO_FUENTE_TEXTO_COMPARACION_MAX = 50;
+export const TAMANO_FUENTE_ETIQUETA_COMPARACION = 40;
+export const TAMANO_FUENTE_ITEM_CHECKLIST_MAX = 60;
+export const TAMANO_FUENTE_TITULO_CHECKLIST = 42;
 
 // Ronda J: gemelo SIN efecto secundario de video/fuentes.ts's
 // familiaDeFuente() -- BotonEstado.tsx necesita el nombre real de la

@@ -29,3 +29,7 @@
 export const TARJETA_TOP_PORCENTAJE = 22;
 export const TARJETA_ALTURA_PORCENTAJE = 27; // termina en 49%, 5 puntos antes de la franja de subtítulos (54%-65%)
 export const TARJETA_ANCHO_PORCENTAJE = 80;
+// Tarjetas de solo texto (comparacion, checklist): crecen al máximo que
+// permite la regla del molde (70-85% del ancho, validarGeometriaMinima)
+// para que el texto de 40px o más quepa sin verse apretado.
+export const TARJETA_ANCHO_AMPLIO_PORCENTAJE = 85;

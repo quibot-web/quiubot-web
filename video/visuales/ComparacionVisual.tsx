@@ -13,15 +13,29 @@
 import { interpolate, spring } from "remotion";
 import { COLOR_ALERTA, COLOR_EXITO, COLOR_EXITO_BLOQUE } from "./acento";
 import { IconoMarca } from "../iconos";
-import { TARJETA_ALTURA_PORCENTAJE, TARJETA_ANCHO_PORCENTAJE, TARJETA_TOP_PORCENTAJE } from "./geometria";
+import { fitText } from "@remotion/layout-utils";
+import { TARJETA_ALTURA_PORCENTAJE, TARJETA_ANCHO_AMPLIO_PORCENTAJE, TARJETA_TOP_PORCENTAJE } from "./geometria";
+import { TAMANO_FUENTE_ETIQUETA_COMPARACION, TAMANO_FUENTE_MINIMO_VISUAL, TAMANO_FUENTE_TEXTO_COMPARACION_MAX, familiaDeFuenteSinCargar } from "./tamanos";
+import type { TemaGuion } from "../tema";
 
-const ALTO_TARJETA_PORCENTAJE = 46;
+const ALTO_TARJETA_PORCENTAJE = 48;
+const PADDING_HORIZONTAL_PX = 28;
+const BORDE_PX = 5;
+const ANCHO_TEXTO_PX = (TARJETA_ANCHO_AMPLIO_PORCENTAJE / 100) * 1080 - PADDING_HORIZONTAL_PX * 2 - BORDE_PX * 2;
+
+// El texto (máx. 44 caracteres) tiene que caber en 2 líneas: se mide como
+// si fuera una sola línea del doble de ancho (con margen por los cortes
+// de palabra) y se deja entre el mínimo del molde y el máximo.
+function tamanoTexto(texto: string, familia: string): number {
+  const { fontSize } = fitText({ text: texto, withinWidth: ANCHO_TEXTO_PX * 1.8, fontFamily: familia, fontWeight: 800 });
+  return Math.max(TAMANO_FUENTE_MINIMO_VISUAL, Math.min(TAMANO_FUENTE_TEXTO_COMPARACION_MAX, Math.floor(fontSize)));
+}
 const SEPARACION_PORCENTAJE = 100 - ALTO_TARJETA_PORCENTAJE * 2;
 // Cuánto baja la tarjeta del error (en % de SU PROPIO alto) para quedar
 // centrada en el cajón mientras la otra no existe.
 const DESPLAZAMIENTO_CENTRADO = ((ALTO_TARJETA_PORCENTAJE + SEPARACION_PORCENTAJE) / 2 / ALTO_TARJETA_PORCENTAJE) * 100;
 
-function Tarjeta({ marca, etiqueta, texto, color, colorEtiqueta, estilo }: { marca: "mal" | "bien"; etiqueta: string; texto: string; color: string; colorEtiqueta: string; estilo: React.CSSProperties }) {
+function Tarjeta({ marca, etiqueta, texto, tamanoTexto, color, colorEtiqueta, estilo }: { marca: "mal" | "bien"; etiqueta: string; texto: string; tamanoTexto: number; color: string; colorEtiqueta: string; estilo: React.CSSProperties }) {
   return (
     <div
       style={{
@@ -31,9 +45,9 @@ function Tarjeta({ marca, etiqueta, texto, color, colorEtiqueta, estilo }: { mar
         height: `${ALTO_TARJETA_PORCENTAJE}%`,
         background: "#fff",
         borderRadius: 28,
-        border: `5px solid ${color}`,
+        border: `${BORDE_PX}px solid ${color}`,
         boxShadow: "0 24px 60px rgba(0,0,0,0.4)",
-        padding: "18px 28px",
+        padding: `12px ${PADDING_HORIZONTAL_PX}px`,
         display: "flex",
         flexDirection: "column",
         justifyContent: "center",
@@ -42,10 +56,10 @@ function Tarjeta({ marca, etiqueta, texto, color, colorEtiqueta, estilo }: { mar
       }}
     >
       <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
-        <IconoMarca tipo={marca} tamano={36} />
-        <span style={{ fontSize: 26, fontWeight: 800, color: colorEtiqueta, textTransform: "uppercase", letterSpacing: "0.03em" }}>{etiqueta}</span>
+        <IconoMarca tipo={marca} tamano={TAMANO_FUENTE_ETIQUETA_COMPARACION} />
+        <span style={{ fontSize: TAMANO_FUENTE_ETIQUETA_COMPARACION, lineHeight: 1.1, fontWeight: 800, color: colorEtiqueta, textTransform: "uppercase", letterSpacing: "0.03em" }}>{etiqueta}</span>
       </div>
-      <div style={{ fontSize: 36, fontWeight: 800, color: "#141414", lineHeight: 1.18 }}>{texto}</div>
+      <div style={{ fontSize: tamanoTexto, fontWeight: 800, color: "#141414", lineHeight: 1.12 }}>{texto}</div>
     </div>
   );
 }
@@ -58,7 +72,9 @@ export function ComparacionVisual({
   textoBien,
   etiquetaMal = "Así no",
   etiquetaBien = "Así sí",
+  tema,
 }: {
+  tema: TemaGuion;
   frame: number;
   fps: number;
   cuadroCambia: number;
@@ -68,6 +84,9 @@ export function ComparacionVisual({
   etiquetaBien?: string;
 }) {
   const progreso = frame >= cuadroCambia ? spring({ frame: frame - cuadroCambia, fps, config: { damping: 15 } }) : 0;
+  // El mismo tamaño en las dos tarjetas (el del texto más largo).
+  const familia = familiaDeFuenteSinCargar(tema.fuente);
+  const tamano = Math.min(tamanoTexto(textoMal, familia), tamanoTexto(textoBien, familia));
 
   return (
     <div
@@ -75,7 +94,7 @@ export function ComparacionVisual({
         position: "absolute",
         top: `${TARJETA_TOP_PORCENTAJE}%`,
         left: "50%",
-        width: `${TARJETA_ANCHO_PORCENTAJE}%`,
+        width: `${TARJETA_ANCHO_AMPLIO_PORCENTAJE}%`,
         height: `${TARJETA_ALTURA_PORCENTAJE}%`,
         transform: "translateX(-50%)",
       }}
@@ -84,6 +103,7 @@ export function ComparacionVisual({
         marca="mal"
         etiqueta={etiquetaMal}
         texto={textoMal}
+        tamanoTexto={tamano}
         color={COLOR_ALERTA}
         colorEtiqueta={COLOR_ALERTA}
         estilo={{
@@ -96,6 +116,7 @@ export function ComparacionVisual({
         marca="bien"
         etiqueta={etiquetaBien}
         texto={textoBien}
+        tamanoTexto={tamano}
         color={COLOR_EXITO}
         colorEtiqueta={COLOR_EXITO_BLOQUE}
         estilo={{
