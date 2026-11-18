@@ -181,17 +181,40 @@ export function renderizarVisual(visual: Visual, ctx: ContextoVisual) {
     // (o, en conexion_whatsapp, 2 tarjetas apiladas).
     case "anuncio_boton": {
       const cuadroCambia = cuadroDePalabra(visual.eventos[0].palabra, ctx);
-      return <AnuncioBotonVisual frame={ctx.frame} fps={ctx.fps} tema={ctx.tema} cuadroCambia={cuadroCambia} />;
+      return (
+        <AnuncioBotonVisual
+          frame={ctx.frame}
+          fps={ctx.fps}
+          tema={ctx.tema}
+          cuadroCambia={cuadroCambia}
+          textos={{ icono: visual.icono, etiqueta: visual.etiqueta, texto_problema: visual.texto_problema, texto_arreglo: visual.texto_arreglo }}
+        />
+      );
     }
 
     case "conexion_whatsapp": {
       const cuadroCambia = cuadroDePalabra(visual.eventos[0].palabra, ctx);
-      return <ConexionWhatsappVisual frame={ctx.frame} fps={ctx.fps} tema={ctx.tema} cuadroCambia={cuadroCambia} />;
+      return (
+        <ConexionWhatsappVisual
+          frame={ctx.frame}
+          fps={ctx.fps}
+          tema={ctx.tema}
+          cuadroCambia={cuadroCambia}
+          textos={{ icono: visual.icono, etiqueta: visual.etiqueta, texto_problema: visual.texto_problema, mensaje: visual.mensaje }}
+        />
+      );
     }
 
     case "respuesta_lenta": {
       const cuadroCambia = cuadroDePalabra(visual.eventos[0].palabra, ctx);
-      return <RespuestaLentaVisual frame={ctx.frame} fps={ctx.fps} cuadroCambia={cuadroCambia} />;
+      return (
+        <RespuestaLentaVisual
+          frame={ctx.frame}
+          fps={ctx.fps}
+          cuadroCambia={cuadroCambia}
+          textos={{ pregunta_cliente: visual.pregunta_cliente, respuesta: visual.respuesta, confirmacion: visual.confirmacion }}
+        />
+      );
     }
   }
 }

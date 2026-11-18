@@ -23,6 +23,46 @@ const Evento = z.object({
   palabra: z.number().int().min(0),
 });
 
+// Texto que escribe la IA DENTRO de un visual (parte 2b, 18 nov 2026:
+// los visuales de 2 estados pasan a tener textos propios según el tema).
+// Lista blanca de caracteres: letras latinas (con tildes y ñ), números,
+// puntuación común y emoji. Fuera quedan flechas y marcas de texto
+// (→ ↓ ✓ ✗ ...): no están en el cmap de las 4 fuentes cargadas y solo
+// se ven gracias al fallback del sistema, que no está garantizado (ver
+// memoria feedback_glifos_faltantes_en_fuentes_cargadas). Para esos,
+// el emoji equivalente (✔️ ❌ ➡️ ⬇️) sí pasa.
+export const PATRON_TEXTO_VISUAL_SEGURO = /^[\p{Script=Latin}\p{N} .,;:¿?¡!'"()\-/%$+&@#=*·…°\p{Extended_Pictographic}\u200d\ufe0f]*$/u;
+
+export function TextoVisual(maximo: number) {
+  return z
+    .string()
+    .trim()
+    .min(1)
+    .max(maximo)
+    .refine((t) => PATRON_TEXTO_VISUAL_SEGURO.test(t), {
+      message: "usa solo letras, números, puntuación común o emoji (nada de flechas ni símbolos como → ✓ ✗)",
+    });
+}
+
+// Un solo emoji (con sus modificadores/uniones) -- el ícono grande de la
+// tarjeta en anuncio_boton/conexion_whatsapp, para que calce con la
+// etiqueta (📷 para "Publicación" de fotos, 🛍️ para "Catálogo"...): un
+// 📣 fijo con la etiqueta "Catálogo" contradice lo que dice el visual.
+export const PATRON_UN_EMOJI = /^\p{Extended_Pictographic}\ufe0f?(\u200d\p{Extended_Pictographic}\ufe0f?)*$/u;
+export const IconoVisual = z
+  .string()
+  .trim()
+  .refine((t) => PATRON_UN_EMOJI.test(t), { message: "debe ser un solo emoji" });
+
+// Límites de largo de cada texto, en un solo lugar: el prompt los cita
+// y el banco de pruebas visual (video/BancoVisuales.tsx) los renderiza
+// al máximo para comprobar que caben.
+export const LIMITES_TEXTO_VISUAL = {
+  anuncio_boton: { etiqueta: 16, texto_problema: 26, texto_arreglo: 20 },
+  conexion_whatsapp: { etiqueta: 16, texto_problema: 18, mensaje: 36 },
+  respuesta_lenta: { pregunta_cliente: 40, respuesta: 36, confirmacion: 28 },
+} as const;
+
 export const VisualSchema = z.discriminatedUnion("tipo", [
   z.object({
     tipo: z.literal("celular_chat"),
@@ -65,16 +105,30 @@ export const VisualSchema = z.discriminatedUnion("tipo", [
   // de dos estados, y el cambio de estado está amarrado a la palabra
   // de la narración donde se da la solución". Nunca más de 1 evento:
   // con 2 estados no hay un "a medio camino", es antes o después.
+  // Textos opcionales (parte 2b): si la IA no los manda, el componente
+  // usa los textos de siempre -- así los guiones ya guardados siguen
+  // siendo válidos y se ven igual que antes.
   z.object({
     tipo: z.literal("anuncio_boton"),
+    icono: IconoVisual.optional(),
+    etiqueta: TextoVisual(LIMITES_TEXTO_VISUAL.anuncio_boton.etiqueta).optional(),
+    texto_problema: TextoVisual(LIMITES_TEXTO_VISUAL.anuncio_boton.texto_problema).optional(),
+    texto_arreglo: TextoVisual(LIMITES_TEXTO_VISUAL.anuncio_boton.texto_arreglo).optional(),
     eventos: z.array(Evento.extend({ accion: z.literal("cambia_estado") })).length(1),
   }),
   z.object({
     tipo: z.literal("conexion_whatsapp"),
+    icono: IconoVisual.optional(),
+    etiqueta: TextoVisual(LIMITES_TEXTO_VISUAL.conexion_whatsapp.etiqueta).optional(),
+    texto_problema: TextoVisual(LIMITES_TEXTO_VISUAL.conexion_whatsapp.texto_problema).optional(),
+    mensaje: TextoVisual(LIMITES_TEXTO_VISUAL.conexion_whatsapp.mensaje).optional(),
     eventos: z.array(Evento.extend({ accion: z.literal("cambia_estado") })).length(1),
   }),
   z.object({
     tipo: z.literal("respuesta_lenta"),
+    pregunta_cliente: TextoVisual(LIMITES_TEXTO_VISUAL.respuesta_lenta.pregunta_cliente).optional(),
+    respuesta: TextoVisual(LIMITES_TEXTO_VISUAL.respuesta_lenta.respuesta).optional(),
+    confirmacion: TextoVisual(LIMITES_TEXTO_VISUAL.respuesta_lenta.confirmacion).optional(),
     eventos: z.array(Evento.extend({ accion: z.literal("cambia_estado") })).length(1),
   }),
 ]);

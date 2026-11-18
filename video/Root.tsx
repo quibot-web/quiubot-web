@@ -18,6 +18,7 @@ import { fixturePreguntaComunidad } from "./fixtures/organico/preguntaComunidad"
 import { fixtureDetrasDeMarca } from "./fixtures/organico/detrasDeMarca";
 import { ReelConsejosNumerados, duracionReelConsejosNumeradosEnCuadros } from "./fixtures/organico/referencia/ReelConsejosNumerados";
 import { ReelMitoVerdad, duracionReelMitoVerdadEnCuadros } from "./fixtures/organico/referencia/ReelMitoVerdad";
+import { BancoVisuales, type PropsBancoVisuales } from "./BancoVisuales";
 
 // Placeholder para "demo-1" (data URI, sin archivos nuevos en public/):
 // solo para ver en Studio cómo se comporta producto_hero y el gancho con
@@ -118,6 +119,18 @@ function RemotionRoot() {
         fps={30}
         width={1080}
         height={1920}
+      />
+      {/* Banco de pruebas visual (parte 2b): un visual suelto, "antes" o
+          "después", con los textos que se le pasen -- solo para revisar
+          stills reales (video/renderBancoVisuales.ts). */}
+      <Composition
+        id="banco-visuales"
+        component={BancoVisuales}
+        durationInFrames={60}
+        fps={30}
+        width={1080}
+        height={1920}
+        defaultProps={{ tipo: "anuncio_boton", estado: "antes", textos: {} } satisfies PropsBancoVisuales}
       />
     </>
   );

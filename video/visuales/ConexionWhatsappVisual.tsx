@@ -21,7 +21,25 @@ import { interpolarSeguro } from "../interpolarSeguro";
 import { COLOR_ALERTA, COLOR_EXITO } from "./acento";
 import { TARJETA_ALTURA_PORCENTAJE, TARJETA_TOP_PORCENTAJE } from "./geometria";
 
-export function ConexionWhatsappVisual({ frame, fps, tema, cuadroCambia }: { frame: number; fps: number; tema: TemaGuion; cuadroCambia: number }) {
+// Textos (parte 2b): "etiqueta" es el origen (anuncio, perfil, catálogo,
+// historia...), "texto_problema" lo que pasa mientras está desconectado,
+// "mensaje" lo que llega al chat al conectarse.
+export const TEXTOS_CONEXION_POR_DEFECTO = { icono: "📣", etiqueta: "Anuncio", texto_problema: "Sin conexión", mensaje: "Hola, ¿tienen disponible?" };
+
+export function ConexionWhatsappVisual({
+  frame,
+  fps,
+  tema,
+  cuadroCambia,
+  textos = {},
+}: {
+  frame: number;
+  fps: number;
+  tema: TemaGuion;
+  cuadroCambia: number;
+  textos?: { icono?: string; etiqueta?: string; texto_problema?: string; mensaje?: string };
+}) {
+  const t = { ...TEXTOS_CONEXION_POR_DEFECTO, ...Object.fromEntries(Object.entries(textos).filter(([, v]) => !!v)) };
   const conectado = frame >= cuadroCambia;
   const progresoMensaje = spring({ frame: frame - cuadroCambia, fps, config: { damping: 14 } });
   const progresoViaje = interpolarSeguro(frame, [cuadroCambia, cuadroCambia + Math.round(fps * 0.35)], [0, 1], { extrapolateLeft: "clamp", extrapolateRight: "clamp" });
@@ -48,8 +66,8 @@ export function ConexionWhatsappVisual({ frame, fps, tema, cuadroCambia }: { fra
           justifyContent: "center",
         }}
       >
-        <span style={{ fontSize: 60 }}>📣</span>
-        <span style={{ position: "absolute", top: 10, left: 14, background: "rgba(0,0,0,0.3)", color: "#fff", fontSize: 18, fontWeight: 700, padding: "5px 14px", borderRadius: 999 }}>Anuncio</span>
+        <span style={{ fontSize: 60 }}>{t.icono}</span>
+        <span style={{ position: "absolute", top: 10, left: 14, background: "rgba(0,0,0,0.3)", color: "#fff", fontSize: 18, fontWeight: 700, padding: "5px 14px", borderRadius: 999 }}>{t.etiqueta}</span>
       </div>
 
       {/* Línea: cortada (✗) o conectada (mensaje viajando). */}
@@ -128,10 +146,10 @@ export function ConexionWhatsappVisual({ frame, fps, tema, cuadroCambia }: { fra
                 transform: `translateY(${interpolate(progresoMensaje, [0, 1], [16, 0])}px)`,
               }}
             >
-              Hola, ¿tienen disponible?
+              {t.mensaje}
             </div>
           ) : (
-            <span style={{ fontSize: 38, fontWeight: 800, color: COLOR_ALERTA }}>Sin conexión</span>
+            <span style={{ fontSize: 38, fontWeight: 800, color: COLOR_ALERTA, textAlign: "center" }}>{t.texto_problema}</span>
           )}
         </div>
       </div>

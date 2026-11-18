@@ -18,7 +18,25 @@ import { CursorClicEventos } from "./CursorClicEventos";
 import { COLOR_ALERTA, COLOR_EXITO } from "./acento";
 import { TARJETA_ALTURA_PORCENTAJE, TARJETA_ANCHO_PORCENTAJE, TARJETA_TOP_PORCENTAJE } from "./geometria";
 
-export function AnuncioBotonVisual({ frame, fps, tema, cuadroCambia }: { frame: number; fps: number; tema: TemaGuion; cuadroCambia: number }) {
+// Textos (parte 2b): la IA los define según el tema -- "lo que le falta"
+// al anuncio/publicación y lo que aparece como arreglo. Por defecto, los
+// textos de siempre (consejo del botón de contacto).
+export const TEXTOS_ANUNCIO_BOTON_POR_DEFECTO = { icono: "📣", etiqueta: "Anuncio", texto_problema: "Sin botón de contacto", texto_arreglo: "Enviar mensaje" };
+
+export function AnuncioBotonVisual({
+  frame,
+  fps,
+  tema,
+  cuadroCambia,
+  textos = {},
+}: {
+  frame: number;
+  fps: number;
+  tema: TemaGuion;
+  cuadroCambia: number;
+  textos?: { icono?: string; etiqueta?: string; texto_problema?: string; texto_arreglo?: string };
+}) {
+  const t = { ...TEXTOS_ANUNCIO_BOTON_POR_DEFECTO, ...Object.fromEntries(Object.entries(textos).filter(([, v]) => !!v)) };
   const activa = frame >= cuadroCambia;
   const progreso = spring({ frame: frame - cuadroCambia, fps, config: { damping: 13 } });
   // Bug real (ronda H, revisión de staging): colorTextoSobre(primario)
@@ -58,8 +76,8 @@ export function AnuncioBotonVisual({ frame, fps, tema, cuadroCambia }: { frame: 
           padding: 24,
         }}
       >
-        <span style={{ position: "absolute", top: 20, left: 20, background: "rgba(0,0,0,0.35)", color: "#fff", fontSize: 24, fontWeight: 700, padding: "8px 18px", borderRadius: 999 }}>📣 Anuncio</span>
-        <span style={{ fontSize: 110, opacity: 0.6, filter: "drop-shadow(0 8px 16px rgba(0,0,0,0.2))" }}>📣</span>
+        <span style={{ position: "absolute", top: 20, left: 20, background: "rgba(0,0,0,0.35)", color: "#fff", fontSize: 24, fontWeight: 700, padding: "8px 18px", borderRadius: 999 }}>{t.etiqueta}</span>
+        <span style={{ fontSize: 110, opacity: 0.6, filter: "drop-shadow(0 8px 16px rgba(0,0,0,0.2))" }}>{t.icono}</span>
       </div>
       <div style={{ padding: "22px 26px" }}>
         {!activa ? (
@@ -72,9 +90,10 @@ export function AnuncioBotonVisual({ frame, fps, tema, cuadroCambia }: { frame: 
               color: COLOR_ALERTA,
               fontSize: 32,
               fontWeight: 800,
+              lineHeight: 1.15,
             }}
           >
-            Sin botón de contacto
+            {t.texto_problema}
           </div>
         ) : (
           // Ancho fijo y generoso (no fit-content) -- mismo ajuste de la
@@ -91,11 +110,12 @@ export function AnuncioBotonVisual({ frame, fps, tema, cuadroCambia }: { frame: 
                 textAlign: "center",
                 fontSize: 32,
                 fontWeight: 800,
+                whiteSpace: "nowrap",
                 transform: `scale(${interpolate(progreso, [0, 1], [0.85, 1])})`,
                 opacity: progreso,
               }}
             >
-              Enviar mensaje
+              {t.texto_arreglo}
             </div>
             <CursorClicEventos frame={frame} fps={fps} cuadroAparece={cuadroCambia} cuadroClic={cuadroCambia + Math.round(fps * 0.25)} />
           </div>

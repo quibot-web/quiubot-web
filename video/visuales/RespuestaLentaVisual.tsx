@@ -18,7 +18,22 @@ function formatoReloj(totalSegundos: number): string {
   return `${m}:${String(s).padStart(2, "0")}`;
 }
 
-export function RespuestaLentaVisual({ frame, fps, cuadroCambia }: { frame: number; fps: number; cuadroCambia: number }) {
+// Textos (parte 2b): la pregunta real que hace un cliente de ESE rubro,
+// la respuesta del negocio y la confirmación del cliente.
+export const TEXTOS_RESPUESTA_POR_DEFECTO = { pregunta_cliente: "Hola, ¿tienen disponible?", respuesta: "¡Sí, aquí tienes! 😊", confirmacion: "Perfecto, lo quiero" };
+
+export function RespuestaLentaVisual({
+  frame,
+  fps,
+  cuadroCambia,
+  textos = {},
+}: {
+  frame: number;
+  fps: number;
+  cuadroCambia: number;
+  textos?: { pregunta_cliente?: string; respuesta?: string; confirmacion?: string };
+}) {
+  const t = { ...TEXTOS_RESPUESTA_POR_DEFECTO, ...Object.fromEntries(Object.entries(textos).filter(([, v]) => !!v)) };
   const rapida = frame >= cuadroCambia;
   const cuadroConfirmacion = cuadroCambia + Math.round(fps * 0.3);
   const progresoRespuesta = spring({ frame: frame - cuadroCambia, fps, config: { damping: 16, stiffness: 300 } });
@@ -46,7 +61,7 @@ export function RespuestaLentaVisual({ frame, fps, cuadroCambia }: { frame: numb
     >
       <div style={{ width: "100%", height: "100%", borderRadius: "22px 22px 0 0", overflow: "hidden", background: "#fff", display: "flex", flexDirection: "column", padding: "20px 22px", gap: 14 }}>
         <div style={{ background: "#f0f0f0", color: "#111", borderRadius: "20px 20px 20px 5px", padding: "18px 22px", fontSize: 32, fontWeight: 700, alignSelf: "flex-start", maxWidth: "90%" }}>
-          Hola, ¿tienen disponible?
+          {t.pregunta_cliente}
         </div>
 
         {!rapida && (
@@ -79,7 +94,7 @@ export function RespuestaLentaVisual({ frame, fps, cuadroCambia }: { frame: numb
                 transform: `translateY(${interpolate(progresoRespuesta, [0, 1], [16, 0])}px)`,
               }}
             >
-              ¡Sí, aquí tienes! 😊
+              {t.respuesta}
             </div>
             <div
               style={{
@@ -95,7 +110,7 @@ export function RespuestaLentaVisual({ frame, fps, cuadroCambia }: { frame: numb
                 transform: `translateY(${interpolate(progresoConfirmacion, [0, 1], [16, 0])}px)`,
               }}
             >
-              Perfecto, lo quiero
+              {t.confirmacion}
             </div>
           </>
         )}
