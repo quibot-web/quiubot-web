@@ -19,6 +19,9 @@ let marcaActual: Record<string, unknown> | null = null;
 let piezaActual: Record<string, unknown> | null = null;
 let piezasAlbumActual: Record<string, unknown>[] = [];
 let productosActivosActual: Record<string, unknown>[] = [];
+// Producto elegido para la pieza (producto_id) -- consulta con maybeSingle.
+let productoPiezaActual: Record<string, unknown> | null = null;
+let filtrosProductoPieza: [string, unknown][] = [];
 let pistasActivasActual: Record<string, unknown>[] = [];
 let piezasSemanaActual: Record<string, unknown>[] = [];
 let updatesRealizados: Record<string, unknown>[] = [];
@@ -33,11 +36,19 @@ fromMock.mockImplementation((tabla: unknown) => {
   if (tabla === "usuarios") return chainSimple(usuarioActual);
   if (tabla === "marcas") return chainSimple(marcaActual);
   if (tabla === "productos") {
+    const filtros: [string, unknown][] = [];
     const obj = {
       select: () => obj,
-      eq: () => obj,
+      eq: (c: string, v: unknown) => {
+        filtros.push([c, v]);
+        return obj;
+      },
       order: () => obj,
       limit: () => obj,
+      maybeSingle: async () => {
+        filtrosProductoPieza = filtros;
+        return { data: productoPiezaActual, error: null };
+      },
       then: (resolve: (v: { data: unknown; error: unknown }) => void) => resolve({ data: productosActivosActual, error: null }),
     };
     return obj;
@@ -510,6 +521,31 @@ describe("POST /api/contenido/[id]/guion -- receta con voz vs. receta de siempre
     expect(body.guion.vozUrl).toBe("https://cloudinary.test/voz.mp3");
     expect(updatesRealizados[0].voz_url).toBe("https://cloudinary.test/voz.mp3");
     vi.unstubAllGlobals();
+  });
+
+  it("consejos_numerados: el tema y el producto de la pieza (solo del propio usuario) llegan a generarGuionConVoz como eje", async () => {
+    piezaActual = { id: "pieza-1", receta_organica: "consejos_numerados", estado: "borrador", media_ids: null, semana: "2026-11-09", tema: "fotos de producto", gancho_tipo: "pregunta", producto_id: "prod-9" };
+    productoPiezaActual = { nombre: "Taza artesanal", tipo: "producto", destacar: "esmalte azul", precio_cop: 45000 };
+    generarGuionConVozMock.mockResolvedValue({ ok: false, status: 502, error: "x" });
+
+    await POST(req(), contexto());
+
+    const entrada = generarGuionConVozMock.mock.calls[0][0].entrada;
+    expect(entrada.tema).toBe("fotos de producto");
+    expect(entrada.productoPieza).toEqual({ nombre: "Taza artesanal", tipo: "producto", destacar: "esmalte azul", precio_cop: 45000 });
+    expect(filtrosProductoPieza).toEqual(expect.arrayContaining([["id", "prod-9"], ["user_id", USUARIO_ADMIN.id]]));
+    productoPiezaActual = null;
+  });
+
+  it("consejos_numerados sin producto_id: productoPieza null, nunca consulta un producto suelto", async () => {
+    piezaActual = { id: "pieza-1", receta_organica: "consejos_numerados", estado: "borrador", media_ids: null, semana: "2026-11-09", tema: null, gancho_tipo: "pregunta", producto_id: null };
+    filtrosProductoPieza = [];
+    generarGuionConVozMock.mockResolvedValue({ ok: false, status: 502, error: "x" });
+
+    await POST(req(), contexto());
+
+    expect(generarGuionConVozMock.mock.calls[0][0].entrada.productoPieza).toBeNull();
+    expect(filtrosProductoPieza).toEqual([]);
   });
 
   it("consejos_numerados sin Cloudinary conectado: 400, nunca llama a generarGuionConVoz", async () => {

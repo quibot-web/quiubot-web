@@ -131,7 +131,7 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
 
   const { data: pieza } = await supabaseAdmin
     .from("publicaciones_organicas")
-    .select("id, receta_organica, estado, media_ids, semana, tema, gancho_tipo")
+    .select("id, receta_organica, estado, media_ids, semana, tema, gancho_tipo, producto_id")
     .eq("id", id)
     .eq("user_id", usuario.id)
     .maybeSingle();
@@ -274,6 +274,27 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
   const { data: pistasDb } = await supabaseAdmin.from("pistas_musicales").select("id, mood, licencia_url").eq("activo", true);
   const pistaIdElegida = elegirPistaMusicalOrganica(pistasDb ?? []);
 
+  // Producto elegido para ESTA pieza (si hay) -- eje del reel junto con
+  // el tema (ver seccionEjeDelReel). Solo del propio usuario; si ya no
+  // existe, el reel se genera sin él (no bloquea).
+  let productoPieza: ProductoResumenNegocio | null = null;
+  if (pieza.producto_id) {
+    const { data: productoDb } = await supabaseAdmin
+      .from("productos")
+      .select("nombre, tipo, destacar, precio_cop")
+      .eq("id", pieza.producto_id)
+      .eq("user_id", usuario.id)
+      .maybeSingle();
+    if (productoDb) {
+      productoPieza = {
+        nombre: productoDb.nombre,
+        tipo: productoDb.tipo === "servicio" ? "servicio" : "producto",
+        destacar: productoDb.destacar ?? null,
+        precio_cop: productoDb.precio_cop ?? null,
+      };
+    }
+  }
+
   const entrada: EntradaGuionOrganico = {
     recetaId,
     receta,
@@ -283,6 +304,7 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
     adnFraseCorta: adnMarca?.frase_corta?.trim() || null,
     productos,
     tema: (pieza.tema as string | null) ?? null,
+    productoPieza,
     ganchoTipoAsignado: ganchoTipoAsignado as EntradaGuionOrganico["ganchoTipoAsignado"],
     piezas: piezasDisponibles,
     analisisPiezas,

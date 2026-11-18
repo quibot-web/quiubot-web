@@ -40,6 +40,7 @@ function entradaBase(): EntradaGuionOrganico {
     adnFraseCorta: "Hecho con cariño",
     productos: [],
     tema: null,
+    productoPieza: null,
     ganchoTipoAsignado: "pregunta",
     piezas: [],
     analisisPiezas: {},

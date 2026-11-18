@@ -149,6 +149,7 @@ export async function POST(req: NextRequest) {
     adnFraseCorta: adnMarca?.frase_corta?.trim() || null,
     productos,
     tema: null,
+    productoPieza: null,
     ganchoTipoAsignado: "pregunta",
     piezas: [],
     analisisPiezas: {},

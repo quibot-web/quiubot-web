@@ -37,6 +37,11 @@ export interface EntradaGuionOrganico {
   // si viene, el guion tiene que tratar ESE tema, no cualquier tema
   // genérico de la receta. Lo llenará el Director en el commit 7.
   tema: string | null;
+  // Producto/servicio del catálogo elegido para ESTA pieza (columna
+  // producto_id, "Agregar reel") -- distinto de "productos", que es el
+  // catálogo entero como contexto del negocio. Antes nunca llegaba al
+  // prompt (18 nov 2026): el reel se generaba igual con o sin producto.
+  productoPieza: ProductoResumenNegocio | null;
   // Tipo de gancho ya decidido por el código al CREAR la pieza (rota
   // los 6 tipos dentro de la semana, ver elegirGanchoTipoMenosUsado en
   // app/lib/contenido.ts) -- la IA NO elige el tipo, solo escribe el
@@ -250,6 +255,40 @@ const ESTRUCTURA_CONSEJOS_NUMERADOS_AUDIO = `ESTRUCTURA OBLIGATORIA PARA "consej
 5. "marca": CIERRA EL BUCLE -- vuelve a visual "celular_chat", el MISMO tipo que el gancho (nunca otro), ahora con eventos que suben el contador (el resultado real de aplicar los 3 consejos).
 6. "cta": visual "boton_estado" o "cursor_clic" (nunca celular_chat ni los 4 de 2 estados -- esos quedan solo para gancho/marca/consejos). El evento "clic"/"cambia_estado" debe caer como máximo a la MITAD de la narracion de esta escena (nunca en la última palabra) -- "Siguiendo ✓" necesita tiempo visible en pantalla antes de que termine la escena.`;
 
+// EJE DEL REEL (18 nov 2026, caso real: los reels consejos_numerados
+// salían con los mismos 3 consejos -- botón de contacto, conexión a
+// WhatsApp, respuesta rápida -- sin importar el tema). El tema pedido y
+// el producto de la pieza van ARRIBA de todo y se dicen como eje, no
+// como un dato más; y los consejos se deciden ANTES que los visuales
+// (el visual se elige para mostrar el consejo, nunca al revés).
+export function seccionEjeDelReel(entrada: Pick<EntradaGuionOrganico, "tema" | "productoPieza">): string {
+  const lineas: string[] = ["EJE DEL REEL (lo más importante de este guion -- todo el reel gira alrededor de esto):"];
+  const tema = entrada.tema?.trim();
+  const producto = entrada.productoPieza;
+  if (tema) {
+    lineas.push(
+      `- TEMA PEDIDO PARA ESTA PIEZA: "${tema}". El gancho, cada consejo y el cierre son sobre ESTE tema y nada más. Ejemplo de cómo se aplica: si el tema fuera "fotos de producto", los consejos serían sobre fotos (luz, fondo, mostrar el producto en uso), nunca sobre botones, WhatsApp o tiempos de respuesta.`
+    );
+  }
+  if (producto) {
+    const precio = producto.precio_cop ? ` ($${producto.precio_cop.toLocaleString("es-CO")})` : "";
+    const destacar = producto.destacar ? ` -- lo que lo hace especial: ${producto.destacar}` : "";
+    const clase = producto.tipo === "servicio" ? "servicio" : "producto";
+    lineas.push(
+      `- ${clase.toUpperCase()} DE ESTA PIEZA: ${producto.nombre}${precio}${destacar}. ${tema ? "Los consejos se aplican a este" : "El reel gira alrededor de este"} ${clase} (cómo elegirlo, usarlo, cuidarlo o sacarle provecho), sin volverlo un anuncio de venta.`
+    );
+  }
+  if (!tema && !producto) {
+    lineas.push(
+      "- Esta pieza no trae tema ni producto: elige UN tema concreto del rubro real de este negocio (de su información y su catálogo, arriba), y que los consejos salgan de ese tema. Nunca un tema genérico de marketing que serviría para cualquier negocio."
+    );
+  }
+  lineas.push(
+    "- ORDEN AL ESCRIBIR: primero decide los consejos a partir del eje; DESPUÉS, para cada consejo, elige el visual que mejor lo muestre. Nunca elijas un consejo porque calza con un visual disponible."
+  );
+  return lineas.join("\n");
+}
+
 export function construirPromptGuionOrganicoConAudio(entrada: EntradaGuionOrganico, erroresPrevios?: string[]): string {
   const partes = [
     `Eres el guionista de contenido orgánico de Quiubot. Escribes el guion de un reel corto (formato 9:16, CON VOZ -- se narra en audio real, no es un reel mudo) para Instagram. Español colombiano, tuteo, frases cortas y directas.`,
@@ -257,7 +296,7 @@ export function construirPromptGuionOrganicoConAudio(entrada: EntradaGuionOrgani
     COPY_SOLO_PROHIBIDO,
     REGLA_CONCRETO,
     seccionNegocio(entrada.infoAdicionalMarca, entrada.productos),
-    entrada.tema ? `TEMA PEDIDO PARA ESTA PIEZA (tienes que tratar justo esto, no cambies de tema): "${entrada.tema}"` : null,
+    seccionEjeDelReel(entrada),
     seccionReceta({ ...entrada, receta: recetaParaPromptConAudio(entrada) }),
     entrada.recetaId === "consejos_numerados" ? ESTRUCTURA_CONSEJOS_NUMERADOS_AUDIO : null,
     seccionGancho(entrada.ganchoTipoAsignado),
