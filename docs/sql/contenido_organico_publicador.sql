@@ -21,6 +21,23 @@
 --    (se descarga y se sube a mano) y sin este filtro el cron la
 --    publicaría en Instagram.
 --
+-- Robustez (pedido de Juan José antes de correrlo, 17-nov-2026): la
+-- función NUNCA castea datos de la pieza, así que un valor vacío,
+-- inválido o de tipo raro no puede tumbarla (y con ella el cron para
+-- todas las demás piezas). Una pieza con un valor así simplemente no
+-- se publica:
+--   - aprobado/publicarIgual se comparan como jsonb (= 'true'::jsonb),
+--     nunca con ::boolean. Solo cuentan los booleanos JSON reales; un
+--     "true" en texto, un número o un null explícito no pasan.
+--     control_calidad que no sea un objeto JSON tampoco pasa.
+--   - pista_id: vacío ('') o ausente = sin música (nullif). Cualquier
+--     otro valor tiene que tener formato uuid Y existir como pista con
+--     licencia para Instagram, comparando como TEXTO (m.id::text), no
+--     con ::uuid -- un valor no-uuid simplemente no encuentra pista
+--     ("música no verificable") y la pieza no se publica.
+-- El mismo criterio está repetido en app/lib/publicadorOrganico.ts
+-- (motivoBloqueoPublicacion) como segunda barrera.
+--
 -- Mismo criterio atómico de siempre (FOR UPDATE SKIP LOCKED, el UPDATE
 -- de afuera vuelve a filtrar estado='lista') -- solo cambian los
 -- filtros del SELECT de adentro.
@@ -43,17 +60,30 @@ begin
           and p.plataforma = 'instagram'
           and (
             p.control_calidad is null
-            or (p.control_calidad->>'aprobado')::boolean is not false
-            or (p.control_calidad->>'publicarIgual')::boolean is true
+            or jsonb_typeof(p.control_calidad) = 'null'
+            or (
+              jsonb_typeof(p.control_calidad) = 'object'
+              and (
+                not (p.control_calidad ? 'aprobado')
+                or p.control_calidad->'aprobado' = 'true'::jsonb
+                or (
+                  p.control_calidad->'aprobado' = 'false'::jsonb
+                  and p.control_calidad->'publicarIgual' = 'true'::jsonb
+                )
+              )
+            )
           )
           and (
-            p.guion->'musica'->>'pista_id' is null
-            or exists (
-              select 1 from pistas_musicales m
-              where m.id = (p.guion->'musica'->>'pista_id')::uuid
-                and m.licencia_url is not null
-                and m.plataformas_permitidas is not null
-                and 'instagram' = any(m.plataformas_permitidas)
+            nullif(p.guion->'musica'->>'pista_id', '') is null
+            or (
+              (p.guion->'musica'->>'pista_id') ~* '^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$'
+              and exists (
+                select 1 from pistas_musicales m
+                where m.id::text = lower(p.guion->'musica'->>'pista_id')
+                  and m.licencia_url is not null
+                  and m.plataformas_permitidas is not null
+                  and 'instagram' = any(m.plataformas_permitidas)
+              )
             )
           )
         order by p.programada_para

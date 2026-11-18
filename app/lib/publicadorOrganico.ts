@@ -54,21 +54,44 @@ export type MotivoBloqueo = "no_es_instagram" | "requiere_confirmacion" | "music
 // (docs/sql/contenido_organico_publicador.sql) -- repetida acá como
 // segunda barrera: si la base todavía tuviera la versión vieja de la
 // RPC (sin estos filtros), el cron igual nunca publica una de estas.
+// Igual de estricta que el SQL con valores raros: solo cuentan los
+// booleanos reales (aprobado/publicarIgual), y un pista_id que no sea
+// uuid es "música no verificable" -- nunca se publica, nunca revienta.
 export function motivoBloqueoPublicacion(
   pieza: Pick<PublicacionOrganica, "plataforma" | "control_calidad" | "guion">,
   pistasConLicenciaInstagram: Set<string>
 ): MotivoBloqueo | null {
   if (pieza.plataforma !== "instagram") return "no_es_instagram";
-  const qc = pieza.control_calidad;
-  if (qc && qc.aprobado === false && qc.publicarIgual !== true) return "requiere_confirmacion";
+  if (!controlCalidadPermitePublicar(pieza.control_calidad)) return "requiere_confirmacion";
   const pistaId = pistaIdDeGuion(pieza.guion);
-  if (pistaId && !pistasConLicenciaInstagram.has(pistaId)) return "musica_sin_licencia";
+  if (pistaId !== null && (!esUuid(pistaId) || !pistasConLicenciaInstagram.has(pistaId.toLowerCase()))) return "musica_sin_licencia";
   return null;
 }
 
+function controlCalidadPermitePublicar(qc: unknown): boolean {
+  if (qc === null || qc === undefined) return true;
+  if (typeof qc !== "object" || Array.isArray(qc)) return false;
+  const { aprobado, publicarIgual } = qc as { aprobado?: unknown; publicarIgual?: unknown };
+  if (!("aprobado" in qc)) return true;
+  if (aprobado === true) return true;
+  return aprobado === false && publicarIgual === true;
+}
+
+const PATRON_UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+export function esUuid(valor: string): boolean {
+  return PATRON_UUID.test(valor);
+}
+
+// null = sin música (ausente, null o ""). Cualquier otro valor se
+// devuelve como texto tal cual -- si no es un uuid de una pista con
+// licencia, motivoBloqueoPublicacion bloquea la pieza.
 export function pistaIdDeGuion(guion: unknown): string | null {
-  const pistaId = (guion as { musica?: { pista_id?: unknown } } | null)?.musica?.pista_id;
-  return typeof pistaId === "string" && pistaId.length > 0 ? pistaId : null;
+  if (!guion || typeof guion !== "object") return null;
+  const musica = (guion as { musica?: unknown }).musica;
+  if (!musica || typeof musica !== "object") return null;
+  const pistaId = (musica as { pista_id?: unknown }).pista_id;
+  if (pistaId === null || pistaId === undefined || pistaId === "") return null;
+  return String(pistaId);
 }
 
 // Caption final de Instagram: texto + hashtags (con "#" siempre), dentro
@@ -84,13 +107,22 @@ export function captionParaInstagram(caption: string | null, hashtags: string[] 
 }
 
 async function cargarPistasConLicenciaInstagram(piezas: Pick<PublicacionOrganica, "guion">[]): Promise<Set<string>> {
-  const ids = [...new Set(piezas.map((p) => pistaIdDeGuion(p.guion)).filter((id): id is string => !!id))];
+  // Solo uuids válidos llegan a la consulta: uno inválido haría fallar
+  // la consulta entera y bloquearía también la música de las demás.
+  const ids = [
+    ...new Set(
+      piezas
+        .map((p) => pistaIdDeGuion(p.guion))
+        .filter((id): id is string => id !== null && esUuid(id))
+        .map((id) => id.toLowerCase())
+    ),
+  ];
   if (ids.length === 0) return new Set();
   const { data } = await supabaseAdmin.from("pistas_musicales").select("id, licencia_url, plataformas_permitidas").in("id", ids);
   return new Set(
     (data ?? [])
       .filter((p) => !!p.licencia_url && Array.isArray(p.plataformas_permitidas) && (p.plataformas_permitidas as string[]).includes("instagram"))
-      .map((p) => p.id as string)
+      .map((p) => String(p.id).toLowerCase())
   );
 }
 

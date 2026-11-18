@@ -13,8 +13,12 @@ function crearConsulta(tabla: string) {
   const filtros: ((f: Fila) => boolean)[] = [];
   let operacion: { tipo: "select" } | { tipo: "update"; valores: Fila } | { tipo: "insert"; valores: Fila } = { tipo: "select" };
   let limite: number | null = null;
+  // Igual que Postgres: un valor que no es uuid en un filtro sobre una
+  // columna uuid hace fallar la consulta ENTERA (22P02).
+  let uuidInvalido = false;
 
   const ejecutar = () => {
+    if (uuidInvalido) return { data: null, error: { code: "22P02", message: "invalid input syntax for type uuid" } };
     const filas = (tablas[tabla] ??= []);
     if (operacion.tipo === "insert") {
       filas.push({ id: `auto-${filas.length + 1}`, ...operacion.valores });
@@ -40,7 +44,11 @@ function crearConsulta(tabla: string) {
       return q;
     },
     eq: (c: string, v: unknown) => (filtros.push((f) => f[c] === v), q),
-    in: (c: string, vs: unknown[]) => (filtros.push((f) => vs.includes(f[c])), q),
+    in: (c: string, vs: unknown[]) => {
+      if (tabla === "pistas_musicales" && c === "id" && vs.some((v) => !/^[0-9a-f-]{36}$/i.test(String(v)))) uuidInvalido = true;
+      filtros.push((f) => vs.includes(f[c]));
+      return q;
+    },
     lt: (c: string, v: string) => (filtros.push((f) => String(f[c]) < v), q),
     lte: (c: string, v: string) => (filtros.push((f) => String(f[c]) <= v), q),
     not: (c: string) => (filtros.push((f) => f[c] !== null && f[c] !== undefined), q),
@@ -197,6 +205,22 @@ describe("reglas puras", () => {
     expect(motivoBloqueoPublicacion({ plataforma: "instagram", guion: { musica: { pista_id: "22222222-2222-4222-8222-222222222222" } }, control_calidad: null }, conLicencia)).toBe("musica_sin_licencia");
     expect(motivoBloqueoPublicacion({ plataforma: "instagram", guion: { musica: { pista_id: "11111111-1111-4111-8111-111111111111" } }, control_calidad: null }, conLicencia)).toBeNull();
   });
+  it("valores raros en control_calidad: nunca se publica, nunca revienta", () => {
+    const base = { plataforma: "instagram" as const, guion: null };
+    const raros: unknown[] = [{ aprobado: "true" }, { aprobado: null }, { aprobado: 1 }, { aprobado: false, publicarIgual: "true" }, "texto", [true]];
+    for (const control_calidad of raros) {
+      expect(motivoBloqueoPublicacion({ ...base, control_calidad } as never, conLicencia)).toBe("requiere_confirmacion");
+    }
+    expect(motivoBloqueoPublicacion({ ...base, control_calidad: { crudo: {} } } as never, conLicencia)).toBeNull();
+  });
+  it("pista_id vacío = sin música; inválido o de otro tipo = música no verificable", () => {
+    const conPista = (pista_id: unknown) => motivoBloqueoPublicacion({ plataforma: "instagram", control_calidad: null, guion: { musica: { pista_id } } }, conLicencia);
+    expect(conPista("")).toBeNull();
+    expect(conPista(null)).toBeNull();
+    expect(conPista("no-es-uuid")).toBe("musica_sin_licencia");
+    expect(conPista(123)).toBe("musica_sin_licencia");
+    expect(conPista("11111111-1111-4111-8111-111111111111".toUpperCase())).toBeNull();
+  });
   it("nunca publica una pieza de TikTok en Instagram", () => {
     expect(motivoBloqueoPublicacion({ plataforma: "tiktok", guion: null, control_calidad: null }, conLicencia)).toBe("no_es_instagram");
   });
@@ -257,6 +281,17 @@ describe("reclamar → contenedor", () => {
     expect(r.devueltas).toBe(3);
     expect(["forzada", "musica", "tiktok"].map((id) => piezaDb(id).estado)).toEqual(["lista", "lista", "lista"]);
     expect(llamadasMeta.some((l) => l.url.includes("/media"))).toBe(false);
+  });
+
+  it("un pista_id inválido en una pieza no bloquea la música válida de las demás", async () => {
+    rpcSinFiltros = true;
+    tablas.publicaciones_organicas.push(
+      pieza({ id: "rara", guion: { musica: { pista_id: "basura" } } }),
+      pieza({ id: "buena", guion: { musica: { pista_id: "11111111-1111-4111-8111-111111111111" } } })
+    );
+    await reclamarYCrearContenedores();
+    expect(piezaDb("rara").estado).toBe("lista");
+    expect(piezaDb("buena").estado).toBe("procesando");
   });
 
   it("sin cupo: vuelve a 'lista' sin crear contenedor ni gastar intentos", async () => {
