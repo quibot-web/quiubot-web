@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import { compactarConSilenciosReales, PAUSA_DENTRO_DE_FRASE_S, PAUSA_ENTRE_FRASES_S } from "./compactarPausas";
+import { compactarConSilenciosReales, corregirPalabrasConSilencios, PAUSA_DENTRO_DE_FRASE_S, PAUSA_ENTRE_FRASES_S } from "./compactarPausas";
 
 describe("compactarConSilenciosReales", () => {
   it("sin silencios reales detectados, nada se toca y da un solo tramo por escena", () => {
@@ -138,4 +138,52 @@ describe("compactarConSilenciosReales", () => {
     const { palabras: resultado } = compactarConSilenciosReales(palabras, silencios, [0, 0], { pausaEntreFrases_s: 0.8 });
     expect(resultado[1].compactado.inicio_s).toBeCloseTo(0.2 + 0.5, 5);
   });
+
+  it("caso real (prototipo ilustrado, 18 nov 2026): Whisper deja una palabra con duración cero justo al borde del silencio -- el silencio se empareja con el hueco con el que más se superpone, no con el de la palabra anterior", () => {
+    // Whisper: "a" 33.07-33.10, "volver." 33.10-33.10 (duración cero), "Sigue" 34.10.
+    // ffmpeg: silencio real 33.05-33.86 (0.81s) -- de verdad está entre "volver" y "Sigue".
+    const palabras = [
+      { texto: "a", inicio_s: 33.07, fin_s: 33.1 },
+      { texto: "volver.", inicio_s: 33.1, fin_s: 33.1 },
+      { texto: "Sigue", inicio_s: 34.1, fin_s: 34.18 },
+      { texto: "a", inicio_s: 34.18, fin_s: 34.3 },
+    ];
+    const silencios = [{ inicio_s: 33.0497, fin_s: 33.8614 }];
+    const { palabras: resultado } = compactarConSilenciosReales(palabras, silencios, [0, 0, 1, 1]);
+    const hueco = resultado[2].compactado.inicio_s - resultado[1].compactado.fin_s;
+    expect(hueco).toBeCloseTo(PAUSA_ENTRE_FRASES_S, 5);
+  });
+
+  it("caso real (prototipo, 18 nov 2026): los dos bordes de Whisper se meten ~90ms en un silencio real de 0.76s -- ya no se deja sin tocar si la zona segura (hueco y silencio a la vez) es grande", () => {
+    const palabras = [
+      { texto: "se", inicio_s: 28.32, fin_s: 28.76 },
+      { texto: "venta.", inicio_s: 28.94, fin_s: 29.3 },
+      { texto: "Así", inicio_s: 29.88, fin_s: 30.18 },
+      { texto: "tu", inicio_s: 30.18, fin_s: 30.38 },
+    ];
+    const silencios = [{ inicio_s: 29.21, fin_s: 29.97 }];
+    const { palabras: r } = compactarConSilenciosReales(palabras, silencios, [0, 0, 1, 1]);
+    expect(r[2].compactado.inicio_s - r[1].compactado.fin_s).toBeCloseTo(PAUSA_ENTRE_FRASES_S, 5);
+  });
 });
+
+describe("corregirPalabrasConSilencios (Whisper estira una palabra sobre un silencio real)", () => {
+  it("caso real: 'y' 1.04-1.84 con silencio real 0.97-1.63 -> la palabra empieza al terminar el silencio", () => {
+    const palabras = [
+      { texto: "anuncios…", inicio_s: 0.4, fin_s: 1.04 },
+      { texto: "y", inicio_s: 1.04, fin_s: 1.84 },
+      { texto: "nadie", inicio_s: 1.84, fin_s: 2.08 },
+    ];
+    const corregidas = corregirPalabrasConSilencios(palabras, [{ inicio_s: 0.97, fin_s: 1.63 }]);
+    expect(corregidas[1]).toEqual({ texto: "y", inicio_s: 1.63, fin_s: 1.84 });
+    expect(corregidas[0]).toEqual(palabras[0]);
+  });
+
+  it("silencio al final de la palabra -> la palabra termina donde empieza el silencio; silencios cortos o que tapan la palabra entera no la tocan", () => {
+    const p = [{ texto: "hola", inicio_s: 1, fin_s: 2 }];
+    expect(corregirPalabrasConSilencios(p, [{ inicio_s: 1.3, fin_s: 2.4 }])[0]).toEqual({ texto: "hola", inicio_s: 1, fin_s: 1.3 });
+    expect(corregirPalabrasConSilencios(p, [{ inicio_s: 1.8, fin_s: 2.0 }])[0]).toEqual(p[0]);
+    expect(corregirPalabrasConSilencios(p, [{ inicio_s: 0.9, fin_s: 2.1 }])[0]).toEqual(p[0]);
+  });
+});
+

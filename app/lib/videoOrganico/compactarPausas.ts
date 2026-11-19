@@ -68,6 +68,33 @@ const TOLERANCIA_EMPAREJAMIENTO_S = 0.05;
 
 type Remocion = { inicioOriginal: number; finOriginal: number; magnitud: number };
 
+// Zona que es silencio real y hueco entre palabras a la vez: por debajo de
+// esto el emparejamiento se considera ambiguo y no se toca.
+const ZONA_SEGURA_MINIMA_S = 0.15;
+
+// Corrección de alineación (prototipo ilustrado, 18 nov 2026): Whisper a
+// veces estira una palabra sobre un silencio real ("y" reportada en
+// 1.04-1.84 con silencio real 0.97-1.63 -- una palabra no dura 0.6s en
+// silencio). Si un silencio real de 0.25s o más tapa más de la mitad de
+// la palabra por UNO de sus extremos, ese borde se mueve al borde del
+// silencio. Si el silencio la tapa entera o es corto, no se toca.
+const SILENCIO_MINIMO_CORRECCION_S = 0.25;
+export function corregirPalabrasConSilencios(palabras: PalabraConTiempo[], silencios: SilencioReal[]): PalabraConTiempo[] {
+  return palabras.map((p) => {
+    let { inicio_s, fin_s } = p;
+    for (const s of silencios) {
+      if (s.fin_s - s.inicio_s < SILENCIO_MINIMO_CORRECCION_S) continue;
+      const superposicion = Math.min(fin_s, s.fin_s) - Math.max(inicio_s, s.inicio_s);
+      if (superposicion < SILENCIO_MINIMO_CORRECCION_S || superposicion < 0.5 * (fin_s - inicio_s)) continue;
+      const tapaInicio = s.inicio_s <= inicio_s + TOLERANCIA_EMPAREJAMIENTO_S && s.fin_s < fin_s - TOLERANCIA_EMPAREJAMIENTO_S;
+      const tapaFin = s.fin_s >= fin_s - TOLERANCIA_EMPAREJAMIENTO_S && s.inicio_s > inicio_s + TOLERANCIA_EMPAREJAMIENTO_S;
+      if (tapaInicio) inicio_s = s.fin_s;
+      else if (tapaFin) fin_s = s.inicio_s;
+    }
+    return inicio_s === p.inicio_s && fin_s === p.fin_s ? p : { ...p, inicio_s, fin_s };
+  });
+}
+
 export function compactarConSilenciosReales(
   palabras: PalabraConTiempo[],
   silencios: SilencioReal[],
@@ -105,6 +132,22 @@ export function compactarConSilenciosReales(
       if (palabras[k].inicio_s <= s.inicio_s + TOLERANCIA_EMPAREJAMIENTO_S) i = k;
       else break;
     }
+    // Caso real (prototipo ilustrado, 18 nov 2026): Whisper dejó
+    // "volver." con duración cero justo en el borde del silencio real
+    // (33.10-33.10 con el silencio desde 33.05), y la regla de arriba
+    // emparejó el silencio con el hueco "a -> volver" (casi cero) en vez
+    // de "volver -> Sigue" -- quedaron 0.81s de silencio real sin
+    // recortar. Se prefiere el hueco entre palabras con el que el
+    // silencio real MÁS se superpone; si no se superpone con ninguno, se
+    // queda la regla de siempre.
+    let mejorSuperposicion = 0;
+    for (let k = 0; k < palabras.length - 1; k++) {
+      const superposicion = Math.min(palabras[k + 1].inicio_s, s.fin_s) - Math.max(palabras[k].fin_s, s.inicio_s);
+      if (superposicion > mejorSuperposicion + 1e-9) {
+        mejorSuperposicion = superposicion;
+        i = k;
+      }
+    }
     if (i === -1 || i >= palabras.length - 1) continue; // no debería pasar (ya cubierto por los 2 casos de arriba) -- no se toca
 
     const siguiente = i + 1;
@@ -121,7 +164,13 @@ export function compactarConSilenciosReales(
     // nada real y cualquier emparejamiento sería una apuesta.
     const anteriorSeMeteAdentro = palabras[i].fin_s > s.inicio_s + TOLERANCIA_EMPAREJAMIENTO_S;
     const siguienteSeMeteAdentro = palabras[siguiente].inicio_s < s.fin_s - TOLERANCIA_EMPAREJAMIENTO_S;
-    if (anteriorSeMeteAdentro && siguienteSeMeteAdentro) continue; // ambiguo real, no tocar
+    // Prototipo ilustrado (18 nov 2026): los dos bordes de Whisper se
+    // metían ~90ms en un silencio real de 0.76s y se dejaba sin tocar.
+    // Solo es ambiguo de verdad si la zona que es silencio real Y hueco
+    // entre palabras a la vez es mínima; si es grande, el recorte (que
+    // cae dentro del hueco de Whisper, centrado) no puede morder voz.
+    const zonaSegura = Math.min(palabras[siguiente].inicio_s, s.fin_s) - Math.max(palabras[i].fin_s, s.inicio_s);
+    if (anteriorSeMeteAdentro && siguienteSeMeteAdentro && zonaSegura < ZONA_SEGURA_MINIMA_S) continue; // ambiguo real, no tocar
 
     const distintaEscena = escenaIndicePorPalabra[i] !== escenaIndicePorPalabra[siguiente];
     const terminaEnPuntuacionFuerte = /[.?!;]$/.test(palabras[i].texto.trim());
@@ -249,7 +298,13 @@ export function construirCamposDeTiempo(
   tramosPorEscena: TramoAudio[][];
 } {
   const cantidadesPorEscena = palabrasPorEscenaCrudo.map((p) => p.palabras.length);
-  const palabrasFlat = palabrasPorEscenaCrudo.flatMap((p) => p.palabras);
+  // Bordes de Whisper corregidos con los silencios reales (ver
+  // corregirPalabrasConSilencios); lo que se devuelve como palabrasFlat
+  // (y lo que revisa verificarPalabrasCompletas) son las corregidas.
+  const palabrasFlat = corregirPalabrasConSilencios(
+    palabrasPorEscenaCrudo.flatMap((p) => p.palabras),
+    silencios
+  );
   const escenaIndicePorPalabra = palabrasPorEscenaCrudo.flatMap((p, i) => p.palabras.map(() => i));
   const { palabras: palabrasCompactadas, tramosPorEscena } = compactarConSilenciosReales(palabrasFlat, silencios, escenaIndicePorPalabra, opciones);
 
