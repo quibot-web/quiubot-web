@@ -3,6 +3,7 @@ import { camaraEnCuadro, construirLineaDeTiempo, silencioMasLargo } from "./tiem
 import { NARRACION_PROTOTIPO, tiemposSinteticos } from "./guionPrototipo";
 import { colorTextoSobre, contrasteHex, mezclarColoresHex } from "../tema";
 import { paletaNoche } from "../estilos/estilos";
+import { ALTO_PANTALLA, ANCHO_PANTALLA, FRANJA_SEGURA, RECTS, encuadre, enfoques, eventosDe, puntosCamara, rectEnPantalla } from "./mundo";
 
 describe("línea de tiempo del reel ilustrado", () => {
   it("escenas una después de la otra y cada palabra en su cuadro global", () => {
@@ -48,5 +49,28 @@ describe("subtítulo karaoke: contraste", () => {
     expect(contrasteHex("#FFFFFF", pildora)).toBeGreaterThanOrEqual(4.5);
     const luz = paletaNoche({ color_primario: "#534AB7", color_secundario: "#B9B2FF" }).luz;
     expect(contrasteHex(colorTextoSobre(luz), luz)).toBeGreaterThanOrEqual(4.5);
+  });
+});
+
+describe("escala: lo que la voz nombra ocupa al menos media pantalla (ronda 2)", () => {
+  const linea = construirLineaDeTiempo(tiemposSinteticos(), 30);
+  const ev = eventosDe(linea);
+  const puntos = puntosCamara(ev, linea.duracionCuadros);
+  for (const e of enfoques(ev)) {
+    it(`"${e.palabra}": >= 50% del ancho o del alto, centrado en la franja segura`, () => {
+      const r = rectEnPantalla(e.rect, camaraEnCuadro(puntos, e.cuadro));
+      expect(Math.max(r.ancho / ANCHO_PANTALLA, r.alto / ALTO_PANTALLA)).toBeGreaterThanOrEqual(0.5);
+      const centroY = r.y + r.alto / 2;
+      expect(centroY).toBeGreaterThanOrEqual(FRANJA_SEGURA.arriba);
+      expect(centroY).toBeLessThanOrEqual(FRANJA_SEGURA.abajo);
+    });
+  }
+
+  it("los objetos que se encuadran enteros (billetera, elegidos, reloj + cliente, billetera + gráfica) caben en la franja segura", () => {
+    for (const nombre of ["billetera", "elegidos", "relojYCliente", "billeteraYGrafica"] as const) {
+      const r = rectEnPantalla(RECTS[nombre], encuadre(RECTS[nombre]));
+      expect(r.y, nombre).toBeGreaterThanOrEqual(FRANJA_SEGURA.arriba - 1);
+      expect(r.y + r.alto, nombre).toBeLessThanOrEqual(FRANJA_SEGURA.abajo + 1);
+    }
   });
 });

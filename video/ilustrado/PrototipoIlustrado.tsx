@@ -3,6 +3,10 @@
 // gráfica) y una cámara que se mueve por él; cada cambio está amarrado a
 // una palabra de la narración. Casi sin texto: solo un subtítulo karaoke
 // corto arriba. No toca /contenido ni los visuales de siempre.
+//
+// Ronda 2: lo que la voz nombra ocupa al menos media pantalla (la cámara
+// se acerca, ver mundo.ts), feed y chat con contenido real, foto apagada
+// vs. clara con contraste fuerte, y fondo con piso, horizonte y luz.
 import { useMemo } from "react";
 import { AbsoluteFill, Sequence, spring, staticFile, useCurrentFrame, useVideoConfig } from "remotion";
 import { familiaDeFuente } from "../fuentes";
@@ -11,24 +15,10 @@ import { paletaNoche } from "../estilos/estilos";
 import { CapaVoz } from "../visuales/CapaVoz";
 import { IconoMano, IconoCheck } from "../iconos";
 import { quitarGlifosFueraDeFuentes } from "../glifos";
-import { camaraEnCuadro, construirLineaDeTiempo, type LineaDeTiempo, type PuntoCamara, type TiemposIlustrado } from "./tiempoIlustrado";
-import {
-  ALTO_BARRA_FEED,
-  ALTO_POST,
-  BILLETERA,
-  CELULAR,
-  PANTALLA,
-  BarraSuperiorFeed,
-  Billetera,
-  Burbuja,
-  Celular,
-  Grafica,
-  Moneda,
-  Persona,
-  Post,
-  Reloj,
-  type TipoPost,
-} from "./Objetos";
+import { camaraEnCuadro, construirLineaDeTiempo, type LineaDeTiempo, type TiemposIlustrado } from "./tiempoIlustrado";
+import { BILLETERA, BOCA_BILLETERA, CELULAR, CLIENTE, ILUMINADOS, MULTITUD, PANTALLA, RELOJ, TAM_MONEDA, eventosDe, puntosCamara } from "./mundo";
+import { ALTO_BARRA_FEED, ALTO_POST, BarraSuperiorFeed, Billetera, Burbuja, Celular, Fondo, Grafica, Moneda, Persona, Post, Reloj, SombraPiso, type TipoPost } from "./Objetos";
+import { Ilustracion, IconoAtras, IconoBolsa, IconoRayo, IconoSaludo } from "./Ilustraciones";
 
 // fotoUrl opcional: por defecto la foto de cerámica de public/demo-organico.
 export type PropsPrototipoIlustrado = { tiempos: TiemposIlustrado; vozUrl: string | null; fotoUrl?: string; tema: TemaGuion };
@@ -55,75 +45,6 @@ function claves(pares: [number, number][], frame: number): number {
   }
   return p[p.length - 1][1];
 }
-
-// ---------- eventos: el cuadro de cada palabra que dispara un cambio ----------
-function eventosDe(l: LineaDeTiempo) {
-  const w = l.cuadroDePalabra;
-  return {
-    e1: { anuncios: w("e1", 1), y: w("e1", 2), nadie: w("e1", 3), compra: w("e1", 5) },
-    e2: { inicio: w("e2", 0), gente: w("e2", 1), ve: w("e2", 2), anuncio: w("e2", 4), pasa: w("e2", 6), largo: w("e2", 8) },
-    e3: { inicio: w("e3", 0), pasa: w("e3", 4), va: w("e3", 7), moneda: w("e3", 9) },
-    e4: { primer: w("e4", 0), hablas: w("e4", 3), mundo: w("e4", 7) },
-    e5: { elige: w("e5", 0), quien: w("e5", 2), iluminan: w("e5", 5), comprarte: w("e5", 10) },
-    e6: { segundo: w("e6", 0), foto: w("e6", 2), detiene: w("e6", 4), dedo: w("e6", 6) },
-    e7: { foto: w("e7", 1), clara: w("e7", 2), producto: w("e7", 5), detiene: w("e7", 10) },
-    e8: { tercero: w("e8", 0), escriben: w("e8", 2), nadie: w("e8", 4), responde: w("e8", 5) },
-    e9: { responde: w("e9", 0), rapido: w("e9", 1), mensaje: w("e9", 4), vuelve: w("e9", 6), venta: w("e9", 7) },
-    e10: { asi: w("e10", 0), presupuesto: w("e10", 2), irse: w("e10", 5), empieza: w("e10", 7), volver: w("e10", 9) },
-    e11: { sigue: w("e11", 0), quiubot: w("e11", 2) },
-  };
-}
-type Eventos = ReturnType<typeof eventosDe>;
-
-// ---------- cámara: entra y sale del celular, baja a la multitud, vuelve ----------
-const CENTRO_CELULAR = { x: CELULAR.x + CELULAR.ancho / 2, y: CELULAR.y + CELULAR.alto / 2 };
-const CERCA_PANTALLA = { x: CENTRO_CELULAR.x, y: CENTRO_CELULAR.y - 20, zoom: 1.36 };
-
-function puntosCamara(ev: Eventos, total: number): PuntoCamara[] {
-  const p = (cuadro: number, c: { x: number; y: number; zoom: number }) => ({ cuadro, ...c });
-  const mover = 16; // ~0,5 s por movimiento
-  return [
-    p(0, CERCA_PANTALLA),
-    p(ev.e1.compra, { ...CERCA_PANTALLA, zoom: 1.42 }),
-    // e2: sale del celular para ver a "la gente" pasar de largo.
-    p(ev.e2.gente, { ...CERCA_PANTALLA, zoom: 1.4 }),
-    p(ev.e2.gente + mover, { x: CENTRO_CELULAR.x, y: CENTRO_CELULAR.y, zoom: 1.0 }),
-    // e3: aparece la billetera al lado.
-    p(ev.e3.inicio, { x: CENTRO_CELULAR.x - 80, y: CENTRO_CELULAR.y + 40, zoom: 0.96 }),
-    p(ev.e3.inicio + mover, { x: 880, y: 1480, zoom: 0.8 }),
-    p(ev.e3.moneda, { x: 860, y: 1560, zoom: 0.78 }),
-    // e4: la cámara sigue la moneda hacia abajo, a la multitud.
-    p(ev.e4.primer, { x: 860, y: 1700, zoom: 0.78 }),
-    p(ev.e4.primer + mover + 6, { x: 1200, y: 3050, zoom: 0.64 }),
-    p(ev.e5.elige, { x: 1200, y: 3080, zoom: 0.68 }),
-    p(ev.e5.iluminan, { x: 1200, y: 3120, zoom: 0.76 }),
-    // e6: sube de vuelta y entra al celular.
-    p(ev.e6.segundo, { x: 1200, y: 3060, zoom: 0.76 }),
-    p(ev.e6.segundo + mover + 6, CERCA_PANTALLA),
-    p(ev.e7.detiene, { ...CERCA_PANTALLA, zoom: 1.46 }),
-    // e8: se abre para ver al cliente junto al celular.
-    p(ev.e8.tercero, { ...CERCA_PANTALLA, zoom: 1.44 }),
-    p(ev.e8.tercero + mover, { x: 1470, y: 1380, zoom: 0.94 }),
-    // e9: hacia la billetera, a donde vuela la venta.
-    p(ev.e9.mensaje, { x: 1400, y: 1400, zoom: 0.92 }),
-    p(ev.e9.venta, { x: 950, y: 1460, zoom: 0.8 }),
-    // e10: plano general del mundo.
-    p(ev.e10.asi, { x: 950, y: 1480, zoom: 0.8 }),
-    p(ev.e10.asi + mover + 8, { x: 1200, y: 2050, zoom: 0.52 }),
-    p(ev.e11.sigue, { x: 1200, y: 2000, zoom: 0.54 }),
-    // e11: entra al celular, al perfil.
-    p(ev.e11.sigue + mover + 4, CERCA_PANTALLA),
-    p(total, { ...CERCA_PANTALLA, zoom: 1.4 }),
-  ];
-}
-
-// ---------- multitud ----------
-const FILAS = [
-  { y: 2880, escala: 0.82, cantidad: 9 },
-  { y: 3110, escala: 0.95, cantidad: 8 },
-  { y: 3360, escala: 1.1, cantidad: 7 },
-];
-const ILUMINADOS = new Set(["0-2", "0-6", "1-1", "1-4", "2-3", "2-5"]);
 
 // ---------- subtítulo karaoke corto (2-3 palabras) arriba ----------
 function grupos(l: LineaDeTiempo): { desde: number; hasta: number; palabras: LineaDeTiempo["palabras"] }[] {
@@ -162,17 +83,22 @@ function Subtitulo({ linea, frame, tema }: { linea: LineaDeTiempo; frame: number
   );
 }
 
+const CENTRO_CELULAR = { x: CELULAR.x + CELULAR.ancho / 2, y: CELULAR.y + CELULAR.alto / 2 };
+const VERDE_RESPUESTA = "#0F7A3C";
+
 export function PrototipoIlustrado({ tiempos, vozUrl, fotoUrl: fotoPropia, tema }: PropsPrototipoIlustrado) {
   const fotoUrl = fotoPropia ?? staticFile("demo-organico/foto-producto-ceramica.jpg");
   const frame = useCurrentFrame();
   const { fps } = useVideoConfig();
   const linea = useMemo(() => construirLineaDeTiempo(tiempos, fps), [tiempos, fps]);
   const ev = useMemo(() => eventosDe(linea), [linea]);
+  const puntos = useMemo(() => puntosCamara(ev, linea.duracionCuadros), [ev, linea.duracionCuadros]);
   const paleta = paletaNoche(tema);
   const colorMarca = tema.color_primario;
+  const aparece = (desde: number, damping = 13) => (frame >= desde ? spring({ frame: frame - desde, fps, config: { damping } }) : 0);
 
   // Cámara + una deriva leve para que nunca esté quieta.
-  const base = camaraEnCuadro(puntosCamara(ev, linea.duracionCuadros), frame);
+  const base = camaraEnCuadro(puntos, frame);
   const cam = { x: base.x + Math.sin(frame / 40) * 8, y: base.y + Math.cos(frame / 52) * 8, zoom: base.zoom * (1 + Math.sin(frame / 70) * 0.01) };
   const transformMundo = `translate(${540 - cam.x * cam.zoom}px, ${960 - cam.y * cam.zoom}px) scale(${cam.zoom})`;
 
@@ -198,7 +124,7 @@ export function PrototipoIlustrado({ tiempos, vozUrl, fotoUrl: fotoPropia, tema 
     ],
     frame
   );
-  const posts: TipoPost[] = ["generico", "anuncio", "generico", "generico", "anuncio", "generico", "anuncio_apagado", "generico"];
+  const posts: TipoPost[] = ["comida", "anuncio", "paisaje", "mascota", "anuncio", "ropa", "anuncio_apagado", "comida"];
   const brilloFoto = rampa(frame, ev.e7.clara, 12);
   const corazon = frame >= ev.e7.detiene ? spring({ frame: frame - ev.e7.detiene, fps, config: { damping: 9, stiffness: 160 } }) * (1 - rampa(frame, ev.e8.tercero - 6, 8)) : 0;
 
@@ -207,28 +133,31 @@ export function PrototipoIlustrado({ tiempos, vozUrl, fotoUrl: fotoPropia, tema 
   const mezclaPerfil = rampa(frame, ev.e11.sigue, 8);
 
   // "La gente ve tu anuncio": ojos que se abren sobre el anuncio.
-  const ojos = [0, 1, 2].map((i) => (frame >= ev.e2.ve + i * 4 ? spring({ frame: frame - ev.e2.ve - i * 4, fps, config: { damping: 12 } }) : 0) * (1 - rampa(frame, ev.e2.pasa, 8)));
+  const ojos = [0, 1, 2].map((i) => aparece(ev.e2.ve + i * 4, 12) * (1 - rampa(frame, ev.e2.pasa, 8)));
 
   // Chat: llegan mensajes, nadie responde; luego respuesta rápida -> venta.
-  const msg1 = frame >= ev.e8.escriben ? spring({ frame: frame - ev.e8.escriben, fps, config: { damping: 13 } }) : 0;
-  const msg2 = frame >= ev.e8.escriben + 8 ? spring({ frame: frame - ev.e8.escriben - 8, fps, config: { damping: 13 } }) : 0;
-  const respuesta = frame >= ev.e9.responde ? spring({ frame: frame - ev.e9.responde, fps, config: { damping: 13 } }) : 0;
+  const msgHola = aparece(ev.e8.te);
+  const msgPrecio = aparece(ev.e8.escriben);
+  const msgEnvio = aparece(ev.e8.escriben + 6);
+  const respuesta = aparece(ev.e9.responde);
+  const leido = frame >= ev.e9.rapido + 8;
+  const msgLoQuiero = aparece(ev.e9.mensaje);
   const aBolsa = rampa(frame, ev.e9.vuelve, 8);
 
   // ---- billetera y monedas ----
   const salidas = [ev.e3.pasa, ev.e3.va, ev.e3.moneda];
-  const inflado = 1 - 0.2 * salidas.filter((c) => frame >= c).length + 0.25 * rampa(frame, ev.e9.venta, 14) + 0.55 * rampa(frame, ev.e10.volver - 4, 16);
-  const bocaBilletera = { x: BILLETERA.x + BILLETERA.ancho / 2, y: BILLETERA.y + 120 };
+  const inflado = 1 - 0.2 * salidas.filter((c) => frame >= c).length + 0.25 * rampa(frame, ev.e9.venta + 14, 10) + 0.55 * rampa(frame, ev.e10.volver - 4, 16);
 
   // ---- multitud ----
   const barrido = frame >= ev.e4.hablas ? ((frame - ev.e4.hablas) / 40) % 1 : -1;
+  const centroFoco = 150 + barrido * 1700;
   const todosTenue = rampa(frame, ev.e4.mundo, 10) * (1 - rampa(frame, ev.e5.iluminan, 8));
   const elegidos = rampa(frame, ev.e5.iluminan, 10);
 
-  // ---- cliente junto al celular (e8-e9) ----
-  const clienteVisible = rampa(frame, ev.e8.tercero, 10);
-  const clienteSeVa = rampa(frame, ev.e8.responde, 14) * (1 - rampa(frame, ev.e9.responde, 14));
-  const clienteX = 1880 + 420 * clienteSeVa;
+  // ---- cliente y reloj (e8): espera, nadie responde, se va ----
+  const relojVisible = rampa(frame, ev.e8.escriben, 8) * (1 - rampa(frame, ev.e9.responde, 8));
+  const clienteSeVa = rampa(frame, ev.e8.responde, 26);
+  const pasos = Math.abs(Math.sin((frame - ev.e8.responde) / 3)) * 30 * Math.min(1, clienteSeVa * 4);
 
   // ---- mano ----
   const deslices: [number, number][] = [
@@ -240,118 +169,113 @@ export function PrototipoIlustrado({ tiempos, vozUrl, fotoUrl: fotoPropia, tema 
   const deslizando = deslices.find(([a, b]) => frame >= a && frame <= b + 4);
   const toques = [ev.e7.detiene, ev.e11.quiubot];
   const toque = toques.find((c) => frame >= c - 6 && frame <= c + 10);
-  const manoVisible = (frame < ev.e2.gente + 10 || (frame >= ev.e6.segundo + 10 && frame < ev.e8.tercero) || frame >= ev.e11.sigue + 10) ? 1 : 0;
+  const manoVisible = frame < ev.e2.gente + 10 || (frame >= ev.e6.segundo + 10 && frame < ev.e8.tercero) || frame >= ev.e11.sigue + 10;
   const enPerfilMano = frame >= ev.e11.sigue;
   const manoY = deslizando ? 1150 - 650 * rampa(frame, deslizando[0], Math.max(6, deslizando[1] - deslizando[0])) : enPerfilMano ? 560 : 1000;
   const manoX = enPerfilMano ? 330 : 420;
   const manoEscala = toque !== undefined ? 1 - 0.18 * Math.sin(Math.min(1, Math.max(0, (frame - (toque - 6)) / 16)) * Math.PI) : 1;
 
   const siguiendo = frame >= ev.e11.quiubot + 3;
+  // Bolsa del chat en coordenadas del mundo (de ahí sale la venta).
+  const origenVenta = { x: CELULAR.x + CELULAR.borde + 170, y: CELULAR.y + CELULAR.borde + 900 };
 
   return (
-    <AbsoluteFill style={{ fontFamily: familiaDeFuente(tema.fuente), background: `linear-gradient(180deg, ${paleta.fondo} 0%, ${paleta.fondoProfundo} 100%)`, overflow: "hidden" }}>
-      {/* Fondo con parallax: se mueve más lento que el mundo (profundidad). */}
-      <AbsoluteFill style={{ transform: `translate(${-cam.x * 0.12}px, ${-cam.y * 0.08}px)` }}>
-        {Array.from({ length: 18 }, (_, i) => (
-          <div
-            key={i}
-            style={{
-              position: "absolute",
-              left: (i * 397) % 1500 - 100,
-              top: (i * 613) % 2600 - 200,
-              width: 120 + (i % 4) * 60,
-              height: 120 + (i % 4) * 60,
-              borderRadius: "50%",
-              background: `radial-gradient(circle, ${hexConAlfa(paleta.luz, 0.22)} 0%, ${hexConAlfa(paleta.luz, 0)} 70%)`,
-            }}
-          />
-        ))}
-      </AbsoluteFill>
+    <AbsoluteFill style={{ fontFamily: familiaDeFuente(tema.fuente), background: paleta.fondoProfundo, overflow: "hidden" }}>
+      <Fondo camX={cam.x} camY={cam.y} fondo={paleta.fondo} profundo={paleta.fondoProfundo} luz={paleta.luz} />
 
       <div style={{ position: "absolute", left: 0, top: 0, width: 2400, height: 4000, transformOrigin: "0 0", transform: transformMundo }}>
-        {/* Piso de la multitud */}
-        <div style={{ position: "absolute", left: -400, top: 2700, width: 3200, height: 1300, background: `linear-gradient(180deg, ${hexConAlfa(paleta.luz, 0.06)} 0%, rgba(0,0,0,0.35) 100%)`, borderRadius: "50% 50% 0 0 / 12% 12% 0 0" }} />
-
-        {/* Foco que barre a la multitud (e4) y se cierra sobre los elegidos (e5) */}
+        {/* Foco que barre a la multitud (e4); se apaga cuando se iluminan los elegidos (e5) */}
         {barrido >= 0 && frame < ev.e6.segundo && (() => {
-          // Cono de luz desde arriba que barre a la multitud (e4) y se
-          // abre para "todo el mundo"; se apaga cuando se iluminan los
-          // elegidos (e5).
-          const centroX = 300 + barrido * 1600;
-          const ancho = 520 + 1400 * todosTenue;
-          const intensidad = 0.32 * (1 - elegidos);
+          const ancho = 620 + 1500 * todosTenue;
+          const intensidad = 0.34 * (1 - elegidos);
           return (
             <>
               {/* Polígono SVG (no clip-path CSS): mismo camino que ya funciona en el renderizador del navegador. */}
-              <svg width={ancho} height={1250} viewBox={`0 0 ${ancho} 1250`} style={{ position: "absolute", left: centroX - ancho / 2, top: 2250 }}>
+              <svg width={ancho} height={1500} viewBox={`0 0 ${ancho} 1500`} style={{ position: "absolute", left: centroFoco - ancho / 2, top: 2000 }}>
                 <defs>
                   <linearGradient id="cono" x1="0" y1="0" x2="0" y2="1">
                     <stop offset="0" stopColor="#ffffff" stopOpacity={intensidad} />
                     <stop offset="1" stopColor="#ffffff" stopOpacity={intensidad * 0.35} />
                   </linearGradient>
                 </defs>
-                <polygon points={`${ancho * 0.42},0 ${ancho * 0.58},0 ${ancho},1250 0,1250`} fill="url(#cono)" />
+                <polygon points={`${ancho * 0.42},0 ${ancho * 0.58},0 ${ancho},1500 0,1500`} fill="url(#cono)" />
               </svg>
-              <div style={{ position: "absolute", left: centroX - ancho / 2, top: 3330, width: ancho, height: 260, borderRadius: "50%", background: `radial-gradient(ellipse, ${hexConAlfa("#ffffff", intensidad * 0.8)} 0%, rgba(255,255,255,0) 70%)` }} />
+              <div style={{ position: "absolute", left: centroFoco - ancho / 2, top: 3330, width: ancho, height: 300, borderRadius: "50%", background: `radial-gradient(ellipse, ${hexConAlfa("#ffffff", intensidad * 0.8)} 0%, rgba(255,255,255,0) 70%)` }} />
             </>
           );
         })()}
 
-        {FILAS.map((fila, f) =>
-          Array.from({ length: fila.cantidad }, (_, k) => {
-            const x = 1200 + (k - (fila.cantidad - 1) / 2) * 230 * fila.escala + (f % 2) * 40;
-            const elegido = ILUMINADOS.has(`${f}-${k}`);
-            const bajoElFoco = barrido >= 0 && Math.abs(x - (300 + barrido * 1600)) < 260 + 700 * todosTenue && frame < ev.e5.iluminan ? 0.45 : 0;
-            const luz = elegido ? Math.max(elegidos, todosTenue * 0.25, bajoElFoco) : Math.max(todosTenue * 0.25, bajoElFoco) * (1 - elegidos);
-            const mirar = elegido ? rampa(frame, ev.e5.comprarte, 10) : 0;
-            const opacidad = elegido ? 1 : 1 - 0.45 * elegidos;
-            return <Persona key={`${f}-${k}`} x={x} y={fila.y} escala={fila.escala} luz={luz} colorLuz={paleta.luz} mirarArriba={mirar} opacidad={opacidad} />;
-          })
-        )}
+        {MULTITUD.map((p, i) => {
+          const elegido = ILUMINADOS.has(p.id);
+          const bajoElFoco = barrido >= 0 && Math.abs(p.x - centroFoco) < 280 + 750 * todosTenue && frame < ev.e5.iluminan ? 0.5 : 0;
+          const luz = elegido ? Math.max(elegidos, todosTenue * 0.3, bajoElFoco) : Math.max(todosTenue * 0.3, bajoElFoco) * (1 - elegidos);
+          const mirar = elegido ? rampa(frame, ev.e5.comprarte, 10) : 0;
+          const opacidad = elegido ? 1 : 1 - 0.5 * elegidos;
+          return <Persona key={p.id} x={p.x} pies={p.pies} escala={p.escala} luz={luz} colorLuz={paleta.luz} mirarArriba={mirar} opacidad={opacidad} variante={i * 3 + p.fila} />;
+        })}
 
-        {/* Gráfica que sube detrás del celular (e10) */}
-        <Grafica x={1640} y={640} avance={rampa(frame, ev.e10.empieza, 26)} color={paleta.luz} />
+        {/* Gráfica que sube sobre la billetera (e10) */}
+        <Grafica avance={rampa(frame, ev.e10.empieza, 26)} color={paleta.luz} />
 
+        <SombraPiso cx={BILLETERA.x + BILLETERA.ancho / 2} y={BILLETERA.y + BILLETERA.alto} ancho={BILLETERA.ancho * 1.15} />
         <Billetera inflado={Math.max(0.2, Math.min(1.1, inflado))} />
 
-        {/* Monedas que se van (e3) -- la última sigue cayendo hacia la multitud (e4) */}
+        {/* Monedas grandes que se van (e3): saltan de la billetera y caen; la última sigue hacia la multitud (e4) */}
         {salidas.map((c, i) => {
           if (frame < c) return null;
           const t = (frame - c) / fps;
           const ultima = i === salidas.length - 1;
-          const y = bocaBilletera.y + 900 * t * t + 120 * t;
-          const yMax = ultima ? 2780 : 1900;
-          return <Moneda key={i} x={bocaBilletera.x + (i - 1) * 70 + 60 * t} y={Math.min(y, yMax)} rotacion={t * 320} opacidad={ultima ? 1 - rampa(frame, ev.e5.elige, 10) : 1 - rampa(frame, c + 40, 14)} />;
+          const y = BOCA_BILLETERA.y - 900 * t + 1500 * t * t;
+          return (
+            <Moneda
+              key={i}
+              x={BOCA_BILLETERA.x + (i - 1) * 140 + 160 * t}
+              y={Math.min(y, ultima ? 2700 : 2300)}
+              tamano={TAM_MONEDA}
+              rotacion={t * 320}
+              opacidad={ultima ? 1 - rampa(frame, ev.e5.elige, 10) : 1 - rampa(frame, c + 40, 12)}
+            />
+          );
         })}
 
         {/* La venta vuelve como moneda a la billetera (e9) */}
-        {frame >= ev.e9.venta && frame < ev.e9.venta + 30 && (
-          <Moneda
-            x={CENTRO_CELULAR.x + (bocaBilletera.x - CENTRO_CELULAR.x) * rampa(frame, ev.e9.venta, 20)}
-            y={CENTRO_CELULAR.y - 200 + (bocaBilletera.y - CENTRO_CELULAR.y + 200) * rampa(frame, ev.e9.venta, 20) - Math.sin(rampa(frame, ev.e9.venta, 20) * Math.PI) * 260}
-            tamano={130}
-            rotacion={frame * 8}
-          />
-        )}
+        {frame >= ev.e9.venta && frame < ev.e9.venta + 30 && (() => {
+          const t = rampa(frame, ev.e9.venta, 22);
+          return (
+            <Moneda
+              x={origenVenta.x + (BOCA_BILLETERA.x - origenVenta.x) * t}
+              y={origenVenta.y + (BOCA_BILLETERA.y - origenVenta.y) * t - Math.sin(t * Math.PI) * 300}
+              tamano={TAM_MONEDA}
+              rotacion={frame * 8}
+              opacidad={1 - rampa(frame, ev.e9.venta + 22, 6)}
+            />
+          );
+        })()}
 
-        {/* El presupuesto empieza a volver (e10): lluvia de monedas hacia la billetera */}
-        {Array.from({ length: 6 }, (_, i) => {
+        {/* El presupuesto empieza a volver (e10): lluvia de monedas grandes hacia la billetera */}
+        {Array.from({ length: 5 }, (_, i) => {
           const inicio = ev.e10.empieza + i * 4;
           if (frame < inicio || frame > inicio + 26) return null;
           const t = rampa(frame, inicio, 20);
-          const desdeX = 1200 + (i - 2.5) * 260;
-          const desdeY = 2850;
-          return <Moneda key={`v${i}`} x={desdeX + (bocaBilletera.x - desdeX) * t} y={desdeY + (bocaBilletera.y - desdeY) * t - Math.sin(t * Math.PI) * 500} tamano={100} rotacion={frame * 9 + i * 40} opacidad={1 - rampa(frame, inicio + 20, 6)} />;
+          const desdeX = BOCA_BILLETERA.x + (i - 2) * 160;
+          const desdeY = 520;
+          return <Moneda key={`v${i}`} x={desdeX + (BOCA_BILLETERA.x - desdeX) * t} y={desdeY + (BOCA_BILLETERA.y - desdeY) * t} tamano={200} rotacion={frame * 9 + i * 40} opacidad={1 - rampa(frame, inicio + 20, 6)} />;
         })}
 
-        {/* Cliente junto al celular (e8-e9): se va si nadie responde */}
-        {clienteVisible > 0 && frame < ev.e10.asi + 10 && (
-          <Persona x={clienteX} y={1960} escala={1.6} luz={0.55} colorLuz={paleta.luz} opacidad={clienteVisible * (1 - 0.85 * clienteSeVa) * (1 - rampa(frame, ev.e10.asi, 10))} />
+        {/* Cliente grande que espera junto a un reloj grande (e8); se va si nadie responde */}
+        {frame >= ev.e8.tercero && frame < ev.e9.responde + 30 && (
+          <>
+            <SombraPiso cx={CLIENTE.x + 900 * clienteSeVa} y={CLIENTE.pies} ancho={140 * CLIENTE.escala * 1.1} />
+            <div style={{ position: "absolute", left: 0, top: 0, transform: `translate(${900 * clienteSeVa}px, ${-pasos}px)` }}>
+              <Persona x={CLIENTE.x} pies={CLIENTE.pies} escala={CLIENTE.escala} luz={0.9} colorLuz={paleta.luz} variante={3} conCelular opacidad={1 - rampa(frame, ev.e8.responde + 18, 10)} />
+            </div>
+          </>
         )}
-        {frame >= ev.e8.escriben && frame < ev.e9.responde + 6 && (
-          <Reloj x={1880} y={1180} tamano={260} angulo={(frame - ev.e8.escriben) * (frame >= ev.e8.nadie ? 26 : 10)} aparicion={rampa(frame, ev.e8.escriben, 8) * (1 - rampa(frame, ev.e9.responde, 6))} />
+        {relojVisible > 0 && (
+          <Reloj cx={RELOJ.cx} cy={RELOJ.cy} tamano={RELOJ.tamano} angulo={(frame - ev.e8.escriben) * (frame >= ev.e8.nadie ? 30 : 8)} aparicion={relojVisible} />
         )}
 
+        <SombraPiso cx={CENTRO_CELULAR.x} y={CELULAR.y + CELULAR.alto + 10} ancho={CELULAR.ancho * 1.25} />
         <Celular>
           {/* Feed */}
           <div style={{ position: "absolute", inset: 0, opacity: 1 - Math.max(mezclaChat, mezclaPerfil) }}>
@@ -364,7 +288,7 @@ export function PrototipoIlustrado({ tiempos, vozUrl, fotoUrl: fotoPropia, tema 
               {/* Ojos: "la gente ve tu anuncio" */}
               {ojos.map((o, i) =>
                 o > 0 ? (
-                  <svg key={i} viewBox="0 0 24 24" width={170} height={170} style={{ position: "absolute", left: 70 + i * 190, top: 520 + (i % 2) * 70, transform: `scale(${o})`, opacity: o, filter: "drop-shadow(0 10px 20px rgba(0,0,0,0.35))" }}>
+                  <svg key={i} viewBox="0 0 24 24" width={170} height={170} style={{ position: "absolute", left: 70 + i * 190, top: 4 * ALTO_POST - scroll + 180 + (i % 2) * 90, transform: `scale(${o})`, opacity: o, filter: "drop-shadow(0 10px 20px rgba(0,0,0,0.35))" }}>
                     <circle cx="12" cy="12" r="11" fill="#ffffff" />
                     <path d="M2 12s3.6-6 10-6 10 6 10 6-3.6 6-10 6S2 12 2 12z" fill="none" stroke="#2a2a33" strokeWidth="1.8" />
                     <circle cx="12" cy="12" r="3.2" fill="#2a2a33" />
@@ -377,24 +301,45 @@ export function PrototipoIlustrado({ tiempos, vozUrl, fotoUrl: fotoPropia, tema 
 
           {/* Chat */}
           {(enChat || mezclaChat > 0) && (
-            <div style={{ position: "absolute", inset: 0, opacity: mezclaChat, background: "#f7f7fa", display: "flex", flexDirection: "column" }}>
-              <div style={{ height: ALTO_BARRA_FEED, background: "#fff", borderBottom: "2px solid #eee", display: "flex", alignItems: "flex-end", gap: 20, padding: "0 30px 22px" }}>
-                <div style={{ width: 64, height: 64, borderRadius: "50%", background: "#4b4b5c" }} />
-                <div style={{ width: 200, height: 22, borderRadius: 11, background: "#2a2a33", marginBottom: 20 }} />
+            <div style={{ position: "absolute", inset: 0, opacity: mezclaChat, background: "#F7F7FA", display: "flex", flexDirection: "column", fontFamily: "Poppins, sans-serif" }}>
+              <div style={{ height: ALTO_BARRA_FEED + 30, background: "#fff", borderBottom: "2px solid #eee", display: "flex", alignItems: "flex-end", gap: 18, padding: "0 26px 22px" }}>
+                <IconoAtras tamano={46} />
+                <div style={{ width: 72, height: 72, borderRadius: "50%", background: "#D65DB1", color: "#fff", display: "flex", alignItems: "center", justifyContent: "center", fontSize: 34, fontWeight: 800 }}>C</div>
+                <div style={{ display: "flex", flexDirection: "column", lineHeight: 1.15 }}>
+                  <span style={{ fontSize: 32, fontWeight: 700, color: "#1c1c22" }}>Camila</span>
+                  <span style={{ fontSize: 22, color: "#2B7A3F", display: "flex", alignItems: "center", gap: 8 }}>
+                    <span style={{ width: 12, height: 12, borderRadius: 6, background: "#2BB24C", display: "inline-block" }} />
+                    En línea
+                  </span>
+                </div>
               </div>
-              <div style={{ flex: 1, display: "flex", flexDirection: "column", gap: 24, padding: "40px 30px" }}>
-                <Burbuja ancho={420} aparicion={msg1} />
-                <Burbuja ancho={360} aparicion={msg2} />
-                <div style={{ position: "relative", alignSelf: "flex-end" }}>
-                  <div style={{ opacity: 1 - aBolsa, transform: `scale(${1 - 0.5 * aBolsa})`, transformOrigin: "100% 50%" }}>
-                    <Burbuja propia ancho={400} aparicion={respuesta} color="#0F7A3C" />
+              {/* Lugar de cada mensaje reservado desde el inicio: nada se corre cuando llega otro. */}
+              <div style={{ display: "flex", flexDirection: "column", gap: 22, padding: "70px 30px 0" }}>
+                <Burbuja aparicion={msgHola} hora="10:42">
+                  Hola <IconoSaludo tamano={46} />
+                </Burbuja>
+                <Burbuja aparicion={msgPrecio} hora="10:42">
+                  ¿Precio?
+                </Burbuja>
+                <Burbuja aparicion={msgEnvio} hora="10:43">
+                  ¿Tienen envío?
+                </Burbuja>
+                <div style={{ alignSelf: "flex-end", display: "flex", flexDirection: "column", alignItems: "flex-end", gap: 10, opacity: respuesta }}>
+                  <div style={{ display: "flex", alignItems: "center", gap: 8, padding: "6px 16px", borderRadius: 20, background: "#FFF4D1", color: "#7A4D00", fontSize: 24, fontWeight: 700 }}>
+                    <IconoRayo tamano={28} color="#E8A100" />
+                    Al instante
                   </div>
-                  {aBolsa > 0 && (
-                    <svg viewBox="0 0 24 24" width={190} height={190} style={{ position: "absolute", right: 80, top: -20, transform: `scale(${aBolsa})`, opacity: 1 - rampa(frame, ev.e9.venta, 6), filter: "drop-shadow(0 10px 20px rgba(0,0,0,0.25))" }}>
-                      <path d="M5 8h14l-1.2 12.2a1 1 0 0 1-1 .8H7.2a1 1 0 0 1-1-.8z" fill={colorMarca} />
-                      <path d="M9 8V6.5a3 3 0 0 1 6 0V8" fill="none" stroke={colorMarca} strokeWidth="1.8" />
-                    </svg>
-                  )}
+                  <Burbuja propia aparicion={respuesta} color={VERDE_RESPUESTA} hora="10:43" leido={leido}>
+                    ¡Sí! Envío gratis
+                  </Burbuja>
+                </div>
+                <div style={{ position: "relative", alignSelf: "flex-start" }}>
+                  <div style={{ opacity: 1 - aBolsa, transform: `scale(${1 - 0.6 * aBolsa})`, transformOrigin: "0% 50%" }}>
+                    <Burbuja aparicion={msgLoQuiero} hora="10:44">
+                      ¡Lo quiero!
+                    </Burbuja>
+                  </div>
+                  {aBolsa > 0 && <IconoBolsa tamano={190} color={colorMarca} estilo={{ position: "absolute", left: 40, top: -40, transform: `scale(${aBolsa})`, opacity: 1 - rampa(frame, ev.e9.venta, 6), filter: "drop-shadow(0 10px 20px rgba(0,0,0,0.25))" }} />}
                 </div>
               </div>
             </div>
@@ -402,38 +347,44 @@ export function PrototipoIlustrado({ tiempos, vozUrl, fotoUrl: fotoPropia, tema 
 
           {/* Perfil de la marca (e11) */}
           {mezclaPerfil > 0 && (
-            <div style={{ position: "absolute", inset: 0, opacity: mezclaPerfil, background: "#fff" }}>
-              <div style={{ display: "flex", alignItems: "center", gap: 40, padding: `${ALTO_BARRA_FEED + 40}px 40px 30px` }}>
-                <div style={{ width: 200, height: 200, borderRadius: "50%", background: `linear-gradient(145deg, ${colorMarca}, ${tema.color_secundario})`, display: "flex", alignItems: "center", justifyContent: "center", color: colorTextoSobre(colorMarca), fontSize: 100, fontWeight: 900 }}>
+            <div style={{ position: "absolute", inset: 0, opacity: mezclaPerfil, background: "#fff", fontFamily: "Poppins, sans-serif", color: "#1c1c22" }}>
+              <div style={{ display: "flex", alignItems: "center", gap: 30, padding: `${ALTO_BARRA_FEED + 40}px 36px 30px` }}>
+                <div style={{ width: 200, height: 200, borderRadius: "50%", flexShrink: 0, background: `linear-gradient(145deg, ${colorMarca}, ${tema.color_secundario})`, display: "flex", alignItems: "center", justifyContent: "center", color: colorTextoSobre(colorMarca), fontSize: 100, fontWeight: 900 }}>
                   {(tema.nombre_marca ?? "Q").slice(0, 1)}
                 </div>
-                <div style={{ display: "flex", gap: 34 }}>
-                  {[0, 1, 2].map((i) => (
-                    <div key={i} style={{ display: "flex", flexDirection: "column", alignItems: "center", gap: 12 }}>
-                      <div style={{ width: 80, height: 28, borderRadius: 14, background: "#2a2a33" }} />
-                      <div style={{ width: 100, height: 18, borderRadius: 9, background: "#d9d9df" }} />
+                <div style={{ display: "flex", flex: 1, justifyContent: "space-between" }}>
+                  {[
+                    ["128", "posts"],
+                    ["4.210", "seguidores"],
+                    ["310", "seguidos"],
+                  ].map(([n, t]) => (
+                    <div key={t} style={{ display: "flex", flexDirection: "column", alignItems: "center", lineHeight: 1.2 }}>
+                      <span style={{ fontSize: 36, fontWeight: 800 }}>{n}</span>
+                      <span style={{ fontSize: 21, color: "#5b5b66" }}>{t}</span>
                     </div>
                   ))}
                 </div>
               </div>
-              <div style={{ padding: "0 40px", display: "flex", flexDirection: "column", gap: 14 }}>
-                <div style={{ width: 300, height: 26, borderRadius: 13, background: "#2a2a33" }} />
-                <div style={{ width: "80%", height: 18, borderRadius: 9, background: "#d9d9df" }} />
+              <div style={{ padding: "0 36px", display: "flex", flexDirection: "column", lineHeight: 1.25 }}>
+                <span style={{ fontSize: 32, fontWeight: 800 }}>{tema.instagramUsuario ?? tema.nombre_marca}</span>
+                <span style={{ fontSize: 26, color: "#3b3b45" }}>Trucos de anuncios para tu negocio</span>
               </div>
-              <div style={{ margin: "40px 40px", height: 110, borderRadius: 24, background: siguiendo ? "#0F7A3C" : colorMarca, color: "#fff", display: "flex", alignItems: "center", justifyContent: "center", gap: 14, fontSize: 48, fontWeight: 800, transform: `scale(${siguiendo ? 1 + 0.05 * (1 - rampa(frame, ev.e11.quiubot + 3, 8)) : 1})` }}>
+              <div style={{ margin: "26px 36px 36px", height: 110, borderRadius: 24, background: siguiendo ? "#0F7A3C" : colorMarca, color: "#fff", display: "flex", alignItems: "center", justifyContent: "center", gap: 14, fontSize: 48, fontWeight: 800, transform: `scale(${siguiendo ? 1 + 0.05 * (1 - rampa(frame, ev.e11.quiubot + 3, 8)) : 1})` }}>
                 {siguiendo ? "Siguiendo" : "Seguir"}
                 {siguiendo && <IconoCheck tamano={48} color="#fff" />}
               </div>
               <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr 1fr", gap: 6, padding: "0 6px" }}>
-                {Array.from({ length: 6 }, (_, i) => (
-                  <div key={i} style={{ height: 230, background: i === 0 ? `url(${fotoUrl}) center/cover` : ["#a18cd1", "#fbc2eb", "#84fab0", "#fccb90", "#8fd3f4"][i % 5] }} />
+                {(["anuncio", "comida", "paisaje", "mascota", "ropa", "comida"] as const).map((t, i) => (
+                  <div key={i} style={{ height: 230, overflow: "hidden", background: i === 0 ? `url(${fotoUrl}) center/cover` : undefined }}>
+                    {t !== "anuncio" && <Ilustracion tipo={t} />}
+                  </div>
                 ))}
               </div>
             </div>
           )}
 
           {/* Mano: desliza el feed y toca */}
-          {manoVisible > 0 && (
+          {manoVisible && (
             <div style={{ position: "absolute", left: manoX, top: manoY, transform: `scale(${manoEscala}) rotate(-12deg)`, transformOrigin: "30% 10%", filter: "drop-shadow(0 18px 26px rgba(0,0,0,0.35))" }}>
               <IconoMano tamano={240} />
             </div>
