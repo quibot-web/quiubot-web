@@ -13,7 +13,7 @@ import path from "node:path";
 import { describe, expect, it } from "vitest";
 import { caracterEnFuentes } from "./glifos";
 
-const CARPETAS = ["video/visuales", "video/escenas", "video/capas", "video/estilos"];
+const CARPETAS = ["video/visuales", "video/escenas", "video/capas", "video/estilos", "video/ilustrado"];
 
 function sinComentarios(codigo: string): string {
   return codigo.replace(/\/\*[\s\S]*?\*\//g, "").replace(/(^|[^:])\/\/.*$/gm, "$1");

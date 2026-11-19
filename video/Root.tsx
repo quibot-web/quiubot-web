@@ -18,6 +18,8 @@ import { fixturePreguntaComunidad } from "./fixtures/organico/preguntaComunidad"
 import { fixtureDetrasDeMarca } from "./fixtures/organico/detrasDeMarca";
 import { ReelConsejosNumerados, duracionReelConsejosNumeradosEnCuadros } from "./fixtures/organico/referencia/ReelConsejosNumerados";
 import { ReelMitoVerdad, duracionReelMitoVerdadEnCuadros } from "./fixtures/organico/referencia/ReelMitoVerdad";
+import { PrototipoIlustrado, duracionPrototipoIlustrado, type PropsPrototipoIlustrado } from "./ilustrado/PrototipoIlustrado";
+import { tiemposSinteticos } from "./ilustrado/guionPrototipo";
 import { ReelAutomatico, duracionReelAutomaticoEnCuadros, type PropsReelAutomatico } from "./visuales/ReelAutomatico";
 import { BancoGanchoCierre, BancoVisuales, type PropsBancoGanchoCierre, type PropsBancoVisuales } from "./BancoVisuales";
 
@@ -76,6 +78,8 @@ const calcularMetadataRender: CalculateMetadataFunction<PropsComposicion> = ({ p
   fps: props.guion.fps,
 });
 
+const TEMA_PROTOTIPO = { color_primario: "#534AB7", color_secundario: "#B9B2FF", fuente: "moderna" as const, logo_url: null, nombre_marca: "Quiubot", instagramUsuario: "quiubot" };
+
 function RemotionRoot() {
   return (
     <>
@@ -132,6 +136,19 @@ function RemotionRoot() {
         width={1080}
         height={1920}
         defaultProps={{ tipo: "anuncio_boton", estado: "antes", textos: {} } satisfies PropsBancoVisuales}
+      />
+      {/* Prototipo de reel ilustrado (un mundo 2.5D, cámara continua):
+          tiempos sintéticos por defecto; el mp4 se renderiza con la voz
+          real y sus tiempos (script local). */}
+      <Composition
+        id="prototipo-ilustrado"
+        component={PrototipoIlustrado}
+        durationInFrames={30}
+        fps={30}
+        width={1080}
+        height={1920}
+        calculateMetadata={({ props }) => ({ durationInFrames: duracionPrototipoIlustrado(props) })}
+        defaultProps={{ tiempos: tiemposSinteticos(), vozUrl: null, tema: TEMA_PROTOTIPO } satisfies PropsPrototipoIlustrado}
       />
       {/* Reel con voz completo desde un guion guardado
           (video/renderReelAutomatico.ts) -- para revisar estilos con el
