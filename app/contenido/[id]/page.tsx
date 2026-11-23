@@ -27,6 +27,7 @@ export default function RevisionPiezaPage({ params }: { params: Promise<{ id: st
   const { id } = use(params);
   const router = useRouter();
   const [paso, setPaso] = useState<Paso>("cargando");
+  const [sinAcceso, setSinAcceso] = useState<{ mensaje: string | null; suscripcion: boolean }>({ mensaje: null, suscripcion: false });
   const [pieza, setPieza] = useState<PublicacionOrganica | null>(null);
   const [medios, setMedios] = useState<MediosResueltos>({});
   const [guion, setGuion] = useState<Guion | null>(null);
@@ -85,17 +86,19 @@ export default function RevisionPiezaPage({ params }: { params: Promise<{ id: st
   useEffect(() => {
     (async () => {
       try {
-        const rolRes = await fetch("/api/usuario/rol");
-        const rolData = await rolRes.json();
-        if (rolData.rol !== "admin") {
+        // Acceso por suscripción activa (ya no solo admin, ver
+        // app/lib/accesoContenido.ts): el motivo se muestra tal cual.
+        const accesoRes = await fetch("/api/contenido/acceso");
+        const accesoData = await accesoRes.json().catch(() => ({}));
+        if (!accesoRes.ok) {
+          setSinAcceso({ mensaje: accesoData.error ?? null, suscripcion: accesoData.codigo === "suscripcion_inactiva" });
           setPaso("sin-acceso");
           return;
         }
-        setRol(rolData.rol);
-        // Lista de pistas para el selector "elegir música a mano" --
-        // mismo endpoint que ya usa /video, cualquier admin puede verlas
-        // todas (ver lib/accesoMusica.ts).
-        fetch("/api/admin/musica")
+        setRol(accesoData.esAdmin ? "admin" : "user");
+        // Pistas para el selector "Música": el cliente solo ve las que se
+        // pueden publicar; admin, todas (ver /api/contenido/musica).
+        fetch("/api/contenido/musica")
           .then((r) => r.json())
           .then((d) => setPistasDisponibles(d.pistas ?? []))
           .catch(() => {});
@@ -265,7 +268,8 @@ export default function RevisionPiezaPage({ params }: { params: Promise<{ id: st
   }
 
   if (paso === "cargando") return <PantallaCentro texto="Cargando…" />;
-  if (paso === "sin-acceso") return <PantallaCentro texto="No tienes acceso a esta sección." />;
+  if (paso === "sin-acceso")
+    return <PantallaCentro texto={sinAcceso.mensaje ?? "No tienes acceso a esta sección."} enlace={sinAcceso.suscripcion ? { href: "/billing", texto: "Renovar mi plan" } : undefined} />;
   if (paso === "no-encontrada") return <PantallaCentro texto="Esta pieza no existe." />;
   if (!pieza) return null;
 
@@ -365,23 +369,26 @@ export default function RevisionPiezaPage({ params }: { params: Promise<{ id: st
         {pieza.estado === "error" && pieza.tipo_error === "calidad" && (
           <div style={{ background: "#FDECEC", border: "1px solid #E8A0A0", borderRadius: 14, padding: 16, marginBottom: 16 }}>
             <p style={{ fontSize: 13, color: "#8A1F1F", fontWeight: 700, margin: "0 0 8px" }}>El control de calidad rechazó este reel.</p>
-            {Array.isArray(pieza.control_calidad?.hallazgos) && (
+            {rol !== "admin" && <p style={{ fontSize: 12.5, color: "#8A1F1F", margin: 0 }}>Encontramos un problema en el audio o la imagen de este reel. Escríbenos y lo revisamos contigo.</p>}
+            {rol === "admin" && Array.isArray(pieza.control_calidad?.hallazgos) && (
               <ul style={{ fontSize: 12, color: "#8A1F1F", margin: "0 0 10px", paddingLeft: 18 }}>
                 {(pieza.control_calidad!.hallazgos as string[]).map((h, i) => (
                   <li key={i}>{h}</li>
                 ))}
               </ul>
             )}
-            <button
-              type="button"
-              style={{ ...botonSecundario, borderColor: "#8A1F1F", color: "#8A1F1F" }}
-              onClick={async () => {
-                await fetch(`/api/contenido/${id}`, { method: "PATCH", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ accion: "forzar_sin_calidad" }) });
-                await cargar();
-              }}
-            >
-              Forzar de todos modos
-            </button>
+            {rol === "admin" && (
+              <button
+                type="button"
+                style={{ ...botonSecundario, borderColor: "#8A1F1F", color: "#8A1F1F" }}
+                onClick={async () => {
+                  await fetch(`/api/contenido/${id}`, { method: "PATCH", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ accion: "forzar_sin_calidad" }) });
+                  await cargar();
+                }}
+              >
+                Forzar de todos modos
+              </button>
+            )}
           </div>
         )}
 
@@ -407,7 +414,7 @@ export default function RevisionPiezaPage({ params }: { params: Promise<{ id: st
           </div>
         )}
 
-        {pieza.estado === "lista" && pieza.control_calidad?.aprobado === false && !pieza.control_calidad?.publicarIgual && (
+        {rol === "admin" && pieza.estado === "lista" && pieza.control_calidad?.aprobado === false && !pieza.control_calidad?.publicarIgual && (
           <div style={{ background: "#FEF6E7", border: "1px solid #F0C36D", borderRadius: 14, padding: 16, marginBottom: 16, display: "flex", gap: 10, alignItems: "center", flexWrap: "wrap" }}>
             <span style={{ fontSize: 13, color: "#8A6416", fontWeight: 700, flex: 1 }}>Lista, no aprobada: requiere confirmación -- el control de calidad no pasó y esta pieza se forzó.</span>
             <button
@@ -558,10 +565,15 @@ export default function RevisionPiezaPage({ params }: { params: Promise<{ id: st
   );
 }
 
-function PantallaCentro({ texto }: { texto: string }) {
+function PantallaCentro({ texto, enlace }: { texto: string; enlace?: { href: string; texto: string } }) {
   return (
-    <div style={{ minHeight: "100vh", display: "flex", alignItems: "center", justifyContent: "center", fontFamily: "system-ui, sans-serif", color: "#666" }}>
+    <div style={{ minHeight: "100vh", display: "flex", flexDirection: "column", gap: 12, alignItems: "center", justifyContent: "center", fontFamily: "system-ui, sans-serif", color: "#666", padding: 20, textAlign: "center" }}>
       {texto}
+      {enlace && (
+        <a href={enlace.href} style={{ padding: "10px 16px", borderRadius: 10, background: "#534AB7", color: "#fff", fontWeight: 700, textDecoration: "none" }}>
+          {enlace.texto}
+        </a>
+      )}
     </div>
   );
 }

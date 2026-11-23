@@ -1,7 +1,7 @@
-import { auth } from "@/auth";
 import { NextRequest, NextResponse } from "next/server";
 import { v2 as cloudinary } from "cloudinary";
 import { supabaseAdmin } from "@/lib/supabase";
+import { accesoContenido } from "@/app/lib/accesoContenido";
 import { desencriptarSiHaceFalta } from "@/lib/crypto";
 import { registrarError } from "@/lib/registrarError";
 
@@ -25,24 +25,10 @@ const INTENTOS_SUBIDA_ANTES_DE_ERROR = 2;
 export async function POST(req: NextRequest, { params }: { params: Promise<{ id: string }> }) {
   const { id } = await params;
 
-  const session = await auth();
-  if (!session?.user?.email) {
-    return NextResponse.json({ error: "No autorizado" }, { status: 401 });
-  }
-  const emailBusqueda = session.user.email.trim().toLowerCase();
-
-  const { data: usuario } = await supabaseAdmin
-    .from("usuarios")
-    .select("id, rol, cloudinary_name, cloudinary_key, cloudinary_secret")
-    .eq("email", emailBusqueda)
-    .single();
-
-  if (!usuario) {
-    return NextResponse.json({ error: "Usuario no encontrado" }, { status: 404 });
-  }
-  if (usuario.rol !== "admin") {
-    return NextResponse.json({ error: "No autorizado" }, { status: 403 });
-  }
+  // Dueño de la pieza con suscripción activa (ver app/lib/accesoContenido.ts).
+  const acceso = await accesoContenido<{ cloudinary_name: string | null; cloudinary_key: string | null; cloudinary_secret: string | null }>("cloudinary_name, cloudinary_key, cloudinary_secret");
+  if (acceso.error) return acceso.error;
+  const { usuario, email: emailBusqueda } = acceso;
   if (!usuario.cloudinary_name || !usuario.cloudinary_key || !usuario.cloudinary_secret) {
     return NextResponse.json({ error: "Configura tus credenciales de Cloudinary en Integraciones" }, { status: 400 });
   }

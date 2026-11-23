@@ -1,31 +1,21 @@
-import { auth } from "@/auth";
 import { NextRequest, NextResponse } from "next/server";
 import { supabaseAdmin } from "@/lib/supabase";
 import { registrarError } from "@/lib/registrarError";
+import { accesoContenido, duenoParaLeer, recursosSonDelUsuario } from "@/app/lib/accesoContenido";
 import { CrearPiezaManualSchema, elegirGanchoTipoMenosUsado, lunesDeLaSemana, type PublicacionOrganica } from "@/app/lib/contenido";
 import { vencerPiezasSinVideo } from "@/app/lib/publicadorOrganico";
 import { fechaBogota, hoyBogota, inicioDiaBogota, finDiaBogota } from "@/app/lib/fechaBogota";
 
-// Calendario semanal de /contenido (commit 4a, ver
-// docs/diseno/plan_contenido_organico.md sección 2). Solo admin, igual
-// que el resto del plan hasta que se abra a clientes.
-
-async function usuarioAdminOFalla(email: string) {
-  const { data: usuario } = await supabaseAdmin.from("usuarios").select("id, rol").eq("email", email).single();
-  if (!usuario) return { error: NextResponse.json({ error: "Usuario no encontrado" }, { status: 404 }) };
-  if (usuario.rol !== "admin") return { error: NextResponse.json({ error: "No autorizado" }, { status: 403 }) };
-  return { usuario };
-}
+// Calendario de /contenido (commit 4a, ver docs/diseno/plan_contenido_organico.md
+// sección 2). Cada usuario con suscripción activa ve y crea SUS piezas;
+// admin puede ver además el calendario de un cliente con ?usuario=<id>
+// (solo lectura). Ver app/lib/accesoContenido.ts.
 
 export async function GET(req: NextRequest) {
-  const session = await auth();
-  if (!session?.user?.email) {
-    return NextResponse.json({ error: "No autorizado" }, { status: 401 });
-  }
-  const emailBusqueda = session.user.email.trim().toLowerCase();
-
-  const { usuario, error } = await usuarioAdminOFalla(emailBusqueda);
-  if (error) return error;
+  const acceso = await accesoContenido();
+  if (acceso.error) return acceso.error;
+  const { usuario, email: emailBusqueda } = acceso;
+  const dueno = duenoParaLeer(usuario, req.nextUrl.searchParams.get("usuario"));
 
   // Vencer piezas sin video (commit 4d, "avisos"): si programada_para
   // ya pasó y la pieza sigue en un estado de antes de tener video real
@@ -34,7 +24,7 @@ export async function GET(req: NextRequest) {
   // en los dos lados, para que el aviso del Publicador en el chat del
   // Equipo salga sin importar quién la venza primero. "error" y "lista"
   // quedan afuera a propósito, ver el comentario de ESTADOS_SIN_VIDEO_AUN.
-  await vencerPiezasSinVideo({ userId: usuario!.id });
+  await vencerPiezasSinVideo({ userId: dueno });
 
   // Vista de mes (rediseño, sección 2 del plan): la cuadrícula de un
   // mes no se alinea con el campo "semana" (una grilla de 6 semanas
@@ -46,7 +36,7 @@ export async function GET(req: NextRequest) {
 
   // Las eliminadas ("cancelada", borrado suave) nunca se muestran en
   // el calendario -- siguen en la base, y su video en el álbum.
-  let consulta = supabaseAdmin.from("publicaciones_organicas").select("*").eq("user_id", usuario!.id).neq("estado", "cancelada");
+  let consulta = supabaseAdmin.from("publicaciones_organicas").select("*").eq("user_id", dueno).neq("estado", "cancelada");
   let semana = "";
 
   if (desdeParam && hastaParam) {
@@ -63,7 +53,7 @@ export async function GET(req: NextRequest) {
     console.error("Error leyendo el calendario de /contenido:", errorLectura);
     registrarError({
       origen: "contenido_calendario",
-      userId: usuario!.id,
+      userId: usuario.id,
       email: emailBusqueda,
       paso: "leer_semana",
       errorMensaje: "No se pudo cargar el calendario.",
@@ -76,14 +66,9 @@ export async function GET(req: NextRequest) {
 }
 
 export async function POST(req: NextRequest) {
-  const session = await auth();
-  if (!session?.user?.email) {
-    return NextResponse.json({ error: "No autorizado" }, { status: 401 });
-  }
-  const emailBusqueda = session.user.email.trim().toLowerCase();
-
-  const { usuario, error } = await usuarioAdminOFalla(emailBusqueda);
-  if (error) return error;
+  const acceso = await accesoContenido();
+  if (acceso.error) return acceso.error;
+  const { usuario, email: emailBusqueda } = acceso;
 
   const cuerpo = await req.json().catch(() => null);
   const resultado = CrearPiezaManualSchema.safeParse(cuerpo);
@@ -91,19 +76,23 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ error: "Datos inválidos para crear el reel." }, { status: 400 });
   }
   const { receta_organica, programada_para, producto_id, media_ids, tema } = resultado.data;
+  // El producto y las piezas del álbum tienen que ser de este usuario.
+  if (!(await recursosSonDelUsuario(usuario.id, { producto_id, media_ids }))) {
+    return NextResponse.json({ error: "El producto o las piezas del álbum elegidas no son de tu cuenta." }, { status: 400 });
+  }
   const semana = lunesDeLaSemana(fechaBogota(new Date(programada_para)));
 
   // Tipo de gancho asignado por el código, no por la IA (pedido
   // explícito): rota los 6 tipos dentro de la semana, eligiendo el que
   // menos se haya usado entre las piezas YA creadas de esa misma
   // semana -- así nunca depende del orden en que se generen los guiones.
-  const { data: piezasSemana } = await supabaseAdmin.from("publicaciones_organicas").select("gancho_tipo").eq("user_id", usuario!.id).eq("semana", semana);
+  const { data: piezasSemana } = await supabaseAdmin.from("publicaciones_organicas").select("gancho_tipo").eq("user_id", usuario.id).eq("semana", semana);
   const ganchoTipo = elegirGanchoTipoMenosUsado((piezasSemana ?? []).map((p) => p.gancho_tipo as string | null));
 
   const { data: pieza, error: errorInsert } = await supabaseAdmin
     .from("publicaciones_organicas")
     .insert({
-      user_id: usuario!.id,
+      user_id: usuario.id,
       tema: tema?.trim() || null,
       gancho_tipo: ganchoTipo,
       plataforma: "instagram",
@@ -121,7 +110,7 @@ export async function POST(req: NextRequest) {
     console.error("Error creando reel manual en /contenido:", errorInsert);
     registrarError({
       origen: "contenido_calendario",
-      userId: usuario!.id,
+      userId: usuario.id,
       email: emailBusqueda,
       paso: "crear_manual",
       errorMensaje: "No se pudo crear el reel.",

@@ -101,6 +101,7 @@ export default function ContenidoPage() {
   const router = useRouter();
   const esMobile = useEsMobile();
   const [paso, setPaso] = useState<Paso>("cargando");
+  const [sinAcceso, setSinAcceso] = useState<{ mensaje: string | null; suscripcion: boolean }>({ mensaje: null, suscripcion: false });
   const [vista, setVista] = useState<Vista>("semana");
   const [semana, setSemana] = useState<string>(() => lunesDeLaSemana(hoyBogota()));
   const [mes, setMes] = useState<string>(() => hoyBogota().slice(0, 7));
@@ -143,9 +144,12 @@ export default function ContenidoPage() {
   useEffect(() => {
     (async () => {
       try {
-        const rolRes = await fetch("/api/usuario/rol");
-        const rolData = await rolRes.json();
-        if (rolData.rol !== "admin") {
+        // Acceso por suscripción activa (ya no solo admin, ver
+        // app/lib/accesoContenido.ts): el motivo se muestra tal cual.
+        const accesoRes = await fetch("/api/contenido/acceso");
+        const accesoData = await accesoRes.json().catch(() => ({}));
+        if (!accesoRes.ok) {
+          setSinAcceso({ mensaje: accesoData.error ?? null, suscripcion: accesoData.codigo === "suscripcion_inactiva" });
           setPaso("sin-acceso");
           return;
         }
@@ -217,7 +221,8 @@ export default function ContenidoPage() {
   }
 
   if (paso === "cargando") return <PantallaCentro texto="Cargando…" />;
-  if (paso === "sin-acceso") return <PantallaCentro texto="No tienes acceso a esta sección." />;
+  if (paso === "sin-acceso")
+    return <PantallaCentro texto={sinAcceso.mensaje ?? "No tienes acceso a esta sección."} enlace={sinAcceso.suscripcion ? { href: "/billing", texto: "Renovar mi plan" } : undefined} />;
 
   const piezasPorDia = (fecha: string) => piezas.filter((p) => fechaBogota(new Date(p.programada_para)) === fecha);
   const hoy = hoyBogota();
@@ -834,10 +839,15 @@ function FormularioAgregarReel({ fechaInicial, onCerrar, onCreado }: { fechaInic
   );
 }
 
-function PantallaCentro({ texto }: { texto: string }) {
+function PantallaCentro({ texto, enlace }: { texto: string; enlace?: { href: string; texto: string } }) {
   return (
-    <div style={{ minHeight: "100vh", display: "flex", alignItems: "center", justifyContent: "center", fontFamily: "system-ui, sans-serif", color: "#666" }}>
+    <div style={{ minHeight: "100vh", display: "flex", flexDirection: "column", gap: 12, alignItems: "center", justifyContent: "center", fontFamily: "system-ui, sans-serif", color: "#666", padding: 20, textAlign: "center" }}>
       {texto}
+      {enlace && (
+        <a href={enlace.href} style={{ padding: "10px 16px", borderRadius: 10, background: "#534AB7", color: "#fff", fontWeight: 700, textDecoration: "none" }}>
+          {enlace.texto}
+        </a>
+      )}
     </div>
   );
 }

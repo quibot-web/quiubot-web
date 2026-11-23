@@ -1,7 +1,7 @@
-import { auth } from "@/auth";
 import { NextRequest, NextResponse } from "next/server";
 import { z } from "zod";
 import { supabaseAdmin } from "@/lib/supabase";
+import { accesoContenido } from "@/app/lib/accesoContenido";
 import { esFechaFutura, elegirGanchoTipoMenosUsado, lunesDeLaSemana, type PublicacionOrganica } from "@/app/lib/contenido";
 import { fechaBogota } from "@/app/lib/fechaBogota";
 import { LIMITE_IDEA, MAX_PARTES_SERIE, serieDesdeIdea } from "@/app/lib/ideaUsuario";
@@ -11,8 +11,7 @@ import { LIMITE_IDEA, MAX_PARTES_SERIE, serieDesdeIdea } from "@/app/lib/ideaUsu
 // la acepta acá, eligiendo la fecha de cada uno. La parte 1 queda en
 // ESTA pieza (su idea pasa a ser la de la parte 1); las demás se crean
 // como piezas nuevas, en borrador, enlazadas con continua_de_id (el
-// aviso al eliminar ya respeta esa cadena). Solo admin, igual que el
-// resto de /contenido.
+// aviso al eliminar ya respeta esa cadena). Solo el dueño de la pieza.
 
 const SerieSchema = z.object({
   partes: z
@@ -28,13 +27,9 @@ const SerieSchema = z.object({
 
 export async function POST(req: NextRequest, { params }: { params: Promise<{ id: string }> }) {
   const { id } = await params;
-  const session = await auth();
-  if (!session?.user?.email) return NextResponse.json({ error: "No autorizado" }, { status: 401 });
-  const email = session.user.email.trim().toLowerCase();
-
-  const { data: usuario } = await supabaseAdmin.from("usuarios").select("id, rol").eq("email", email).single();
-  if (!usuario) return NextResponse.json({ error: "Usuario no encontrado" }, { status: 404 });
-  if (usuario.rol !== "admin") return NextResponse.json({ error: "No autorizado" }, { status: 403 });
+  const acceso = await accesoContenido();
+  if (acceso.error) return acceso.error;
+  const { usuario } = acceso;
 
   const resultado = SerieSchema.safeParse(await req.json().catch(() => null));
   if (!resultado.success) return NextResponse.json({ error: `La serie necesita entre 2 y ${MAX_PARTES_SERIE} partes, cada una con su idea y su fecha.` }, { status: 400 });

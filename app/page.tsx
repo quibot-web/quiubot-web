@@ -1,4 +1,5 @@
 "use client";
+import Link from "next/link";
 import { useState, useEffect, useRef } from "react";
 import { useSession, signOut } from "next-auth/react";
 import { useRouter } from "next/navigation";
@@ -824,6 +825,11 @@ export default function Home() {
                 <span className="qb-nav-label">Álbum de creativos</span>
                 <span className="qb-tooltip">Álbum de creativos</span>
               </a>
+              <Link href="/contenido" className="qb-nav-item">
+                <span className="qb-nav-icon"><Icono><rect x="3" y="5" width="18" height="16" rx="2" /><path d="M3 10h18M8 3v4M16 3v4" /><path d="M10 14l4 2-4 2z" /></Icono></span>
+                <span className="qb-nav-label">Contenido</span>
+                <span className="qb-tooltip">Contenido</span>
+              </Link>
 
               <div onClick={() => setTab("integraciones")} className={`qb-nav-item${tab === "integraciones" ? " activo" : ""}`}>
                 <span className="qb-nav-icon"><Icono><path d="M9 2v4M15 2v4M6 8h12l-1 6a5 5 0 01-10 0L6 8z" /><path d="M12 18v4" /></Icono></span>

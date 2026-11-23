@@ -39,6 +39,8 @@ interface EstadoPiezaCola {
 }
 
 const LICENCIA_REMOTION = "free-license";
+// Margen bajo los 25 MB que el servidor acepta sin truncar (next.config.ts).
+const TAMANO_MAXIMO_VIDEO_BYTES = 24 * 1024 * 1024;
 
 export default function ColaDeRender({
   piezasAprobadas,
@@ -103,8 +105,9 @@ export default function ColaDeRender({
   // ilustrado: el render fue el reel ilustrado -> control propio.
   async function correrControlDeCalidad(blob: Blob, guionActual: Guion, duracionS: number, ilustrado: boolean, piezaId: string): Promise<ClasificacionQC> {
     // La voz primero: si un arranque llegó cortado o corrido, se vuelve a renderizar.
-    const hallazgosVoz = await controlarVozDelVideo({ blob, guion: guionActual, piezaId });
-    if (hallazgosVoz.length > 0) return { tipo: "voz", hallazgos: hallazgosVoz };
+    const voz = await controlarVozDelVideo({ blob, guion: guionActual, piezaId });
+    if (voz.errorCuenta) return { tipo: "rechazado", hallazgos: [voz.errorCuenta] };
+    if (voz.hallazgos.length > 0) return { tipo: "voz", hallazgos: voz.hallazgos };
     const momentos: { etiqueta: string; segundo: number; esperado?: string }[] =
       ilustrado && guionActual.ilustrado && guionActual.tiemposRender && guionActual.palabrasPorEscena && guionActual.segmentosAudio
         ? momentosControlIlustrado({ tiemposRender: guionActual.tiemposRender, palabrasPorEscena: guionActual.palabrasPorEscena, segmentosAudio: guionActual.segmentosAudio }, guionActual.ilustrado, guionActual.fps)
@@ -123,15 +126,21 @@ export default function ColaDeRender({
       audioEstaEnSilencio(blob),
       encontrarSilenciosLargos(blob),
       cuadrosConImagen.length > 0
-        ? fetch("/api/admin/reel-automatico-prueba/control-calidad", {
+        ? fetch(`/api/contenido/${piezaId}/control-calidad`, {
             method: "POST",
             headers: { "Content-Type": "application/json" },
             body: JSON.stringify(esIlustrado ? { tipo: "ilustrado", cuadros: cuadrosConImagen } : { cuadros: cuadrosConImagen }),
           })
-            .then((r) => (r.ok ? r.json() : { hallazgos: [] }))
+            .then(async (r) => {
+              if (r.ok) return r.json();
+              const d = await r.json().catch(() => ({}));
+              // Sin créditos / llave inválida: aviso claro al cliente.
+              return { hallazgos: [], errorCuenta: typeof d?.codigo === "string" && d.codigo.startsWith("openai_") ? (d.error as string) : undefined };
+            })
             .catch(() => ({ hallazgos: [] }))
         : Promise.resolve({ hallazgos: [] }),
     ]);
+    if (visionRes.errorCuenta) return { tipo: "rechazado", hallazgos: [visionRes.errorCuenta] };
     if (esIlustrado) {
       // Estricto: si la visión no respondió, cada cuadro cuenta como no revisado.
       const erroresVision = erroresQCIlustrado(visionRes.hallazgos, cuadrosConImagen.map((c) => c.etiqueta));
@@ -270,7 +279,7 @@ export default function ColaDeRender({
               crudo: controlCalidadActual?.crudo,
               correrQC: (b, g) => correrControlDeCalidad(b, g, ultimaDuracionS, ultimoFueIlustrado, pieza.id),
               recompactar: async (g, crudo, limites) => {
-                const resRecompactar = await fetch("/api/admin/reel-automatico-prueba/recompactar", {
+                const resRecompactar = await fetch(`/api/contenido/${pieza.id}/recompactar`, {
                   method: "POST",
                   headers: { "Content-Type": "application/json" },
                   body: JSON.stringify({ guion: g, crudo, ...limites }),
@@ -318,6 +327,13 @@ export default function ColaDeRender({
         }
 
         actualizarEstado(pieza.id, { fase: "subiendo", progreso: 100 });
+        // Por encima del límite de next.config (proxyClientMaxBodySize 25mb)
+        // Next.js no rechaza: TRUNCA el video en silencio. Mejor no subirlo
+        // y decir por qué.
+        if (blob.size > TAMANO_MAXIMO_VIDEO_BYTES) {
+          actualizarEstado(pieza.id, { fase: "error", errorMsg: `El video pesa ${(blob.size / 1048576).toFixed(1)} MB y el máximo para subirlo es ${TAMANO_MAXIMO_VIDEO_BYTES / 1048576} MB. Acorta la idea del reel y vuelve a generarlo.` });
+          return;
+        }
         const resultadoSubida = await subirBlob(pieza.id, blob);
 
         if (resultadoSubida === "ok") {

@@ -1,6 +1,7 @@
-import { auth } from "@/auth";
 import { NextRequest, NextResponse } from "next/server";
 import { supabaseAdmin } from "@/lib/supabase";
+import { accesoContenido } from "@/app/lib/accesoContenido";
+import { errorDeOpenAI, respuestaErrorOpenAI } from "@/app/lib/openaiErrores";
 import { desencriptarSiHaceFalta } from "@/lib/crypto";
 import { verificarLimite } from "@/lib/rateLimit";
 import { transcribirAudioFinal } from "@/app/lib/videoOrganico/generarVoz";
@@ -17,14 +18,10 @@ const TAMANO_MAXIMO_BYTES = 8 * 1024 * 1024;
 
 export async function POST(req: NextRequest, { params }: { params: Promise<{ id: string }> }) {
   const { id } = await params;
-  const session = await auth();
-  if (!session?.user?.email) return NextResponse.json({ error: "No autorizado" }, { status: 401 });
-  const email = session.user.email.trim().toLowerCase();
+  const acceso = await accesoContenido<{ openai_key: string | null }>("openai_key");
+  if (acceso.error) return acceso.error;
+  const { usuario, email } = acceso;
   if (!verificarLimite(`contenido-control-voz:${email}`, 20, 5 * 60 * 1000)) return NextResponse.json({ error: "Demasiados controles seguidos." }, { status: 429 });
-
-  const { data: usuario } = await supabaseAdmin.from("usuarios").select("id, rol, openai_key").eq("email", email).single();
-  if (!usuario) return NextResponse.json({ error: "Usuario no encontrado" }, { status: 404 });
-  if (usuario.rol !== "admin") return NextResponse.json({ error: "No autorizado" }, { status: 403 });
   if (!usuario.openai_key) return NextResponse.json({ error: "Sin llave de OpenAI." }, { status: 400 });
 
   const { data: pieza } = await supabaseAdmin.from("publicaciones_organicas").select("id, guion").eq("id", id).eq("user_id", usuario.id).maybeSingle();
@@ -43,6 +40,11 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
     );
     return NextResponse.json({ faltantes, hallazgos: hallazgosPalabrasFaltantes(faltantes) });
   } catch (err) {
-    return NextResponse.json({ error: err instanceof Error ? err.message : "No se pudo transcribir el audio." }, { status: 502 });
+    const errorOpenAI = errorDeOpenAI(err);
+    if (errorOpenAI) {
+      const r = respuestaErrorOpenAI(errorOpenAI);
+      return NextResponse.json(r.cuerpo, { status: r.status });
+    }
+    return NextResponse.json({ error: "No se pudo transcribir el audio." }, { status: 502 });
   }
 }

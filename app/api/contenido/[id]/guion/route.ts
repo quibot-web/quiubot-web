@@ -1,9 +1,10 @@
-import { auth } from "@/auth";
 import { NextRequest, NextResponse } from "next/server";
 import { supabaseAdmin } from "@/lib/supabase";
 import { desencriptarSiHaceFalta } from "@/lib/crypto";
 import { verificarLimite } from "@/lib/rateLimit";
 import { registrarError } from "@/lib/registrarError";
+import { accesoContenido } from "@/app/lib/accesoContenido";
+import { errorDeOpenAI, respuestaErrorOpenAI } from "@/app/lib/openaiErrores";
 import { GuionSchema, idsDeMediaUsados, type Guion } from "@/video/guion.schema";
 import { construirTemaDesdeAdn } from "@/video/tema";
 import { RECETAS_ORGANICAS, validarContraRecetaOrganica } from "@/video/recetas/organico";
@@ -112,28 +113,16 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
   const { id } = await params;
   const cuerpoGuion = (await req.json().catch(() => null)) as { unSoloReel?: unknown } | null;
 
-  const session = await auth();
-  if (!session?.user?.email) {
-    return NextResponse.json({ error: "No autorizado" }, { status: 401 });
-  }
-  const emailBusqueda = session.user.email.trim().toLowerCase();
+  // Dueño de la pieza con suscripción activa (ver app/lib/accesoContenido.ts).
+  const acceso = await accesoContenido<{ openai_key: string | null; cloudinary_name: string | null; cloudinary_key: string | null; cloudinary_secret: string | null; meta_page_id: string | null; meta_access_token: string | null }>(
+    "openai_key, cloudinary_name, cloudinary_key, cloudinary_secret, meta_page_id, meta_access_token"
+  );
+  if (acceso.error) return acceso.error;
+  const { usuario, email: emailBusqueda } = acceso;
 
   const permitido = verificarLimite(`contenido-guion:${emailBusqueda}`, 10, 5 * 60 * 1000);
   if (!permitido) {
     return NextResponse.json({ error: "Estás generando guiones muy rápido. Espera un momento e intenta de nuevo." }, { status: 429 });
-  }
-
-  const { data: usuario } = await supabaseAdmin
-    .from("usuarios")
-    .select("id, rol, openai_key, cloudinary_name, cloudinary_key, cloudinary_secret, meta_page_id, meta_access_token")
-    .eq("email", emailBusqueda)
-    .single();
-
-  if (!usuario) {
-    return NextResponse.json({ error: "Usuario no encontrado" }, { status: 404 });
-  }
-  if (usuario.rol !== "admin") {
-    return NextResponse.json({ error: "No autorizado" }, { status: 403 });
   }
   if (!usuario.openai_key) {
     return NextResponse.json({ error: "Conecta tu cuenta de OpenAI en Integraciones antes de generar el guion." }, { status: 400 });
@@ -279,7 +268,7 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
       .eq("semana", pieza.semana)
       .neq("id", id);
     ganchoTipoAsignado = elegirGanchoTipoMenosUsado((piezasSemana ?? []).map((p) => p.gancho_tipo as string | null));
-    await supabaseAdmin.from("publicaciones_organicas").update({ gancho_tipo: ganchoTipoAsignado }).eq("id", id);
+    await supabaseAdmin.from("publicaciones_organicas").update({ gancho_tipo: ganchoTipoAsignado }).eq("id", id).eq("user_id", usuario.id);
   }
 
   // Música real -- causa real del reel publicado en silencio total
@@ -452,11 +441,10 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
         errorMensaje: "No se pudo generar el guion con voz.",
         detalleTecnico: detalle,
       });
-      if (/insufficient_quota|credit_balance_exhausted/.test(detalle)) {
-        return NextResponse.json(
-          { error: "Tu cuenta de OpenAI no tiene créditos. Agrega saldo en platform.openai.com y vuelve a intentar." },
-          { status: 503 }
-        );
+      const errorOpenAI = errorDeOpenAI(detalle);
+      if (errorOpenAI) {
+        const r = respuestaErrorOpenAI(errorOpenAI);
+        return NextResponse.json(r.cuerpo, { status: r.status });
       }
       return NextResponse.json({ error: "No se pudo generar el guion en este momento. Intenta de nuevo." }, { status: 503 });
     }
@@ -606,11 +594,10 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
     // nada de la causa real (créditos de OpenAI agotados), así que
     // revisar el error se volvió "ir a buscar en registrarError" en
     // vez de verlo directo en la pantalla.
-    if (/insufficient_quota|credit_balance_exhausted/.test(detalle)) {
-      return NextResponse.json(
-        { error: "Tu cuenta de OpenAI no tiene créditos. Agrega saldo en platform.openai.com y vuelve a intentar." },
-        { status: 503 }
-      );
+    const errorOpenAI = errorDeOpenAI(detalle);
+    if (errorOpenAI) {
+      const r = respuestaErrorOpenAI(errorOpenAI);
+      return NextResponse.json(r.cuerpo, { status: r.status });
     }
 
     return NextResponse.json({ error: "No se pudo generar el guion en este momento. Intenta de nuevo." }, { status: 503 });

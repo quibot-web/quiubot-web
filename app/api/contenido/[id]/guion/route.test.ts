@@ -399,7 +399,8 @@ describe("POST /api/contenido/[id]/guion", () => {
 
     const res = await POST(req(), contexto());
     const body = await res.json();
-    expect(res.status).toBe(503);
+    expect(res.status).toBe(402);
+    expect(body.codigo).toBe("openai_sin_creditos");
     expect(body.error).toContain("no tiene créditos");
     vi.unstubAllGlobals();
   });
@@ -513,6 +514,18 @@ describe("POST /api/contenido/[id]/guion -- receta con voz vs. receta de siempre
     piezasSemanaActual = [];
     pistasActivasActual = [];
     vi.spyOn(console, "error").mockImplementation(() => {});
+  });
+
+  it("la voz (TTS) se queda sin créditos: llega el aviso claro, no el genérico (antes el mensaje ya venía en español y se perdía)", async () => {
+    piezaActual = { id: "pieza-1", receta_organica: "consejos_numerados", estado: "borrador", media_ids: null, semana: "2026-11-09", tema: null, gancho_tipo: "pregunta" };
+    vi.stubGlobal("fetch", vi.fn());
+    generarGuionConVozMock.mockRejectedValue(new Error("Tu cuenta de OpenAI no tiene créditos. Agrega saldo en platform.openai.com y vuelve a intentar."));
+    const res = await POST(req(), contexto());
+    expect(res.status).toBe(402);
+    const body = await res.json();
+    expect(body.codigo).toBe("openai_sin_creditos");
+    expect(body.error).toMatch(/no tiene créditos/);
+    vi.unstubAllGlobals();
   });
 
   it("consejos_numerados: llama a generarGuionConVoz(), nunca a OpenAI directo desde esta ruta, y guarda voz_url", async () => {

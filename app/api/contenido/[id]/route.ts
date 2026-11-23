@@ -1,4 +1,3 @@
-import { auth } from "@/auth";
 import { NextRequest, NextResponse } from "next/server";
 import { supabaseAdmin } from "@/lib/supabase";
 import { desencriptarSiHaceFalta } from "@/lib/crypto";
@@ -21,37 +20,35 @@ import { vozDesactualizada } from "@/app/lib/videoOrganico/hashNarracion";
 import { llamarOpenAI, regenerarVozParaGuion } from "@/app/lib/videoOrganico/generarGuionConVoz";
 import { planTrasRegenerarVoz } from "@/app/lib/videoOrganico/generarPlanIlustrado";
 import { registrarError } from "@/lib/registrarError";
+import { accesoContenido, esAdmin } from "@/app/lib/accesoContenido";
+import { errorDeOpenAI, respuestaErrorOpenAI } from "@/app/lib/openaiErrores";
 import { LIMITE_IDEA } from "@/app/lib/ideaUsuario";
 import { reelIlustradoActivo } from "@/app/lib/reelIlustrado";
 
 const VOZ_POR_DEFECTO = "cedar";
 
-// Detalle de una pieza (commit 4b, pantalla de revisión) + "Aprobar".
-// Solo admin, igual que el resto del plan.
-
-async function usuarioAdminOFalla(email: string) {
-  const { data: usuario } = await supabaseAdmin.from("usuarios").select("id, rol").eq("email", email).single();
-  if (!usuario) return { error: NextResponse.json({ error: "Usuario no encontrado" }, { status: 404 }) };
-  if (usuario.rol !== "admin") return { error: NextResponse.json({ error: "No autorizado" }, { status: 403 }) };
-  return { usuario };
-}
+// Detalle de una pieza (commit 4b, pantalla de revisión) + acciones.
+// Cada usuario con suscripción activa ve y cambia SUS piezas; admin puede
+// además VER cualquier pieza (soporte). Ver app/lib/accesoContenido.ts.
 
 export async function GET(req: NextRequest, { params }: { params: Promise<{ id: string }> }) {
   const { id } = await params;
-  const session = await auth();
-  if (!session?.user?.email) {
-    return NextResponse.json({ error: "No autorizado" }, { status: 401 });
-  }
-  const emailBusqueda = session.user.email.trim().toLowerCase();
+  const acceso = await accesoContenido();
+  if (acceso.error) return acceso.error;
+  const { usuario } = acceso;
 
-  const { usuario, error } = await usuarioAdminOFalla(emailBusqueda);
-  if (error) return error;
-
-  const { data: pieza } = await supabaseAdmin.from("publicaciones_organicas").select("*").eq("id", id).eq("user_id", usuario!.id).maybeSingle();
+  // Admin (solo lectura) puede abrir la pieza de cualquier cliente.
+  let consultaPieza = supabaseAdmin.from("publicaciones_organicas").select("*").eq("id", id);
+  if (!esAdmin(usuario)) consultaPieza = consultaPieza.eq("user_id", usuario.id);
+  const { data: pieza } = await consultaPieza.maybeSingle();
 
   if (!pieza) {
     return NextResponse.json({ error: "Pieza no encontrada." }, { status: 404 });
   }
+  // El álbum y la marca son los del DUEÑO de la pieza.
+  const duenoId = (pieza.user_id as string | undefined) ?? usuario.id;
+  const emailBusqueda =
+    duenoId === usuario.id ? acceso.email : ((await supabaseAdmin.from("usuarios").select("email").eq("id", duenoId).maybeSingle()).data?.email as string | undefined)?.toLowerCase() ?? "";
 
   // Resuelve las piezas del álbum elegidas (commit 4b.2), para que la
   // revisión pueda mostrar el video/foto real en el player y en el
@@ -59,7 +56,7 @@ export async function GET(req: NextRequest, { params }: { params: Promise<{ id: 
   const mediaIds: string[] = Array.isArray(pieza.media_ids) ? pieza.media_ids : [];
   const medios: Record<string, { url: string; tipo: "imagen" | "video" }> = {};
   if (mediaIds.length > 0) {
-    const { data: piezasAlbum } = await supabaseAdmin.from("album_creativos").select("id, url_imagen, tipo").eq("user_id", usuario!.id).in("id", mediaIds);
+    const { data: piezasAlbum } = await supabaseAdmin.from("album_creativos").select("id, url_imagen, tipo").eq("user_id", duenoId).in("id", mediaIds);
     for (const p of piezasAlbum ?? []) {
       medios[p.id] = { url: p.url_imagen, tipo: p.tipo === "video" ? "video" : "imagen" };
     }
@@ -117,14 +114,17 @@ export async function GET(req: NextRequest, { params }: { params: Promise<{ id: 
 
 export async function PATCH(req: NextRequest, { params }: { params: Promise<{ id: string }> }) {
   const { id } = await params;
-  const session = await auth();
-  if (!session?.user?.email) {
-    return NextResponse.json({ error: "No autorizado" }, { status: 401 });
-  }
-  const emailBusqueda = session.user.email.trim().toLowerCase();
+  // Cambiar una pieza: solo su dueño (también admin): toda consulta de
+  // abajo filtra por user_id = usuario.id.
+  const acceso = await accesoContenido();
+  if (acceso.error) return acceso.error;
+  const { usuario, email: emailBusqueda } = acceso;
 
-  const { usuario, error } = await usuarioAdminOFalla(emailBusqueda);
-  if (error) return error;
+  // Antes de cualquier acción: la pieza tiene que ser de quien pide. Las
+  // consultas de abajo también filtran por dueño; esto hace que TODAS las
+  // acciones respondan 404 con una pieza ajena, en vez de un "ok" vacío.
+  const { data: propia } = await supabaseAdmin.from("publicaciones_organicas").select("id").eq("id", id).eq("user_id", usuario.id).maybeSingle();
+  if (!propia) return NextResponse.json({ error: "Pieza no encontrada." }, { status: 404 });
 
   const cuerpo = await req.json().catch(() => null);
 
@@ -143,7 +143,7 @@ export async function PATCH(req: NextRequest, { params }: { params: Promise<{ id
       .from("publicaciones_organicas")
       .update({ guion: resultado.data, caption, hashtags, actualizado_en: new Date().toISOString() })
       .eq("id", id)
-      .eq("user_id", usuario!.id)
+      .eq("user_id", usuario.id)
       .eq("estado", "borrador");
 
     if (errorUpdate) {
@@ -163,7 +163,7 @@ export async function PATCH(req: NextRequest, { params }: { params: Promise<{ id
       .from("publicaciones_organicas")
       .update({ tema, actualizado_en: new Date().toISOString() })
       .eq("id", id)
-      .eq("user_id", usuario!.id)
+      .eq("user_id", usuario.id)
       .eq("estado", "borrador");
 
     if (errorUpdate) {
@@ -183,9 +183,14 @@ export async function PATCH(req: NextRequest, { params }: { params: Promise<{ id
     const pistaId = typeof cuerpo.pista_id === "string" ? cuerpo.pista_id : null;
 
     if (pistaId) {
-      const { data: pista } = await supabaseAdmin.from("pistas_musicales").select("id").eq("id", pistaId).maybeSingle();
+      const { data: pista } = await supabaseAdmin.from("pistas_musicales").select("id, activo, licencia_url").eq("id", pistaId).maybeSingle();
       if (!pista) {
         return NextResponse.json({ error: "Esa pista ya no existe." }, { status: 400 });
+      }
+      // Un cliente solo puede elegir pistas activas con licencia (las que
+      // se pueden publicar); las de "solo pruebas" son de admin.
+      if (!esAdmin(usuario) && (!pista.activo || !pista.licencia_url)) {
+        return NextResponse.json({ error: "Esa pista no está disponible." }, { status: 400 });
       }
     }
 
@@ -193,7 +198,7 @@ export async function PATCH(req: NextRequest, { params }: { params: Promise<{ id
       .from("publicaciones_organicas")
       .select("guion, estado")
       .eq("id", id)
-      .eq("user_id", usuario!.id)
+      .eq("user_id", usuario.id)
       .maybeSingle();
 
     if (!piezaActual?.guion) {
@@ -213,7 +218,7 @@ export async function PATCH(req: NextRequest, { params }: { params: Promise<{ id
       .from("publicaciones_organicas")
       .update({ guion: resultadoGuion.data, actualizado_en: new Date().toISOString() })
       .eq("id", id)
-      .eq("user_id", usuario!.id)
+      .eq("user_id", usuario.id)
       .eq("estado", "borrador");
 
     if (errorUpdate) {
@@ -232,7 +237,7 @@ export async function PATCH(req: NextRequest, { params }: { params: Promise<{ id
       .from("publicaciones_organicas")
       .update({ estado: "renderizando", actualizado_en: new Date().toISOString() })
       .eq("id", id)
-      .eq("user_id", usuario!.id)
+      .eq("user_id", usuario.id)
       .eq("estado", "aprobada")
       .select("id");
 
@@ -252,7 +257,7 @@ export async function PATCH(req: NextRequest, { params }: { params: Promise<{ id
     const navegador = typeof cuerpo.navegador === "string" ? cuerpo.navegador.slice(0, 300) : "desconocido";
     await registrarError({
       origen: "render_ilustrado_respaldo",
-      userId: usuario!.id,
+      userId: usuario.id,
       email: emailBusqueda,
       paso: "render_navegador",
       errorMensaje: "El reel ilustrado no se pudo renderizar en el navegador; se usó su estilo de siempre.",
@@ -279,7 +284,7 @@ export async function PATCH(req: NextRequest, { params }: { params: Promise<{ id
     const controlCalidad = cuerpo.control_calidad as Record<string, unknown> | undefined;
     const estadoNuevo = cuerpo.estado as "error" | undefined;
 
-    const { data: piezaActual } = await supabaseAdmin.from("publicaciones_organicas").select("estado").eq("id", id).eq("user_id", usuario!.id).maybeSingle();
+    const { data: piezaActual } = await supabaseAdmin.from("publicaciones_organicas").select("estado").eq("id", id).eq("user_id", usuario.id).maybeSingle();
     if (!piezaActual) return NextResponse.json({ error: "Pieza no encontrada." }, { status: 404 });
     if (piezaActual.estado !== "renderizando") {
       return NextResponse.json({ error: `Esta pieza está en estado "${piezaActual.estado}", no se puede guardar el control de calidad ahora.` }, { status: 400 });
@@ -297,9 +302,14 @@ export async function PATCH(req: NextRequest, { params }: { params: Promise<{ id
       valoresUpdate.tipo_error = "calidad";
     }
 
-    const { error: errorUpdate } = await supabaseAdmin.from("publicaciones_organicas").update(valoresUpdate).eq("id", id).eq("user_id", usuario!.id).eq("estado", "renderizando");
+    const { error: errorUpdate } = await supabaseAdmin.from("publicaciones_organicas").update(valoresUpdate).eq("id", id).eq("user_id", usuario.id).eq("estado", "renderizando");
     if (errorUpdate) return NextResponse.json({ error: "No se pudo guardar el control de calidad." }, { status: 503 });
     return NextResponse.json({ ok: true });
+  }
+
+  // Saltarse el control de calidad es decisión de admin, nunca del cliente.
+  if ((cuerpo?.accion === "forzar_sin_calidad" || cuerpo?.accion === "publicar_igual") && !esAdmin(usuario)) {
+    return NextResponse.json({ error: "Este reel no pasó el control de calidad. Escríbenos y lo revisamos contigo." }, { status: 403 });
   }
 
   if (cuerpo?.accion === "forzar_sin_calidad") {
@@ -310,7 +320,7 @@ export async function PATCH(req: NextRequest, { params }: { params: Promise<{ id
     // como evidencia de qué se forzó). Publicar de todos modos (acción
     // aparte, más abajo) es la única que la vuelve elegible para el
     // publicador automático -- "forzar" por sí solo NUNCA basta.
-    const { data: piezaActual } = await supabaseAdmin.from("publicaciones_organicas").select("estado, control_calidad").eq("id", id).eq("user_id", usuario!.id).maybeSingle();
+    const { data: piezaActual } = await supabaseAdmin.from("publicaciones_organicas").select("estado, control_calidad").eq("id", id).eq("user_id", usuario.id).maybeSingle();
     if (!piezaActual) return NextResponse.json({ error: "Pieza no encontrada." }, { status: 404 });
     if (piezaActual.estado !== "error") {
       return NextResponse.json({ error: `Esta pieza está en estado "${piezaActual.estado}", no se puede forzar.` }, { status: 400 });
@@ -323,7 +333,7 @@ export async function PATCH(req: NextRequest, { params }: { params: Promise<{ id
         actualizado_en: new Date().toISOString(),
       })
       .eq("id", id)
-      .eq("user_id", usuario!.id)
+      .eq("user_id", usuario.id)
       .eq("estado", "error");
     if (errorUpdate) return NextResponse.json({ error: "No se pudo forzar la pieza." }, { status: 503 });
     return NextResponse.json({ ok: true });
@@ -336,7 +346,7 @@ export async function PATCH(req: NextRequest, { params }: { params: Promise<{ id
     // explícito (pedido de Juan José, 17-nov-2026: nunca auto-publicar
     // un reel forzado). "Lista, no aprobada: requiere confirmación" es
     // el estado visible en /contenido hasta que se presione este botón.
-    const { data: piezaActual } = await supabaseAdmin.from("publicaciones_organicas").select("estado, control_calidad").eq("id", id).eq("user_id", usuario!.id).maybeSingle();
+    const { data: piezaActual } = await supabaseAdmin.from("publicaciones_organicas").select("estado, control_calidad").eq("id", id).eq("user_id", usuario.id).maybeSingle();
     if (!piezaActual) return NextResponse.json({ error: "Pieza no encontrada." }, { status: 404 });
     if (piezaActual.estado !== "lista") {
       return NextResponse.json({ error: `Esta pieza está en estado "${piezaActual.estado}", no se puede marcar para publicar.` }, { status: 400 });
@@ -349,7 +359,7 @@ export async function PATCH(req: NextRequest, { params }: { params: Promise<{ id
       .from("publicaciones_organicas")
       .update({ control_calidad: { ...controlActual, publicarIgual: true }, actualizado_en: new Date().toISOString() })
       .eq("id", id)
-      .eq("user_id", usuario!.id)
+      .eq("user_id", usuario.id)
       .eq("estado", "lista");
     if (errorUpdate) return NextResponse.json({ error: "No se pudo marcar la pieza para publicar." }, { status: 503 });
     return NextResponse.json({ ok: true });
@@ -366,7 +376,7 @@ export async function PATCH(req: NextRequest, { params }: { params: Promise<{ id
       .from("publicaciones_organicas")
       .select("id, estado, tipo_error")
       .eq("id", id)
-      .eq("user_id", usuario!.id)
+      .eq("user_id", usuario.id)
       .maybeSingle();
     if (!piezaActual) return NextResponse.json({ error: "Pieza no encontrada." }, { status: 404 });
 
@@ -377,7 +387,7 @@ export async function PATCH(req: NextRequest, { params }: { params: Promise<{ id
       const { data: partes2 } = await supabaseAdmin
         .from("publicaciones_organicas")
         .select("id")
-        .eq("user_id", usuario!.id)
+        .eq("user_id", usuario.id)
         .eq("continua_de_id", id)
         .neq("estado", "cancelada")
         .limit(1);
@@ -393,7 +403,7 @@ export async function PATCH(req: NextRequest, { params }: { params: Promise<{ id
       .from("publicaciones_organicas")
       .update({ estado: "cancelada", actualizado_en: new Date().toISOString() })
       .eq("id", id)
-      .eq("user_id", usuario!.id)
+      .eq("user_id", usuario.id)
       .eq("estado", piezaActual.estado)
       .select("id");
     if (errorUpdate) return NextResponse.json({ error: "No se pudo eliminar el reel en este momento." }, { status: 503 });
@@ -410,7 +420,7 @@ export async function PATCH(req: NextRequest, { params }: { params: Promise<{ id
     // Publicador la toma con los mismos bloqueos de siempre (control de
     // calidad forzado sin confirmar, música sin licencia). Nunca llama
     // a Meta desde acá.
-    const { data: piezaActual } = await supabaseAdmin.from("publicaciones_organicas").select("*").eq("id", id).eq("user_id", usuario!.id).maybeSingle();
+    const { data: piezaActual } = await supabaseAdmin.from("publicaciones_organicas").select("*").eq("id", id).eq("user_id", usuario.id).maybeSingle();
     if (!piezaActual) return NextResponse.json({ error: "Pieza no encontrada." }, { status: 404 });
     if (!puedePublicarAhora(piezaActual as Pick<PublicacionOrganica, "estado" | "url_video" | "plataforma" | "tipo_error">)) {
       return NextResponse.json({ error: "Solo se puede publicar ahora un reel de Instagram vencido o con error de publicación que ya tiene su video." }, { status: 400 });
@@ -427,7 +437,7 @@ export async function PATCH(req: NextRequest, { params }: { params: Promise<{ id
         actualizado_en: ahora.toISOString(),
       })
       .eq("id", id)
-      .eq("user_id", usuario!.id)
+      .eq("user_id", usuario.id)
       .eq("estado", piezaActual.estado)
       .select("id");
     if (errorUpdate) return NextResponse.json({ error: "No se pudo programar la publicación en este momento." }, { status: 503 });
@@ -448,7 +458,7 @@ export async function PATCH(req: NextRequest, { params }: { params: Promise<{ id
       .from("publicaciones_organicas")
       .select("*") // "*" a propósito: sigue funcionando aunque estado_antes_de_vencer todavía no exista en la base (queda undefined -> "borrador")
       .eq("id", id)
-      .eq("user_id", usuario!.id)
+      .eq("user_id", usuario.id)
       .maybeSingle();
 
     if (!piezaActual) {
@@ -475,7 +485,7 @@ export async function PATCH(req: NextRequest, { params }: { params: Promise<{ id
         actualizado_en: new Date().toISOString(),
       })
       .eq("id", id)
-      .eq("user_id", usuario!.id)
+      .eq("user_id", usuario.id)
       .eq("estado", piezaActual.estado)
       .select("id");
 
@@ -499,7 +509,7 @@ export async function PATCH(req: NextRequest, { params }: { params: Promise<{ id
       .from("publicaciones_organicas")
       .select("guion, estado")
       .eq("id", id)
-      .eq("user_id", usuario!.id)
+      .eq("user_id", usuario.id)
       .maybeSingle();
 
     const guionActual = piezaActual?.guion as Guion | null;
@@ -513,7 +523,7 @@ export async function PATCH(req: NextRequest, { params }: { params: Promise<{ id
     const { data: usuarioCreds } = await supabaseAdmin
       .from("usuarios")
       .select("openai_key, cloudinary_name, cloudinary_key, cloudinary_secret")
-      .eq("id", usuario!.id)
+      .eq("id", usuario.id)
       .single();
     if (!usuarioCreds?.openai_key) {
       return NextResponse.json({ error: "Conecta tu cuenta de OpenAI en Integraciones antes de regenerar la voz." }, { status: 400 });
@@ -536,11 +546,23 @@ export async function PATCH(req: NextRequest, { params }: { params: Promise<{ id
     const { data: marca } = await supabaseAdmin.from("marcas").select("voz_tts").eq("email", emailBusqueda).maybeSingle();
     const voz = (marca?.voz_tts as string | null) || VOZ_POR_DEFECTO;
 
-    const resultado = await regenerarVozParaGuion(guionActual.escenas, {
-      openaiKey: apiKeyUsuario,
-      voz,
-      cloudinary: { cloudName: usuarioCreds.cloudinary_name, apiKey: cloudinaryKey, apiSecret: cloudinarySecret },
-    });
+    let resultado: Awaited<ReturnType<typeof regenerarVozParaGuion>>;
+    try {
+      resultado = await regenerarVozParaGuion(guionActual.escenas, {
+        openaiKey: apiKeyUsuario,
+        voz,
+        cloudinary: { cloudName: usuarioCreds.cloudinary_name, apiKey: cloudinaryKey, apiSecret: cloudinarySecret },
+      });
+    } catch (err) {
+      // Antes una falla de OpenAI acá salía como un 500 vacío.
+      const errorOpenAI = errorDeOpenAI(err);
+      if (errorOpenAI) {
+        const r = respuestaErrorOpenAI(errorOpenAI);
+        return NextResponse.json(r.cuerpo, { status: r.status });
+      }
+      await registrarError({ origen: "contenido_regenerar_voz", userId: usuario.id, email: emailBusqueda, paso: "regenerar_voz", errorMensaje: "No se pudo regenerar la voz.", detalleTecnico: String(err) });
+      return NextResponse.json({ error: "No se pudo regenerar la voz en este momento. Intenta de nuevo." }, { status: 503 });
+    }
 
     if (!resultado.ok) {
       return NextResponse.json({ error: resultado.error, resumenErrores: resultado.resumenErrores }, { status: resultado.status });
@@ -556,7 +578,7 @@ export async function PATCH(req: NextRequest, { params }: { params: Promise<{ id
       .from("publicaciones_organicas")
       .update({ guion: guionActualizado, voz_url: resultado.campos.vozUrl, control_calidad: resultado.crudo ? { crudo: resultado.crudo } : null, actualizado_en: new Date().toISOString() })
       .eq("id", id)
-      .eq("user_id", usuario!.id)
+      .eq("user_id", usuario.id)
       .eq("estado", "borrador");
 
     if (errorUpdate) {
@@ -573,7 +595,7 @@ export async function PATCH(req: NextRequest, { params }: { params: Promise<{ id
     .from("publicaciones_organicas")
     .select("id, estado, guion, caption, hashtags")
     .eq("id", id)
-    .eq("user_id", usuario!.id)
+    .eq("user_id", usuario.id)
     .maybeSingle();
 
   if (!pieza) {
@@ -599,7 +621,7 @@ export async function PATCH(req: NextRequest, { params }: { params: Promise<{ id
     .from("publicaciones_organicas")
     .update({ estado: "aprobada", actualizado_en: new Date().toISOString() })
     .eq("id", id)
-    .eq("user_id", usuario!.id)
+    .eq("user_id", usuario.id)
     .eq("estado", "borrador")
     .select("id");
 

@@ -24,6 +24,7 @@ let ganchoTipoPiezasSemanaActual: Record<string, unknown>[] = [];
 let piezaCreadaActual: Record<string, unknown> | null = null;
 let errorInsertActual: { message: string } | null = null;
 let insertadoCon: Record<string, unknown> | null = null;
+const ALBUM_DEL_USUARIO = ["11111111-1111-4111-8111-111111111111"];
 
 function chainUsuarios(data: unknown) {
   const obj = { select: () => obj, eq: () => obj, single: async () => ({ data, error: null }) };
@@ -51,6 +52,20 @@ let filtrosNeqActual: string[] = [];
 const fromMock = vi.fn();
 fromMock.mockImplementation((tabla: unknown) => {
   if (tabla === "usuarios") return chainUsuarios(usuarioActual);
+  // Álbum: solo devuelve las piezas que son del usuario (ALBUM_DEL_USUARIO).
+  if (tabla === "album_creativos") {
+    let pedidos: string[] = [];
+    const obj = {
+      select: () => obj,
+      eq: () => obj,
+      in: (_c: string, ids: string[]) => {
+        pedidos = ids;
+        return obj;
+      },
+      then: (resolve: (v: { data: unknown; error: unknown }) => void) => resolve({ data: pedidos.filter((id) => ALBUM_DEL_USUARIO.includes(id)).map((id) => ({ id })), error: null }),
+    };
+    return obj;
+  }
   if (tabla === "publicaciones_organicas") {
     const obj: CadenaPiezas = {
       select: () => obj,
@@ -205,6 +220,19 @@ describe("POST /api/contenido (agregar reel a mano)", () => {
       })
     );
     expect(insertadoCon).toMatchObject({ media_ids: ["11111111-1111-4111-8111-111111111111"] });
+  });
+
+  it("permisos: no deja crear una pieza con piezas del álbum de OTRO usuario", async () => {
+    insertadoCon = null;
+    const res = await POST(
+      postReq({
+        receta_organica: "producto_en_uso",
+        programada_para: isoEnElFuturo(48),
+        media_ids: ["22222222-2222-4222-8222-222222222222"],
+      })
+    );
+    expect(res.status).toBe(400);
+    expect(insertadoCon).toBeNull();
   });
 
   it("sin otras piezas esa semana: asigna el primer tipo de gancho de la lista fija", async () => {

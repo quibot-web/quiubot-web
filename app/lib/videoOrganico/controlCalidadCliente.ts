@@ -299,9 +299,11 @@ export type GuionParaControlDeVoz = {
   palabrasPorEscena?: { escena_id: string; palabras: { texto: string; inicio_s: number }[] }[];
 };
 
-export async function controlarVozDelVideo(params: { blob: Blob; guion: GuionParaControlDeVoz; piezaId: string }): Promise<string[]> {
+// errorCuenta: la cuenta de OpenAI del cliente no pudo transcribir (sin
+// créditos o llave inválida): se muestra tal cual y NO se re-renderiza.
+export async function controlarVozDelVideo(params: { blob: Blob; guion: GuionParaControlDeVoz; piezaId: string }): Promise<{ hallazgos: string[]; errorCuenta?: string }> {
   const { guion } = params;
-  if (!guion.vozUrl || !guion.segmentosAudio?.length) return [];
+  if (!guion.vozUrl || !guion.segmentosAudio?.length) return { hallazgos: [] };
   let final: AudioMono;
   let original: AudioMono;
   try {
@@ -310,7 +312,7 @@ export async function controlarVozDelVideo(params: { blob: Blob; guion: GuionPar
     [final, original] = await Promise.all([params.blob.arrayBuffer().then(decodificarMono), resVoz.arrayBuffer().then(decodificarMono)]);
   } catch (err) {
     // Nunca se aprueba sin medir: si no se pudo, no pasa.
-    return [`No se pudo verificar la voz del video (${err instanceof Error ? err.message : "error al leer el audio"}).`];
+    return { hallazgos: [`No se pudo verificar la voz del video (${err instanceof Error ? err.message : "error al leer el audio"}).`] };
   }
   const energia = controlarArranquesDeVoz({
     original,
@@ -318,7 +320,7 @@ export async function controlarVozDelVideo(params: { blob: Blob; guion: GuionPar
     tramos: guion.segmentosAudio.flatMap((s) => s.tramos),
     palabras: guion.palabrasPorEscena?.flatMap((e) => e.palabras),
   });
-  if (energia.hallazgos.length > 0) return energia.hallazgos;
+  if (energia.hallazgos.length > 0) return { hallazgos: energia.hallazgos };
 
   // Segundo control (Whisper). Si la transcripción no está disponible (red,
   // créditos de OpenAI), no bloquea: el control principal ya pasó.
@@ -326,11 +328,11 @@ export async function controlarVozDelVideo(params: { blob: Blob; guion: GuionPar
     const form = new FormData();
     form.set("audio", new Blob([aWav16k(final)], { type: "audio/wav" }), "final.wav");
     const res = await fetch(`/api/contenido/${params.piezaId}/control-voz`, { method: "POST", body: form });
-    if (!res.ok) return [];
-    const data = (await res.json()) as { hallazgos?: string[] };
-    return data.hallazgos ?? [];
+    const data = (await res.json().catch(() => ({}))) as { hallazgos?: string[]; error?: string; codigo?: string };
+    if (!res.ok) return data.codigo?.startsWith("openai_") && data.error ? { hallazgos: [], errorCuenta: data.error } : { hallazgos: [] };
+    return { hallazgos: data.hallazgos ?? [] };
   } catch {
-    return [];
+    return { hallazgos: [] };
   }
 }
 
