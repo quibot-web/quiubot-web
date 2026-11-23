@@ -26,6 +26,6 @@ export type PropsEscena = {
   fotoUrl: string;
   // Foto apagada/clara y halo de luz horneados al precargar.
   recursos: RecursosGenerados;
-  // Solo pantallas del celular: cuadros en que cambia la pantalla.
-  inicioFrase?: Record<string, number>;
+  // Solo pantallas del celular: cuadro en que esta pantalla se vuelve visible.
+  desdePantalla?: number;
 };

@@ -16,7 +16,7 @@ import { prepararReel } from "./motor/preparar";
 import type { PlanIlustrado } from "./motor/plan";
 import type { MarcaIlustrada } from "./motor/escenas/tipos";
 import { precargarImagenes, urlsImagenesFijas } from "./imagenesFijas";
-import { generarRecursos, type RecursosGenerados } from "./imagenesGeneradas";
+import { generarRecursos, tarjetaDeMarca, type RecursosGenerados } from "./imagenesGeneradas";
 import { aUrlLocal } from "./recursosLocales";
 
 export type PropsReelIlustrado = {
@@ -33,7 +33,7 @@ export type PropsReelIlustrado = {
 };
 
 const FPS = 30;
-// Fase 3 la reemplaza por una foto apta del álbum o un producto ilustrado.
+// Último respaldo (sin canvas disponible). El prototipo la pasa explícita.
 const FOTO_POR_DEFECTO = () => staticFile("demo-organico/foto-producto-ceramica.jpg");
 
 export function duracionReelIlustrado(props: Pick<PropsReelIlustrado, "tiempos">): number {
@@ -45,7 +45,7 @@ export function ReelIlustrado({ tiempos, plan, vozUrl, fotoUrl, tema, marca, pis
   const { fps } = useVideoConfig();
   const reel = useMemo(() => prepararReel(tiempos, plan, fps), [tiempos, plan, fps]);
   const paleta = paletaNoche(tema);
-  const foto = fotoUrl ?? FOTO_POR_DEFECTO();
+  const foto = fotoUrl ?? null;
   // Una sola espera al inicio: imágenes fijas, foto y recursos horneados
   // (foto apagada/clara, halo de luz). El mundo se monta recién cuando
   // todo está listo: así cada <img> nace con su imagen ya disponible y el
@@ -59,7 +59,9 @@ export function ReelIlustrado({ tiempos, plan, vozUrl, fotoUrl, tema, marca, pis
       // La foto remota (álbum en Cloudinary) se baja con CORS y se usa
       // como blob: local; si no se puede, la foto por defecto -- nunca
       // una imagen remota sin CORS (contamina el canvas y el render falla).
-      const fotoLocal = (await aUrlLocal(foto)) ?? FOTO_POR_DEFECTO();
+      // Sin foto apta (o si no se pudo bajar): la tarjeta de marca, nunca una captura con texto.
+      const tarjeta = () => tarjetaDeMarca(marca.colorMarca, marca.colorSecundario, marca.inicial);
+      const fotoLocal = (foto ? await aUrlLocal(foto) : null) || (await tarjeta()) || FOTO_POR_DEFECTO();
       const generados = await generarRecursos(fotoLocal, paleta.luz);
       await precargarImagenes([...urlsImagenesFijas(), fotoLocal, generados.fotoApagada, generados.fotoClara, generados.brilloLuz].filter(Boolean));
       if (vigente) setListo({ recursos: generados, foto: fotoLocal });
@@ -67,7 +69,7 @@ export function ReelIlustrado({ tiempos, plan, vozUrl, fotoUrl, tema, marca, pis
     return () => {
       vigente = false;
     };
-  }, [foto, paleta.luz]);
+  }, [foto, paleta.luz, marca.colorMarca, marca.colorSecundario, marca.inicial]);
   useEffect(() => {
     if (listo) continueRender(espera);
   }, [listo, espera, continueRender]);

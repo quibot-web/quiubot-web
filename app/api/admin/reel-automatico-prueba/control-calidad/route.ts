@@ -3,6 +3,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { supabaseAdmin } from "@/lib/supabase";
 import { desencriptarSiHaceFalta } from "@/lib/crypto";
 import { MODELO_ANALISIS_IMAGEN } from "@/app/lib/analizarPiezaImagen";
+import { promptControlIlustrado } from "@/app/lib/videoOrganico/controlCalidadIlustrado";
 
 // Fase B v2.0, paso 7 del plan -- el paso de visión del control de
 // calidad (código + visión, nunca solo uno). Verificado antes con un
@@ -45,7 +46,15 @@ export async function POST(req: NextRequest) {
     }
   }
 
-  const content: unknown[] = [
+  // Reel ilustrado: prompt propio (ver controlCalidadIlustrado.ts), con
+  // lo que DEBERÍA verse en cada cuadro.
+  const esIlustrado = cuerpo?.tipo === "ilustrado";
+  if (esIlustrado && cuadros.some((c) => typeof (c as { esperado?: unknown }).esperado !== "string")) {
+    return NextResponse.json({ error: "En el reel ilustrado cada cuadro necesita 'esperado'." }, { status: 400 });
+  }
+  const content: unknown[] = esIlustrado
+    ? [{ type: "text", text: promptControlIlustrado(cuadros as unknown as { etiqueta: string; esperado: string }[]) }]
+    : [
     {
       type: "text",
       text:

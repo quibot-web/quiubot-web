@@ -1,5 +1,6 @@
 "use client";
 
+import { erroresQCIlustrado, momentosControlIlustrado } from "@/app/lib/videoOrganico/controlCalidadIlustrado";
 import { useNombreNavegador } from "@/app/lib/useNavegador";
 import { useEffect, useRef, useState, useCallback } from "react";
 import type { PublicacionOrganica } from "@/app/lib/contenido";
@@ -95,15 +96,24 @@ export default function ColaDeRender({
   // verificarlo. El arnés admin SIEMPRE vuelve a correr el control de
   // calidad después de recompactar (hasta MAX_REINTENTOS_QC veces) --
   // acá ahora es igual.
-  async function correrControlDeCalidad(blob: Blob, guionActual: Guion): Promise<ClasificacionQC> {
-    const duracionS = guionActual.escenas.reduce((acc, e) => acc + e.duracion_s, 0);
-    const etiquetasYSegundos = [
-      { etiqueta: "inicio", segundo: 0.1 },
-      { etiqueta: "mitad", segundo: duracionS / 2 },
-      { etiqueta: "final", segundo: Math.max(duracionS - 0.2, 0) },
-    ];
-    const cuadros = await extraerCuadrosClave(blob, duracionS, etiquetasYSegundos, () => {});
-    const cuadrosConImagen = cuadros.filter((c): c is { etiqueta: string; dataUrl: string } => typeof c.dataUrl === "string");
+  // duracionS: la duración REAL del video recién renderizado (antes se
+  // usaba la suma estimada por la IA -- 16 s en un reel de 23,7 s: la
+  // "mitad" y el "final" no eran ni la mitad ni el final).
+  // ilustrado: el render fue el reel ilustrado -> control propio.
+  async function correrControlDeCalidad(blob: Blob, guionActual: Guion, duracionS: number, ilustrado: boolean): Promise<ClasificacionQC> {
+    const momentos: { etiqueta: string; segundo: number; esperado?: string }[] =
+      ilustrado && guionActual.ilustrado && guionActual.tiemposRender && guionActual.palabrasPorEscena && guionActual.segmentosAudio
+        ? momentosControlIlustrado({ tiemposRender: guionActual.tiemposRender, palabrasPorEscena: guionActual.palabrasPorEscena, segmentosAudio: guionActual.segmentosAudio }, guionActual.ilustrado, guionActual.fps)
+        : [
+            { etiqueta: "inicio", segundo: 0.1 },
+            { etiqueta: "mitad", segundo: duracionS / 2 },
+            { etiqueta: "final", segundo: Math.max(duracionS - 0.2, 0) },
+          ];
+    const esIlustrado = momentos.some((m) => m.esperado !== undefined);
+    const cuadros = await extraerCuadrosClave(blob, duracionS, momentos, () => {});
+    const cuadrosConImagen = cuadros
+      .filter((c): c is { etiqueta: string; dataUrl: string } => typeof c.dataUrl === "string")
+      .map((c) => ({ ...c, esperado: momentos.find((m) => m.etiqueta === c.etiqueta)?.esperado }));
 
     const [silencio, silenciosLargos, visionRes] = await Promise.all([
       audioEstaEnSilencio(blob),
@@ -112,12 +122,20 @@ export default function ColaDeRender({
         ? fetch("/api/admin/reel-automatico-prueba/control-calidad", {
             method: "POST",
             headers: { "Content-Type": "application/json" },
-            body: JSON.stringify({ cuadros: cuadrosConImagen }),
+            body: JSON.stringify(esIlustrado ? { tipo: "ilustrado", cuadros: cuadrosConImagen } : { cuadros: cuadrosConImagen }),
           })
             .then((r) => (r.ok ? r.json() : { hallazgos: [] }))
             .catch(() => ({ hallazgos: [] }))
         : Promise.resolve({ hallazgos: [] }),
     ]);
+    if (esIlustrado) {
+      // Estricto: si la visión no respondió, cada cuadro cuenta como no revisado.
+      const erroresVision = erroresQCIlustrado(visionRes.hallazgos, cuadrosConImagen.map((c) => c.etiqueta));
+      const erroresAudio = erroresDesdeQC([], silencio, silenciosLargos);
+      if (erroresVision.length === 0 && erroresAudio.length === 0) return { tipo: "aprobado" };
+      if (erroresVision.length === 0 && esSoloProblemaDePausas([], silencio, silenciosLargos)) return { tipo: "pausas" };
+      return { tipo: "rechazado", hallazgos: [...erroresVision, ...erroresAudio] };
+    }
     const hallazgos = (visionRes.hallazgos ?? []) as Parameters<typeof erroresDesdeQC>[0];
 
     const errores = erroresDesdeQC(hallazgos, silencio, silenciosLargos);
@@ -164,6 +182,10 @@ export default function ColaDeRender({
         // vez que falló, los re-renders del control de calidad de esta
         // misma pasada ya no lo intentan. La pieza nunca queda trabada.
         let ilustradoDesactivado = false;
+        // Del último render: duración REAL del video y si fue el ilustrado
+        // (el control de calidad muestrea con esto).
+        let ultimaDuracionS = 0;
+        let ultimoFueIlustrado = false;
 
         async function renderizar(component: React.ComponentType<Record<string, unknown>>, durationInFrames: number, defaultProps: Record<string, unknown>, fps: number): Promise<Blob> {
           const resultado = await renderMediaOnWeb({
@@ -180,8 +202,10 @@ export default function ColaDeRender({
 
         async function renderizarConGuion(guionARenderizar: Guion): Promise<{ blob: Blob; duracionS: number }> {
           const inicio = performance.now();
-          const medir = (blob: Blob, duracionS: number) => {
+          const medir = (blob: Blob, duracionS: number, ilustrado = false) => {
             setSegundosPorSegundoDeVideo((performance.now() - inicio) / 1000 / Math.max(duracionS, 1));
+            ultimaDuracionS = duracionS;
+            ultimoFueIlustrado = ilustrado;
             return { blob, duracionS };
           };
           // Reel ilustrado (fase 2): solo si el guion trae plan (cuentas de
@@ -193,7 +217,7 @@ export default function ColaDeRender({
             const durationInFrames = duracionReelIlustrado(propsIlustrado);
             try {
               const blob = await renderizar(ReelIlustrado as unknown as React.ComponentType<Record<string, unknown>>, durationInFrames, propsIlustrado as unknown as Record<string, unknown>, guionARenderizar.fps);
-              return medir(blob, durationInFrames / guionARenderizar.fps);
+              return medir(blob, durationInFrames / guionARenderizar.fps, true);
             } catch (err) {
               ilustradoDesactivado = true;
               const motivo = err instanceof Error ? err.message : String(err);
@@ -208,13 +232,15 @@ export default function ColaDeRender({
           if (esPiezaConVoz) {
             const { ReelAutomatico, duracionReelAutomaticoEnCuadros } = await import("@/video/visuales/ReelAutomatico");
             const defaultProps = { guion: guionARenderizar, medios, pistaMusicaUrl: pistaUrl, mostrarZonaSegura: false };
-            const blob = await renderizar(ReelAutomatico as unknown as React.ComponentType<Record<string, unknown>>, duracionReelAutomaticoEnCuadros(guionARenderizar), defaultProps, guionARenderizar.fps);
-            return medir(blob, guionARenderizar.escenas.reduce((acc, e) => acc + e.duracion_s, 0));
+            const cuadros = duracionReelAutomaticoEnCuadros(guionARenderizar);
+            const blob = await renderizar(ReelAutomatico as unknown as React.ComponentType<Record<string, unknown>>, cuadros, defaultProps, guionARenderizar.fps);
+            return medir(blob, cuadros / guionARenderizar.fps);
           }
           const { Composicion, duracionEnCuadros } = await import("@/video/Composicion");
           const defaultProps = { guion: guionARenderizar, medios, pistaUrl, mostrarZonaSegura: false };
-          const blob = await renderizar(Composicion as unknown as React.ComponentType<Record<string, unknown>>, duracionEnCuadros(guionARenderizar), defaultProps, guionARenderizar.fps);
-          return medir(blob, guionARenderizar.escenas.reduce((acc, e) => acc + e.duracion_s, 0));
+          const cuadros = duracionEnCuadros(guionARenderizar);
+          const blob = await renderizar(Composicion as unknown as React.ComponentType<Record<string, unknown>>, cuadros, defaultProps, guionARenderizar.fps);
+          return medir(blob, cuadros / guionARenderizar.fps);
         }
 
         let { blob } = await renderizarConGuion(guion);
@@ -238,7 +264,7 @@ export default function ColaDeRender({
               blobInicial: blob,
               guionInicial: guion,
               crudo: controlCalidadActual?.crudo,
-              correrQC: (b, g) => correrControlDeCalidad(b, g),
+              correrQC: (b, g) => correrControlDeCalidad(b, g, ultimaDuracionS, ultimoFueIlustrado),
               recompactar: async (g, crudo, limites) => {
                 const resRecompactar = await fetch("/api/admin/reel-automatico-prueba/recompactar", {
                   method: "POST",

@@ -91,6 +91,45 @@ async function brillo(color: string): Promise<string> {
   return aUrl(canvas, "image/png");
 }
 
+// Sin foto apta de la marca: una tarjeta ilustrada con sus colores y su
+// inicial (nunca un producto inventado ni una captura con texto). La
+// fase 3 la reemplaza por un producto ilustrado según el tipo de negocio.
+export async function tarjetaDeMarca(colorPrimario: string, colorSecundario: string, inicial: string): Promise<string> {
+  if (typeof document === "undefined") return "";
+  const clave = `tarjeta|${colorPrimario}|${colorSecundario}|${inicial}`;
+  return unaVez(
+    clave,
+    async () => {
+      await document.fonts?.ready;
+      const canvas = document.createElement("canvas");
+      canvas.width = canvas.height = 1080;
+      const ctx = canvas.getContext("2d")!;
+      const fondo = ctx.createLinearGradient(0, 0, 1080, 1080);
+      fondo.addColorStop(0, colorPrimario);
+      fondo.addColorStop(1, colorSecundario);
+      ctx.fillStyle = fondo;
+      ctx.fillRect(0, 0, 1080, 1080);
+      ctx.fillStyle = "rgba(255,255,255,0.12)";
+      for (const [x, y, r] of [[180, 220, 160], [900, 860, 220], [880, 200, 90]]) {
+        ctx.beginPath();
+        ctx.arc(x, y, r, 0, Math.PI * 2);
+        ctx.fill();
+      }
+      ctx.fillStyle = "rgba(255,255,255,0.94)";
+      ctx.beginPath();
+      ctx.arc(540, 540, 260, 0, Math.PI * 2);
+      ctx.fill();
+      ctx.fillStyle = colorPrimario;
+      ctx.font = "800 300px Poppins, sans-serif";
+      ctx.textAlign = "center";
+      ctx.textBaseline = "middle";
+      ctx.fillText(inicial.slice(0, 1).toUpperCase(), 540, 560);
+      return aUrl(canvas, "image/png");
+    },
+    ""
+  );
+}
+
 function unaVez(clave: string, crear: () => Promise<string>, respaldo: string): Promise<string> {
   let p = cache.get(clave);
   if (!p) {

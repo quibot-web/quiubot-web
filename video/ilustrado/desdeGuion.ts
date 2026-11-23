@@ -24,14 +24,15 @@ export function marcaDesdeTema(tema: TemaGuion): MarcaIlustrada {
   };
 }
 
-// La foto del producto: primero una foto de la pieza sin texto encima
-// (análisis del álbum), si no cualquier imagen de la pieza. Sin imagen,
-// undefined (el reel usa su foto por defecto; la fase 3 la reemplaza).
+// La foto del producto: SOLO una foto de la pieza analizada y sin texto
+// encima. Nunca una captura con texto como producto (QC de staging, 23
+// nov 2026: Quiubot es un software y su álbum son capturas). Sin foto
+// apta, undefined: el reel muestra una tarjeta de marca ilustrada (y en
+// la fase 3, un producto ilustrado según el tipo de negocio).
 export function fotoParaReelIlustrado(guion: Pick<Guion, "analisisPiezas">, medios: MediosResueltos | undefined): string | undefined {
   if (!medios) return undefined;
   const sinTexto = idsFotosSinTexto(medios, guion.analisisPiezas);
-  if (sinTexto.length > 0) return medios[sinTexto[0]].url;
-  return Object.values(medios).find((m) => m.tipo === "imagen")?.url;
+  return sinTexto.length > 0 ? medios[sinTexto[0]].url : undefined;
 }
 
 export function propsReelIlustradoDesdeGuion(guion: Guion, medios: MediosResueltos | undefined, pistaMusicaUrl: string | null): PropsReelIlustrado | null {

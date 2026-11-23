@@ -12,7 +12,25 @@ export const ZOOM_MAXIMO = 1.3;
 
 // Encuadra un rectángulo del mundo para que quepa en la franja segura y
 // la llene (>= 50% del ancho o del alto de la pantalla).
-export function encuadre(r: Rect, zoomMaximo = ZOOM_MAXIMO): Encuadre {
+// "arriba": el tope del rectángulo queda justo debajo del subtítulo
+// (pantallas del celular: nada de la app queda bajo el subtítulo).
+export const TOPE_BAJO_SUBTITULO = FRANJA_SEGURA.arriba + 8;
+// Borde inferior real de la píldora del subtítulo (top 14,5% + alto), con margen.
+export const FONDO_SUBTITULO = 360;
+
+// Acerca la cámara un factor; "arriba": manteniendo fijo lo que está en
+// TOPE_BAJO_SUBTITULO (el celular no se mete bajo el subtítulo).
+export function acercar(e: Encuadre, factor: number, alinear: "centro" | "arriba" = "centro"): Encuadre {
+  const zoom = e.zoom * factor;
+  if (alinear === "centro") return { ...e, zoom };
+  const mundoEnTope = e.y + (TOPE_BAJO_SUBTITULO - ALTO_PANTALLA / 2) / e.zoom;
+  return { x: e.x, y: mundoEnTope - (TOPE_BAJO_SUBTITULO - ALTO_PANTALLA / 2) / zoom, zoom };
+}
+export function encuadre(r: Rect, zoomMaximo = ZOOM_MAXIMO, alinear: "centro" | "arriba" = "centro"): Encuadre {
+  if (alinear === "arriba") {
+    const zoom = Math.min(1000 / r.ancho, (FRANJA_SEGURA.abajo - TOPE_BAJO_SUBTITULO) / r.alto, zoomMaximo);
+    return { x: r.x + r.ancho / 2, y: r.y + (ALTO_PANTALLA / 2 - TOPE_BAJO_SUBTITULO) / zoom, zoom };
+  }
   const zoom = Math.min(1000 / r.ancho, (FRANJA_SEGURA.abajo - FRANJA_SEGURA.arriba - 30) / r.alto, zoomMaximo);
   return { x: r.x + r.ancho / 2, y: r.y + r.alto / 2 - (CENTRO_FRANJA - ALTO_PANTALLA / 2) / zoom, zoom };
 }

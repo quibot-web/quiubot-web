@@ -47,7 +47,8 @@ export default function AdminReelIlustradoPruebaClient({ estado }: { estado: { a
       let vozUrl: string | null = null;
       let voz: string | null = null;
       // Modo Cloudinary: foto del álbum (otro origen), como en /contenido.
-      let fotoUrl: string | undefined;
+      // Modos locales: la cerámica del prototipo aprobado.
+      let fotoUrl: string | undefined = modo === "cloudinary" ? undefined : "/demo-organico/foto-producto-ceramica.jpg";
       if (conVoz) {
         setFase("generando_voz");
         const res = await fetch("/api/admin/reel-ilustrado-prueba/voz", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ conFotoAlbum: modo === "cloudinary" }) });

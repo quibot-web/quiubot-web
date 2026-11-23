@@ -1,4 +1,4 @@
-import { Composition, registerRoot, type CalculateMetadataFunction } from "remotion";
+import { Composition, registerRoot, type CalculateMetadataFunction, staticFile } from "remotion";
 import { Composicion, duracionEnCuadros, type PropsComposicion } from "./Composicion";
 import type { Guion } from "./guion.schema";
 import { fixtureCompleta } from "./fixtures/completa";
@@ -150,7 +150,7 @@ function RemotionRoot() {
         width={1080}
         height={1920}
         calculateMetadata={({ props }) => ({ durationInFrames: duracionReelIlustrado(props) })}
-        defaultProps={{ tiempos: tiemposSinteticos(), plan: PLAN_PROTOTIPO, vozUrl: null, tema: TEMA_PROTOTIPO, marca: MARCA_PROTOTIPO } satisfies PropsReelIlustrado}
+        defaultProps={{ tiempos: tiemposSinteticos(), plan: PLAN_PROTOTIPO, vozUrl: null, fotoUrl: staticFile("demo-organico/foto-producto-ceramica.jpg"), tema: TEMA_PROTOTIPO, marca: MARCA_PROTOTIPO } satisfies PropsReelIlustrado}
       />
       {/* Solo para generar public/ilustrado/post-<tipo>.png (video/ilustrado/generarPostsFijos.ts). */}
       <Composition id="post-fijo" component={PostFijo} durationInFrames={1} fps={30} width={ANCHO_POST_FIJO} height={ALTO_POST_FIJO} defaultProps={{ tipo: "comida" as const }} />

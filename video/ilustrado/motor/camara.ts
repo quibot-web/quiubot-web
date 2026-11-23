@@ -11,7 +11,7 @@
 //   toma hasta que su última acción se vio al menos 0,4 s.
 import type { PuntoCamara } from "../tiempoIlustrado";
 import { CATALOGO, MICRO, definicionAccion, unionRects, type IdIsla } from "./catalogo";
-import { ALTO_PANTALLA, ANCHO_PANTALLA, desplazar, encuadre, ocupacion, type Encuadre, type Rect } from "./geometria";
+import { ALTO_PANTALLA, ANCHO_PANTALLA, acercar, desplazar, encuadre, ocupacion, type Encuadre, type Rect } from "./geometria";
 import type { Disparo } from "./plan";
 import type { Recorrido } from "./recorrido";
 
@@ -27,7 +27,10 @@ export function focoGlobal(d: Pick<Disparo, "escena" | "accion">, recorrido: Rec
   return desplazar(def.foco, isla.x, isla.y);
 }
 
-export type Toma = { desde: number; ultimaAccion: number; focos: Rect[]; encuadre: Encuadre };
+export type Toma = { desde: number; ultimaAccion: number; focos: Rect[]; encuadre: Encuadre; celular: boolean };
+
+// Pantallas del celular: ancladas debajo del subtítulo.
+const encuadrar = (focos: Rect[], celular: boolean) => encuadre(unionRects(focos), undefined, celular ? "arriba" : "centro");
 
 const igual = (a: Rect, b: Rect) => a.x === b.x && a.y === b.y && a.ancho === b.ancho && a.alto === b.alto;
 
@@ -37,15 +40,16 @@ export function tomasDeCamara(disparos: Disparo[], recorrido: Recorrido): Toma[]
     // La micro-acción no cambia de toma (ver pulsoDeCamara).
     if (d.accion === MICRO) continue;
     const f = focoGlobal(d, recorrido);
+    const esCelular = CATALOGO[d.escena].isla === "celular";
     const ultima = tomas[tomas.length - 1];
     if (ultima) {
       if (ultima.focos.some((g) => igual(g, f))) {
         ultima.ultimaAccion = d.cuadro;
         continue;
       }
-      if (d.cuadro - ultima.desde < JUNTAR_SI_MENOS_DE) {
+      if (d.cuadro - ultima.desde < JUNTAR_SI_MENOS_DE && ultima.celular === esCelular) {
         const focos = [...ultima.focos, f];
-        const enc = encuadre(unionRects(focos));
+        const enc = encuadrar(focos, esCelular);
         if (focos.every((g) => ocupacion(g, enc) >= 0.5)) {
           ultima.focos = focos;
           ultima.encuadre = enc;
@@ -54,7 +58,7 @@ export function tomasDeCamara(disparos: Disparo[], recorrido: Recorrido): Toma[]
         }
       }
     }
-    tomas.push({ desde: d.cuadro, ultimaAccion: d.cuadro, focos: [f], encuadre: encuadre(f) });
+    tomas.push({ desde: d.cuadro, ultimaAccion: d.cuadro, focos: [f], encuadre: encuadrar([f], esCelular), celular: esCelular });
   }
   return tomas;
 }
@@ -83,13 +87,13 @@ export function puntosCamaraAutomatica(tomas: Toma[], total: number, fps: number
       inicio = salidaMinima;
       llegada = inicio + dur;
     }
-    puntos.push({ cuadro: inicio, ...a, zoom: a.zoom * empuje(inicio - llegadaAnterior) });
+    puntos.push({ cuadro: inicio, ...acercar(a, empuje(inicio - llegadaAnterior), tomas[i - 1].celular ? "arriba" : "centro") });
     puntos.push({ cuadro: llegada, ...b });
     llegadaAnterior = llegada;
   }
   const ultima = tomas[tomas.length - 1].encuadre;
   const fin = Math.max(total, llegadaAnterior + 1);
-  puntos.push({ cuadro: fin, ...ultima, zoom: ultima.zoom * empuje(fin - llegadaAnterior) });
+  puntos.push({ cuadro: fin, ...acercar(ultima, empuje(fin - llegadaAnterior), tomas[tomas.length - 1].celular ? "arriba" : "centro") });
   return puntos;
 }
 

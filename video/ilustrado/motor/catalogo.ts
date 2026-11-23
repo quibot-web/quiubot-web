@@ -17,9 +17,16 @@ export const PANTALLA = { ancho: CELULAR_ISLA.ancho - CELULAR_ISLA.borde * 2, al
 const B = CELULAR_ISLA.borde;
 
 // Zonas de la pantalla del celular (coordenadas de la isla del celular).
-const ZONA_POST: Rect = { x: B, y: B + 290, ancho: PANTALLA.ancho, alto: 920 };
-const ZONA_CHAT: Rect = { x: B, y: B + 170, ancho: PANTALLA.ancho, alto: 860 };
-const ZONA_PERFIL: Rect = { x: B, y: B + 130, ancho: PANTALLA.ancho, alto: 900 };
+// Todas empiezan en el TOPE de la pantalla: la cámara las ancla justo
+// debajo del subtítulo (encuadre "arriba"), así el subtítulo nunca tapa
+// el encabezado ni el texto de la app (QC de staging, 23 nov 2026).
+export const ALTO_BARRA_APP = 130; // = ALTO_BARRA_FEED de Objetos.tsx
+export const ALTO_POST_FEED = 920; // = ALTO_POST de Objetos.tsx
+const ZONA_POST: Rect = { x: B, y: B, ancho: PANTALLA.ancho, alto: ALTO_BARRA_APP + ALTO_POST_FEED };
+// La publicación misma (lo nombrado en las acciones del feed), debajo de la barra.
+export const POST_NOMBRADO: Rect = { x: B, y: B + ALTO_BARRA_APP, ancho: PANTALLA.ancho, alto: ALTO_POST_FEED };
+const ZONA_CHAT: Rect = { x: B, y: B, ancho: PANTALLA.ancho, alto: 1030 };
+const ZONA_PERFIL: Rect = { x: B, y: B, ancho: PANTALLA.ancho, alto: 1030 };
 
 // Billetera: 600 x 450 abajo, con lugar arriba para las monedas que saltan.
 export const BILLETERA_LOCAL: Rect = { x: 80, y: 450, ancho: 600, alto: 450 };
@@ -146,6 +153,17 @@ export const CATALOGO = {
 } as const satisfies Record<string, DefinicionEscena>;
 
 export type IdEscena = keyof typeof CATALOGO;
+
+// Qué se ve en cada escena, dicho para el control de calidad por visión.
+export const ESCENA_VISIBLE: Record<IdEscena, string> = {
+  feed: "un celular grande con un feed de publicaciones (una publicación o anuncio con su foto)",
+  chat: "un celular grande con un chat y burbujas de mensajes",
+  perfil: "un celular grande con el perfil de una cuenta y el botón Seguir/Siguiendo",
+  billetera: "una billetera grande (con monedas)",
+  multitud: "una multitud de personas ilustradas",
+  reloj_cliente: "un reloj grande junto a un cliente ilustrado",
+  grafica: "una gráfica de barras con una línea que sube",
+};
 
 // Micro-acción neutra (fase 2, arreglo de ritmo): la escena que está en
 // pantalla hace un gesto chico y la cámara se acerca un poco, SIN cambiar

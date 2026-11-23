@@ -7,7 +7,7 @@ import { Celular, Fondo, Moneda, SombraPiso } from "../Objetos";
 import { rampa } from "./animacion";
 import { pulsoDeCamara } from "./camara";
 import { CATALOGO, type IdEscena, type IdIsla } from "./catalogo";
-import { ALTO_PANTALLA, ANCHO_PANTALLA, seTocan, vistaDelMundo } from "./geometria";
+import { ALTO_PANTALLA, ANCHO_PANTALLA, acercar, seTocan, vistaDelMundo } from "./geometria";
 import { disparosDeEscena } from "./plan";
 import { PISO_Y } from "./recorrido";
 import type { ReelPreparado } from "./preparar";
@@ -59,7 +59,11 @@ export type PropsMundo = {
 export function MundoIlustrado({ frame, fps, reel, paleta, tema, marca, fotoUrl, recursos = recursosSinGenerar(fotoUrl) }: PropsMundo) {
   // Cámara + una deriva leve para que nunca esté quieta.
   const base = camaraEnCuadro(reel.camara, frame);
-  const cam = { x: base.x + Math.sin(frame / 40) * 8, y: base.y + Math.cos(frame / 52) * 8, zoom: base.zoom * (1 + Math.sin(frame / 70) * 0.01) * pulsoDeCamara(frame, reel.pulsos ?? []) };
+  // Deriva y pulso de las micro-acciones; con el celular en toma, anclados
+  // debajo del subtítulo (el celular nunca se mete bajo el subtítulo).
+  const enCelular = reel.tomas.length > 0 && [...reel.tomas].reverse().find((t) => frame >= t.desde)?.celular === true;
+  const conPulso = acercar(base, (1 + Math.sin(frame / 70) * 0.01) * pulsoDeCamara(frame, reel.pulsos ?? []), enCelular ? "arriba" : "centro");
+  const cam = { x: conPulso.x + Math.sin(frame / 40) * 8, y: conPulso.y + (enCelular ? 0 : Math.cos(frame / 52) * 8), zoom: conPulso.zoom };
   const vista = vistaDelMundo(cam);
   const pisoEnPantalla = ALTO_PANTALLA / 2 + (PISO_Y - cam.y) * cam.zoom;
   const props = (escena: IdEscena): PropsEscena => ({ frame, fps, d: disparosDeEscena(reel.disparos, escena), paleta, tema, marca, fotoUrl, recursos });
@@ -84,8 +88,8 @@ export function MundoIlustrado({ frame, fps, reel, paleta, tema, marca, fotoUrl,
               <div key={id} style={{ position: "absolute", left: r.x, top: r.y, width: r.ancho, height: r.alto }}>
                 <SombraPiso cx={r.ancho / 2} y={r.alto + 10} ancho={r.ancho * 1.25} />
                 <Celular>
-                  {anterior && <CapaPantalla Componente={PANTALLAS[anterior.pantalla]} props={props(anterior.pantalla)} opacidad={1} />}
-                  {actual && <CapaPantalla Componente={PANTALLAS[actual.pantalla]} props={props(actual.pantalla)} opacidad={mezcla} />}
+                  {anterior && <CapaPantalla Componente={PANTALLAS[anterior.pantalla]} props={{ ...props(anterior.pantalla), desdePantalla: anterior.cuadro }} opacidad={1} />}
+                  {actual && <CapaPantalla Componente={PANTALLAS[actual.pantalla]} props={{ ...props(actual.pantalla), desdePantalla: actual.cuadro }} opacidad={mezcla} />}
                 </Celular>
               </div>
             );

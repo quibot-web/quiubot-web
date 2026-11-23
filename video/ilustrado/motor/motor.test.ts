@@ -16,9 +16,9 @@ import { NARRACION_PROTOTIPO, tiemposSinteticos } from "../guionPrototipo";
 import { MARCA_PROTOTIPO, PLAN_PROTOTIPO } from "../planPrototipo";
 import tiemposReales from "../fixtures/tiemposPrototipoReales.json";
 import { paletaNoche } from "../../estilos/estilos";
-import { CATALOGO, ID_ESCENAS, PANTALLA, definicionAccion } from "./catalogo";
+import { CATALOGO, CELULAR_ISLA, ID_ESCENAS, PANTALLA, POST_NOMBRADO, definicionAccion } from "./catalogo";
 import { focoGlobal } from "./camara";
-import { ALTO_PANTALLA, ANCHO_PANTALLA, FRANJA_SEGURA, ocupacion, rectEnPantalla, seTocan } from "./geometria";
+import { ALTO_PANTALLA, ANCHO_PANTALLA, FONDO_SUBTITULO, FRANJA_SEGURA, ocupacion, rectEnPantalla, seTocan } from "./geometria";
 import { problemasDelPlan, type PlanIlustrado } from "./plan";
 import { prepararReel } from "./preparar";
 import { coreografiaFeed } from "./escenas/Pantallas";
@@ -75,6 +75,27 @@ for (const [nombre, tiempos] of TIEMPOS) {
         if (llega === undefined) tarde.push(`${d.frase} ${d.escena}.${d.accion}`);
       }
       expect(tarde).toEqual([]);
+    });
+
+    it("celular: mientras la cámara está quieta en una toma del celular, el tope de la pantalla queda DEBAJO del subtítulo y la publicación nombrada ocupa >= 50%", () => {
+      const celular = reel.recorrido.celular!;
+      const puntos = [...reel.camara].sort((a, b) => a.cuadro - b.cuadro);
+      // puntos: [0] llegada de la toma 0; luego (salida, llegada) por toma; al final, el cierre.
+      const llegadas = [0, ...reel.tomas.slice(1).map((_, i) => puntos[2 + 2 * i].cuadro)];
+      const salidas = [...reel.tomas.slice(1).map((_, i) => puntos[1 + 2 * i].cuadro), reel.linea.duracionCuadros - 1];
+      let revisados = 0;
+      reel.tomas.forEach((t, i) => {
+        if (!t.celular) return;
+        for (let f = llegadas[i]; f <= salidas[i]; f += 5) {
+          const cam = camaraEnCuadro(reel.camara, f);
+          const topePantalla = ALTO_PANTALLA / 2 + (celular.y + CELULAR_ISLA.borde - cam.y) * cam.zoom;
+          expect(topePantalla, `toma ${i}, cuadro ${f}`).toBeGreaterThanOrEqual(FONDO_SUBTITULO);
+          const esFeed = t.focos.some((r) => r.alto === POST_NOMBRADO.alto + 130);
+          if (esFeed) expect(ocupacion({ ...POST_NOMBRADO, x: POST_NOMBRADO.x + celular.x, y: POST_NOMBRADO.y + celular.y }, cam), `toma ${i}, cuadro ${f}`).toBeGreaterThanOrEqual(0.5);
+          revisados++;
+        }
+      });
+      expect(revisados).toBeGreaterThan(20);
     });
 
     it("casi todas las acciones (>= 85%) ya están encuadradas ~0,3 s después de su palabra", () => {
@@ -204,5 +225,21 @@ describe("cuadro 0 completo (nunca el celular vacío)", () => {
       expect((h.match(/<img src="[^"]*ilustrado\/post-/g) ?? []).length + (h.match(/<img[^>]*src="foto.jpg"/g) ?? []).length).toBeGreaterThanOrEqual(2);
     });
   }
+});
+
+describe("chat que abre el reel (pieza 9c3bec9f, QC: 'pantalla vacía' en el inicio)", () => {
+  it("en el cuadro 0 ya se ven la fecha y la primera burbuja, completas", () => {
+    const plan = {
+      frases: [
+        { escena_id: "e1", acciones: [{ escena: "chat" as const, accion: "llega_mensaje", palabra: 1 }] },
+        { escena_id: "e2", acciones: [{ escena: "chat" as const, accion: "responde", palabra: 2 }] },
+      ],
+    };
+    const reel = prepararReel(tiemposSinteticos(), plan, 30);
+    const h = renderToStaticMarkup(createElement(MundoIlustrado, { frame: 0, fps: 30, reel, paleta: paletaNoche(TEMA), tema: TEMA, marca: MARCA_PROTOTIPO, fotoUrl: "foto.jpg" }));
+    expect(h).toContain(">Hoy<");
+    const burbuja = h.slice(0, h.indexOf("Hola"));
+    expect(burbuja.slice(burbuja.lastIndexOf("opacity:"))).toMatch(/^opacity:1[;"]/);
+  });
 });
 

@@ -13,7 +13,9 @@ import type { PropsEscena } from "./tipos";
 
 // ---------- Feed ----------
 const POSTS: TipoPost[] = ["comida", "anuncio", "paisaje", "mascota", "anuncio", "ropa", "anuncio", "comida", "paisaje", "anuncio", "mascota", "ropa", "anuncio", "comida"];
-const centrar = (k: number) => k * ALTO_POST - (PANTALLA.alto - ALTO_BARRA_FEED - ALTO_POST) / 2;
+// La publicación "centrada" queda justo debajo de la barra de la app: la
+// cámara ancla la pantalla debajo del subtítulo (catalogo.ts, ZONA_POST).
+const centrar = (k: number) => k * ALTO_POST;
 const siguienteAnuncio = (desde: number) => {
   const i = POSTS.findIndex((t, k) => k > desde && t === "anuncio");
   return i === -1 ? Math.min(POSTS.length - 1, Math.floor(desde) + 1) : i;
@@ -100,7 +102,8 @@ export function PantallaFeed({ frame, fps, d, marca, fotoUrl, recursos }: PropsE
   const opacidadMano = mano ? 1 - rampa(frame, mano.cuadro + 18, 8) : 0;
   const tocando = mano?.accion === "se_detiene";
   const progresoMano = mano ? rampa(frame, mano.cuadro, 14) : 0;
-  const manoY = tocando ? 1000 : 1150 - 650 * progresoMano;
+  // El toque cae sobre la foto de la publicación (debajo de la barra).
+  const manoY = tocando ? 500 : 1150 - 650 * progresoMano;
   const manoEscala = tocando && mano ? 1 - 0.18 * Math.sin(Math.min(1, Math.max(0, (frame - (mano.cuadro - 6)) / 16)) * Math.PI) : 1;
   return (
     <>
@@ -155,11 +158,19 @@ function Mano({ x, y, escala, opacidad = 1 }: { x: number; y: number; escala: nu
 const VERDE_RESPUESTA = "#0F7A3C";
 const HORAS = ["10:42", "10:42", "10:43", "10:43", "10:44", "10:44"];
 
-export function PantallaChat({ frame, fps, d, marca }: PropsEscena) {
+// Si el primer mensaje llega poco después de abrir el chat, ya se ve al
+// abrirlo: el chat nunca arranca vacío (QC de staging, 23 nov 2026).
+const ADELANTAR_PRIMER_MENSAJE = 45; // cuadros (1,5 s)
+
+export function PantallaChat({ frame, fps, d, marca, desdePantalla }: PropsEscena) {
   const aparece = (desde: number) => (frame >= desde ? spring({ frame: frame - desde, fps, config: { damping: 13 } }) : 0);
   const items = [
-    ...(d.llega_mensaje ?? []).map((cuadro, k) => ({ tipo: "cliente" as const, cuadro, texto: marca.chat.cliente[k % marca.chat.cliente.length] })),
-    ...(d.responde ?? []).slice(0, 1).map((cuadro) => ({ tipo: "tienda" as const, cuadro, texto: marca.chat.respuesta })),
+    ...(d.llega_mensaje ?? []).map((cuadro, k) => {
+      // El primero, si llega poco después de abrir el chat, ya está al abrirlo (sin animación).
+      const inmediato = k === 0 && desdePantalla !== undefined && cuadro - desdePantalla <= ADELANTAR_PRIMER_MENSAJE;
+      return { tipo: "cliente" as const, cuadro: inmediato ? Math.min(cuadro, desdePantalla!) : cuadro, inmediato, texto: marca.chat.cliente[k % marca.chat.cliente.length] };
+    }),
+    ...(d.responde ?? []).slice(0, 1).map((cuadro) => ({ tipo: "tienda" as const, cuadro, inmediato: false, texto: marca.chat.respuesta })),
   ].sort((a, b) => a.cuadro - b.cuadro);
   const venta = primero(d.se_vuelve_venta);
   const indiceBolsa = venta === undefined ? -1 : items.map((it, i) => ({ it, i })).filter(({ it }) => it.tipo === "cliente" && it.cuadro <= venta).pop()?.i ?? -1;
@@ -180,9 +191,10 @@ export function PantallaChat({ frame, fps, d, marca }: PropsEscena) {
         </div>
       </div>
       {/* Lugar de cada mensaje reservado desde el inicio: nada se corre cuando llega otro. */}
-      <div style={{ display: "flex", flexDirection: "column", gap: 22, padding: "70px 30px 0" }}>
+      <div style={{ display: "flex", flexDirection: "column", gap: 22, padding: "30px 30px 0" }}>
+        <div style={{ alignSelf: "center", padding: "6px 18px", borderRadius: 16, background: "#E6E6EC", color: "#4b4b55", fontSize: 22, fontWeight: 600 }}>Hoy</div>
         {items.map((it, i) => {
-          const a = aparece(it.cuadro);
+          const a = it.inmediato ? (frame >= it.cuadro ? 1 : 0) : aparece(it.cuadro);
           if (it.tipo === "tienda") {
             return (
               <div key={i} style={{ alignSelf: "flex-end", display: "flex", flexDirection: "column", alignItems: "flex-end", gap: 10, opacity: a }}>
@@ -209,6 +221,11 @@ export function PantallaChat({ frame, fps, d, marca }: PropsEscena) {
             </div>
           );
         })}
+      </div>
+      {/* Barra para escribir, como en cualquier app de chat. */}
+      <div style={{ position: "absolute", left: 24, right: 24, bottom: 40, height: 96, borderRadius: 48, background: "#fff", border: "2px solid #E2E2E8", display: "flex", alignItems: "center", padding: "0 30px", gap: 18 }}>
+        <span style={{ flex: 1, fontSize: 30, color: "#8a8a96" }}>Escribe un mensaje</span>
+        <div style={{ width: 64, height: 64, borderRadius: 32, background: marca.colorMarca }} />
       </div>
     </div>
   );

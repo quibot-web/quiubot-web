@@ -19,11 +19,11 @@ describe("marca del reel ilustrado desde el tema (fase 2)", () => {
 });
 
 describe("foto del reel ilustrado", () => {
-  it("prefiere una foto de la pieza sin texto encima; si no hay, cualquier imagen; sin imágenes, ninguna", () => {
+  it("solo una foto analizada y sin texto; nunca una captura con texto ni una foto sin analizar (sin foto apta: tarjeta de marca)", () => {
     const medios = { a: { url: "a.jpg", tipo: "imagen" as const }, b: { url: "b.jpg", tipo: "imagen" as const }, v: { url: "v.mp4", tipo: "video" as const } };
-    const analisis = { a: { tiene_texto: true }, b: { tiene_texto: false } } as never;
-    expect(fotoParaReelIlustrado({ analisisPiezas: analisis }, medios)).toBe("b.jpg");
-    expect(fotoParaReelIlustrado({ analisisPiezas: undefined }, medios)).toBe("a.jpg");
+    expect(fotoParaReelIlustrado({ analisisPiezas: { a: { tiene_texto: true }, b: { tiene_texto: false } } as never }, medios)).toBe("b.jpg");
+    expect(fotoParaReelIlustrado({ analisisPiezas: { a: { tiene_texto: true }, b: { tiene_texto: true } } as never }, medios)).toBeUndefined();
+    expect(fotoParaReelIlustrado({ analisisPiezas: undefined }, medios)).toBeUndefined();
     expect(fotoParaReelIlustrado({ analisisPiezas: undefined }, { v: medios.v })).toBeUndefined();
   });
 });
