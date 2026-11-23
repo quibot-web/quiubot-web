@@ -356,6 +356,12 @@ export default function ColaDeRender({
           ? `(~${Math.round(segundosPorSegundoDeVideo)}x la duración real por pieza, medido en esta sesión en ${navegador})`
           : `(calculando tiempo… en ${navegador})`}
       </div>
+      {/* Safari arma los videos más lento que Chrome (medido: reel ilustrado
+          con voz 5,48 s por segundo de video en Safari vs. 2,23 en Chrome,
+          staging 23 nov 2026) y más todavía si la pestaña no está al frente. */}
+      {navegador.startsWith("Safari") && (
+        <div style={{ fontSize: 12, color: "#7A4D00", background: "#FFF4D1", borderRadius: 8, padding: "6px 10px", marginBottom: 10 }}>En Chrome tu video se arma más rápido.</div>
+      )}
       {entradas.map(([id, estado]) => {
         const pieza = piezasAprobadas.find((p) => p.id === id);
         return (

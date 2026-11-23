@@ -119,6 +119,9 @@ export default function AdminReelIlustradoPruebaClient() {
       <p style={{ fontSize: 13, color: "#555", marginBottom: 20 }}>
         Navegador: <strong>{entorno.navegador}</strong> · Equipo: {entorno.equipo}
       </p>
+      {entorno.navegador.startsWith("Safari") && (
+        <p style={{ fontSize: 13, color: "#7A4D00", background: "#FFF4D1", borderRadius: 8, padding: "8px 12px", marginBottom: 20 }}>En Chrome tu video se arma más rápido.</p>
+      )}
 
       {fase === "generando_voz" && <p>Generando la voz y los tiempos por palabra…</p>}
       {fase === "renderizando" && (
