@@ -17,6 +17,7 @@ import type { MediosResueltos } from "../escenas/tipos";
 import { familiaDeFuente } from "../fuentes";
 import { FondoMarca } from "../capas/FondoMarca";
 import { CapaLogo } from "../capas/Logo";
+import { ChipSerie } from "../capas/ChipSerie";
 import { CapaBucleAudio } from "./CapaBucleAudio";
 import { ZonaSegura } from "../capas/ZonaSegura";
 import { CapaVoz } from "./CapaVoz";
@@ -325,6 +326,7 @@ export function ReelAutomatico({ guion, medios, pistaMusicaUrl, efectos = [], mo
       {nodosEscenas}
 
       <CapaLogo tema={tema} />
+      <ChipSerie serie={guion.serie} />
       <CapaBucleAudio guion={guion} />
       {pistaMusicaUrl && (
         <CapaMusicaConDucking url={pistaMusicaUrl} volumenNormal={guion.musica.volumen} volumenConVoz={guion.musica.volumen * 0.3} inicioVoz_s={primeraInicio_s} finVoz_s={ultimaFin_s} />

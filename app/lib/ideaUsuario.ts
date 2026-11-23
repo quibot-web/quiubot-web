@@ -157,3 +157,36 @@ export function detectarDatosInventados(textosGuion: string[], fuentesReales: st
   }
   return [...new Set(problemas)];
 }
+
+// ---------- Series (24 nov 2026): cada parte funciona sola y se siente serie ----------
+export type ContextoSerie = { parte: number; total: number; ideaAnterior?: string | null; ideaSiguiente?: string | null };
+
+// "Parte 2 de 3.\n..." -> { parte: 2, total: 3 } (el encabezado que pone
+// la propuesta de serie al comienzo de la idea de cada parte).
+export function serieDesdeIdea(idea: string | null | undefined): { parte: number; total: number } | null {
+  const m = /^\s*parte (\d) de (\d)\b/i.exec(idea ?? "");
+  if (!m) return null;
+  const parte = Number(m[1]);
+  const total = Number(m[2]);
+  return total >= 2 && total <= MAX_PARTES_SERIE && parte >= 1 && parte <= total ? { parte, total } : null;
+}
+
+const ADELANTO = /\b(ma[nñ]ana|pr[oó]xim[oa]|siguiente|en la parte (dos|tres|2|3)|la otra parte|despu[eé]s te (muestro|cuento|ense[nñ]o))\b/i;
+const LLAMADO = /\b(gu[aá]rd(a|alo|ala|en)|s[ií]gue(me|nos)?|s[ií]guenos)\b/i;
+const REPASO = /\b(ayer|en la parte (uno|dos|1|2)|en el (reel|video) anterior|antes (vimos|te mostr[eé])|ya (viste|vimos)|la vez pasada|recuerda que)\b/i;
+
+// Problemas de una parte de serie (para el reintento de la IA). Los
+// textos van en orden: gancho primero, cierre al final.
+export function problemasDeParteDeSerie(narraciones: string[], serie: ContextoSerie): string[] {
+  const problemas: string[] = [];
+  const inicio = narraciones.slice(0, 2).join(" ");
+  const cierre = narraciones.slice(-2).join(" ");
+  if (serie.parte < serie.total) {
+    if (!ADELANTO.test(cierre)) problemas.push(`parte ${serie.parte} de ${serie.total}: el cierre tiene que adelantar en concreto lo que viene en la parte ${serie.parte + 1} (ej. "Mañana: cómo ...")`);
+    if (!LLAMADO.test(cierre)) problemas.push(`parte ${serie.parte} de ${serie.total}: el cierre tiene que pedir guardar el reel o seguir la cuenta para no perderse la siguiente parte`);
+  }
+  if (serie.parte > 1 && !REPASO.test(inicio)) {
+    problemas.push(`parte ${serie.parte} de ${serie.total}: después del gancho, repasa en UNA frase lo de la parte anterior (ej. "Ayer viste que ..."), para que quien llega nuevo entienda`);
+  }
+  return problemas;
+}

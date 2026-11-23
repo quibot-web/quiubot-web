@@ -9,6 +9,7 @@ import type { TemaGuion } from "../tema";
 import { paletaNoche } from "../estilos/estilos";
 import { CapaVoz } from "../visuales/CapaVoz";
 import { CapaMusicaConDucking } from "../visuales/CapaMusicaConDucking";
+import { textoSerie } from "../capas/ChipSerie";
 import { construirLineaDeTiempo, type TiemposIlustrado } from "./tiempoIlustrado";
 import { MundoIlustrado } from "./motor/MundoIlustrado";
 import { Subtitulo } from "./motor/Subtitulo";
@@ -30,6 +31,8 @@ export type PropsReelIlustrado = {
   // Música de fondo con ducking bajo la voz (como ReelAutomatico).
   pistaMusicaUrl?: string | null;
   volumenMusica?: number;
+  // Parte de una serie: "Parte k de N" al inicio.
+  serie?: { parte: number; total: number };
 };
 
 const FPS = 30;
@@ -40,7 +43,7 @@ export function duracionReelIlustrado(props: Pick<PropsReelIlustrado, "tiempos">
   return Math.max(1, construirLineaDeTiempo(props.tiempos, FPS).duracionCuadros);
 }
 
-export function ReelIlustrado({ tiempos, plan, vozUrl, fotoUrl, tema, marca, pistaMusicaUrl, volumenMusica = 0.35 }: PropsReelIlustrado) {
+export function ReelIlustrado({ tiempos, plan, vozUrl, fotoUrl, tema, marca, pistaMusicaUrl, volumenMusica = 0.35, serie }: PropsReelIlustrado) {
   const frame = useCurrentFrame();
   const { fps } = useVideoConfig();
   const reel = useMemo(() => prepararReel(tiempos, plan, fps), [tiempos, plan, fps]);
@@ -76,7 +79,7 @@ export function ReelIlustrado({ tiempos, plan, vozUrl, fotoUrl, tema, marca, pis
   return (
     <AbsoluteFill style={{ fontFamily: familiaDeFuente(tema.fuente), background: paleta.fondoProfundo, overflow: "hidden" }}>
       {listo && <MundoIlustrado frame={frame} fps={fps} reel={reel} paleta={paleta} tema={tema} marca={marca} fotoUrl={listo.foto} recursos={listo.recursos} />}
-      <Subtitulo linea={reel.linea} frame={frame} luz={paleta.luz} />
+      <Subtitulo linea={reel.linea} frame={frame} luz={paleta.luz} etiqueta={serie ? textoSerie(serie) : null} />
       {pistaMusicaUrl && reel.linea.palabras.length > 0 && (
         <CapaMusicaConDucking
           url={pistaMusicaUrl}

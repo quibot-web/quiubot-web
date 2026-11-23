@@ -369,7 +369,9 @@ describe("generarGuionConVoz", () => {
     it("idea que no cabe: la IA propone la serie y se devuelve SIN pagar la voz ni reintentar", async () => {
       const fetchMock = vi.fn().mockResolvedValue(respuestaOpenAI({ no_cabe: true, motivo: "Son muchos pasos para 30 segundos.", partes: [{ titulo: "Parte 1", idea: "primeros pasos" }, { titulo: "Parte 2", idea: "últimos pasos" }] }));
       vi.stubGlobal("fetch", fetchMock);
-      const r = await generarGuionConVoz(conIdea(`${IDEA}\nAdemás quiero explicar cómo armar un catálogo y cómo usar etiquetas, con ejemplos de mi tienda y de mis clientes de este año.`));
+      // Idea en prosa, sin puntos marcados: ahí la IA sí puede proponer serie.
+      const prosa = "Quiero contar toda la historia de cómo pasamos de vender por un local a vender por WhatsApp: qué cambiamos en los anuncios, cómo armamos el catálogo, cómo usamos etiquetas, cómo respondemos, cómo cobramos y cómo hacemos seguimiento, con ejemplos de mis clientes de este año y de los errores que cometimos al principio.";
+      const r = await generarGuionConVoz(conIdea(prosa));
       expect(r.ok).toBe(false);
       if (r.ok) return;
       expect(r.status).toBe(422);
@@ -400,6 +402,83 @@ describe("generarGuionConVoz", () => {
         expect((r.resumenErrores ?? []).join(" ")).toMatch(/envío gratis/);
       }
       expect(generarVozMock).not.toHaveBeenCalled();
+    });
+
+    it("caso real: idea de 3 puntos con ejemplos (~170 palabras) va en UN solo reel aunque la IA intente partirla", async () => {
+      const ejemplo = "Ejemplo de mi tienda: una clienta escribió un domingo a las nueve de la noche preguntando por el estuche azul, le respondimos al día siguiente y ya le había comprado a otra marca que sí le contestó enseguida. Desde ese día tenemos respuestas guardadas para las preguntas que más se repiten y alguien de turno revisa los mensajes cada hora. Otro ejemplo: un cliente nos encontró por un anuncio, no vio cómo escribirnos y nos lo contó semanas después en el local; por eso ahora el botón está siempre visible.";
+      const idea = `Quiero un reel para vender más por WhatsApp, con mis palabras y mis ejemplos.\n1. Pon un boton de contacto visible en el anuncio, porque si la persona tiene que buscar cómo escribirte se va.\n2. Conecta tu anuncio con WhatsApp para que el mensaje llegue directo y no se pierda en otra bandeja.\n3. Responde cada mensaje rapido, idealmente en menos de diez minutos.\n${ejemplo}\nCierre: escríbenos y te ayudamos a configurarlo hoy mismo.`;
+      expect(idea.split(/\s+/).length).toBeGreaterThan(150);
+      const fetchMock = vi
+        .fn()
+        .mockResolvedValueOnce(respuestaOpenAI({ no_cabe: true, motivo: "Supera las ochenta palabras.", partes: [{ titulo: "1", idea: "a" }, { titulo: "2", idea: "b" }] }))
+        .mockResolvedValueOnce(respuestaOpenAI(GUION_CON_AUDIO_VALIDO));
+      vi.stubGlobal("fetch", fetchMock);
+      prepararVozOk();
+      const r = await generarGuionConVoz(conIdea(idea));
+      expect(r.ok).toBe(true);
+      if (r.ok) expect(r.intentosGuion).toBe(2);
+      // El reintento le dijo que va en un solo reel, condensando.
+      const promptReintento = JSON.parse(fetchMock.mock.calls[1][1].body).messages[0].content as string;
+      expect(promptReintento).toMatch(/va en UN solo reel de hasta ~50 segundos/);
+    });
+
+    it("'Hazlo en un solo reel (resumido)': aunque tenga 5 puntos, no vale 'no_cabe'", async () => {
+      const idea = "Cinco errores.\n1. Pon un boton de contacto visible\n2. Conecta tu anuncio con WhatsApp\n3. Responde cada mensaje rapido\n4. Marca lista\n5. Siguenos";
+      const fetchMock = vi.fn().mockResolvedValueOnce(respuestaOpenAI({ no_cabe: true, motivo: "m", partes: [{ titulo: "1", idea: "a" }, { titulo: "2", idea: "b" }] })).mockResolvedValueOnce(respuestaOpenAI(GUION_CON_AUDIO_VALIDO));
+      vi.stubGlobal("fetch", fetchMock);
+      prepararVozOk();
+      const base = conIdea(idea);
+      const r = await generarGuionConVoz({ ...base, entrada: { ...base.entrada, unSoloReel: true } });
+      expect(r.ok).toBe(true);
+      expect(JSON.parse(fetchMock.mock.calls[0][1].body).messages[0].content).toMatch(/UN SOLO reel resumido/);
+    });
+
+    describe("partes de una serie: cada una funciona sola y se siente serie", () => {
+      const conEscenas = (cambios: Record<string, string>) => ({ ...GUION_CON_AUDIO_VALIDO, escenas: GUION_CON_AUDIO_VALIDO.escenas.map((e) => (cambios[e.id] ? { ...e, narracion: cambios[e.id] } : e)) });
+      const parte = (n: number, total: number) => {
+        const base = conIdea(`Parte ${n} de ${total}.\nVender por WhatsApp sin perder clientes, contado con ejemplos de mi tienda y mis propias palabras.`);
+        return { ...base, entrada: { ...base.entrada, serie: { parte: n, total, ideaAnterior: n > 1 ? "Parte 1: botón y conexión" : null, ideaSiguiente: n < total ? "Parte 2: responder rápido" : null } } };
+      };
+
+      it("parte 1 sin adelanto ni llamados al cierre: se rechaza", async () => {
+        vi.stubGlobal("fetch", vi.fn().mockResolvedValue(respuestaOpenAI(conEscenas({ e6: "Gracias por ver hasta el final" }))));
+        prepararVozOk();
+        const r = await generarGuionConVoz(parte(1, 2));
+        expect(r.ok).toBe(false);
+        if (!r.ok) {
+          expect((r.resumenErrores ?? []).join(" ")).toMatch(/adelantar en concreto lo que viene en la parte 2/);
+          expect((r.resumenErrores ?? []).join(" ")).toMatch(/guardar el reel o seguir la cuenta/);
+        }
+      });
+
+      it("parte 1 con adelanto ('Mañana: cómo ...') y llamados (guarda, síguenos): pasa y el guion queda marcado como Parte 1 de 2", async () => {
+        vi.stubGlobal("fetch", vi.fn().mockResolvedValue(respuestaOpenAI(conEscenas({ e5: "Mañana: cómo responder sin perder ventas", e6: "Guárdalo y síguenos ya" }))));
+        prepararVozOk();
+        const r = await generarGuionConVoz(parte(1, 2));
+        expect(r.ok).toBe(true);
+        if (r.ok) expect(r.guion.serie).toEqual({ parte: 1, total: 2 });
+      });
+
+      it("parte 2 sin repaso de la parte 1: se rechaza; con 'Ayer viste que ...': pasa", async () => {
+        vi.stubGlobal("fetch", vi.fn().mockResolvedValue(respuestaOpenAI(GUION_CON_AUDIO_VALIDO)));
+        prepararVozOk();
+        const sinRepaso = await generarGuionConVoz(parte(2, 2));
+        expect(sinRepaso.ok).toBe(false);
+        if (!sinRepaso.ok) expect((sinRepaso.resumenErrores ?? []).join(" ")).toMatch(/repasa en UNA frase lo de la parte anterior/);
+        vi.stubGlobal("fetch", vi.fn().mockResolvedValue(respuestaOpenAI(conEscenas({ e2: "Ayer viste el boton: primero pon un boton de contacto visible" }))));
+        const conRepaso = await generarGuionConVoz(parte(2, 2));
+        expect(conRepaso.ok).toBe(true);
+        if (conRepaso.ok) expect(conRepaso.guion.serie).toEqual({ parte: 2, total: 2 });
+      });
+
+      it("una parte de serie nunca puede responder 'no_cabe' (se pide condensar)", async () => {
+        const fetchMock = vi.fn().mockResolvedValueOnce(respuestaOpenAI({ no_cabe: true, motivo: "m", partes: [{ titulo: "1", idea: "a" }, { titulo: "2", idea: "b" }] })).mockResolvedValue(respuestaOpenAI(conEscenas({ e5: "Mañana: cómo responder sin perder ventas", e6: "Guárdalo y síguenos ya" })));
+        vi.stubGlobal("fetch", fetchMock);
+        prepararVozOk();
+        const r = await generarGuionConVoz(parte(1, 2));
+        expect(r.ok).toBe(true);
+        expect(JSON.parse(fetchMock.mock.calls[1][1].body).messages[0].content).toMatch(/parte de una serie: tiene que caber en UN reel/);
+      });
     });
 
     it("idea corta (un tema): se genera como siempre, sin exigir puntos", async () => {

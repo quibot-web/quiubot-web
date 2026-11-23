@@ -412,6 +412,8 @@ export const GuionSchema = z
     // Solo cuentas de REELS_ILUSTRADOS_EMAILS; sin él, el reel usa
     // "estilo" (respaldo). Estricto: ningún campo de texto en pantalla.
     ilustrado: PlanIlustradoSchema.optional(),
+    // Parte de una serie (24 nov 2026): el reel muestra "Parte k de N" al inicio.
+    serie: z.object({ parte: z.number().int().min(1).max(3), total: z.number().int().min(2).max(3) }).strict().optional(),
   })
   // Invariantes que no dependen de la receta del objetivo/orgánica --
   // las que sí dependen (orden de bloques, rango de duracion, escenas

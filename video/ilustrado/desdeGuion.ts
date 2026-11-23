@@ -46,5 +46,6 @@ export function propsReelIlustradoDesdeGuion(guion: Guion, medios: MediosResuelt
     marca: marcaDesdeTema(guion.tema),
     pistaMusicaUrl,
     volumenMusica: guion.musica.volumen,
+    ...(guion.serie ? { serie: guion.serie } : {}),
   };
 }

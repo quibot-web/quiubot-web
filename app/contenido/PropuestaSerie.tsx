@@ -19,7 +19,22 @@ function sumarDias(ymd: string, dias: number): string {
   return fechaBogota(d);
 }
 
-export default function PropuestaSerie({ piezaId, programadaPara, propuesta, onCreada, onCancelar }: { piezaId: string; programadaPara: string; propuesta: Propuesta; onCreada: () => void; onCancelar: () => void }) {
+export default function PropuestaSerie({
+  piezaId,
+  programadaPara,
+  propuesta,
+  onCreada,
+  onCancelar,
+  onUnSoloReel,
+}: {
+  piezaId: string;
+  programadaPara: string;
+  propuesta: Propuesta;
+  onCreada: () => void;
+  onCancelar: () => void;
+  // "Hazlo en un solo reel (resumido)": el usuario prefiere no partirla.
+  onUnSoloReel: () => void;
+}) {
   const base = fechaBogota(new Date(programadaPara)) < hoyBogota() ? hoyBogota() : fechaBogota(new Date(programadaPara));
   const hora = horaBogota(programadaPara);
   // Por defecto, un reel por día a la misma hora; cada fecha se puede cambiar.
@@ -66,9 +81,12 @@ export default function PropuestaSerie({ piezaId, programadaPara, propuesta, onC
         </div>
       ))}
       {error && <p style={{ fontSize: 12.5, color: "#b91c1c", margin: "0 0 8px" }}>{error}</p>}
-      <div style={{ display: "flex", gap: 8, justifyContent: "flex-end" }}>
+      <div style={{ display: "flex", gap: 8, justifyContent: "flex-end", flexWrap: "wrap" }}>
         <button type="button" onClick={onCancelar} disabled={creando} style={{ padding: "8px 14px", borderRadius: 8, border: "1px solid #ccc", background: "#fff", fontWeight: 600, cursor: "pointer" }}>
           Volver a mi idea
+        </button>
+        <button type="button" onClick={onUnSoloReel} disabled={creando} style={{ padding: "8px 14px", borderRadius: 8, border: "1px solid #534AB7", background: "#fff", color: "#534AB7", fontWeight: 700, cursor: "pointer" }}>
+          Hazlo en un solo reel (resumido)
         </button>
         <button type="button" onClick={crear} disabled={creando} style={{ padding: "8px 14px", borderRadius: 8, border: "none", background: "#534AB7", color: "#fff", fontWeight: 700, cursor: "pointer" }}>
           {creando ? "Creando…" : `Crear la serie de ${partes.length} reels`}

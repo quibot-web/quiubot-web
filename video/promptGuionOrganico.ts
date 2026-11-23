@@ -11,7 +11,7 @@ import type { PiezaDisponible } from "./promptGuion";
 import { TIPOS_VISUAL_DOS_ESTADOS } from "./visuales/schema";
 import { NOMBRES_ICONOS } from "./nombresIconos";
 import { LIMITES_TEXTO_GIGANTE } from "./estilos/textoGigante";
-import { MAX_PARTES_SERIE, MAX_PUNTOS_POR_REEL, clasificarIdea } from "../app/lib/ideaUsuario";
+import { MAX_PARTES_SERIE, MAX_PUNTOS_POR_REEL, clasificarIdea, type ContextoSerie } from "../app/lib/ideaUsuario";
 
 // Resumen de un producto/servicio del catálogo (app/lib/productos.ts)
 // -- solo los campos que describen QUÉ es, nunca más (ver seccionNegocio).
@@ -41,6 +41,11 @@ export interface EntradaGuionOrganico {
   // si viene, el guion tiene que tratar ESE tema, no cualquier tema
   // genérico de la receta. Lo llenará el Director en el commit 7.
   tema: string | null;
+  // Parte de una serie (la idea viene de una propuesta de serie): reglas
+  // para que cada parte funcione sola y se sienta serie.
+  serie?: ContextoSerie | null;
+  // El usuario eligió "Hazlo en un solo reel (resumido)".
+  unSoloReel?: boolean;
   // Producto/servicio del catálogo elegido para ESTA pieza (columna
   // producto_id, "Agregar reel") -- distinto de "productos", que es el
   // catálogo entero como contexto del negocio. Antes nunca llegaba al
@@ -305,7 +310,34 @@ function estructuraConsejosNumeradosAudio(piezas: PiezaDisponible[]): string {
 // el producto de la pieza van ARRIBA de todo y se dicen como eje, no
 // como un dato más; y los consejos se deciden ANTES que los visuales
 // (el visual se elige para mostrar el consejo, nunca al revés).
-export function seccionEjeDelReel(entrada: Pick<EntradaGuionOrganico, "tema" | "productoPieza">): string {
+// Largo del reel con idea del usuario (24 nov 2026, caso real: una idea
+// de 3 puntos con ejemplos se partía en 2 reels por "más de 80 palabras").
+// Primero se intenta UN reel de hasta ~50 s condensando ejemplos y frases.
+export const SEGUNDOS_MAX_REEL_IDEA = 50;
+export const PALABRAS_MAX_CONSEJO_IDEA = 28;
+
+function instruccionesDeLargo(entrada: Pick<EntradaGuionOrganico, "tema" | "serie" | "unSoloReel">): string[] {
+  const serie = entrada.serie;
+  if (serie) {
+    const lineas = [
+      `- Este reel es la PARTE ${serie.parte} DE ${serie.total} de una serie. Tiene que funcionar SOLO y sentirse serie: gancho propio (no "en la parte anterior..." como gancho), y si nombra un problema, da su solución en este mismo reel (nunca el problema en una parte y la solución en otra). El código ya muestra "Parte ${serie.parte} de ${serie.total}" en pantalla al inicio.`,
+      `- Hasta ~${SEGUNDOS_MAX_REEL_IDEA} segundos: condensa ejemplos y frases para que quepa (cada escena de consejo puede llevar hasta ~${PALABRAS_MAX_CONSEJO_IDEA} palabras de narración). Nunca respondas "no_cabe".`,
+    ];
+    if (serie.parte > 1) lineas.push(`- Después del gancho, repasa en UNA frase lo de la parte ${serie.parte - 1} (ej. "Ayer viste que ..."), para quien llega nuevo.${serie.ideaAnterior ? ` La parte ${serie.parte - 1} trató: """${serie.ideaAnterior.slice(0, 400)}"""` : ""}`);
+    if (serie.parte < serie.total) lineas.push(`- El cierre adelanta en concreto lo que viene en la parte ${serie.parte + 1} (ej. "Mañana: cómo ...") y pide guardar el reel y seguir la cuenta para no perdérsela.${serie.ideaSiguiente ? ` La parte ${serie.parte + 1} trata: """${serie.ideaSiguiente.slice(0, 400)}"""` : ""}`);
+    return lineas;
+  }
+  if (entrada.unSoloReel) {
+    return [`- El usuario pidió hacerla en UN SOLO reel resumido: condensa todo en hasta ~${SEGUNDOS_MAX_REEL_IDEA} segundos (puedes juntar dos de sus puntos en una escena de consejo, en su orden), sin quitar ningún punto ni cambiar su mensaje. NUNCA respondas "no_cabe".`];
+  }
+  return [
+    `- Primero intenta UN solo reel de hasta ~${SEGUNDOS_MAX_REEL_IDEA} segundos (unas 130 palabras de voz en total): condensa sus ejemplos y frases, sin quitar ningún punto ni cambiar su mensaje. En este reel cada escena de consejo puede llevar hasta ~${PALABRAS_MAX_CONSEJO_IDEA} palabras de narración (en lugar de 7 a 16) para que quepa su ejemplo.`,
+    `- Si la idea trae ${MAX_PUNTOS_POR_REEL} puntos o menos, NUNCA respondas "no_cabe": va en un solo reel. Solo si trae más de ${MAX_PUNTOS_POR_REEL} puntos, o si es un texto sin puntos que aun condensado pasaría de ~${SEGUNDOS_MAX_REEL_IDEA} segundos, NO la recortes ni la resumas en silencio: responde SOLO este JSON, que la divide en 2 a ${MAX_PARTES_SERIE} reels con TODO su contenido en su orden, y donde cada parte tiene sentido sola (su problema Y su solución en la misma parte):
+{"no_cabe": true, "motivo": "por qué no cabe, en una frase para el usuario", "partes": [{"titulo": "...", "idea": "la parte de la idea del usuario que va en este reel, con sus palabras"}]}`,
+  ];
+}
+
+export function seccionEjeDelReel(entrada: Pick<EntradaGuionOrganico, "tema" | "productoPieza" | "serie" | "unSoloReel">): string {
   const lineas: string[] = ["EJE DEL REEL (lo más importante de este guion -- todo el reel gira alrededor de esto):"];
   const tema = entrada.tema?.trim();
   const producto = entrada.productoPieza;
@@ -319,8 +351,7 @@ ${tema}
 """`,
       `- Respeta sus puntos, en SU orden, sus ejemplos y sus frases (también su frase de cierre). Solo adáptalos al formato reel: gancho, frases cortas para la voz, la duración y las reglas de siempre. NO agregues puntos que el usuario no pidió ni cambies lo que quiere decir. Si trae menos de ${MAX_PUNTOS_POR_REEL} puntos, completa las escenas de consejo con SU ejemplo o SU desarrollo, nunca con puntos nuevos.`,
       `- Los datos que el usuario escribió en su idea (precio, horario, envío, promociones, condiciones) son datos REALES de la marca: puedes decirlos y mostrarlos tal cual, aunque arriba diga que no menciones precios ni ofertas. Cualquier dato que NO escribió (ni está en QUÉ HACE ESTE NEGOCIO) sigue prohibido: no lo inventes.`,
-      `- Si la idea NO cabe en un reel de ~30 segundos (más de ${MAX_PUNTOS_POR_REEL} puntos o más contenido del que se puede decir en ~80 palabras), NO la recortes ni la resumas en silencio: responde SOLO este JSON, que divide la idea en 2 a ${MAX_PARTES_SERIE} reels con TODOS sus puntos en su orden:
-{"no_cabe": true, "motivo": "por qué no cabe, en una frase para el usuario", "partes": [{"titulo": "...", "idea": "la parte de la idea del usuario que va en este reel, con sus palabras"}]}`
+      ...instruccionesDeLargo(entrada)
     );
   } else if (tema) {
     lineas.push(

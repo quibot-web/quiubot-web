@@ -192,13 +192,13 @@ describe("presupuesto de render (rendimiento en el navegador)", () => {
       const h = html(f);
       expect(h, `cuadro ${f}`).not.toMatch(/filter:|box-shadow|radial-gradient|background[^;"]*url\(/);
     }
-  });
+  }, 20_000); // renderiza muchos cuadros: con la máquina cargada pasa de 5 s
 
   it("cantidad de elementos por cuadro acotada (solo se dibuja lo que la cámara ve)", () => {
     let maximo = 0;
     for (const f of muestras) maximo = Math.max(maximo, (html(f).match(/<[a-z]/g) ?? []).length);
     expect(maximo).toBeLessThanOrEqual(PRESUPUESTO_ELEMENTOS);
-  });
+  }, 20_000);
 
   it("el feed solo dibuja las publicaciones que se ven", () => {
     const frame = reel.disparos.find((d) => d.accion === "aparece_anuncio")!.cuadro + 20;

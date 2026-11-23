@@ -25,7 +25,7 @@ import type { RecetaOrganicaId } from "@/video/guion.schema";
 import { obtenerSaludInstagram } from "@/app/lib/metaInstagramSalud";
 import { generarGuionConVoz } from "@/app/lib/videoOrganico/generarGuionConVoz";
 import { reelIlustradoActivo } from "@/app/lib/reelIlustrado";
-import { clasificarIdea, proponerSerie } from "@/app/lib/ideaUsuario";
+import { clasificarIdea, proponerSerie, serieDesdeIdea, type ContextoSerie } from "@/app/lib/ideaUsuario";
 import { erroresDatosDelGuion } from "@/app/lib/videoOrganico/datosReales";
 import { VENTANA_ROTACION } from "@/video/estilos/estilos";
 
@@ -96,8 +96,21 @@ async function llamarOpenAI(apiKey: string, prompt: string): Promise<string> {
   }
 }
 
+// Parte de una serie: "Parte k de N" al comienzo de su idea, y las ideas
+// de la parte anterior y la siguiente (para el repaso y el adelanto).
+async function contextoDeSerie(pieza: { id: string; tema: string | null; continua_de_id?: string | null }, userId: string): Promise<ContextoSerie | null> {
+  const serie = serieDesdeIdea(pieza.tema);
+  if (!serie) return null;
+  const [anterior, siguiente] = await Promise.all([
+    pieza.continua_de_id ? supabaseAdmin.from("publicaciones_organicas").select("tema").eq("id", pieza.continua_de_id).eq("user_id", userId).maybeSingle() : Promise.resolve({ data: null }),
+    supabaseAdmin.from("publicaciones_organicas").select("tema").eq("continua_de_id", pieza.id).eq("user_id", userId).neq("estado", "cancelada").maybeSingle(),
+  ]);
+  return { ...serie, ideaAnterior: (anterior.data?.tema as string | null) ?? null, ideaSiguiente: (siguiente.data?.tema as string | null) ?? null };
+}
+
 export async function POST(req: NextRequest, { params }: { params: Promise<{ id: string }> }) {
   const { id } = await params;
+  const cuerpoGuion = (await req.json().catch(() => null)) as { unSoloReel?: unknown } | null;
 
   const session = await auth();
   if (!session?.user?.email) {
@@ -135,7 +148,7 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
 
   const { data: pieza } = await supabaseAdmin
     .from("publicaciones_organicas")
-    .select("id, receta_organica, estado, media_ids, semana, tema, gancho_tipo, producto_id")
+    .select("id, receta_organica, estado, media_ids, semana, tema, gancho_tipo, producto_id, continua_de_id")
     .eq("id", id)
     .eq("user_id", usuario.id)
     .maybeSingle();
@@ -312,6 +325,9 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
     ganchoTipoAsignado: ganchoTipoAsignado as EntradaGuionOrganico["ganchoTipoAsignado"],
     piezas: piezasDisponibles,
     analisisPiezas,
+    serie: await contextoDeSerie(pieza as { id: string; tema: string | null; continua_de_id?: string | null }, usuario.id),
+    // "Hazlo en un solo reel (resumido)", elegido en la propuesta de serie.
+    unSoloReel: cuerpoGuion?.unSoloReel === true,
   };
 
   // Pipeline con voz (narración + TTS + subtítulos sincronizados),
@@ -351,7 +367,7 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
     try {
       // "Tu idea para el video": más de 3 puntos marcados no caben en un
       // reel de ~30 s -- se propone la serie sin gastar IA ni voz.
-      const serie = clasificarIdea(entrada.tema) === "idea" ? proponerSerie(entrada.tema ?? "") : "cabe";
+      const serie = clasificarIdea(entrada.tema) === "idea" && !entrada.serie && !entrada.unSoloReel ? proponerSerie(entrada.tema ?? "") : "cabe";
       if (serie === null) {
         return NextResponse.json({ error: "Tu idea tiene demasiados puntos incluso para una serie de 3 reels. Acórtala o divídela tú en varias ideas." }, { status: 422 });
       }

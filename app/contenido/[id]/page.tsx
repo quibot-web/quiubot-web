@@ -106,11 +106,11 @@ export default function RevisionPiezaPage({ params }: { params: Promise<{ id: st
     })();
   }, [cargar]);
 
-  async function generarGuion() {
+  async function generarGuion(opciones?: { unSoloReel?: boolean }) {
     setGenerando(true);
     setErrorMsg(null);
     try {
-      const res = await fetch(`/api/contenido/${id}/guion`, { method: "POST" });
+      const res = await fetch(`/api/contenido/${id}/guion`, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ unSoloReel: opciones?.unSoloReel === true }) });
       const data = await res.json();
       if (res.status === 422 && data.propuestaSerie) {
         setPropuestaSerie(data.propuestaSerie as PropuestaSerieDatos);
@@ -461,6 +461,10 @@ export default function RevisionPiezaPage({ params }: { params: Promise<{ id: st
                 programadaPara={pieza.programada_para}
                 propuesta={propuestaSerie}
                 onCancelar={() => setPropuestaSerie(null)}
+                onUnSoloReel={async () => {
+                  setPropuestaSerie(null);
+                  await generarGuion({ unSoloReel: true });
+                }}
                 onCreada={async () => {
                   setPropuestaSerie(null);
                   await cargar();
@@ -468,7 +472,7 @@ export default function RevisionPiezaPage({ params }: { params: Promise<{ id: st
                 }}
               />
             )}
-            <button type="button" onClick={generarGuion} disabled={generando} style={botonPrimario}>
+            <button type="button" onClick={() => generarGuion()} disabled={generando} style={botonPrimario}>
               {generando ? "Generando…" : "Generar guion"}
             </button>
           </div>
@@ -478,7 +482,7 @@ export default function RevisionPiezaPage({ params }: { params: Promise<{ id: st
           <div style={{ display: "grid", gridTemplateColumns: "1fr 320px", gap: 24, alignItems: "start" }}>
             <div>
               <div style={{ display: "flex", gap: 10, marginBottom: 12 }}>
-                <button type="button" onClick={generarGuion} disabled={generando} style={botonSecundario}>
+                <button type="button" onClick={() => generarGuion()} disabled={generando} style={botonSecundario}>
                   {generando ? "Regenerando…" : "Regenerar guion"}
                 </button>
               </div>

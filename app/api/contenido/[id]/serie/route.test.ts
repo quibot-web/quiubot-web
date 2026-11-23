@@ -71,6 +71,13 @@ describe("POST /api/contenido/[id]/serie", () => {
     expect(inserciones[1]).toMatchObject({ tema: "Parte 3 de 3. tres", continua_de_id: "nueva-1" });
   });
 
+  it("cada parte lleva 'Parte k de N.' al comienzo de su idea (si la propuesta no lo traía)", async () => {
+    const res = await POST(req({ partes: [{ idea: "botón y conexión", programada_para: manana(1) }, { idea: "responder rápido", programada_para: manana(2) }] }), ctx);
+    expect(res.status).toBe(201);
+    expect(actualizaciones[0]).toMatchObject({ tema: "Parte 1 de 2.\nbotón y conexión" });
+    expect(inserciones[0]).toMatchObject({ tema: "Parte 2 de 2.\nresponder rápido" });
+  });
+
   it("rechaza fechas pasadas, menos de 2 o más de 3 partes, y piezas que ya no están en borrador", async () => {
     expect((await POST(req({ partes: [{ idea: "uno uno", programada_para: manana(-1) }, { idea: "dos dos", programada_para: manana(2) }] }), ctx)).status).toBe(400);
     expect((await POST(req({ partes: [{ idea: "uno uno", programada_para: manana(1) }] }), ctx)).status).toBe(400);

@@ -135,8 +135,8 @@ function respuestaOpenAI(contenidoObjeto: unknown) {
   return { ok: true, json: async () => ({ choices: [{ message: { content: JSON.stringify(contenidoObjeto) } }] }) };
 }
 
-function req() {
-  return new NextRequest("http://localhost/api/contenido/pieza-1/guion", { method: "POST" });
+function req(cuerpo?: unknown) {
+  return new NextRequest("http://localhost/api/contenido/pieza-1/guion", { method: "POST", ...(cuerpo ? { body: JSON.stringify(cuerpo) } : {}) });
 }
 function contexto() {
   return { params: Promise.resolve({ id: "pieza-1" }) };
@@ -575,6 +575,26 @@ describe("POST /api/contenido/[id]/guion -- receta con voz vs. receta de siempre
     expect(res2.status).toBe(422);
     expect((await res2.json()).error).toMatch(/demasiados puntos/);
     expect(generarGuionConVozMock).not.toHaveBeenCalled();
+    vi.unstubAllGlobals();
+  });
+
+  it("'Hazlo en un solo reel (resumido)': con 5 puntos ya no propone serie y le pasa unSoloReel al guion", async () => {
+    piezaActual = { id: "pieza-1", receta_organica: "consejos_numerados", estado: "borrador", media_ids: null, semana: "2026-11-09", tema: "Errores.\n1. uno uno\n2. dos dos\n3. tres tres\n4. cuatro cuatro\n5. cinco cinco", gancho_tipo: "pregunta" };
+    vi.stubGlobal("fetch", vi.fn());
+    generarGuionConVozMock.mockResolvedValue({ ok: false, status: 502, error: "x" });
+    await POST(req({ unSoloReel: true }), contexto());
+    expect(generarGuionConVozMock).toHaveBeenCalledTimes(1);
+    expect(generarGuionConVozMock.mock.calls[0][0].entrada.unSoloReel).toBe(true);
+    vi.unstubAllGlobals();
+  });
+
+  it("una parte de serie ('Parte 1 de 2.' al comienzo de su idea) llega al guion como serie, nunca vuelve a proponer serie", async () => {
+    piezaActual = { id: "pieza-1", receta_organica: "consejos_numerados", estado: "borrador", media_ids: null, semana: "2026-11-09", tema: "Parte 1 de 2.\nErrores.\n1. uno uno\n2. dos dos\n3. tres tres\n4. cuatro cuatro", gancho_tipo: "pregunta" };
+    vi.stubGlobal("fetch", vi.fn());
+    generarGuionConVozMock.mockResolvedValue({ ok: false, status: 502, error: "x" });
+    await POST(req(), contexto());
+    expect(generarGuionConVozMock).toHaveBeenCalledTimes(1);
+    expect(generarGuionConVozMock.mock.calls[0][0].entrada.serie).toMatchObject({ parte: 1, total: 2 });
     vi.unstubAllGlobals();
   });
 

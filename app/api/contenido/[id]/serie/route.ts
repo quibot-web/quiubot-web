@@ -4,7 +4,7 @@ import { z } from "zod";
 import { supabaseAdmin } from "@/lib/supabase";
 import { esFechaFutura, elegirGanchoTipoMenosUsado, lunesDeLaSemana, type PublicacionOrganica } from "@/app/lib/contenido";
 import { fechaBogota } from "@/app/lib/fechaBogota";
-import { LIMITE_IDEA, MAX_PARTES_SERIE } from "@/app/lib/ideaUsuario";
+import { LIMITE_IDEA, MAX_PARTES_SERIE, serieDesdeIdea } from "@/app/lib/ideaUsuario";
 
 // "Tu idea para el video" (24 nov 2026): cuando la idea del usuario no
 // cabe en un reel, el guion propone una serie de 2-3 reels y el usuario
@@ -38,7 +38,9 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
 
   const resultado = SerieSchema.safeParse(await req.json().catch(() => null));
   if (!resultado.success) return NextResponse.json({ error: `La serie necesita entre 2 y ${MAX_PARTES_SERIE} partes, cada una con su idea y su fecha.` }, { status: 400 });
-  const { partes } = resultado.data;
+  // Cada parte lleva "Parte k de N." al comienzo de su idea: así el guion
+  // de cada una sabe que es serie (gancho propio, repaso, adelanto).
+  const partes = resultado.data.partes.map((p, k, todas) => ({ ...p, idea: serieDesdeIdea(p.idea) ? p.idea : `Parte ${k + 1} de ${todas.length}.\n${p.idea}`.slice(0, LIMITE_IDEA) }));
   if (partes.some((p) => !esFechaFutura(p.programada_para))) return NextResponse.json({ error: "Cada parte necesita una fecha y hora futuras." }, { status: 400 });
 
   const { data: pieza } = await supabaseAdmin

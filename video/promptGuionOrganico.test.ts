@@ -125,3 +125,37 @@ describe("tu idea para el video en el prompt (24 nov 2026)", () => {
     expect(s).not.toMatch(/no_cabe/);
   });
 });
+
+describe("largo del reel con idea y partes de serie (24 nov 2026)", () => {
+  const idea = "Mi idea.\n1. Punto uno largo\n2. Punto dos largo\n3. Punto tres largo";
+  it("ya no parte por un conteo fijo de palabras: primero un solo reel de hasta ~50 s condensando; con 3 puntos o menos nunca 'no_cabe'", () => {
+    const s = seccionEjeDelReel({ tema: idea, productoPieza: null });
+    expect(s).not.toMatch(/80 palabras/);
+    expect(s).toMatch(/UN solo reel de hasta ~50 segundos/);
+    expect(s).toMatch(/hasta ~28 palabras de narración/);
+    expect(s).toMatch(/3 puntos o menos, NUNCA respondas "no_cabe"/);
+    expect(s).toMatch(/su problema Y su solución en la misma parte/);
+  });
+  it("parte 1 de 2: gancho propio, sentido sola, adelanto concreto y llamados; nunca 'no_cabe'", () => {
+    const s = seccionEjeDelReel({ tema: `Parte 1 de 2.\n${idea}`, productoPieza: null, serie: { parte: 1, total: 2, ideaSiguiente: "Parte 2 de 2. responder rápido" } });
+    expect(s).toMatch(/PARTE 1 DE 2/);
+    expect(s).toMatch(/gancho propio/);
+    expect(s).toMatch(/nunca el problema en una parte y la solución en otra/);
+    expect(s).toMatch(/El cierre adelanta en concreto lo que viene en la parte 2/);
+    expect(s).toMatch(/guardar el reel y seguir la cuenta/);
+    expect(s).toMatch(/responder rápido/);
+    expect(s).toMatch(/Nunca respondas "no_cabe"/);
+    expect(s).not.toMatch(/repasa en UNA frase/);
+  });
+  it("parte 2 de 2: repaso de una frase de la parte 1 y sin adelanto", () => {
+    const s = seccionEjeDelReel({ tema: `Parte 2 de 2.\n${idea}`, productoPieza: null, serie: { parte: 2, total: 2, ideaAnterior: "Parte 1 de 2. botón y conexión" } });
+    expect(s).toMatch(/repasa en UNA frase lo de la parte 1/);
+    expect(s).toMatch(/botón y conexión/);
+    expect(s).not.toMatch(/El cierre adelanta/);
+  });
+  it("'un solo reel resumido': condensa todo sin quitar puntos y nunca 'no_cabe'", () => {
+    const s = seccionEjeDelReel({ tema: idea, productoPieza: null, unSoloReel: true });
+    expect(s).toMatch(/UN SOLO reel resumido/);
+    expect(s).toMatch(/sin quitar ningún punto/);
+  });
+});

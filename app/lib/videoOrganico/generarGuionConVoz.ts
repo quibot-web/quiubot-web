@@ -1,5 +1,5 @@
 import "server-only";
-import { LIMITE_IDEA, MAX_PARTES_SERIE, clasificarIdea, verificarIdeaRespetada, type PropuestaSerie } from "@/app/lib/ideaUsuario";
+import { LIMITE_IDEA, MAX_PARTES_SERIE, MAX_PUNTOS_POR_REEL, clasificarIdea, problemasDeParteDeSerie, puntosDeLaIdea, verificarIdeaRespetada, type PropuestaSerie } from "@/app/lib/ideaUsuario";
 import { erroresDatosDelGuion } from "./datosReales";
 import { ajustarConVozReal, generarPlanIlustrado } from "./generarPlanIlustrado";
 import type { PlanIlustrado } from "@/video/ilustrado/motor/plan";
@@ -207,6 +207,20 @@ export async function generarGuionConVoz(params: ParametrosGenerarGuionConVoz): 
 
     const crudoObj = crudo as Record<string, unknown>;
     // La idea no cabe en un reel: la IA propone una serie (no se recorta en silencio).
+    // Con 3 puntos o menos, en una parte de serie o si el usuario pidió
+    // un solo reel resumido, "no_cabe" no vale: se pide condensar.
+    const puntosIdea = puntosDeLaIdea(idea).length;
+    if (esIdea && crudoObj?.no_cabe === true && (params.entrada.serie || params.entrada.unSoloReel || (puntosIdea >= 1 && puntosIdea <= MAX_PUNTOS_POR_REEL))) {
+      const errores = [
+        params.entrada.serie
+          ? `Esta es una parte de una serie: tiene que caber en UN reel de hasta ~50 segundos. No respondas "no_cabe": condensa ejemplos y frases.`
+          : params.entrada.unSoloReel
+            ? `El usuario pidió UN solo reel resumido. No respondas "no_cabe": condensa todo en hasta ~50 segundos, sin quitar puntos.`
+            : `La idea tiene ${puntosIdea} punto(s): va en UN solo reel de hasta ~50 segundos. No respondas "no_cabe": condensa sus ejemplos y frases (cada escena de consejo puede llevar hasta ~28 palabras), sin quitar puntos ni cambiar el mensaje.`,
+      ];
+      intentosRegistrados.push({ errores });
+      return { ok: false, errores };
+    }
     if (esIdea && crudoObj?.no_cabe === true) {
       const partes = Array.isArray(crudoObj.partes) ? (crudoObj.partes as { titulo?: unknown; idea?: unknown }[]) : [];
       const validas = partes
@@ -266,7 +280,12 @@ export async function generarGuionConVoz(params: ParametrosGenerarGuionConVoz): 
     // Idea desarrollada: sus puntos en su orden. Datos reales: en TODOS
     // los guiones (tema corto o idea), solo lo que escribió el usuario o
     // está en los datos de la marca/producto.
-    const erroresIdea = [...(esIdea ? verificarIdeaRespetada(idea, textosConVoz) : []), ...erroresDatosDelGuion(resultado.data, params.entrada)];
+    const erroresIdea = [
+      ...(esIdea ? verificarIdeaRespetada(idea, textosConVoz) : []),
+      ...erroresDatosDelGuion(resultado.data, params.entrada),
+      // Parte de una serie: adelanto y llamados al cierre, repaso al inicio.
+      ...(params.entrada.serie ? problemasDeParteDeSerie(resultado.data.escenas.map((e) => e.narracion ?? ""), params.entrada.serie) : []),
+    ];
 
     const erroresTotales = [...erroresReceta, ...erroresMedia, ...erroresCopy, ...erroresVacios, ...hallazgosAudio, ...hallazgosEstructura, ...erroresIdea];
     intentosRegistrados.push({ errores: erroresTotales });
@@ -328,6 +347,8 @@ export async function generarGuionConVoz(params: ParametrosGenerarGuionConVoz): 
     ...resultadoVoz.campos,
     ...(Object.keys(analisisDeLaPieza).length > 0 ? { analisisPiezas: analisisDeLaPieza } : {}),
     estilo: asignarEstilo(resultado.guion.escenas, estiloElegido, { fotosSinTexto }),
+    // Parte de una serie: el reel muestra "Parte k de N" al inicio.
+    ...(params.entrada.serie ? { serie: { parte: params.entrada.serie.parte, total: params.entrada.serie.total } } : {}),
   };
   if (plan && resultadoVoz.campos.palabrasPorEscena) {
     // Con la voz real: separa acciones de lugares distintos muy juntas y
