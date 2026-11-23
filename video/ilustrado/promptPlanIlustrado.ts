@@ -1,7 +1,7 @@
 // Prompt del plan ilustrado (fase 2): con la narración ya escrita y
 // validada, la IA elige por cada frase qué escena del catálogo se ve y
 // qué palabra dispara cada acción. Puro (lo prueba promptPlanIlustrado.test.ts).
-import { accionesDisponiblesTexto, MAX_PALABRAS_SIN_ACCION, MIN_PALABRAS_ENTRE_ISLAS } from "./motor/validarPlan";
+import { accionesDisponiblesTexto, MAX_PALABRAS_SIN_ACCION, MIN_PALABRAS_ENTRE_ISLAS, MIN_PALABRAS_POR_PANTALLA } from "./motor/validarPlan";
 
 // Conceptos frecuentes de un negocio -> la metáfora más cercana del
 // catálogo actual (fase 2: solo las escenas del prototipo).
@@ -43,7 +43,10 @@ REGLAS
 5. Dos acciones seguidas en lugares distintos (por ejemplo feed y billetera, o chat y reloj_cliente) van separadas al menos ${MIN_PALABRAS_ENTRE_ISLAS} palabras: la cámara viaja entre ellas. feed, chat y perfil son el MISMO lugar (el celular).
 6. Usa pocas escenas distintas (2 a 5 en todo el reel) y vuelve a las mismas: es un solo mundo con una cámara continua.
 7. De 1 a 4 acciones por frase.
-8. Nunca inventes datos: las escenas no muestran precios, descuentos, reseñas, horarios ni promesas, y tú no escribes ningún texto para la pantalla. Solo eliges escena, acción y palabra.
+8. El celular muestra UNA pantalla a la vez (feed, chat o perfil). Cuando cambias de pantalla, la nueva se queda al menos ${MIN_PALABRAS_POR_PANTALLA} palabras; no saltes entre feed, chat y perfil a cada rato.
+9. El perfil (aparece, toque_seguir) va SOLO en la última frase, que es el cierre, y después de toque_seguir no va ninguna otra acción.
+10. Cada acción en su propia palabra: nunca dos acciones en la misma palabra.
+11. Nunca inventes datos: las escenas no muestran precios, descuentos, reseñas, horarios ni promesas, y tú no escribes ningún texto para la pantalla. Solo eliges escena, acción y palabra.
 
 RESPONDE SOLO este JSON:
 {"frases":[{"escena_id":"e1","acciones":[{"escena":"feed","accion":"aparece_anuncio","palabra":1}],"metafora":"opcional"}]}${

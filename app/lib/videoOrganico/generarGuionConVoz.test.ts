@@ -286,8 +286,8 @@ describe("generarGuionConVoz", () => {
         { escena_id: "e2", acciones: [{ escena: "feed", accion: "desliza", palabra: 3 }, { escena: "feed", accion: "se_detiene", palabra: 6 }] },
         { escena_id: "e3", acciones: [{ escena: "chat", accion: "llega_mensaje", palabra: 3 }, { escena: "chat", accion: "llega_mensaje", palabra: 5 }] },
         { escena_id: "e4", acciones: [{ escena: "chat", accion: "responde", palabra: 1 }, { escena: "chat", accion: "se_vuelve_venta", palabra: 3 }] },
-        { escena_id: "e5", acciones: [{ escena: "perfil", accion: "aparece", palabra: 0 }] },
-        { escena_id: "e6", acciones: [{ escena: "perfil", accion: "toque_seguir", palabra: 0 }] },
+        { escena_id: "e5", acciones: [{ escena: "billetera", accion: "se_llena", palabra: 0 }] },
+        { escena_id: "e6", acciones: [{ escena: "perfil", accion: "aparece", palabra: 0 }, { escena: "perfil", accion: "toque_seguir", palabra: 1 }] },
       ],
     };
     function prepararVoz() {

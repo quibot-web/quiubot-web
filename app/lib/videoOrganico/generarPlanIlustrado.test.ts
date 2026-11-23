@@ -65,3 +65,18 @@ describe("planTrasRegenerarVoz (editar una narración)", () => {
     expect(llamar).not.toHaveBeenCalled();
   });
 });
+
+describe("arreglo automático de ritmo antes de reintentar (pieza 67d87ce8)", () => {
+  it("un plan cuyo único problema son huecos (también al final del reel) se acepta al primer intento", async () => {
+    const escenas = [
+      { id: "e1", narracion: "Uno dos tres cuatro cinco seis siete ocho" },
+      { id: "e2", narracion: "Uno dos tres cuatro cinco seis siete ocho nueve diez" },
+    ];
+    const plan = { frases: [{ escena_id: "e1", acciones: [{ escena: "feed", accion: "aparece_anuncio", palabra: 0 }] }, { escena_id: "e2", acciones: [{ escena: "feed", accion: "desliza", palabra: 0 }] }] };
+    const llamar = vi.fn().mockResolvedValue(JSON.stringify(plan));
+    const r = await generarPlanIlustrado(escenas, llamar);
+    expect(r.ok).toBe(true);
+    expect(llamar).toHaveBeenCalledTimes(1);
+    if (r.ok) expect(r.ajustes.some((a) => a.startsWith("e2: micro-acción"))).toBe(true);
+  });
+});

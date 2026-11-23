@@ -44,6 +44,12 @@ export const MAX_SEGUNDOS_SIN_CAMBIO = 2.5;
 export const MIN_PALABRAS_ENTRE_ISLAS = 2;
 // Con los tiempos reales: separación mínima entre islas distintas.
 export const MIN_SEGUNDOS_ENTRE_ISLAS = 0.6;
+// Una pantalla del celular (feed, chat, perfil) se queda al menos estas
+// palabras antes de cambiar a otra (staging, pieza 67d87ce8: el plan
+// saltaba entre feed, perfil y chat cada 1-2 s). No choca con el ritmo:
+// dentro de esa permanencia, los cambios son acciones o micro-acciones
+// de la MISMA pantalla.
+export const MIN_PALABRAS_POR_PANTALLA = 4;
 
 export const contarPalabras = (narracion: string) => narracion.trim().split(/\s+/).filter(Boolean).length;
 const islaDe = (escena: IdEscena) => CATALOGO[escena].isla as IdIsla;
@@ -95,6 +101,37 @@ export function validarPlanIlustrado(plan: unknown, escenas: { id: string; narra
       problemas.push(`${b.frase}: "${a.escena}.${a.accion}" y "${b.escena}.${b.accion}" son de lugares distintos y están a ${b.pos - a.pos} palabra(s); sepáralas al menos ${MIN_PALABRAS_ENTRE_ISLAS} palabras`);
     }
   }
+  // Reglas de pantallas del celular y del cierre (pieza 67d87ce8).
+  const ultimaFrase = escenas[escenas.length - 1]?.id;
+  for (const f of p.frases) {
+    const palabrasUsadas = new Map<number, string>();
+    for (const a of f.acciones) {
+      const otra = palabrasUsadas.get(a.palabra);
+      if (otra) problemas.push(`${f.escena_id}: "${otra}" y "${a.escena}.${a.accion}" están en la misma palabra ${etiquetaPalabra(inicioFrase[f.escena_id] + a.palabra)}; cada acción va en su propia palabra`);
+      palabrasUsadas.set(a.palabra, `${a.escena}.${a.accion}`);
+      if (a.escena === "perfil" && a.accion !== MICRO && f.escena_id !== ultimaFrase) {
+        problemas.push(`${f.escena_id}: el perfil (Seguir) solo va en la última frase (${ultimaFrase}), que es el cierre; aquí usa feed, chat u otra escena`);
+      }
+    }
+  }
+  const toque = globales.find((g) => g.escena === "perfil" && g.accion === "toque_seguir");
+  if (toque) {
+    for (const g of globales) if (g.pos > toque.pos && g.escena !== "perfil") problemas.push(`${g.frase}: después de tocar Seguir no va nada más ("${g.escena}.${g.accion}" está después); el reel cierra en el perfil`);
+  }
+  // Cuánto dura cada pantalla del celular: desde su primera acción hasta
+  // la primera acción de la pantalla que la reemplaza.
+  let tramo: { escena: string; desde: number } | null = null;
+  for (const g of globales) {
+    if (islaDe(g.escena) !== "celular" || g.accion === MICRO) continue;
+    if (!tramo) tramo = { escena: g.escena, desde: g.pos };
+    else if (g.escena !== tramo.escena) {
+      if (g.pos - tramo.desde < MIN_PALABRAS_POR_PANTALLA) {
+        problemas.push(`${g.frase}: la pantalla "${tramo.escena}" del celular dura solo ${g.pos - tramo.desde} palabra(s) antes de cambiar a "${g.escena}"; cada pantalla se queda al menos ${MIN_PALABRAS_POR_PANTALLA} palabras (mueve "${g.escena}.${g.accion}" a ${etiquetaPalabra(tramo.desde + MIN_PALABRAS_POR_PANTALLA)} o después, o usa otra acción de "${tramo.escena}")`);
+      }
+      tramo = { escena: g.escena, desde: g.pos };
+    }
+  }
+
   const fin = acumulado - 1;
   const ultima = globales[globales.length - 1];
   if (fin - ultima.pos > MAX_PALABRAS_SIN_ACCION) problemas.push(`${ultima.frase}: las últimas ${fin - ultima.pos} palabras del reel no tienen ningún cambio (máximo ${MAX_PALABRAS_SIN_ACCION})`);

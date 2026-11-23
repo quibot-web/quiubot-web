@@ -49,9 +49,11 @@ describe("validarPlanIlustrado", () => {
       { escena_id: "e2", acciones: [{ escena: "billetera", accion: "sale_moneda", palabra: 7 }] },
     ]);
     expect(validarPlanIlustrado(juntas, ESCENAS).join(" ")).toMatch(/lugares distintos/);
+    // Mismo celular: no les aplica la separación entre lugares, sí la
+    // permanencia de 4 palabras por pantalla.
     const mismoCelular = plan([
-      { escena_id: "e1", acciones: [{ escena: "feed", accion: "aparece_anuncio", palabra: 1 }, { escena: "chat", accion: "llega_mensaje", palabra: 2 }, { escena: "chat", accion: "llega_mensaje", palabra: 6 }] },
-      { escena_id: "e2", acciones: [{ escena: "perfil", accion: "aparece", palabra: 4 }] },
+      { escena_id: "e1", acciones: [{ escena: "feed", accion: "aparece_anuncio", palabra: 1 }, { escena: "chat", accion: "llega_mensaje", palabra: 5 }, { escena: "chat", accion: "llega_mensaje", palabra: 6 }] },
+      { escena_id: "e2", acciones: [{ escena: "chat", accion: "responde", palabra: 3 }, { escena: "perfil", accion: "aparece", palabra: 7 }] },
     ]);
     expect(validarPlanIlustrado(mismoCelular, ESCENAS)).toEqual([]);
   });

@@ -11,7 +11,7 @@
 // - nunca una foto con texto o una captura como foto de producto.
 // Una respuesta incompleta del modelo cuenta como problema.
 // El QC completo por acción es la fase 5. Puro: corre en el navegador y en el servidor.
-import { prepararReel } from "@/video/ilustrado/motor/preparar";
+import { escenaEnCamara, prepararReel } from "@/video/ilustrado/motor/preparar";
 import { CATALOGO, ESCENA_VISIBLE, MICRO } from "@/video/ilustrado/motor/catalogo";
 import type { PlanIlustrado } from "@/video/ilustrado/motor/plan";
 import type { TiemposIlustrado } from "@/video/ilustrado/tiempoIlustrado";
@@ -26,11 +26,16 @@ export function momentosControlIlustrado(tiempos: TiemposIlustrado, plan: PlanIl
   const llegadas = [0, ...reel.tomas.slice(1).map((_, i) => puntos[2 + 2 * i].cuadro)];
   const salidas = [...reel.tomas.slice(1).map((_, i) => puntos[1 + 2 * i].cuadro), total - 1];
   const ventanas = reel.tomas.map((t, i) => ({ i, desde: llegadas[i], hasta: salidas[i], medio: Math.round((llegadas[i] + salidas[i]) / 2) }));
+  // Lo que el reel MUESTRA en ese cuadro (misma función que el render):
+  // la escena en cámara y la última acción de ESA escena (staging, pieza
+  // 67d87ce8: se usaba la última acción del plan aunque fuera de otra
+  // pantalla, y se esperaba un perfil donde se veía el feed).
   const queSeVe = (cuadro: number) => {
-    const accion = [...reel.disparos].reverse().find((d) => d.cuadro <= cuadro + 6 && d.accion !== MICRO) ?? reel.disparos.find((d) => d.accion !== MICRO);
-    if (!accion) return "la escena del reel";
-    const def = (CATALOGO[accion.escena].acciones as Record<string, { descripcion: string }>)[accion.accion];
-    return `${ESCENA_VISIBLE[accion.escena]}; en ese momento: ${def.descripcion}`;
+    const escena = escenaEnCamara(reel, cuadro);
+    if (!escena) return "la escena del reel";
+    const accion = [...reel.disparos].reverse().find((d) => d.escena === escena && d.cuadro <= cuadro && d.accion !== MICRO);
+    const def = accion ? (CATALOGO[escena].acciones as Record<string, { descripcion: string }>)[accion.accion] : null;
+    return def ? `${ESCENA_VISIBLE[escena]}; en ese momento: ${def.descripcion}` : ESCENA_VISIBLE[escena];
   };
   const momentos: MomentoQC[] = [{ etiqueta: "inicio", segundo: 0.1, esperado: queSeVe(3) }];
   for (let tercio = 0; tercio < 3; tercio++) {

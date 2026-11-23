@@ -1,0 +1,733 @@
+{
+ "_origen": "Pieza real 67d87ce8 (staging 23 nov 2026): narraciones, tiempos de la voz y el plan que escribió la IA. El reel mostraba el perfil y el chat segundos antes de sus acciones y el QC esperaba escenas que no estaban en cuadro.",
+ "escenas": [
+  {
+   "id": "e1",
+   "narracion": "¿Likes, pero nadie te escribe por tu anuncio?"
+  },
+  {
+   "id": "e2",
+   "narracion": "Primero, nombra el problema exacto: tienes likes, pero nadie te escribe."
+  },
+  {
+   "id": "e3",
+   "narracion": "Luego, promete un resultado concreto, como publicar anuncios en tu cuenta."
+  },
+  {
+   "id": "e4",
+   "narracion": "Por último, pide una acción fácil: escríbenos tu meta de campaña."
+  },
+  {
+   "id": "e5",
+   "narracion": "En Autopilot, estos tres pasos le dan motivos al cliente para escribirte."
+  },
+  {
+   "id": "e6",
+   "narracion": "Síguenos y guarda esta fórmula para escribir tu próximo anuncio."
+  }
+ ],
+ "tiempos": {
+  "tiemposRender": [
+   {
+    "escena_id": "e1",
+    "inicio_s": 0,
+    "fin_s": 2.63
+   },
+   {
+    "escena_id": "e2",
+    "inicio_s": 2.63,
+    "fin_s": 7.55
+   },
+   {
+    "escena_id": "e3",
+    "inicio_s": 7.55,
+    "fin_s": 11.49
+   },
+   {
+    "escena_id": "e4",
+    "inicio_s": 11.49,
+    "fin_s": 14.91
+   },
+   {
+    "escena_id": "e5",
+    "inicio_s": 14.91,
+    "fin_s": 19.322
+   },
+   {
+    "escena_id": "e6",
+    "inicio_s": 19.322,
+    "fin_s": 23.145
+   }
+  ],
+  "palabrasPorEscena": [
+   {
+    "escena_id": "e1",
+    "palabras": [
+     {
+      "texto": "¿Likes,",
+      "inicio_s": 0,
+      "fin_s": 0.52
+     },
+     {
+      "texto": "pero",
+      "inicio_s": 0.77,
+      "fin_s": 0.93
+     },
+     {
+      "texto": "nadie",
+      "inicio_s": 0.93,
+      "fin_s": 1.25
+     },
+     {
+      "texto": "te",
+      "inicio_s": 1.25,
+      "fin_s": 1.73
+     },
+     {
+      "texto": "escribe",
+      "inicio_s": 1.73,
+      "fin_s": 1.73
+     },
+     {
+      "texto": "por",
+      "inicio_s": 1.73,
+      "fin_s": 2.01
+     },
+     {
+      "texto": "tu",
+      "inicio_s": 2.01,
+      "fin_s": 2.39
+     },
+     {
+      "texto": "anuncio?",
+      "inicio_s": 2.39,
+      "fin_s": 2.43
+     }
+    ]
+   },
+   {
+    "escena_id": "e2",
+    "palabras": [
+     {
+      "texto": "Primero,",
+      "inicio_s": 2.83,
+      "fin_s": 3.47
+     },
+     {
+      "texto": "nombra",
+      "inicio_s": 3.72,
+      "fin_s": 3.98
+     },
+     {
+      "texto": "el",
+      "inicio_s": 3.98,
+      "fin_s": 4.24
+     },
+     {
+      "texto": "problema",
+      "inicio_s": 4.24,
+      "fin_s": 4.44
+     },
+     {
+      "texto": "exacto:",
+      "inicio_s": 4.44,
+      "fin_s": 5.34
+     },
+     {
+      "texto": "tienes",
+      "inicio_s": 5.56,
+      "fin_s": 5.72
+     },
+     {
+      "texto": "likes,",
+      "inicio_s": 5.72,
+      "fin_s": 6
+     },
+     {
+      "texto": "pero",
+      "inicio_s": 6.25,
+      "fin_s": 6.55
+     },
+     {
+      "texto": "nadie",
+      "inicio_s": 6.55,
+      "fin_s": 6.81
+     },
+     {
+      "texto": "te",
+      "inicio_s": 6.81,
+      "fin_s": 7.35
+     },
+     {
+      "texto": "escribe.",
+      "inicio_s": 7.35,
+      "fin_s": 7.35
+     }
+    ]
+   },
+   {
+    "escena_id": "e3",
+    "palabras": [
+     {
+      "texto": "Luego,",
+      "inicio_s": 7.75,
+      "fin_s": 7.85
+     },
+     {
+      "texto": "promete",
+      "inicio_s": 8.1,
+      "fin_s": 8.46
+     },
+     {
+      "texto": "un",
+      "inicio_s": 8.46,
+      "fin_s": 8.64
+     },
+     {
+      "texto": "resultado",
+      "inicio_s": 8.64,
+      "fin_s": 9
+     },
+     {
+      "texto": "concreto,",
+      "inicio_s": 9,
+      "fin_s": 9.48
+     },
+     {
+      "texto": "como",
+      "inicio_s": 9.73,
+      "fin_s": 9.85
+     },
+     {
+      "texto": "publicar",
+      "inicio_s": 9.85,
+      "fin_s": 10.35
+     },
+     {
+      "texto": "anuncios",
+      "inicio_s": 10.35,
+      "fin_s": 10.75
+     },
+     {
+      "texto": "en",
+      "inicio_s": 10.75,
+      "fin_s": 10.91
+     },
+     {
+      "texto": "tu",
+      "inicio_s": 10.91,
+      "fin_s": 11.09
+     },
+     {
+      "texto": "cuenta.",
+      "inicio_s": 11.09,
+      "fin_s": 11.29
+     }
+    ]
+   },
+   {
+    "escena_id": "e4",
+    "palabras": [
+     {
+      "texto": "Por",
+      "inicio_s": 11.69,
+      "fin_s": 11.87
+     },
+     {
+      "texto": "último,",
+      "inicio_s": 11.87,
+      "fin_s": 12.17
+     },
+     {
+      "texto": "pide",
+      "inicio_s": 12.42,
+      "fin_s": 12.42
+     },
+     {
+      "texto": "una",
+      "inicio_s": 12.42,
+      "fin_s": 12.76
+     },
+     {
+      "texto": "acción",
+      "inicio_s": 12.76,
+      "fin_s": 12.9
+     },
+     {
+      "texto": "fácil:",
+      "inicio_s": 12.9,
+      "fin_s": 13.28
+     },
+     {
+      "texto": "escríbenos",
+      "inicio_s": 13.53,
+      "fin_s": 13.75
+     },
+     {
+      "texto": "tu",
+      "inicio_s": 13.75,
+      "fin_s": 13.97
+     },
+     {
+      "texto": "meta",
+      "inicio_s": 13.97,
+      "fin_s": 14.11
+     },
+     {
+      "texto": "de",
+      "inicio_s": 14.11,
+      "fin_s": 14.59
+     },
+     {
+      "texto": "campaña.",
+      "inicio_s": 14.59,
+      "fin_s": 14.71
+     }
+    ]
+   },
+   {
+    "escena_id": "e5",
+    "palabras": [
+     {
+      "texto": "En",
+      "inicio_s": 15.11,
+      "fin_s": 15.21
+     },
+     {
+      "texto": "Autopilot,",
+      "inicio_s": 15.21,
+      "fin_s": 15.77
+     },
+     {
+      "texto": "estos",
+      "inicio_s": 16.02,
+      "fin_s": 16.2
+     },
+     {
+      "texto": "tres",
+      "inicio_s": 16.2,
+      "fin_s": 16.58
+     },
+     {
+      "texto": "pasos",
+      "inicio_s": 16.58,
+      "fin_s": 16.88
+     },
+     {
+      "texto": "le",
+      "inicio_s": 17.13,
+      "fin_s": 17.402
+     },
+     {
+      "texto": "dan",
+      "inicio_s": 17.402,
+      "fin_s": 17.402
+     },
+     {
+      "texto": "motivos",
+      "inicio_s": 17.402,
+      "fin_s": 17.802
+     },
+     {
+      "texto": "al",
+      "inicio_s": 17.802,
+      "fin_s": 17.982
+     },
+     {
+      "texto": "cliente",
+      "inicio_s": 17.982,
+      "fin_s": 18.342
+     },
+     {
+      "texto": "para",
+      "inicio_s": 18.342,
+      "fin_s": 18.562
+     },
+     {
+      "texto": "escribirte.",
+      "inicio_s": 18.562,
+      "fin_s": 19.122
+     }
+    ]
+   },
+   {
+    "escena_id": "e6",
+    "palabras": [
+     {
+      "texto": "Síguenos",
+      "inicio_s": 19.522,
+      "fin_s": 19.722
+     },
+     {
+      "texto": "y",
+      "inicio_s": 19.972,
+      "fin_s": 20.217
+     },
+     {
+      "texto": "guarda",
+      "inicio_s": 20.217,
+      "fin_s": 20.477
+     },
+     {
+      "texto": "esta",
+      "inicio_s": 20.477,
+      "fin_s": 20.697
+     },
+     {
+      "texto": "fórmula",
+      "inicio_s": 20.697,
+      "fin_s": 21.017
+     },
+     {
+      "texto": "para",
+      "inicio_s": 21.017,
+      "fin_s": 21.317
+     },
+     {
+      "texto": "escribir",
+      "inicio_s": 21.317,
+      "fin_s": 21.657
+     },
+     {
+      "texto": "tu",
+      "inicio_s": 21.657,
+      "fin_s": 21.877
+     },
+     {
+      "texto": "próximo",
+      "inicio_s": 21.877,
+      "fin_s": 22.237
+     },
+     {
+      "texto": "anuncio.",
+      "inicio_s": 22.237,
+      "fin_s": 22.557
+     }
+    ]
+   }
+  ],
+  "segmentosAudio": [
+   {
+    "escena_id": "e1",
+    "tramos": [
+     {
+      "original": {
+       "inicio_s": 0,
+       "fin_s": 0.645
+      },
+      "compactado": {
+       "inicio_s": 0,
+       "fin_s": 0.645
+      }
+     },
+     {
+      "original": {
+       "inicio_s": 0.995,
+       "fin_s": 2.98
+      },
+      "compactado": {
+       "inicio_s": 0.645,
+       "fin_s": 2.63
+      }
+     }
+    ]
+   },
+   {
+    "escena_id": "e2",
+    "tramos": [
+     {
+      "original": {
+       "inicio_s": 3.28,
+       "fin_s": 4.245
+      },
+      "compactado": {
+       "inicio_s": 2.63,
+       "fin_s": 3.595
+      }
+     },
+     {
+      "original": {
+       "inicio_s": 4.515,
+       "fin_s": 6.385
+      },
+      "compactado": {
+       "inicio_s": 3.595,
+       "fin_s": 5.465
+      }
+     },
+     {
+      "original": {
+       "inicio_s": 6.415,
+       "fin_s": 7.105
+      },
+      "compactado": {
+       "inicio_s": 5.435,
+       "fin_s": 6.125
+      }
+     },
+     {
+      "original": {
+       "inicio_s": 7.235,
+       "fin_s": 8.66
+      },
+      "compactado": {
+       "inicio_s": 6.125,
+       "fin_s": 7.55
+      }
+     }
+    ]
+   },
+   {
+    "escena_id": "e3",
+    "tramos": [
+     {
+      "original": {
+       "inicio_s": 9.32,
+       "fin_s": 9.745
+      },
+      "compactado": {
+       "inicio_s": 7.55,
+       "fin_s": 7.975
+      }
+     },
+     {
+      "original": {
+       "inicio_s": 9.915,
+       "fin_s": 11.545
+      },
+      "compactado": {
+       "inicio_s": 7.975,
+       "fin_s": 9.605
+      }
+     },
+     {
+      "original": {
+       "inicio_s": 11.815,
+       "fin_s": 13.7
+      },
+      "compactado": {
+       "inicio_s": 9.605,
+       "fin_s": 11.49
+      }
+     }
+    ]
+   },
+   {
+    "escena_id": "e4",
+    "tramos": [
+     {
+      "original": {
+       "inicio_s": 14.16,
+       "fin_s": 14.965
+      },
+      "compactado": {
+       "inicio_s": 11.49,
+       "fin_s": 12.295
+      }
+     },
+     {
+      "original": {
+       "inicio_s": 15.475,
+       "fin_s": 16.585
+      },
+      "compactado": {
+       "inicio_s": 12.295,
+       "fin_s": 13.405
+      }
+     },
+     {
+      "original": {
+       "inicio_s": 17.175,
+       "fin_s": 18.68
+      },
+      "compactado": {
+       "inicio_s": 13.405,
+       "fin_s": 14.91
+      }
+     }
+    ]
+   },
+   {
+    "escena_id": "e5",
+    "tramos": [
+     {
+      "original": {
+       "inicio_s": 19.08,
+       "fin_s": 20.065
+      },
+      "compactado": {
+       "inicio_s": 14.91,
+       "fin_s": 15.895
+      }
+     },
+     {
+      "original": {
+       "inicio_s": 20.375,
+       "fin_s": 21.485
+      },
+      "compactado": {
+       "inicio_s": 15.895,
+       "fin_s": 17.005
+      }
+     },
+     {
+      "original": {
+       "inicio_s": 21.543,
+       "fin_s": 23.86
+      },
+      "compactado": {
+       "inicio_s": 17.005,
+       "fin_s": 19.322
+      }
+     }
+    ]
+   },
+   {
+    "escena_id": "e6",
+    "tramos": [
+     {
+      "original": {
+       "inicio_s": 24.38,
+       "fin_s": 24.905
+      },
+      "compactado": {
+       "inicio_s": 19.322,
+       "fin_s": 19.847
+      }
+     },
+     {
+      "original": {
+       "inicio_s": 25.07,
+       "fin_s": 28.368
+      },
+      "compactado": {
+       "inicio_s": 19.847,
+       "fin_s": 23.145
+      }
+     }
+    ]
+   }
+  ]
+ },
+ "planIA": {
+  "frases": [
+   {
+    "acciones": [
+     {
+      "accion": "se_detiene",
+      "escena": "feed",
+      "palabra": 0
+     },
+     {
+      "accion": "aparece_anuncio",
+      "escena": "feed",
+      "palabra": 7
+     }
+    ],
+    "escena_id": "e1"
+   },
+   {
+    "acciones": [
+     {
+      "accion": "micro",
+      "escena": "feed",
+      "palabra": 2
+     },
+     {
+      "accion": "se_detiene",
+      "escena": "feed",
+      "palabra": 6
+     }
+    ],
+    "escena_id": "e2"
+   },
+   {
+    "acciones": [
+     {
+      "accion": "desliza",
+      "escena": "feed",
+      "palabra": 0
+     },
+     {
+      "accion": "micro",
+      "escena": "feed",
+      "palabra": 4
+     },
+     {
+      "accion": "aparece_anuncio",
+      "escena": "feed",
+      "palabra": 7
+     },
+     {
+      "accion": "aparece",
+      "escena": "perfil",
+      "palabra": 10
+     }
+    ],
+    "escena_id": "e3"
+   },
+   {
+    "acciones": [
+     {
+      "accion": "llega_mensaje",
+      "escena": "chat",
+      "palabra": 6
+     },
+     {
+      "accion": "aparece_anuncio",
+      "escena": "feed",
+      "palabra": 10
+     }
+    ],
+    "escena_id": "e4"
+   },
+   {
+    "acciones": [
+     {
+      "accion": "micro",
+      "escena": "feed",
+      "palabra": 3
+     },
+     {
+      "accion": "lo_miran",
+      "escena": "feed",
+      "palabra": 7
+     },
+     {
+      "accion": "llega_mensaje",
+      "escena": "chat",
+      "palabra": 11
+     }
+    ],
+    "metafora": "Las miradas representan los motivos que captan el interés del cliente antes de que escriba.",
+    "escena_id": "e5"
+   },
+   {
+    "acciones": [
+     {
+      "accion": "aparece",
+      "escena": "perfil",
+      "palabra": 0
+     },
+     {
+      "accion": "toque_seguir",
+      "escena": "perfil",
+      "palabra": 0
+     },
+     {
+      "accion": "vuelve",
+      "escena": "feed",
+      "palabra": 2
+     },
+     {
+      "accion": "aparece_anuncio",
+      "escena": "feed",
+      "palabra": 9
+     }
+    ],
+    "metafora": "Volver a la publicación representa guardarla para consultarla al preparar el próximo anuncio.",
+    "escena_id": "e6"
+   }
+  ]
+ }
+}

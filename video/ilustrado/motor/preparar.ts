@@ -31,15 +31,21 @@ export function prepararReel(tiempos: TiemposIlustrado, plan: PlanIlustrado, fps
   const tomas = tomasDeCamara(disparos, recorrido);
   const camara = puntosCamaraAutomatica(tomas, linea.duracionCuadros, fps);
 
-  // El celular cambia de pantalla al empezar la frase de la primera
-  // acción de la nueva pantalla (así ya está cuando llega la cámara).
+  // El celular cambia de pantalla amarrado a la acción que la pide:
+  // ~0,33 s antes de ella y nunca antes de que termine la acción
+  // anterior del celular (staging 23 nov 2026, pieza 67d87ce8: el cambio
+  // al empezar la frase mostraba el perfil 3,5 s antes de tiempo y
+  // tapaba las acciones del feed de esa misma frase).
   const pantallas: CambioPantalla[] = [];
+  let anteriorCelular: number | null = null;
   for (const d of disparos) {
-    if (CATALOGO[d.escena].isla !== "celular" || d.accion === MICRO) continue;
+    if (CATALOGO[d.escena].isla !== "celular") continue;
     const actual = pantallas[pantallas.length - 1];
-    if (actual?.pantalla === d.escena) continue;
-    const cuadro = actual ? Math.max(actual.cuadro + 10, Math.min(d.inicioFrase, d.cuadro - 10)) : 0;
-    pantallas.push({ cuadro, pantalla: d.escena });
+    if (actual?.pantalla !== d.escena && d.accion !== MICRO) {
+      const cuadro = actual ? Math.min(d.cuadro, Math.max(actual.cuadro + 10, (anteriorCelular ?? 0) + 12, d.cuadro - 10)) : 0;
+      pantallas.push({ cuadro, pantalla: d.escena });
+    }
+    anteriorCelular = d.cuadro;
   }
 
   // Monedas que viajan entre islas: la venta sale del celular y llega a
@@ -58,3 +64,20 @@ export function prepararReel(tiempos: TiemposIlustrado, plan: PlanIlustrado, fps
   const pulsos = disparos.filter((d) => d.accion === MICRO).map((d) => d.cuadro);
   return { linea, disparos, recorrido, tomas, camara, pantallas, viajes, pulsos };
 }
+
+// Lo que el reel muestra en un cuadro (lo usan el render, el control de
+// calidad y las pruebas, para que nunca se separen).
+export function pantallaEnCuadro(reel: Pick<ReelPreparado, "pantallas">, cuadro: number): IdEscena | null {
+  return [...reel.pantallas].reverse().find((p) => cuadro >= p.cuadro)?.pantalla ?? reel.pantallas[0]?.pantalla ?? null;
+}
+
+// La escena que está en cámara: la pantalla activa del celular si la
+// toma en curso es del celular; si no, la escena de la isla de la toma.
+export function escenaEnCamara(reel: Pick<ReelPreparado, "pantallas" | "tomas" | "disparos">, cuadro: number): IdEscena | null {
+  const toma = [...reel.tomas].reverse().find((t) => cuadro >= t.desde) ?? reel.tomas[0];
+  if (!toma) return null;
+  if (toma.celular) return pantallaEnCuadro(reel, cuadro);
+  const accion = [...reel.disparos].reverse().find((d) => d.cuadro <= Math.max(cuadro, toma.desde) && CATALOGO[d.escena].isla !== "celular");
+  return accion?.escena ?? null;
+}
+

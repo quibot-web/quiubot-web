@@ -32,7 +32,8 @@ export async function generarPlanIlustrado(
     // ritmo (micro-acciones) y recién después se valida todo.
     let candidato = crudo;
     let ajustes: string[] = [];
-    if (validarPlanIlustrado(crudo, escenas).every((p) => p.includes("sin ningún cambio"))) {
+    // Problemas de ritmo (huecos entre acciones o al final del reel): se arreglan solos.
+    if (validarPlanIlustrado(crudo, escenas).every((p) => /ningún cambio/.test(p))) {
       const reparado = repararRitmoPorPalabras(crudo as PlanIlustrado, escenas);
       candidato = reparado.plan;
       ajustes = reparado.ajustes;
