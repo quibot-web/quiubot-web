@@ -15,6 +15,7 @@ import { prepararReel } from "./motor/preparar";
 import type { PlanIlustrado } from "./motor/plan";
 import type { MarcaIlustrada } from "./motor/escenas/tipos";
 import { precargarImagenes, urlsImagenesFijas } from "./imagenesFijas";
+import { generarRecursos, type RecursosGenerados } from "./imagenesGeneradas";
 
 export type PropsReelIlustrado = {
   tiempos: TiemposIlustrado;
@@ -38,15 +39,30 @@ export function ReelIlustrado({ tiempos, plan, vozUrl, fotoUrl, tema, marca }: P
   const reel = useMemo(() => prepararReel(tiempos, plan, fps), [tiempos, plan, fps]);
   const paleta = paletaNoche(tema);
   const foto = fotoUrl ?? staticFile("demo-organico/foto-producto-ceramica.jpg");
-  // Una sola espera al inicio: todas las imágenes fijas + la foto (ver imagenesFijas.tsx).
+  // Una sola espera al inicio: imágenes fijas, foto y recursos horneados
+  // (foto apagada/clara, halo de luz). El mundo se monta recién cuando
+  // todo está listo: así cada <img> nace con su imagen ya disponible y el
+  // cuadro 0 sale completo (nunca el celular en blanco).
   const { delayRender, continueRender } = useDelayRender();
   const [espera] = useState(() => delayRender("Precargando imágenes del reel ilustrado"));
+  const [recursos, setRecursos] = useState<RecursosGenerados | null>(null);
   useEffect(() => {
-    precargarImagenes([...urlsImagenesFijas(), foto]).then(() => continueRender(espera));
-  }, [foto, espera, continueRender]);
+    let vigente = true;
+    (async () => {
+      const generados = await generarRecursos(foto, paleta.luz);
+      await precargarImagenes([...urlsImagenesFijas(), foto, generados.fotoApagada, generados.fotoClara, generados.brilloLuz].filter(Boolean));
+      if (vigente) setRecursos(generados);
+    })();
+    return () => {
+      vigente = false;
+    };
+  }, [foto, paleta.luz]);
+  useEffect(() => {
+    if (recursos) continueRender(espera);
+  }, [recursos, espera, continueRender]);
   return (
     <AbsoluteFill style={{ fontFamily: familiaDeFuente(tema.fuente), background: paleta.fondoProfundo, overflow: "hidden" }}>
-      <MundoIlustrado frame={frame} fps={fps} reel={reel} paleta={paleta} tema={tema} marca={marca} fotoUrl={foto} />
+      {recursos && <MundoIlustrado frame={frame} fps={fps} reel={reel} paleta={paleta} tema={tema} marca={marca} fotoUrl={foto} recursos={recursos} />}
       <Subtitulo linea={reel.linea} frame={frame} luz={paleta.luz} />
       {/* Voz: cada escena reproduce sus tramos ya compactados (mismo criterio que ReelAutomatico). */}
       {vozUrl &&

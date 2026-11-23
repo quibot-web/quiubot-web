@@ -82,7 +82,7 @@ export function coreografiaFeed(acciones: { accion: string; cuadro: number }[]):
   return res;
 }
 
-export function PantallaFeed({ frame, fps, d, marca, fotoUrl }: PropsEscena) {
+export function PantallaFeed({ frame, fps, d, marca, fotoUrl, recursos }: PropsEscena) {
   const acciones = Object.entries(d).flatMap(([accion, cuadros]) => cuadros.map((cuadro) => ({ accion, cuadro })));
   const c = coreografiaFeed(acciones);
   const pos = claves(c.pares, frame);
@@ -110,6 +110,8 @@ export function PantallaFeed({ frame, fps, d, marca, fotoUrl }: PropsEscena) {
                 tipo={i === c.fotoApagada ? "anuncio_apagado" : tipo}
                 indice={i}
                 fotoUrl={fotoUrl}
+                fotoApagadaUrl={recursos.fotoApagada}
+                fotoClaraUrl={recursos.fotoClara}
                 brillo={rampa(frame, aclara, 12)}
                 colorMarca={marca.colorMarca}
                 nombreTienda={marca.nombreTienda}
@@ -230,8 +232,14 @@ export function PantallaPerfil({ frame, d, marca, fotoUrl }: PropsEscena) {
       </div>
       <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr 1fr", gap: 6, padding: "0 6px" }}>
         {(["foto", "comida", "paisaje", "mascota", "ropa", "foto"] as const).map((t, i) => (
-          <div key={i} style={{ height: 230, overflow: "hidden", background: t === "foto" ? `url(${fotoUrl}) center/cover` : undefined }}>
-            {t !== "foto" && <ImagenFija nombre={`ilu-${t}`} ancho="100%" alto="100%" estilo={{ objectFit: "cover" }} />}
+          <div key={i} style={{ height: 230, overflow: "hidden" }}>
+            {/* <img>, no background url(): el renderizador del navegador no dibuja fondos con imagen. */}
+            {t === "foto" ? (
+              // eslint-disable-next-line @next/next/no-img-element -- dibujo del video; precargada en ReelIlustrado
+              <img src={fotoUrl} alt="" decoding="sync" style={{ display: "block", width: "100%", height: "100%", objectFit: "cover" }} />
+            ) : (
+              <ImagenFija nombre={`ilu-${t}`} ancho="100%" alto="100%" estilo={{ objectFit: "cover" }} />
+            )}
           </div>
         ))}
       </div>

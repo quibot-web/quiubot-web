@@ -2,7 +2,6 @@
 // lugar. Cada una dibuja en coordenadas de su isla (el motor la ubica) y
 // reacciona a los cuadros de sus acciones (d). Sin texto.
 import { spring } from "remotion";
-import { hexConAlfa } from "../../../tema";
 import { Billetera, Grafica, Moneda, Persona, Reloj, SombraPiso } from "../../Objetos";
 import { rampa, cuantas, primero } from "../animacion";
 import { BILLETERA_LOCAL, BOCA_BILLETERA_LOCAL, CLIENTE_LOCAL, ELEGIDOS_MULTITUD, GRAFICA_LOCAL, ISLAS, PERSONAS_MULTITUD, RELOJ_LOCAL } from "../catalogo";
@@ -57,7 +56,7 @@ export function IslaBilletera({ frame, fps, d }: PropsEscena) {
 }
 
 // ---------- Multitud ----------
-export function IslaMultitud({ frame, d, paleta }: PropsEscena) {
+export function IslaMultitud({ frame, d, recursos }: PropsEscena) {
   const inicioBarrido = primero(d.foco_barre) ?? primero(d.todos_tenues);
   const tenues = primero(d.todos_tenues);
   const iluminan = primero(d.se_iluminan);
@@ -79,7 +78,7 @@ export function IslaMultitud({ frame, d, paleta }: PropsEscena) {
           <div style={{ position: "absolute", left: centroFoco - 500, top: -150, width: 1000, height: 1300, opacity: intensidad / 0.34, transform: `scaleX(${anchoCono / 1000})` }}>
             <ImagenFija nombre="cono" ancho={1000} alto={1300} />
           </div>
-          <div style={{ position: "absolute", left: centroFoco - anchoCono / 2, top: 1030, width: anchoCono, height: 300, borderRadius: "50%", background: `radial-gradient(ellipse, ${hexConAlfa("#ffffff", intensidad * 0.8)} 0%, rgba(255,255,255,0) 70%)` }} />
+          <ImagenFija nombre="brillo-blanco" ancho={anchoCono} alto={300} estilo={{ position: "absolute", left: centroFoco - anchoCono / 2, top: 1030, opacity: intensidad / 0.34 }} />
         </>
       )}
       {PERSONAS_MULTITUD.map((p, i) => {
@@ -87,14 +86,14 @@ export function IslaMultitud({ frame, d, paleta }: PropsEscena) {
         const bajoElFoco = barrido >= 0 && Math.abs(p.x - centroFoco) < 280 + 750 * todosTenue && (iluminan === undefined || frame < iluminan) ? 0.5 : 0;
         const luz = elegido ? Math.max(elegidos, todosTenue * 0.3, bajoElFoco) : Math.max(todosTenue * 0.3, bajoElFoco) * (1 - elegidos);
         const opacidad = elegido ? 1 : 1 - 0.5 * elegidos;
-        return <Persona key={p.id} x={p.x} pies={p.pies} escala={p.escala} luz={luz} colorLuz={paleta.luz} mirarArriba={elegido ? rampa(frame, miran, 10) : 0} opacidad={opacidad} variante={i * 3 + p.fila} />;
+        return <Persona key={p.id} brilloUrl={recursos.brilloLuz} x={p.x} pies={p.pies} escala={p.escala} luz={luz} mirarArriba={elegido ? rampa(frame, miran, 10) : 0} opacidad={opacidad} variante={i * 3 + p.fila} />;
       })}
     </>
   );
 }
 
 // ---------- Reloj + cliente ----------
-export function IslaRelojCliente({ frame, d, paleta }: PropsEscena) {
+export function IslaRelojCliente({ frame, d, recursos }: PropsEscena) {
   const acelera = primero(d.reloj_acelera);
   const seVa = primero(d.cliente_se_va);
   const velocidad = acelera !== undefined && frame >= acelera ? 30 : 6;
@@ -110,7 +109,7 @@ export function IslaRelojCliente({ frame, d, paleta }: PropsEscena) {
       <Reloj cx={RELOJ_LOCAL.cx} cy={RELOJ_LOCAL.cy} tamano={RELOJ_LOCAL.tamano} angulo={angulo} aparicion={1} />
       <SombraPiso cx={CLIENTE_LOCAL.x + 900 * salida} y={CLIENTE_LOCAL.pies} ancho={140 * CLIENTE_LOCAL.escala * 1.1} />
       <div style={{ position: "absolute", left: 0, top: 0, transform: `translate(${900 * salida}px, ${-pasos}px)` }}>
-        <Persona x={CLIENTE_LOCAL.x} pies={CLIENTE_LOCAL.pies} escala={CLIENTE_LOCAL.escala} luz={0.9} colorLuz={paleta.luz} variante={3} conCelular opacidad={1 - rampa(frame, arranca === undefined ? undefined : arranca + 28, 10)} />
+        <Persona brilloUrl={recursos.brilloLuz} x={CLIENTE_LOCAL.x} pies={CLIENTE_LOCAL.pies} escala={CLIENTE_LOCAL.escala} luz={0.9} variante={3} conCelular opacidad={1 - rampa(frame, arranca === undefined ? undefined : arranca + 28, 10)} />
       </div>
     </>
   );

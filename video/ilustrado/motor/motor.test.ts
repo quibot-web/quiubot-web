@@ -165,12 +165,10 @@ describe("presupuesto de render (rendimiento en el navegador)", () => {
   const muestras = Array.from({ length: Math.floor(reel.linea.duracionCuadros / 10) }, (_, i) => i * 10);
   const html = (frame: number) => renderToStaticMarkup(createElement(MundoIlustrado, { frame, fps: 30, reel, paleta, tema: TEMA, marca: MARCA_PROTOTIPO, fotoUrl: "foto.jpg" }));
 
-  it("sin sombras con filter ni box-shadow (las más caras del renderizador del navegador)", () => {
+  it("sin filter, box-shadow, degradados radiales ni fondos url() (Safari no aplica filter en el renderizador, los radiales solo se dibujan centrados y cuestan un canvas por cuadro, y los fondos con imagen no se dibujan)", () => {
     for (const f of muestras) {
       const h = html(f);
-      expect(h, `cuadro ${f}`).not.toMatch(/drop-shadow|box-shadow/);
-      // El único filter permitido: la foto apagada/clara del producto.
-      for (const m of h.matchAll(/filter:([^;"]*)/g)) expect(m[1], `cuadro ${f}`).toMatch(/brightness/);
+      expect(h, `cuadro ${f}`).not.toMatch(/filter:|box-shadow|radial-gradient|background[^;"]*url\(/);
     }
   });
 
@@ -191,3 +189,19 @@ describe("presupuesto de render (rendimiento en el navegador)", () => {
 // Calibrado con el prototipo (máximo medido + ~15%); si una escena nueva
 // lo supera, hay que bajar su costo antes de subir este número.
 const PRESUPUESTO_ELEMENTOS = 520;
+
+describe("cuadro 0 completo (nunca el celular vacío)", () => {
+  const paleta = paletaNoche(TEMA);
+  for (const [nombre, tiempos] of TIEMPOS) {
+    it(`${nombre}: la primera pantalla entra sin fundido y ya muestra el feed con sus imágenes`, () => {
+      const reel = prepararReel(tiempos, PLAN_PROTOTIPO, 30);
+      const h = renderToStaticMarkup(createElement(MundoIlustrado, { frame: 0, fps: 30, reel, paleta, tema: TEMA, marca: MARCA_PROTOTIPO, fotoUrl: "foto.jpg" }));
+      // Ninguna capa con opacidad 0 (el fundido de entrada dejaba el celular en blanco).
+      expect(h).not.toMatch(/opacity:0[;"]/);
+      // El feed está: barra de arriba, publicaciones como imagen y la foto del anuncio.
+      expect(h).toContain("Inicio");
+      expect((h.match(/<img src="[^"]*ilustrado\/post-/g) ?? []).length + (h.match(/<img[^>]*src="foto.jpg"/g) ?? []).length).toBeGreaterThanOrEqual(2);
+    });
+  }
+});
+

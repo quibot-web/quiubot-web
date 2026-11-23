@@ -116,7 +116,24 @@ const Cono = (
 );
 
 // dibujo + ancho del PNG en px (~ tamaño máximo en pantalla con zoom)
+// Halos radiales horneados: el renderizador solo dibuja degradados
+// radiales centrados y crea un canvas por cada uno en cada cuadro.
+const halo = (color: string, alfa: number) => (
+  <svg viewBox="0 0 100 100" width={100} height={100}>
+    <defs>
+      <radialGradient id="halo" cx="50%" cy="50%" r="50%">
+        <stop offset="0" stopColor={color} stopOpacity={alfa} />
+        <stop offset="0.6" stopColor={color} stopOpacity={alfa * 0.35} />
+        <stop offset="1" stopColor={color} stopOpacity={0} />
+      </radialGradient>
+    </defs>
+    <rect width="100" height="100" fill="url(#halo)" />
+  </svg>
+);
+
 export const IMAGENES_FIJAS = {
+  sombra: { dibujo: halo("#000000", 0.5), ancho: 256 },
+  "brillo-blanco": { dibujo: halo("#ffffff", 0.8), ancho: 256 },
   "ilu-comida": { dibujo: <Ilustracion tipo="comida" ancho={700} alto={700} />, ancho: 1050 },
   "ilu-ropa": { dibujo: <Ilustracion tipo="ropa" ancho={700} alto={700} />, ancho: 1050 },
   "ilu-paisaje": { dibujo: <Ilustracion tipo="paisaje" ancho={700} alto={700} />, ancho: 1050 },

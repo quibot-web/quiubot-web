@@ -1,4 +1,10 @@
 {
+ "post-comida": "a0cc535d32887068",
+ "post-ropa": "5762f7e216cc75e8",
+ "post-paisaje": "e1ad4cc078c41718",
+ "post-mascota": "98e631218943ccbb",
+ "sombra": "58542b9f5044427c",
+ "brillo-blanco": "155eb89b4ce7b155",
  "ilu-comida": "3c711e5dd18ae2fc",
  "ilu-ropa": "02a93f2f73d04c05",
  "ilu-paisaje": "d5e8118fd2fafad4",
@@ -20,9 +26,5 @@
  "reloj-corta": "48122f0bb0249615",
  "reloj-larga": "5c980e4b7f19b0d8",
  "candado": "5da445fa20fb5a4c",
- "cono": "1ffaa53eb9b9022e",
- "post-comida": "a0cc535d32887068",
- "post-ropa": "5762f7e216cc75e8",
- "post-paisaje": "e1ad4cc078c41718",
- "post-mascota": "98e631218943ccbb"
+ "cono": "1ffaa53eb9b9022e"
 }

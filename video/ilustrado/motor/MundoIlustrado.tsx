@@ -14,6 +14,7 @@ import { IslaBilletera, IslaGrafica, IslaMultitud, IslaRelojCliente, TAM_MONEDA 
 import { PantallaChat, PantallaFeed, PantallaPerfil } from "./escenas/Pantallas";
 import type { MarcaIlustrada, PaletaIlustrada, PropsEscena } from "./escenas/tipos";
 import type { TemaGuion } from "../../tema";
+import { recursosSinGenerar, type RecursosGenerados } from "../imagenesGeneradas";
 
 const ISLAS_DEL_MUNDO: Partial<Record<IdIsla, ComponentType<PropsEscena>>> = {
   billetera: IslaBilletera,
@@ -50,27 +51,30 @@ export type PropsMundo = {
   tema: TemaGuion;
   marca: MarcaIlustrada;
   fotoUrl: string;
+  // Foto apagada/clara y halo horneados (ReelIlustrado los genera al precargar).
+  recursos?: RecursosGenerados;
 };
 
-export function MundoIlustrado({ frame, fps, reel, paleta, tema, marca, fotoUrl }: PropsMundo) {
+export function MundoIlustrado({ frame, fps, reel, paleta, tema, marca, fotoUrl, recursos = recursosSinGenerar(fotoUrl) }: PropsMundo) {
   // Cámara + una deriva leve para que nunca esté quieta.
   const base = camaraEnCuadro(reel.camara, frame);
   const cam = { x: base.x + Math.sin(frame / 40) * 8, y: base.y + Math.cos(frame / 52) * 8, zoom: base.zoom * (1 + Math.sin(frame / 70) * 0.01) };
   const vista = vistaDelMundo(cam);
   const pisoEnPantalla = ALTO_PANTALLA / 2 + (PISO_Y - cam.y) * cam.zoom;
-  const props = (escena: IdEscena): PropsEscena => ({ frame, fps, d: disparosDeEscena(reel.disparos, escena), paleta, tema, marca, fotoUrl });
+  const props = (escena: IdEscena): PropsEscena => ({ frame, fps, d: disparosDeEscena(reel.disparos, escena), paleta, tema, marca, fotoUrl, recursos });
 
   const islas = (Object.keys(reel.recorrido) as IdIsla[]).filter((id) => seTocan(rectVisible(id, reel.recorrido[id]!), vista, MARGEN_CULLING));
 
   // Pantallas del celular: la actual y, durante el fundido, la anterior.
   const iActual = reel.pantallas.reduce((acc, p, i) => (frame >= p.cuadro ? i : acc), 0);
   const actual = reel.pantallas[iActual];
-  const mezcla = actual ? rampa(frame, actual.cuadro, FUNDIDO_PANTALLA) : 1;
+  // La primera pantalla está completa desde el cuadro 0 (sin fundido de entrada).
+  const mezcla = actual && iActual > 0 ? rampa(frame, actual.cuadro, FUNDIDO_PANTALLA) : 1;
   const anterior = iActual > 0 && mezcla < 1 ? reel.pantallas[iActual - 1] : null;
 
   return (
     <>
-      <Fondo camX={cam.x} horizonte={pisoEnPantalla - 240 * cam.zoom} fondo={paleta.fondo} profundo={paleta.fondoProfundo} luz={paleta.luz} />
+      <Fondo camX={cam.x} horizonte={pisoEnPantalla - 240 * cam.zoom} fondo={paleta.fondo} profundo={paleta.fondoProfundo} luz={paleta.luz} brilloUrl={recursos.brilloLuz} />
       <div style={{ position: "absolute", left: 0, top: 0, width: ANCHO_PANTALLA, height: ALTO_PANTALLA, transformOrigin: "0 0", transform: `translate(${540 - cam.x * cam.zoom}px, ${960 - cam.y * cam.zoom}px) scale(${cam.zoom})` }}>
         {islas.map((id) => {
           const r = reel.recorrido[id]!;

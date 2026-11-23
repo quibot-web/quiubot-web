@@ -49,24 +49,17 @@ const CuadriculaPiso = ({ luz }: { luz: string }) => {
 };
 
 // "horizonte": altura en pantalla de la línea del horizonte.
-export function Fondo({ camX, horizonte: h, fondo, profundo, luz }: { camX: number; horizonte: number; fondo: string; profundo: string; luz: string }) {
+export function Fondo({ camX, horizonte: h, fondo, profundo, luz, brilloUrl }: { camX: number; horizonte: number; fondo: string; profundo: string; luz: string; brilloUrl: string }) {
   const horizonte = Math.round(Math.max(250, Math.min(1750, h)));
   const corrimiento = (((-camX * 0.35) % PASO_RADIAL) + PASO_RADIAL) % PASO_RADIAL;
   return (
     <>
       <div style={{ position: "absolute", inset: 0, background: `linear-gradient(180deg, ${profundo} 0%, ${fondo} 100%)` }} />
-      {/* Luz de fondo detrás de la escena, sobre el horizonte */}
-      <div
-        style={{
-          position: "absolute",
-          left: -360,
-          top: horizonte - 900,
-          width: 1800,
-          height: 1300,
-          borderRadius: "50%",
-          background: `radial-gradient(ellipse at 50% 70%, ${hexConAlfa(luz, 0.42)} 0%, ${hexConAlfa(luz, 0.12)} 45%, ${hexConAlfa(luz, 0)} 72%)`,
-        }}
-      />
+      {/* Luz de fondo detrás de la escena, sobre el horizonte (halo horneado en el color de luz) */}
+      {brilloUrl && (
+        // eslint-disable-next-line @next/next/no-img-element -- dibujo del video
+        <img src={brilloUrl} alt="" decoding="sync" style={{ position: "absolute", left: -360, top: horizonte - 1000, width: 1800, height: 1300, opacity: 0.55 }} />
+      )}
       {/* Piso */}
       <div style={{ position: "absolute", left: 0, right: 0, top: horizonte, bottom: 0, overflow: "hidden", background: `linear-gradient(180deg, ${mezclarColoresHex(fondo, luz, 0.18)} 0%, ${profundo} 100%)` }}>
         <div style={{ position: "absolute", left: -1080 - PASO_RADIAL + corrimiento, top: 0, width: ANCHO_CUADRICULA, height: ALTO_CUADRICULA }}>
@@ -81,7 +74,7 @@ export function Fondo({ camX, horizonte: h, fondo, profundo, luz }: { camX: numb
 
 // Sombra de contacto sobre el piso (da peso a los objetos).
 export function SombraPiso({ cx, y, ancho }: { cx: number; y: number; ancho: number }) {
-  return <div style={{ position: "absolute", left: cx - ancho / 2, top: y - ancho * 0.06, width: ancho, height: ancho * 0.12, borderRadius: "50%", background: "radial-gradient(ellipse, rgba(0,0,0,0.5) 0%, rgba(0,0,0,0) 70%)" }} />;
+  return <ImagenFija nombre="sombra" ancho={ancho} alto={ancho * 0.12} estilo={{ position: "absolute", left: cx - ancho / 2, top: y - ancho * 0.06 }} />;
 }
 
 // ---------- Celular ----------
@@ -148,7 +141,12 @@ export function Post({
   nombreTienda = "tu.tienda",
   corazon = 0,
   comoHtml = false,
+  fotoApagadaUrl,
+  fotoClaraUrl,
 }: {
+  // Variantes horneadas de la foto (imagenesGeneradas.ts); sin ellas, la foto tal cual.
+  fotoApagadaUrl?: string;
+  fotoClaraUrl?: string;
   tipo: TipoPost;
   // Solo el generador de PNG: dibuja la publicación genérica completa en HTML.
   comoHtml?: boolean;
@@ -199,24 +197,14 @@ export function Post({
       <div style={{ position: "relative", width: "100%", height: altoImagen, overflow: "hidden", background: "#222" }}>
         {esAnuncio ? (
           <>
+            {/* Sin filter (Safari no lo aplica en el renderizador): la foto
+                apagada y la clara son dos imágenes horneadas y se cruzan
+                con opacidad. */}
             {/* eslint-disable-next-line @next/next/no-img-element -- dibujo del video; precargada en ReelIlustrado */}
-            <img
-              alt=""
-              decoding="sync"
-              src={fotoUrl}
-              style={{
-                width: "100%",
-                height: "100%",
-                objectFit: "cover",
-                // Apagada: oscura y casi sin color. Clara: luminosa y cálida.
-                filter: apagado ? `brightness(${0.34 + 0.9 * brillo}) saturate(${0.05 + 1.55 * brillo}) sepia(${0.45 * brillo}) contrast(${0.8 + 0.25 * brillo}) blur(${(1 - brillo) * 3}px)` : undefined,
-              }}
-            />
-            {apagado && (
-              <>
-                <div style={{ position: "absolute", inset: 0, background: `rgba(12,12,22,${0.38 * (1 - brillo)})` }} />
-                <div style={{ position: "absolute", inset: 0, background: `radial-gradient(ellipse at 30% 25%, rgba(255,220,160,${0.62 * brillo}) 0%, rgba(255,170,90,${0.26 * brillo}) 45%, rgba(255,170,90,0) 75%)` }} />
-              </>
+            <img alt="" decoding="sync" src={apagado ? fotoClaraUrl ?? fotoUrl : fotoUrl} style={{ position: "absolute", inset: 0, width: "100%", height: "100%", objectFit: "cover" }} />
+            {apagado && brillo < 1 && (
+              // eslint-disable-next-line @next/next/no-img-element -- dibujo del video; precargada en ReelIlustrado
+              <img alt="" decoding="sync" src={fotoApagadaUrl ?? fotoUrl} style={{ position: "absolute", inset: 0, width: "100%", height: "100%", objectFit: "cover", opacity: 1 - brillo }} />
             )}
           </>
         ) : (
@@ -326,19 +314,20 @@ export function Persona({
   pies,
   escala = 1,
   luz = 0,
-  colorLuz,
   mirarArriba = 0,
   opacidad = 1,
   variante = 0,
   espejo = false,
   conCelular = false,
+  brilloUrl = "",
 }: {
+  // Halo horneado en el color de luz (imagenesGeneradas.ts).
+  brilloUrl?: string;
   x: number;
   pies: number;
   escala?: number;
   // 0 = apagada (gris), 1 = iluminada con su color.
   luz?: number;
-  colorLuz: string;
   mirarArriba?: number;
   opacidad?: number;
   variante?: number;
@@ -354,8 +343,9 @@ export function Persona({
   const cabezaY = 92 - mirarArriba * 8;
   return (
     <div style={{ position: "absolute", left: x - 70 * escala, top: pies - 280 * escala, width: 140 * escala, height: 280 * escala, opacity: opacidad, transform: espejo ? "scaleX(-1)" : undefined }}>
-      {luz > 0.05 && (
-        <div style={{ position: "absolute", left: -40 * escala, top: 30 * escala, width: 220 * escala, height: 270 * escala, borderRadius: "50%", background: `radial-gradient(ellipse, ${hexConAlfa(colorLuz, 0.6 * luz)} 0%, ${hexConAlfa(colorLuz, 0)} 68%)` }} />
+      {luz > 0.05 && brilloUrl && (
+        // eslint-disable-next-line @next/next/no-img-element -- dibujo del video
+        <img src={brilloUrl} alt="" decoding="sync" style={{ position: "absolute", left: -60 * escala, top: 20 * escala, width: 260 * escala, height: 290 * escala, opacity: 0.75 * luz }} />
       )}
       <svg viewBox="0 0 140 280" width={140 * escala} height={280 * escala} style={{ position: "absolute", left: 0, top: 0, overflow: "visible" }}>
         <ellipse cx="70" cy="274" rx="60" ry="9" fill="rgba(0,0,0,0.4)" />

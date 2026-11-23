@@ -1,5 +1,6 @@
 import type { TemaGuion } from "../../../tema";
 import type { DisparosEscena } from "../plan";
+import type { RecursosGenerados } from "../../imagenesGeneradas";
 
 export type PaletaIlustrada = { fondo: string; fondoProfundo: string; luz: string };
 
@@ -23,6 +24,8 @@ export type PropsEscena = {
   tema: TemaGuion;
   marca: MarcaIlustrada;
   fotoUrl: string;
+  // Foto apagada/clara y halo de luz horneados al precargar.
+  recursos: RecursosGenerados;
   // Solo pantallas del celular: cuadros en que cambia la pantalla.
   inicioFrase?: Record<string, number>;
 };
