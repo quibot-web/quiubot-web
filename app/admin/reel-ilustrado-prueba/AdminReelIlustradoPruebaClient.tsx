@@ -1,6 +1,8 @@
 "use client";
 import { useRef, useState } from "react";
 import type { TiemposIlustrado } from "@/video/ilustrado/tiempoIlustrado";
+import { nombreNavegador } from "@/app/lib/navegador";
+import { useDescripcionEquipo, useNombreNavegador } from "@/app/lib/useNavegador";
 
 // Reel ilustrado, fase 1: renderiza el reel del prototipo con el motor
 // genérico EN ESTE NAVEGADOR (mismo @remotion/web-renderer que la cola de
@@ -13,13 +15,8 @@ const META_SEGUNDOS_POR_SEGUNDO = 5;
 const TEMA = { color_primario: "#534AB7", color_secundario: "#B9B2FF", fuente: "moderna" as const, logo_url: null, nombre_marca: "Quiubot", instagramUsuario: "quiubot" };
 
 type Fase = "inactivo" | "generando_voz" | "renderizando" | "listo" | "error";
-type Resultado = { duracionVideo: number; segundosRender: number; conVoz: boolean; voz: string | null };
+type Resultado = { duracionVideo: number; segundosRender: number; conVoz: boolean; voz: string | null; navegador: string };
 
-function equipo(): string {
-  if (typeof navigator === "undefined") return "";
-  const n = navigator as Navigator & { deviceMemory?: number };
-  return `${n.hardwareConcurrency ?? "?"} núcleos${n.deviceMemory ? `, ~${n.deviceMemory} GB` : ""} · ${navigator.userAgent.match(/(Chrome|Edg|Firefox|Safari)\/[\d.]+/)?.[0] ?? navigator.userAgent}`;
-}
 
 export default function AdminReelIlustradoPruebaClient() {
   const [fase, setFase] = useState<Fase>("inactivo");
@@ -29,6 +26,7 @@ export default function AdminReelIlustradoPruebaClient() {
   const [resultado, setResultado] = useState<Resultado | null>(null);
   const [urlVideo, setUrlVideo] = useState<string | null>(null);
   const urlRef = useRef<string | null>(null);
+  const entorno = { navegador: useNombreNavegador() ?? "", equipo: useDescripcionEquipo() ?? "" };
 
   async function correr(conVoz: boolean) {
     setError(null);
@@ -81,7 +79,7 @@ export default function AdminReelIlustradoPruebaClient() {
         const url = URL.createObjectURL(blob);
         urlRef.current = url;
         setUrlVideo(url);
-        setResultado({ duracionVideo: durationInFrames / 30, segundosRender, conVoz, voz });
+        setResultado({ duracionVideo: durationInFrames / 30, segundosRender, conVoz, voz, navegador: nombreNavegador(navigator.userAgent) });
         setFase("listo");
       } finally {
         clearInterval(reloj);
@@ -118,7 +116,9 @@ export default function AdminReelIlustradoPruebaClient() {
           Sin voz (gratis, solo medir)
         </button>
       </div>
-      <p style={{ fontSize: 12, color: "#777", marginBottom: 20 }}>Equipo: {equipo()}</p>
+      <p style={{ fontSize: 13, color: "#555", marginBottom: 20 }}>
+        Navegador: <strong>{entorno.navegador}</strong> · Equipo: {entorno.equipo}
+      </p>
 
       {fase === "generando_voz" && <p>Generando la voz y los tiempos por palabra…</p>}
       {fase === "renderizando" && (
@@ -134,7 +134,7 @@ export default function AdminReelIlustradoPruebaClient() {
             {porSegundo.toFixed(2)} s de render por segundo de video {porSegundo <= META_SEGUNDOS_POR_SEGUNDO ? "· cumple la meta" : `· NO cumple la meta (≤ ${META_SEGUNDOS_POR_SEGUNDO})`}
           </p>
           <p style={{ color: "#555" }}>
-            Video de {resultado.duracionVideo.toFixed(1)} s renderizado en {resultado.segundosRender.toFixed(0)} s · {resultado.conVoz ? `con voz real (${resultado.voz})` : "sin voz, tiempos sintéticos"}
+            Video de {resultado.duracionVideo.toFixed(1)} s renderizado en {resultado.segundosRender.toFixed(0)} s en <strong>{resultado.navegador}</strong> · {resultado.conVoz ? `con voz real (${resultado.voz})` : "sin voz, tiempos sintéticos (solo diagnóstico: los reels reales siempre llevan voz)"}
           </p>
         </div>
       )}

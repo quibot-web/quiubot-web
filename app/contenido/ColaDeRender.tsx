@@ -1,5 +1,6 @@
 "use client";
 
+import { useNombreNavegador } from "@/app/lib/useNavegador";
 import { useEffect, useRef, useState, useCallback } from "react";
 import type { PublicacionOrganica } from "@/app/lib/contenido";
 import type { Guion } from "@/video/guion.schema";
@@ -59,6 +60,8 @@ export default function ColaDeRender({
   // fijo (pedido explícito del plan). Antes de tener una medición real
   // no se muestra ningún tiempo estimado.
   const [segundosPorSegundoDeVideo, setSegundosPorSegundoDeVideo] = useState<number | null>(null);
+  // Qué navegador renderiza (Safari y Chrome rinden distinto).
+  const navegador = useNombreNavegador() ?? "este navegador";
   const wakeLockRef = useRef<{ release: () => Promise<void> } | null>(null);
   const procesandoRef = useRef(false);
 
@@ -350,8 +353,8 @@ export default function ColaDeRender({
       <div style={{ fontSize: 13, fontWeight: 700, color: "#1a1a1a", marginBottom: 10 }}>
         Preparando videos{" "}
         {segundosPorSegundoDeVideo
-          ? `(~${Math.round(segundosPorSegundoDeVideo)}x la duración real por pieza, medido en esta sesión)`
-          : "(calculando tiempo…)"}
+          ? `(~${Math.round(segundosPorSegundoDeVideo)}x la duración real por pieza, medido en esta sesión en ${navegador})`
+          : `(calculando tiempo… en ${navegador})`}
       </div>
       {entradas.map(([id, estado]) => {
         const pieza = piezasAprobadas.find((p) => p.id === id);
