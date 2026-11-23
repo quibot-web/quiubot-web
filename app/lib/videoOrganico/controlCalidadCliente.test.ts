@@ -139,4 +139,25 @@ describe("ejecutarControlDeCalidadConReintentos", () => {
     expect(correrQC).toHaveBeenCalledTimes(1);
     expect(rerenderizar).not.toHaveBeenCalled();
   });
+
+  it("voz cortada en el primer render: se vuelve a renderizar la MISMA pieza (sin recompactar) y se aprueba si el segundo pasa", async () => {
+    const correrQC = vi.fn<(b: string, g: string) => Promise<ClasificacionQC>>().mockResolvedValueOnce({ tipo: "voz", hallazgos: ['Se cortó el comienzo de "Escribe"'] }).mockResolvedValueOnce({ tipo: "aprobado" });
+    const recompactar = vi.fn();
+    const rerenderizar = vi.fn().mockResolvedValue("blob-2");
+    const r = await ejecutarControlDeCalidadConReintentos({ blobInicial: "blob-1", guionInicial: "g", crudo: { x: 1 }, correrQC, recompactar, rerenderizar });
+    expect(r.aprobado).toBe(true);
+    expect(r.blob).toBe("blob-2");
+    expect(rerenderizar).toHaveBeenCalledTimes(1);
+    expect(recompactar).not.toHaveBeenCalled();
+  });
+
+  it("voz cortada dos veces: error visible con el motivo, sin un tercer render", async () => {
+    const correrQC = vi.fn<(b: string, g: string) => Promise<ClasificacionQC>>().mockResolvedValue({ tipo: "voz", hallazgos: ['Se cortó el comienzo de "Escribe" (segundo 7.80 del video)'] });
+    const rerenderizar = vi.fn().mockResolvedValue("blob-2");
+    const r = await ejecutarControlDeCalidadConReintentos({ blobInicial: "blob-1", guionInicial: "g", crudo: null, correrQC, recompactar: vi.fn(), rerenderizar });
+    expect(r.aprobado).toBe(false);
+    expect(r.hallazgos[0]).toMatch(/La voz del video no pasó el control dos veces: Se cortó el comienzo de "Escribe"/);
+    expect(rerenderizar).toHaveBeenCalledTimes(1);
+    expect(correrQC).toHaveBeenCalledTimes(2);
+  });
 });

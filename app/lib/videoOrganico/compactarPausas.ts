@@ -66,7 +66,20 @@ const PAUSA_MAXIMA_ABSOLUTA_S = 0.5;
 // seguro dejarlo intacto que arriesgar con un emparejamiento dudoso.
 const TOLERANCIA_EMPAREJAMIENTO_S = 0.05;
 
-type Remocion = { inicioOriginal: number; finOriginal: number; magnitud: number };
+type Remocion = { inicioOriginal: number; finOriginal: number; magnitud: number; despuesDePalabra: number };
+
+// Causa raíz medida (23 nov 2026, 5 reels de staging): el corte iba del
+// fin de la palabra anterior al inicio de la siguiente SEGÚN WHISPER,
+// dejando objetivo/2 (0.2 s) a cada lado. Whisper marca el inicio de la
+// primera palabra de una frase 250-370 ms TARDE, así que se quitaban
+// 40-375 ms del ataque real ("Escribe" sonaba "cribe", "Sigue" mordida en
+// 4 de 5 reels). Ahora el corte cae SIEMPRE dentro del silencio medido en
+// la forma de onda (detectarSilenciosReales, -50 dB) y deja al menos
+// 120 ms de ese silencio antes de que la voz arranque de verdad (y
+// después de que termine la palabra anterior). Whisper solo clasifica
+// el tipo de pausa; nunca decide dónde se corta.
+export const MARGEN_ANTES_DE_PALABRA_S = 0.12;
+export const MARGEN_DESPUES_DE_PALABRA_S = 0.12;
 
 // Zona que es silencio real y hueco entre palabras a la vez: por debajo de
 // esto el emparejamiento se considera ambiguo y no se toca.
@@ -112,9 +125,12 @@ export function compactarConSilenciosReales(
   for (const s of silencios) {
     // Silencio antes de la primera palabra -- el gancho debe arrancar
     // en (casi) 0, sin importar cuánto dure este tramo inicial.
-    if (s.fin_s <= primeraPalabra.inicio_s + TOLERANCIA_EMPAREJAMIENTO_S) {
-      const finReal = Math.min(s.fin_s, primeraPalabra.inicio_s);
-      if (finReal > 1e-6) remociones.push({ inicioOriginal: 0, finOriginal: finReal, magnitud: finReal });
+    // Se corta solo hasta 120 ms antes de donde termina el silencio
+    // medido (= donde la voz arranca de verdad), nunca hasta el inicio
+    // que reporta Whisper.
+    if (s.inicio_s <= 1e-3 || s.fin_s <= primeraPalabra.inicio_s + TOLERANCIA_EMPAREJAMIENTO_S) {
+      const finCorte = s.fin_s - MARGEN_ANTES_DE_PALABRA_S;
+      if (s.inicio_s <= 1e-3 && finCorte > 1e-3) remociones.push({ inicioOriginal: 0, finOriginal: finCorte, magnitud: finCorte, despuesDePalabra: -1 });
       continue;
     }
     // Silencio después de la última palabra -- no afecta nada del
@@ -176,29 +192,20 @@ export function compactarConSilenciosReales(
     const terminaEnPuntuacionFuerte = /[.?!;]$/.test(palabras[i].texto.trim());
     const esLimiteDeFrase = distintaEscena || terminaEnPuntuacionFuerte;
 
-    // El silencio que detectó ffmpeg solo CONFIRMA que este hueco entre
-    // palabras tiene silencio real adentro (ya se descartó arriba el
-    // caso ambiguo) -- una vez confirmado, se compacta el hueco ENTERO
-    // entre las dos palabras (de fin_s de la anterior a inicio_s de la
-    // siguiente), no solo el sub-tramo que ffmpeg marcó. Caso real que
-    // esto corrige: ffmpeg a veces deja de marcar silencio un poco
-    // ANTES de que Whisper diga que la siguiente palabra ya empezó
-    // (ej. real: el silencio mide hasta 12.902 pero "Tercero" recién
-    // se reporta en 13.100) -- esos ~200ms de holgura sin clasificar no
-    // son otra palabra (no hay ninguna palabra ahí, por construcción:
-    // "palabras" es la lista completa y ordenada, sin huecos), así que
-    // es seguro tratarlos igual que el silencio ya confirmado. Sin
-    // este ajuste, esa holgura se sumaba AFUERA de cualquier objetivo y
-    // el techo de 0.5s pedido explícito se rompía en la práctica
-    // (medido real: hasta 0.63s).
-    const inicioHueco = palabras[i].fin_s;
-    const finHueco = palabras[siguiente].inicio_s;
-    const duracion = finHueco - inicioHueco;
+    // El corte cae DENTRO del silencio medido (s.inicio_s..s.fin_s), nunca
+    // en los bordes de palabra de Whisper. Se deja la mitad del objetivo
+    // (y nunca menos de 120 ms) antes del arranque real de la siguiente
+    // palabra, y el resto (nunca menos de 120 ms) tras la anterior. Si el
+    // silencio medido no alcanza para eso, esa pausa no se toca: mejor
+    // una pausa un poco más larga que una palabra mordida.
+    const duracion = s.fin_s - s.inicio_s;
     const objetivo = Math.min(esLimiteDeFrase ? pausaEntreFrases : Math.min(duracion, pausaFrase), PAUSA_MAXIMA_ABSOLUTA_S);
-    if (duracion <= objetivo) continue;
-
-    const recorte = duracion - objetivo;
-    remociones.push({ inicioOriginal: inicioHueco + objetivo / 2, finOriginal: finHueco - objetivo / 2, magnitud: recorte });
+    const guardarAntesDeLaSiguiente = Math.max(MARGEN_ANTES_DE_PALABRA_S, objetivo / 2);
+    const guardarTrasLaAnterior = Math.max(MARGEN_DESPUES_DE_PALABRA_S, objetivo - guardarAntesDeLaSiguiente);
+    const inicioCorte = s.inicio_s + guardarTrasLaAnterior;
+    const finCorte = s.fin_s - guardarAntesDeLaSiguiente;
+    if (finCorte - inicioCorte <= 1e-3) continue;
+    remociones.push({ inicioOriginal: inicioCorte, finOriginal: finCorte, magnitud: finCorte - inicioCorte, despuesDePalabra: i });
   }
 
   remociones.sort((a, b) => a.inicioOriginal - b.inicioOriginal);
@@ -207,6 +214,7 @@ export function compactarConSilenciosReales(
     let total = 0;
     for (const r of remociones) {
       if (r.finOriginal <= tOriginal + 1e-9) total += r.magnitud;
+      else if (r.inicioOriginal < tOriginal) total += tOriginal - r.inicioOriginal; // adentro de lo quitado: cae en su borde
       else break;
     }
     return total;
@@ -233,8 +241,17 @@ export function compactarConSilenciosReales(
   }
   for (let i = 0; i < palabras.length - 1; i++) {
     if (escenaIndicePorPalabra[i] !== escenaIndicePorPalabra[i + 1]) {
-      const yaCubierto = remociones.some((r) => r.inicioOriginal >= palabras[i].fin_s - TOLERANCIA_EMPAREJAMIENTO_S && r.finOriginal <= palabras[i + 1].inicio_s + TOLERANCIA_EMPAREJAMIENTO_S);
-      if (!yaCubierto) puntos.add((palabras[i].fin_s + palabras[i + 1].inicio_s) / 2);
+      const yaCubierto = remociones.some((r) => r.despuesDePalabra === i);
+      if (!yaCubierto) {
+        // Dentro del silencio medido entre las dos (nunca en el punto medio
+        // de Whisper, que puede caer en el ataque de la palabra).
+        const hueco = { desde: palabras[i].fin_s, hasta: palabras[i + 1].inicio_s };
+        const silencio = silencios
+          .map((s) => ({ s, solape: Math.min(hueco.hasta, s.fin_s) - Math.max(hueco.desde, s.inicio_s) }))
+          .filter((x) => x.solape > -0.3)
+          .sort((a, b) => b.solape - a.solape)[0]?.s;
+        puntos.add(silencio ? (silencio.inicio_s + silencio.fin_s) / 2 : (hueco.desde + hueco.hasta) / 2);
+      }
     }
   }
   const finalDeAudio = Math.max(ultimaPalabra.fin_s, ...silencios.map((s) => s.fin_s));
@@ -256,18 +273,21 @@ export function compactarConSilenciosReales(
   }
 
   // Cada tramo global pertenece exactamente a UNA escena: la de la
-  // última palabra cuyo inicio (original) no pasa de su propio punto
-  // medio (por construcción, ningún tramo cruza un límite de escena --
-  // siempre se forzó un punto de corte ahí arriba).
+  // primera palabra cuyo CENTRO (según Whisper) cae dentro del tramo; un
+  // tramo sin palabras (solo silencio) va con el anterior. Antes se
+  // miraba el inicio de Whisper contra el punto medio del tramo, y con
+  // Whisper atrasado (23 nov 2026: "Escribe" marcada 385 ms tarde) el
+  // tramo de la escena nueva quedaba en la anterior.
   const tramosPorEscena: TramoAudio[][] = Array.from({ length: Math.max(...escenaIndicePorPalabra) + 1 }, () => []);
+  let escenaAnterior = escenaIndicePorPalabra[0];
   for (const tramo of tramosGlobales) {
-    const medio = (tramo.original.inicio_s + tramo.original.fin_s) / 2;
-    let indiceEscena = escenaIndicePorPalabra[0];
-    for (let i = 0; i < palabras.length; i++) {
-      if (palabras[i].inicio_s <= medio) indiceEscena = escenaIndicePorPalabra[i];
-      else break;
-    }
+    const k = palabras.findIndex((p) => {
+      const centro = (p.inicio_s + p.fin_s) / 2;
+      return centro >= tramo.original.inicio_s - 1e-9 && centro < tramo.original.fin_s;
+    });
+    const indiceEscena = k >= 0 ? escenaIndicePorPalabra[k] : escenaAnterior;
     tramosPorEscena[indiceEscena].push(tramo);
+    escenaAnterior = indiceEscena;
   }
 
   return { palabras: palabrasCompactadas, tramosPorEscena };

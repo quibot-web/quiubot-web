@@ -14,6 +14,7 @@ import {
   erroresDesdeQC,
   esSoloProblemaDePausas,
   ejecutarControlDeCalidadConReintentos,
+  controlarVozDelVideo,
   type ClasificacionQC,
 } from "@/app/lib/videoOrganico/controlCalidadCliente";
 
@@ -100,7 +101,10 @@ export default function ColaDeRender({
   // usaba la suma estimada por la IA -- 16 s en un reel de 23,7 s: la
   // "mitad" y el "final" no eran ni la mitad ni el final).
   // ilustrado: el render fue el reel ilustrado -> control propio.
-  async function correrControlDeCalidad(blob: Blob, guionActual: Guion, duracionS: number, ilustrado: boolean): Promise<ClasificacionQC> {
+  async function correrControlDeCalidad(blob: Blob, guionActual: Guion, duracionS: number, ilustrado: boolean, piezaId: string): Promise<ClasificacionQC> {
+    // La voz primero: si un arranque llegó cortado o corrido, se vuelve a renderizar.
+    const hallazgosVoz = await controlarVozDelVideo({ blob, guion: guionActual, piezaId });
+    if (hallazgosVoz.length > 0) return { tipo: "voz", hallazgos: hallazgosVoz };
     const momentos: { etiqueta: string; segundo: number; esperado?: string }[] =
       ilustrado && guionActual.ilustrado && guionActual.tiemposRender && guionActual.palabrasPorEscena && guionActual.segmentosAudio
         ? momentosControlIlustrado({ tiemposRender: guionActual.tiemposRender, palabrasPorEscena: guionActual.palabrasPorEscena, segmentosAudio: guionActual.segmentosAudio }, guionActual.ilustrado, guionActual.fps)
@@ -264,7 +268,7 @@ export default function ColaDeRender({
               blobInicial: blob,
               guionInicial: guion,
               crudo: controlCalidadActual?.crudo,
-              correrQC: (b, g) => correrControlDeCalidad(b, g, ultimaDuracionS, ultimoFueIlustrado),
+              correrQC: (b, g) => correrControlDeCalidad(b, g, ultimaDuracionS, ultimoFueIlustrado, pieza.id),
               recompactar: async (g, crudo, limites) => {
                 const resRecompactar = await fetch("/api/admin/reel-automatico-prueba/recompactar", {
                   method: "POST",
@@ -296,7 +300,7 @@ export default function ColaDeRender({
               headers: { "Content-Type": "application/json" },
               body: JSON.stringify({ accion: "guardar_calidad", estado: "error", control_calidad: { aprobado: false, forzado: false, hallazgos: resultadoLoop.hallazgos } }),
             });
-            actualizarEstado(pieza.id, { fase: "error", errorMsg: "El control de calidad rechazó este reel -- revísalo en la pieza." });
+            actualizarEstado(pieza.id, { fase: "error", errorMsg: `El control de calidad rechazó este reel: ${resultadoLoop.hallazgos[0] ?? "revísalo en la pieza."}` });
             return;
           }
 

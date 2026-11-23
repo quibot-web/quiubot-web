@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import { compactarConSilenciosReales, corregirPalabrasConSilencios, PAUSA_DENTRO_DE_FRASE_S, PAUSA_ENTRE_FRASES_S } from "./compactarPausas";
+import { compactarConSilenciosReales, corregirPalabrasConSilencios, MARGEN_ANTES_DE_PALABRA_S, PAUSA_DENTRO_DE_FRASE_S, PAUSA_ENTRE_FRASES_S } from "./compactarPausas";
 
 describe("compactarConSilenciosReales", () => {
   it("sin silencios reales detectados, nada se toca y da un solo tramo por escena", () => {
@@ -14,14 +14,15 @@ describe("compactarConSilenciosReales", () => {
     expect(tramosPorEscena[1]).toHaveLength(1);
   });
 
-  it("silencio real ANTES de la primera palabra se recorta por completo (el gancho arranca en ~0)", () => {
+  it("silencio real ANTES de la primera palabra se recorta hasta 120 ms antes de que la voz arranque (el gancho arranca en ~0.12 s, sin morder el ataque)", () => {
     const palabras = [
       { texto: "¿Cero", inicio_s: 0.42, fin_s: 0.9 },
       { texto: "mensajes?", inicio_s: 0.9, fin_s: 1.3 },
     ];
     const silencios = [{ inicio_s: 0, fin_s: 0.42 }];
-    const { palabras: resultado } = compactarConSilenciosReales(palabras, silencios, [0, 0]);
-    expect(resultado[0].compactado.inicio_s).toBeCloseTo(0, 5);
+    const { palabras: resultado, tramosPorEscena } = compactarConSilenciosReales(palabras, silencios, [0, 0]);
+    expect(resultado[0].compactado.inicio_s).toBeCloseTo(MARGEN_ANTES_DE_PALABRA_S, 5);
+    expect(tramosPorEscena[0][0].original.inicio_s).toBeCloseTo(0.42 - MARGEN_ANTES_DE_PALABRA_S, 5);
   });
 
   it("silencio real DENTRO de una frase (sin puntuación fuerte antes) se recorta a 0.25s, nunca a 0.4", () => {
@@ -123,10 +124,11 @@ describe("compactarConSilenciosReales", () => {
     ];
     const silencios = [{ inicio_s: 7.484, fin_s: 8.063 }]; // silencio real medido por ffmpeg
     const { palabras: resultado } = compactarConSilenciosReales(palabras, silencios, [0, 1]);
-    // se comprime a 0.4s (límite de frase, distinta escena) -- medido
-    // sobre el hueco ENTERO entre palabras (7.98 a 8.5), no solo sobre
-    // el sub-tramo que ffmpeg marcó -- ya NO se deja intacto.
-    expect(resultado[1].compactado.inicio_s).toBeCloseTo(7.98 + PAUSA_ENTRE_FRASES_S, 5);
+    // Se comprime (ya NO se deja intacto), pero solo DENTRO del silencio
+    // medido: quedan 0.4 s de ese silencio (23 nov 2026: nunca se corta
+    // con los bordes de Whisper).
+    const quitado = 8.063 - 7.484 - PAUSA_ENTRE_FRASES_S;
+    expect(resultado[1].compactado.inicio_s).toBeCloseTo(8.5 - quitado, 5);
   });
 
   it("ronda J -- techo duro de 0.5s: nunca se supera aunque pausaEntreFrases_s pida más", () => {
@@ -149,9 +151,13 @@ describe("compactarConSilenciosReales", () => {
       { texto: "a", inicio_s: 34.18, fin_s: 34.3 },
     ];
     const silencios = [{ inicio_s: 33.0497, fin_s: 33.8614 }];
-    const { palabras: resultado } = compactarConSilenciosReales(palabras, silencios, [0, 0, 1, 1]);
+    const { palabras: resultado, tramosPorEscena } = compactarConSilenciosReales(palabras, silencios, [0, 0, 1, 1]);
+    // Del silencio medido (0.81 s) quedan 0.4 s; Whisper marca "Sigue"
+    // 0.24 s después de donde termina el silencio y "volver." 0.05 s
+    // después de donde empieza, así que entre sus tiempos hay 0.4 + 0.24 - 0.05.
     const hueco = resultado[2].compactado.inicio_s - resultado[1].compactado.fin_s;
-    expect(hueco).toBeCloseTo(PAUSA_ENTRE_FRASES_S, 5);
+    expect(hueco).toBeCloseTo(PAUSA_ENTRE_FRASES_S + (34.1 - 33.8614) - (33.1 - 33.0497), 5);
+    expect(tramosPorEscena[1][0].original.inicio_s).toBeCloseTo(33.8614 - PAUSA_ENTRE_FRASES_S / 2, 5);
   });
 
   it("caso real (prototipo, 18 nov 2026): los dos bordes de Whisper se meten ~90ms en un silencio real de 0.76s -- ya no se deja sin tocar si la zona segura (hueco y silencio a la vez) es grande", () => {
@@ -163,7 +169,56 @@ describe("compactarConSilenciosReales", () => {
     ];
     const silencios = [{ inicio_s: 29.21, fin_s: 29.97 }];
     const { palabras: r } = compactarConSilenciosReales(palabras, silencios, [0, 0, 1, 1]);
-    expect(r[2].compactado.inicio_s - r[1].compactado.fin_s).toBeCloseTo(PAUSA_ENTRE_FRASES_S, 5);
+    // Se recorta (ya no queda intacto): del silencio medido quedan 0.4 s.
+    const quitado = 29.97 - 29.21 - PAUSA_ENTRE_FRASES_S;
+    expect(r[2].compactado.inicio_s).toBeCloseTo(29.88 - quitado, 5);
+  });
+
+  it("caso real (cd34eec3, 23 nov 2026): Whisper marca 'Escribe' 385 ms tarde -- el corte ya no se come el 'Es-'", () => {
+    // Voz real: silencio medido a -50 dB 8.874-9.595; la voz de "Escribe"
+    // arranca en 9.595, pero Whisper dice 9.98. Antes el tramo de e3
+    // empezaba en 9.78 (se perdían ~180 ms: sonaba "cribe").
+    const palabras = [
+      { texto: "reacciones.", inicio_s: 8.3, fin_s: 8.84 },
+      { texto: "Escribe", inicio_s: 9.98, fin_s: 10.4 },
+    ];
+    const silencios = [{ inicio_s: 8.874, fin_s: 9.5947 }];
+    const { tramosPorEscena } = compactarConSilenciosReales(palabras, silencios, [0, 1]);
+    expect(tramosPorEscena[1][0].original.inicio_s).toBeLessThanOrEqual(9.5947 - MARGEN_ANTES_DE_PALABRA_S + 1e-9);
+    expect(tramosPorEscena[1][0].original.inicio_s).toBeGreaterThanOrEqual(8.874);
+  });
+
+  it("regla de seguridad: con cualquier pausa y cualquier atraso de Whisper, ningún corte deja menos de 120 ms de silencio medido antes de una palabra, y todo lo quitado es silencio medido", () => {
+    let semilla = 7;
+    const azar = () => ((semilla = (semilla * 16807) % 2147483647) / 2147483647);
+    for (let caso = 0; caso < 300; caso++) {
+      const palabras: { texto: string; inicio_s: number; fin_s: number }[] = [];
+      const silencios: { inicio_s: number; fin_s: number }[] = [];
+      const escenas: number[] = [];
+      let t = azar() * 0.6;
+      if (t > 0.2) silencios.push({ inicio_s: 0, fin_s: t });
+      for (let k = 0; k < 8; k++) {
+        const dur = 0.15 + azar() * 0.5;
+        const atrasoWhisper = azar() * 0.45; // Whisper marca tarde el inicio
+        palabras.push({ texto: azar() < 0.3 ? "fin." : "pal", inicio_s: t + atrasoWhisper, fin_s: t + dur + atrasoWhisper * 0.2 });
+        escenas.push(Math.floor(k / 3));
+        t += dur;
+        const pausa = azar() < 0.5 ? 0.05 + azar() * 0.15 : 0.2 + azar() * 1.2;
+        if (pausa >= 0.2) silencios.push({ inicio_s: t, fin_s: t + pausa });
+        t += pausa;
+      }
+      const opciones = azar() < 0.5 ? {} : { pausaEntreFrases_s: 0.3, pausaDentroDeFrase_s: 0.15 };
+      const { tramosPorEscena } = compactarConSilenciosReales(palabras, silencios, escenas, opciones);
+      const tramos = tramosPorEscena.flat().sort((a, b) => a.original.inicio_s - b.original.inicio_s);
+      for (let k = 1; k < tramos.length; k++) {
+        const quitadoDesde = tramos[k - 1].original.fin_s;
+        const quitadoHasta = tramos[k].original.inicio_s;
+        if (quitadoHasta - quitadoDesde < 1e-6) continue; // división sin recorte
+        const s = silencios.find((x) => x.inicio_s - 1e-9 <= quitadoDesde && quitadoHasta <= x.fin_s + 1e-9);
+        expect(s, `caso ${caso}: lo quitado ${quitadoDesde}-${quitadoHasta} no es silencio medido`).toBeDefined();
+        expect(s!.fin_s - quitadoHasta).toBeGreaterThanOrEqual(MARGEN_ANTES_DE_PALABRA_S - 1e-9);
+      }
+    }
   });
 });
 

@@ -2,6 +2,7 @@
 // genérico -- escenas del catálogo, acciones amarradas a palabras,
 // cámara automática y voz por escena. Reemplaza al componente del
 // prototipo: el prototipo es ahora solo un plan (planPrototipo.ts).
+import { cuadrosDeTramo } from "../cuadrosDeTramo";
 import { useEffect, useMemo, useState } from "react";
 import { AbsoluteFill, Sequence, staticFile, useCurrentFrame, useDelayRender, useVideoConfig } from "remotion";
 import { familiaDeFuente } from "../fuentes";
@@ -96,12 +97,11 @@ export function ReelIlustrado({ tiempos, plan, vozUrl, fotoUrl, tema, marca, pis
           return (
             <Sequence key={e.id} from={e.desde} durationInFrames={Math.max(1, e.duracion)}>
               {tramos.map((tramo, i) => {
-                const desde = Math.round((tramo.compactado.inicio_s - e.inicio_s) * fps);
-                const dur = Math.round((tramo.compactado.fin_s - tramo.compactado.inicio_s) * fps);
+                const { desde, duracion: dur, trimBefore, trimAfter } = cuadrosDeTramo(tramo, e.inicio_s, fps);
                 if (dur <= 0) return null;
                 return (
                   <Sequence key={i} from={desde} durationInFrames={dur}>
-                    <CapaVoz url={vozUrl} trimBefore={Math.round(tramo.original.inicio_s * fps)} trimAfter={Math.round(tramo.original.fin_s * fps)} duracionCuadros={dur} fps={fps} />
+                    <CapaVoz url={vozUrl} trimBefore={trimBefore} trimAfter={trimAfter} duracionCuadros={dur} fps={fps} />
                   </Sequence>
                 );
               })}

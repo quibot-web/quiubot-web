@@ -1,3 +1,4 @@
+import { cuadrosDeTramo } from "../cuadrosDeTramo";
 import { AbsoluteFill, Sequence, spring, useCurrentFrame } from "remotion";
 import { idsFotosSinTexto, layoutDeEscena, layoutDelVisual, paletaDeEstilo, type EstiloVisualId, type LayoutEscena } from "../estilos/estilos";
 import { FondoNoche } from "../estilos/FondoNoche";
@@ -232,14 +233,18 @@ export function ReelAutomatico({ guion, medios, pistaMusicaUrl, efectos = [], mo
   // reasignada DENTRO del .map() que arma el JSX de cada escena:
   // react-hooks/immutability rechaza mutar una variable de closure
   // durante el render, aunque acá sea determinístico y seguro.
-  const duracionesEnCuadros = escenas.map((escena) => {
+  // Cada escena empieza en round(tiempo REAL acumulado), nunca en la suma
+  // de duraciones ya redondeadas: esa suma acumulaba medio cuadro de error
+  // por escena y las últimas frases sonaban 45-65 ms corridas (medido con
+  // el control de arranques de voz, 23 nov 2026). La última termina en
+  // round(total), igual que duracionReelAutomaticoEnCuadros.
+  const segundosPorEscena = escenas.map((escena) => {
     const tiempo = tiemposRender.find((t) => t.escena_id === escena.id);
-    return Math.round((tiempo ? tiempo.fin_s - tiempo.inicio_s : 0) * fps);
+    return tiempo ? tiempo.fin_s - tiempo.inicio_s : 0;
   });
-  const desdeEscenaPorIndice = duracionesEnCuadros.reduce<number[]>((acc, _duracion, i) => {
-    acc.push(i === 0 ? 0 : acc[i - 1] + duracionesEnCuadros[i - 1]);
-    return acc;
-  }, []);
+  const desdeEscenaPorIndice = segundosPorEscena.map((_, i) => Math.round(segundosPorEscena.slice(0, i).reduce((a, b) => a + b, 0) * fps));
+  const finTotalCuadros = Math.round(segundosPorEscena.reduce((a, b) => a + b, 0) * fps);
+  const duracionesEnCuadros = desdeEscenaPorIndice.map((desde, i) => (i + 1 < desdeEscenaPorIndice.length ? desdeEscenaPorIndice[i + 1] : finTotalCuadros) - desde);
 
   const nodosEscenas = escenas.map((escena, i) => {
     const tiempo = tiemposRender.find((t) => t.escena_id === escena.id);
@@ -301,15 +306,14 @@ export function ReelAutomatico({ guion, medios, pistaMusicaUrl, efectos = [], mo
               // ronda I) YA ES el borde del primer/último tramo de esta
               // escena, así que siempre coincide exacto, haya habido
               // margen real ahí (un corte de verdad) o no.
-              const desdeCuadro = Math.round((tramo.compactado.inicio_s - inicioEscena_s) * fps);
-              const duracionTramoCuadros = Math.round((tramo.compactado.fin_s - tramo.compactado.inicio_s) * fps);
+              const { desde: desdeCuadro, duracion: duracionTramoCuadros, trimBefore, trimAfter } = cuadrosDeTramo(tramo, inicioEscena_s, fps);
               if (duracionTramoCuadros <= 0) return null;
               return (
                 <Sequence key={`${escena.id}-voz-${iTramo}`} from={desdeCuadro} durationInFrames={duracionTramoCuadros}>
                   <CapaVoz
                     url={guion.vozUrl!}
-                    trimBefore={Math.round(tramo.original.inicio_s * fps)}
-                    trimAfter={Math.round(tramo.original.fin_s * fps)}
+                    trimBefore={trimBefore}
+                    trimAfter={trimAfter}
                     duracionCuadros={duracionTramoCuadros}
                     fps={fps}
                   />

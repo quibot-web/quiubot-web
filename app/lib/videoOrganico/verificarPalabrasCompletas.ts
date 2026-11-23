@@ -17,12 +17,33 @@ import type { TramoAudio } from "./compactarPausas";
 // un falso positivo o negativo por el propio error de Whisper).
 export type HallazgoPalabraPerdida = { palabra: string; inicio_s: number; fin_s: number; mensaje: string };
 
-export function verificarPalabrasCompletas(palabrasOriginales: PalabraConTiempo[], tramosPorEscena: TramoAudio[][]): HallazgoPalabraPerdida[] {
-  const tramos = tramosPorEscena.flat();
+// 23 nov 2026: Whisper a veces estira una palabra sobre un silencio medido
+// ("y" 21.48-22.28 con silencio real 21.58-21.87). Como compactarPausas
+// solo quita silencio medido, una palabra se pierde solo si lo quitado toca
+// la parte de ella que TIENE sonido (fuera de los silencios medidos).
+export function verificarPalabrasCompletas(palabrasOriginales: PalabraConTiempo[], tramosPorEscena: TramoAudio[][], silencios: { inicio_s: number; fin_s: number }[] = []): HallazgoPalabraPerdida[] {
+  const tramos = tramosPorEscena.flat().sort((a, b) => a.original.inicio_s - b.original.inicio_s);
+  // Lo quitado: antes del primer tramo, entre tramos y después del último.
+  const quitado: { desde: number; hasta: number }[] = [];
+  if (tramos.length === 0) quitado.push({ desde: -Infinity, hasta: Infinity });
+  else {
+    quitado.push({ desde: -Infinity, hasta: tramos[0].original.inicio_s });
+    for (let k = 1; k < tramos.length; k++) quitado.push({ desde: tramos[k - 1].original.fin_s, hasta: tramos[k].original.inicio_s });
+    quitado.push({ desde: tramos[tramos.length - 1].original.fin_s, hasta: Infinity });
+  }
   const hallazgos: HallazgoPalabraPerdida[] = [];
   for (const p of palabrasOriginales) {
-    const sobrevive = tramos.some((t) => t.original.inicio_s <= p.inicio_s + 1e-6 && t.original.fin_s >= p.fin_s - 1e-6);
-    if (!sobrevive) {
+    let conSonidoQuitado = 0;
+    for (const q of quitado) {
+      const a = Math.max(q.desde, p.inicio_s);
+      const b = Math.min(q.hasta, p.fin_s);
+      if (b - a <= 1e-6) continue;
+      // descuenta lo que de ese pedazo es silencio medido
+      let silencio = 0;
+      for (const s of silencios) silencio += Math.max(0, Math.min(b, s.fin_s) - Math.max(a, s.inicio_s));
+      conSonidoQuitado += Math.max(0, b - a - silencio);
+    }
+    if (conSonidoQuitado > 1e-3) {
       hallazgos.push({
         palabra: p.texto,
         inicio_s: p.inicio_s,

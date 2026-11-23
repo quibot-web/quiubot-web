@@ -25,12 +25,14 @@ export type LineaDeTiempo = {
 };
 
 export function construirLineaDeTiempo(t: TiemposIlustrado, fps: number): LineaDeTiempo {
-  let acumulado = 0;
+  // Cada escena empieza en round(tiempo REAL acumulado): sumar duraciones
+  // ya redondeadas acumulaba medio cuadro de error por escena (la voz de
+  // las últimas frases quedaba corrida, 23 nov 2026).
+  let acumulado_s = 0;
   const escenas = t.tiemposRender.map((tr) => {
-    const duracion = Math.round((tr.fin_s - tr.inicio_s) * fps);
-    const e = { id: tr.escena_id, desde: acumulado, duracion, inicio_s: tr.inicio_s };
-    acumulado += duracion;
-    return e;
+    const desde = Math.round(acumulado_s * fps);
+    acumulado_s += tr.fin_s - tr.inicio_s;
+    return { id: tr.escena_id, desde, duracion: Math.round(acumulado_s * fps) - desde, inicio_s: tr.inicio_s };
   });
   const palabras = t.palabrasPorEscena.flatMap((pe) => {
     const e = escenas.find((x) => x.id === pe.escena_id)!;
@@ -47,7 +49,7 @@ export function construirLineaDeTiempo(t: TiemposIlustrado, fps: number): LineaD
     if (!p) throw new Error(`Palabra ${indice} de ${id} no existe`);
     return p.desde;
   };
-  return { fps, duracionCuadros: acumulado, escenas, cuadroDePalabra, palabras };
+  return { fps, duracionCuadros: Math.round(acumulado_s * fps), escenas, cuadroDePalabra, palabras };
 }
 
 // Cámara: puntos clave (cuadro -> centro del mundo y zoom) y movimiento

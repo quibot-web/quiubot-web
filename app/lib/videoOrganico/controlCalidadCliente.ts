@@ -1,4 +1,5 @@
 import { silenciosLargosDesdeNivelesDb, type SilencioLargo } from "./encontrarSilenciosLargos";
+import { controlarArranquesDeVoz, type AudioMono, type TramoVoz } from "./controlArranquesVoz";
 
 // Extraído de app/admin/reel-automatico-prueba/AdminReelAutomaticoPruebaClient.tsx
 // (paso 3 de la integración a /contenido, plan en memoria
@@ -239,6 +240,100 @@ export function esSoloProblemaDePausas(hallazgos: HallazgoVision[], silencio: Re
 // recompactaba UNA vez y subía sin volver a verificar el resultado).
 export const MAX_REINTENTOS_QC = 2;
 
+// ---------- Control de la voz después del render (23 nov 2026) ----------
+// Principal: energía de cada arranque de palabra del video contra la voz
+// TTS original (controlArranquesVoz.ts). Segundo: Whisper sobre el audio
+// final, solo para palabras que faltan del todo (ruta control-voz).
+
+async function decodificarMono(buffer: ArrayBuffer): Promise<AudioMono> {
+  const AudioContextCtor = window.AudioContext || (window as unknown as { webkitAudioContext: typeof AudioContext }).webkitAudioContext;
+  const contexto = new AudioContextCtor();
+  try {
+    const d = await contexto.decodeAudioData(buffer.slice(0));
+    const muestras = new Float32Array(d.length);
+    for (let c = 0; c < d.numberOfChannels; c++) {
+      const datos = d.getChannelData(c);
+      for (let i = 0; i < d.length; i++) muestras[i] += datos[i] / d.numberOfChannels;
+    }
+    return { muestras, sampleRate: d.sampleRate };
+  } finally {
+    await contexto.close().catch(() => {});
+  }
+}
+
+// WAV mono de 16 kHz (lo que necesita Whisper; ~32 KB por segundo).
+export function aWav16k(audio: AudioMono): ArrayBuffer {
+  const sr = 16000;
+  const paso = audio.sampleRate / sr;
+  const n = Math.floor(audio.muestras.length / paso);
+  const buf = new ArrayBuffer(44 + n * 2);
+  const v = new DataView(buf);
+  const txt = (o: number, t: string) => [...t].forEach((c, i) => v.setUint8(o + i, c.charCodeAt(0)));
+  txt(0, "RIFF");
+  v.setUint32(4, 36 + n * 2, true);
+  txt(8, "WAVE");
+  txt(12, "fmt ");
+  v.setUint32(16, 16, true);
+  v.setUint16(20, 1, true);
+  v.setUint16(22, 1, true);
+  v.setUint32(24, sr, true);
+  v.setUint32(28, sr * 2, true);
+  v.setUint16(32, 2, true);
+  v.setUint16(34, 16, true);
+  txt(36, "data");
+  v.setUint32(40, n * 2, true);
+  for (let i = 0; i < n; i++) {
+    const a = Math.floor(i * paso);
+    const b = Math.max(a + 1, Math.floor((i + 1) * paso));
+    let suma = 0;
+    for (let j = a; j < b; j++) suma += audio.muestras[j] ?? 0;
+    const x = Math.max(-1, Math.min(1, suma / (b - a)));
+    v.setInt16(44 + i * 2, Math.round(x * 32767), true);
+  }
+  return buf;
+}
+
+export type GuionParaControlDeVoz = {
+  vozUrl?: string;
+  segmentosAudio?: { escena_id: string; tramos: TramoVoz[] }[];
+  palabrasPorEscena?: { escena_id: string; palabras: { texto: string; inicio_s: number }[] }[];
+};
+
+export async function controlarVozDelVideo(params: { blob: Blob; guion: GuionParaControlDeVoz; piezaId: string }): Promise<string[]> {
+  const { guion } = params;
+  if (!guion.vozUrl || !guion.segmentosAudio?.length) return [];
+  let final: AudioMono;
+  let original: AudioMono;
+  try {
+    const resVoz = await fetch(guion.vozUrl, { mode: "cors" });
+    if (!resVoz.ok) throw new Error(`la voz original respondió ${resVoz.status}`);
+    [final, original] = await Promise.all([params.blob.arrayBuffer().then(decodificarMono), resVoz.arrayBuffer().then(decodificarMono)]);
+  } catch (err) {
+    // Nunca se aprueba sin medir: si no se pudo, no pasa.
+    return [`No se pudo verificar la voz del video (${err instanceof Error ? err.message : "error al leer el audio"}).`];
+  }
+  const energia = controlarArranquesDeVoz({
+    original,
+    final,
+    tramos: guion.segmentosAudio.flatMap((s) => s.tramos),
+    palabras: guion.palabrasPorEscena?.flatMap((e) => e.palabras),
+  });
+  if (energia.hallazgos.length > 0) return energia.hallazgos;
+
+  // Segundo control (Whisper). Si la transcripción no está disponible (red,
+  // créditos de OpenAI), no bloquea: el control principal ya pasó.
+  try {
+    const form = new FormData();
+    form.set("audio", new Blob([aWav16k(final)], { type: "audio/wav" }), "final.wav");
+    const res = await fetch(`/api/contenido/${params.piezaId}/control-voz`, { method: "POST", body: form });
+    if (!res.ok) return [];
+    const data = (await res.json()) as { hallazgos?: string[] };
+    return data.hallazgos ?? [];
+  } catch {
+    return [];
+  }
+}
+
 export function limitesDeRecompactacion(intentosRecompactacion: number): { pausaEntreFrases_s: number; pausaDentroDeFrase_s: number } {
   return {
     pausaEntreFrases_s: Math.max(0.3, 0.4 - 0.05 * intentosRecompactacion),
@@ -246,7 +341,9 @@ export function limitesDeRecompactacion(intentosRecompactacion: number): { pausa
   };
 }
 
-export type ClasificacionQC = { tipo: "aprobado" } | { tipo: "pausas" } | { tipo: "rechazado"; hallazgos: string[] };
+// "voz": el control de la voz encontró un arranque cortado/corrido o una
+// palabra faltante -> se vuelve a renderizar UNA vez; si falla de nuevo, error.
+export type ClasificacionQC = { tipo: "aprobado" } | { tipo: "pausas" } | { tipo: "voz"; hallazgos: string[] } | { tipo: "rechazado"; hallazgos: string[] };
 
 export type ResultadoLoopQC<TGuion, TBlob> = {
   aprobado: boolean;
@@ -279,13 +376,24 @@ export async function ejecutarControlDeCalidadConReintentos<TGuion, TBlob>(param
   let guion = params.guionInicial;
   let blob = params.blobInicial;
   let intentosRecompactacion = 0;
+  let rerendersPorVoz = 0;
   let hallazgosFinal: string[] = [];
 
-  for (let intento = 1; intento <= maxIntentos; intento++) {
+  for (let intento = 1; intento <= maxIntentos + rerendersPorVoz; intento++) {
     const resultadoQC = await params.correrQC(blob, guion);
 
     if (resultadoQC.tipo === "aprobado") {
       return { aprobado: true, guion, blob, hallazgos: [], intentosRecompactacion };
+    }
+
+    if (resultadoQC.tipo === "voz") {
+      if (rerendersPorVoz === 0) {
+        rerendersPorVoz += 1;
+        blob = await params.rerenderizar(guion);
+        continue;
+      }
+      hallazgosFinal = [`La voz del video no pasó el control dos veces: ${resultadoQC.hallazgos[0] ?? "sin detalle"}`, ...resultadoQC.hallazgos.slice(1)];
+      break;
     }
 
     if (resultadoQC.tipo === "pausas" && params.crudo && intento < maxIntentos) {

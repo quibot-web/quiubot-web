@@ -14,6 +14,7 @@ import { validarEdicionDesdeAudio, validarEstructuraConsejosNumeradosAudio } fro
 import { generarVoz, type CredencialesCloudinary } from "./generarVoz";
 import { alinearPalabras } from "./alinearPalabras";
 import { construirCamposDeTiempo } from "./compactarPausas";
+import { UMBRAL_SILENCIO_VOZ_DB } from "./detectarSilenciosReales";
 import { verificarPalabrasCompletas } from "./verificarPalabrasCompletas";
 import { calcularHashNarracion } from "./hashNarracion";
 
@@ -94,7 +95,7 @@ export type ResultadoGenerarGuionConVoz =
       guion: Guion;
       puntajeAlineacion: number;
       intentosGuion: number;
-      crudo: { palabrasPorEscenaCrudo: unknown; silencios: unknown };
+      crudo: { palabrasPorEscenaCrudo: unknown; silencios: unknown; silenciosUmbral_db?: number };
       planIlustrado: EstadoPlanIlustrado;
     }
   | { ok: false; status: number; error: string; resumenErrores?: string[]; propuestaSerie?: PropuestaSerie };
@@ -106,7 +107,7 @@ export type ResultadoRegenerarVoz =
       ok: true;
       campos: Pick<Guion, "tiemposRender" | "palabrasPorEscena" | "segmentosAudio" | "narracionHash" | "vozUrl">;
       puntajeAlineacion: number;
-      crudo: { palabrasPorEscenaCrudo: unknown; silencios: unknown };
+      crudo: { palabrasPorEscenaCrudo: unknown; silencios: unknown; silenciosUmbral_db?: number };
     }
   | { ok: false; status: number; error: string; resumenErrores?: string[] };
 
@@ -144,7 +145,7 @@ export type ResultadoVozYTiempos =
       ok: true;
       campos: Pick<Guion, "tiemposRender" | "palabrasPorEscena" | "segmentosAudio" | "vozUrl">;
       puntajeAlineacion: number;
-      crudo: { palabrasPorEscenaCrudo: unknown; silencios: unknown };
+      crudo: { palabrasPorEscenaCrudo: unknown; silencios: unknown; silenciosUmbral_db?: number };
     }
   | { ok: false; status: number; error: string; resumenErrores?: string[] };
 
@@ -163,7 +164,7 @@ export async function generarVozYTiempos(narraciones: { id: string; narracion: s
   const { palabrasPorEscena: palabrasPorEscenaCrudo, puntaje } = alinearPalabras(narraciones, palabras);
   const { tiemposRender, palabrasPorEscena, segmentosAudio, palabrasFlat, tramosPorEscena } = construirCamposDeTiempo(palabrasPorEscenaCrudo, silencios);
 
-  const hallazgosPalabrasPerdidas = verificarPalabrasCompletas(palabrasFlat, tramosPorEscena);
+  const hallazgosPalabrasPerdidas = verificarPalabrasCompletas(palabrasFlat, tramosPorEscena, silencios);
   if (hallazgosPalabrasPerdidas.length > 0) {
     return {
       ok: false,
@@ -177,7 +178,7 @@ export async function generarVozYTiempos(narraciones: { id: string; narracion: s
     ok: true,
     campos: { tiemposRender, palabrasPorEscena, segmentosAudio, vozUrl: audioUrl },
     puntajeAlineacion: puntaje,
-    crudo: { palabrasPorEscenaCrudo, silencios },
+    crudo: { palabrasPorEscenaCrudo, silencios, silenciosUmbral_db: UMBRAL_SILENCIO_VOZ_DB },
   };
 }
 

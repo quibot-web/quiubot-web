@@ -35,4 +35,16 @@ describe("verificarPalabrasCompletas", () => {
   it("lista vacía de palabras no genera hallazgos", () => {
     expect(verificarPalabrasCompletas([], [])).toEqual([]);
   });
+
+  it("caso real (cd34eec3): Whisper estira 'y' sobre un silencio medido; quitar ese silencio no la pierde, pero quitar su parte con sonido sí", () => {
+    const palabras = [{ texto: "y", inicio_s: 21.48, fin_s: 22.28 }];
+    const silencios = [{ inicio_s: 21.584, fin_s: 21.871 }];
+    const tramosOk = [
+      { original: { inicio_s: 20, fin_s: 21.7 }, compactado: { inicio_s: 20, fin_s: 21.7 } },
+      { original: { inicio_s: 21.75, fin_s: 23 }, compactado: { inicio_s: 21.7, fin_s: 22.95 } },
+    ];
+    expect(verificarPalabrasCompletas(palabras, [tramosOk], silencios)).toEqual([]);
+    const tramosMuerden = [tramosOk[0], { original: { inicio_s: 21.95, fin_s: 23 }, compactado: { inicio_s: 21.7, fin_s: 22.75 } }];
+    expect(verificarPalabrasCompletas(palabras, [tramosMuerden], silencios)).toHaveLength(1);
+  });
 });

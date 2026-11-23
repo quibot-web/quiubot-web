@@ -77,12 +77,12 @@ async function llamarTTS(openaiKey: string, texto: string, voz: string): Promise
 // Privado -- llama a /v1/audio/transcriptions con whisper-1 para los
 // timestamps por palabra del audio que generó TTS (nunca del texto
 // original: whisper transcribe lo que de verdad se escucha).
-async function llamarTranscripcion(openaiKey: string, audio: ArrayBuffer): Promise<PalabraConTiempo[]> {
+async function llamarTranscripcion(openaiKey: string, audio: ArrayBuffer, archivo: { nombre: string; tipo: string } = { nombre: "narracion.mp3", tipo: "audio/mp3" }): Promise<PalabraConTiempo[]> {
   const controller = new AbortController();
   const timeoutId = setTimeout(() => controller.abort(), TIMEOUT_OPENAI_MS);
   try {
     const formData = new FormData();
-    formData.append("file", new Blob([audio], { type: "audio/mp3" }), "narracion.mp3");
+    formData.append("file", new Blob([audio], { type: archivo.tipo }), archivo.nombre);
     formData.append("model", MODELO_TRANSCRIPCION);
     formData.append("response_format", "verbose_json");
     formData.append("timestamp_granularities[]", "word");
@@ -142,4 +142,11 @@ export async function generarVoz(
     detectarSilenciosReales(audio),
   ]);
   return { audioUrl, palabras, silencios };
+}
+
+// Control posterior al render (23 nov 2026): transcribe el audio FINAL del
+// video (WAV que arma el navegador) para buscar palabras faltantes.
+export async function transcribirAudioFinal(openaiKey: string, wav: ArrayBuffer): Promise<string> {
+  const palabras = await llamarTranscripcion(openaiKey, wav, { nombre: "final.wav", tipo: "audio/wav" });
+  return palabras.map((p) => p.texto).join(" ");
 }
