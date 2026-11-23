@@ -278,4 +278,62 @@ describe("generarGuionConVoz", () => {
     expect(resultado.ok).toBe(true);
     if (resultado.ok) expect(resultado.guion.estilo?.id).toBe("color_pleno");
   });
+
+  describe("reel ilustrado (fase 2)", () => {
+    const PLAN_FIXTURE = {
+      frases: [
+        { escena_id: "e1", acciones: [{ escena: "feed", accion: "aparece_anuncio", palabra: 1 }, { escena: "feed", accion: "lo_miran", palabra: 5 }] },
+        { escena_id: "e2", acciones: [{ escena: "feed", accion: "desliza", palabra: 3 }, { escena: "feed", accion: "se_detiene", palabra: 6 }] },
+        { escena_id: "e3", acciones: [{ escena: "chat", accion: "llega_mensaje", palabra: 3 }, { escena: "chat", accion: "llega_mensaje", palabra: 5 }] },
+        { escena_id: "e4", acciones: [{ escena: "chat", accion: "responde", palabra: 1 }, { escena: "chat", accion: "se_vuelve_venta", palabra: 3 }] },
+        { escena_id: "e5", acciones: [{ escena: "perfil", accion: "aparece", palabra: 0 }] },
+        { escena_id: "e6", acciones: [{ escena: "perfil", accion: "toque_seguir", palabra: 0 }] },
+      ],
+    };
+    function prepararVoz() {
+      const textoCompleto = GUION_CON_AUDIO_VALIDO.escenas.map((e) => e.narracion).join(" ");
+      vi.stubGlobal("fetch", vi.fn().mockResolvedValue(respuestaOpenAI(GUION_CON_AUDIO_VALIDO)));
+      generarVozMock.mockResolvedValue({ audioUrl: "https://cloudinary.test/voz.mp3", palabras: palabrasParaTexto(textoCompleto), silencios: [] });
+    }
+
+    it("cuenta de la lista: el plan se pide ANTES de pagar la voz y queda en el guion, con su estilo de respaldo", async () => {
+      prepararVoz();
+      const orden: string[] = [];
+      const llamarIAPlan = vi.fn(async () => {
+        orden.push("plan");
+        return JSON.stringify(PLAN_FIXTURE);
+      });
+      generarVozMock.mockImplementation(async (texto: string) => {
+        orden.push("voz");
+        return { audioUrl: "https://cloudinary.test/voz.mp3", palabras: palabrasParaTexto(texto), silencios: [] };
+      });
+      const resultado = await generarGuionConVoz({ ...parametrosBase(), conPlanIlustrado: true, llamarIAPlan });
+      if (!resultado.ok) throw new Error("no debería fallar");
+      expect(orden).toEqual(["plan", "voz"]);
+      expect(resultado.guion.ilustrado?.frases).toHaveLength(6);
+      expect(resultado.planIlustrado.estado).toBe("generado");
+      expect(resultado.guion.estilo).toBeDefined(); // respaldo siempre presente
+    });
+
+    it("si el plan no sale válido en 3 intentos, la pieza se genera igual con su estilo (sin 'ilustrado') y queda el motivo", async () => {
+      prepararVoz();
+      const llamarIAPlan = vi.fn(async () => JSON.stringify({ frases: [{ escena_id: "e1", acciones: [{ escena: "feed", accion: "vuela", palabra: 0 }] }] }));
+      const resultado = await generarGuionConVoz({ ...parametrosBase(), conPlanIlustrado: true, llamarIAPlan });
+      if (!resultado.ok) throw new Error("no debería fallar");
+      expect(llamarIAPlan).toHaveBeenCalledTimes(3);
+      expect(resultado.guion.ilustrado).toBeUndefined();
+      expect(resultado.planIlustrado.estado).toBe("respaldo");
+      expect(resultado.guion.estilo).toBeDefined();
+    });
+
+    it("cuenta fuera de la lista: nunca se pide plan", async () => {
+      prepararVoz();
+      const llamarIAPlan = vi.fn();
+      const resultado = await generarGuionConVoz({ ...parametrosBase(), llamarIAPlan });
+      if (!resultado.ok) throw new Error("no debería fallar");
+      expect(llamarIAPlan).not.toHaveBeenCalled();
+      expect(resultado.planIlustrado.estado).toBe("no_aplica");
+      expect(resultado.guion.ilustrado).toBeUndefined();
+    });
+  });
 });

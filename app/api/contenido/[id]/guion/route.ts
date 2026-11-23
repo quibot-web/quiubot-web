@@ -24,6 +24,7 @@ import { elegirGanchoTipoMenosUsado, elegirPistaMusicalOrganica } from "@/app/li
 import type { RecetaOrganicaId } from "@/video/guion.schema";
 import { obtenerSaludInstagram } from "@/app/lib/metaInstagramSalud";
 import { generarGuionConVoz } from "@/app/lib/videoOrganico/generarGuionConVoz";
+import { reelIlustradoActivo } from "@/app/lib/reelIlustrado";
 import { VENTANA_ROTACION } from "@/video/estilos/estilos";
 
 // Receta que ya pasó al pipeline nuevo (narración + voz real, ver
@@ -359,6 +360,7 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
         recetaId,
         maxReintentos: MAX_REINTENTOS,
         historialEstilos,
+        conPlanIlustrado: reelIlustradoActivo(emailBusqueda),
       });
 
       if (!resultado.ok) {
@@ -371,6 +373,19 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
           detalleTecnico: (resultado.resumenErrores ?? []).join(" || "),
         });
         return NextResponse.json({ error: resultado.error, resumenErrores: resultado.resumenErrores }, { status: resultado.status });
+      }
+
+      // Plan ilustrado que no salió válido: la pieza sigue con su estilo,
+      // pero queda registrado para revisar por qué.
+      if (resultado.planIlustrado.estado === "respaldo") {
+        registrarError({
+          origen: "contenido_guion",
+          userId: usuario.id,
+          email: emailBusqueda,
+          paso: "plan_ilustrado_respaldo",
+          errorMensaje: "El plan ilustrado no salió válido; el reel usa su estilo de siempre.",
+          detalleTecnico: resultado.planIlustrado.errores.join(" || "),
+        });
       }
 
       const { error: errorUpdate } = await supabaseAdmin

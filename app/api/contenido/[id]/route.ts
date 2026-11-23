@@ -18,7 +18,9 @@ import { fechaBogota } from "@/app/lib/fechaBogota";
 import { infoAdicionalEsSuficiente } from "@/video/promptGuionOrganico";
 import { urlPistaMusical } from "@/app/lib/cloudinaryUrl";
 import { vozDesactualizada } from "@/app/lib/videoOrganico/hashNarracion";
-import { regenerarVozParaGuion } from "@/app/lib/videoOrganico/generarGuionConVoz";
+import { llamarOpenAI, regenerarVozParaGuion } from "@/app/lib/videoOrganico/generarGuionConVoz";
+import { planTrasRegenerarVoz } from "@/app/lib/videoOrganico/generarPlanIlustrado";
+import { reelIlustradoActivo } from "@/app/lib/reelIlustrado";
 
 const VOZ_POR_DEFECTO = "cedar";
 
@@ -525,7 +527,12 @@ export async function PATCH(req: NextRequest, { params }: { params: Promise<{ id
       return NextResponse.json({ error: resultado.error, resumenErrores: resultado.resumenErrores }, { status: resultado.status });
     }
 
-    const guionActualizado: Guion = { ...guionActual, ...resultado.campos };
+    // Reel ilustrado: el plan apunta a palabras por número; con el texto
+    // nuevo se revalida, se reajusta o se vuelve a pedir (ver planTrasRegenerarVoz).
+    const { guion: guionActualizado } = await planTrasRegenerarVoz<Guion>(
+      { ...guionActual, ...resultado.campos },
+      { activo: reelIlustradoActivo(emailBusqueda), llamarIA: (prompt) => llamarOpenAI(apiKeyUsuario, prompt) }
+    );
     const { error: errorUpdate } = await supabaseAdmin
       .from("publicaciones_organicas")
       .update({ guion: guionActualizado, voz_url: resultado.campos.vozUrl, control_calidad: resultado.crudo ? { crudo: resultado.crudo } : null, actualizado_en: new Date().toISOString() })

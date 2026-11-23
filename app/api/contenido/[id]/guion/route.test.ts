@@ -511,6 +511,7 @@ describe("POST /api/contenido/[id]/guion -- receta con voz vs. receta de siempre
       puntajeAlineacion: 1,
       intentosGuion: 1,
       crudo: { palabrasPorEscenaCrudo: [], silencios: [] },
+      planIlustrado: { estado: "no_aplica" },
     });
 
     const res = await POST(req(), contexto());
@@ -519,9 +520,33 @@ describe("POST /api/contenido/[id]/guion -- receta con voz vs. receta de siempre
     expect(res.status).toBe(200);
     expect(generarGuionConVozMock).toHaveBeenCalledTimes(1);
     expect(generarGuionConVozMock.mock.calls[0][0].voz).toBe("cedar");
+    // Sin REELS_ILUSTRADOS_EMAILS: ninguna cuenta pide plan ilustrado.
+    expect(generarGuionConVozMock.mock.calls[0][0].conPlanIlustrado).toBe(false);
     expect(fetchMock).not.toHaveBeenCalled(); // esta ruta ya no llama a OpenAI directo para esta receta
     expect(body.guion.vozUrl).toBe("https://cloudinary.test/voz.mp3");
     expect(updatesRealizados[0].voz_url).toBe("https://cloudinary.test/voz.mp3");
+    vi.unstubAllGlobals();
+  });
+
+  it("cuenta en REELS_ILUSTRADOS_EMAILS: pide el plan ilustrado; otra cuenta, no", async () => {
+    piezaActual = { id: "pieza-1", receta_organica: "consejos_numerados", estado: "borrador", media_ids: null, semana: "2026-11-09", tema: null, gancho_tipo: "pregunta" };
+    vi.stubGlobal("fetch", vi.fn());
+    const exito = {
+      ok: true,
+      guion: { version: 1, formato: "9x16", fps: 30, uso: "organico", receta_organica: "consejos_numerados", escenas: [], publicacion: { caption: "cap", hashtags: ["#a", "#b", "#c"] }, vozUrl: "https://cloudinary.test/voz.mp3" },
+      puntajeAlineacion: 1,
+      intentosGuion: 1,
+      crudo: { palabrasPorEscenaCrudo: [], silencios: [] },
+      planIlustrado: { estado: "generado", intentos: 1, ajustes: [] },
+    };
+    generarGuionConVozMock.mockResolvedValue(exito);
+    vi.stubEnv("REELS_ILUSTRADOS_EMAILS", "otra@cuenta.com, MARCA@quiubot.com");
+    await POST(req(), contexto());
+    expect(generarGuionConVozMock.mock.calls[0][0].conPlanIlustrado).toBe(true);
+    vi.stubEnv("REELS_ILUSTRADOS_EMAILS", "otra@cuenta.com");
+    await POST(req(), contexto());
+    expect(generarGuionConVozMock.mock.calls[1][0].conPlanIlustrado).toBe(false);
+    vi.unstubAllEnvs();
     vi.unstubAllGlobals();
   });
 

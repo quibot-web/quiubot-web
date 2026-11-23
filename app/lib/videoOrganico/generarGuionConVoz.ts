@@ -1,4 +1,7 @@
 import "server-only";
+import { generarPlanIlustrado } from "./generarPlanIlustrado";
+import { ajustarPlanConTiempos } from "@/video/ilustrado/motor/validarPlan";
+import type { PlanIlustrado } from "@/video/ilustrado/motor/plan";
 import { asignarEstilo, elegirEstilo, estilosDisponibles, idsFotosSinTexto } from "@/video/estilos/estilos";
 import { GuionSchema, idsDeMediaUsados, type Guion, type RecetaOrganicaId } from "@/video/guion.schema";
 import type { TemaGuion } from "@/video/tema";
@@ -27,7 +30,7 @@ import { calcularHashNarracion } from "./hashNarracion";
 // generación+validación+voz.
 const TIMEOUT_OPENAI_MS = 60_000;
 
-async function llamarOpenAI(apiKey: string, prompt: string): Promise<string> {
+export async function llamarOpenAI(apiKey: string, prompt: string): Promise<string> {
   const controller = new AbortController();
   const timeoutId = setTimeout(() => controller.abort(), TIMEOUT_OPENAI_MS);
   try {
@@ -72,7 +75,14 @@ export type ParametrosGenerarGuionConVoz = {
   // primero (rotación de estilos, paso 3). Sin historial: el primero
   // disponible.
   historialEstilos?: (string | null)[];
+  // Reel ilustrado (fase 2): solo cuentas de REELS_ILUSTRADOS_EMAILS.
+  conPlanIlustrado?: boolean;
+  // Inyectable para pruebas; por defecto la misma IA del guion.
+  llamarIAPlan?: (prompt: string) => Promise<string>;
 };
+
+// Qué pasó con el plan ilustrado (para registrar y mostrar al admin).
+export type EstadoPlanIlustrado = { estado: "no_aplica" } | { estado: "generado"; intentos: number; ajustes: string[] } | { estado: "respaldo"; errores: string[] };
 
 export type ResultadoGenerarGuionConVoz =
   | {
@@ -81,6 +91,7 @@ export type ResultadoGenerarGuionConVoz =
       puntajeAlineacion: number;
       intentosGuion: number;
       crudo: { palabrasPorEscenaCrudo: unknown; silencios: unknown };
+      planIlustrado: EstadoPlanIlustrado;
     }
   | { ok: false; status: number; error: string; resumenErrores?: string[] };
 
@@ -244,6 +255,19 @@ export async function generarGuionConVoz(params: ParametrosGenerarGuionConVoz): 
     return { ok: false, status: 502, error: "No se pudo generar un guion válido (narración/visual) después de varios intentos.", resumenErrores: resultado.errores };
   }
 
+  // Plan ilustrado (fase 2): sobre la narración ya validada y ANTES de
+  // pagar la voz. Si no sale válido, el reel sigue con su estilo.
+  let plan: PlanIlustrado | null = null;
+  let estadoPlan: EstadoPlanIlustrado = { estado: "no_aplica" };
+  if (params.conPlanIlustrado) {
+    const narraciones = resultado.guion.escenas.map((e) => ({ id: e.id, narracion: e.narracion ?? "" }));
+    const llamar = params.llamarIAPlan ?? ((prompt: string) => llamarOpenAI(params.apiKeyUsuario, prompt));
+    const r = await generarPlanIlustrado(narraciones, llamar);
+    if (r.ok) plan = r.plan;
+    else estadoPlan = { estado: "respaldo", errores: r.errores };
+    if (r.ok) estadoPlan = { estado: "generado", intentos: r.intentos, ajustes: [] };
+  }
+
   // Voz real -- única llamada de toda esta función que cuesta dinero de
   // verdad (TTS + Whisper). Solo se llega acá con un guion que YA pasó
   // validarEdicionDesdeAudio(), para no gastarla en un guion que de
@@ -270,6 +294,12 @@ export async function generarGuionConVoz(params: ParametrosGenerarGuionConVoz): 
     ...(Object.keys(analisisDeLaPieza).length > 0 ? { analisisPiezas: analisisDeLaPieza } : {}),
     estilo: asignarEstilo(resultado.guion.escenas, estiloElegido, { fotosSinTexto }),
   };
+  if (plan && resultadoVoz.campos.palabrasPorEscena) {
+    // Con los tiempos reales: separa acciones de lugares distintos que quedaron muy juntas.
+    const { plan: ajustado, ajustes } = ajustarPlanConTiempos(plan, resultadoVoz.campos.palabrasPorEscena);
+    guionFinal.ilustrado = ajustado;
+    if (estadoPlan.estado === "generado") estadoPlan = { ...estadoPlan, ajustes };
+  }
 
-  return { ok: true, guion: guionFinal, puntajeAlineacion: resultadoVoz.puntajeAlineacion, intentosGuion, crudo: resultadoVoz.crudo };
+  return { ok: true, guion: guionFinal, puntajeAlineacion: resultadoVoz.puntajeAlineacion, intentosGuion, crudo: resultadoVoz.crudo, planIlustrado: estadoPlan };
 }

@@ -4,6 +4,7 @@ import { z } from "zod";
 // alias de tsconfig, solo lo resuelve el bundler de Next.
 import { AnalisisPiezaSchema } from "../app/lib/analisisPieza";
 import { VisualSchema } from "./visuales/schema";
+import { PlanIlustradoSchema } from "./ilustrado/motor/validarPlan";
 import { EstiloGuionSchema } from "./estilos/estilos";
 import { problemasTextoGigante } from "./estilos/textoGigante";
 
@@ -406,6 +407,11 @@ export const GuionSchema = z
     // escena, elegidos por el código al generar. Opcional: sin él el reel
     // se ve como siempre (guiones guardados antes de esto).
     estilo: EstiloGuionSchema.optional(),
+    // Reel ilustrado (fase 2, 23 nov 2026): por frase, qué acción de qué
+    // escena del catálogo dispara cada palabra (video/ilustrado/motor).
+    // Solo cuentas de REELS_ILUSTRADOS_EMAILS; sin él, el reel usa
+    // "estilo" (respaldo). Estricto: ningún campo de texto en pantalla.
+    ilustrado: PlanIlustradoSchema.optional(),
   })
   // Invariantes que no dependen de la receta del objetivo/orgánica --
   // las que sí dependen (orden de bloques, rango de duracion, escenas

@@ -34,7 +34,15 @@ export const PLAN_PROTOTIPO: PlanIlustrado = {
     // Segundo: tu foto no detiene el dedo.
     { escena_id: "e6", acciones: [{ escena: "feed", accion: "foto_apagada", palabra: 2 }, { escena: "feed", accion: "desliza", palabra: 6 }] },
     // Una foto clara, con el producto en uso, sí lo detiene.
-    { escena_id: "e7", acciones: [{ escena: "feed", accion: "foto_se_aclara", palabra: 2 }, { escena: "feed", accion: "se_detiene", palabra: 10 }] },
+    {
+      escena_id: "e7",
+      acciones: [
+        { escena: "feed", accion: "foto_se_aclara", palabra: 2 },
+        // "producto": la gente mira la foto (y no pasan más de 7 palabras sin cambio).
+        { escena: "feed", accion: "lo_miran", palabra: 5 },
+        { escena: "feed", accion: "se_detiene", palabra: 10 },
+      ],
+    },
     // Tercero: te escriben… y nadie responde.
     {
       escena_id: "e8",
