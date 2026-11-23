@@ -111,16 +111,41 @@ export async function regenerarVozParaGuion(escenas: Guion["escenas"], params: P
     return { ok: false, status: 400, error: "La narración editada ya no es consistente con sus eventos/visuales.", resumenErrores: erroresTotales };
   }
 
-  const textoCompleto = escenas.map((e) => e.narracion ?? "").join(" ");
+  const voz = await generarVozYTiempos(
+    escenas.map((e) => ({ id: e.id, narracion: e.narracion ?? "" })),
+    params
+  );
+  if (!voz.ok) return voz;
+  return {
+    ok: true,
+    campos: { ...voz.campos, narracionHash: calcularHashNarracion(escenas) },
+    puntajeAlineacion: voz.puntajeAlineacion,
+    crudo: voz.crudo,
+  };
+}
+
+export type ResultadoVozYTiempos =
+  | {
+      ok: true;
+      campos: Pick<Guion, "tiemposRender" | "palabrasPorEscena" | "segmentosAudio" | "vozUrl">;
+      puntajeAlineacion: number;
+      crudo: { palabrasPorEscenaCrudo: unknown; silencios: unknown };
+    }
+  | { ok: false; status: number; error: string; resumenErrores?: string[] };
+
+// Voz + tiempos para narraciones ya escritas, sin validar ningún
+// esquema de guion: TTS -> Whisper -> alineación -> compactación de
+// pausas -> verificación de palabras completas. La usan
+// regenerarVozParaGuion() y el arnés admin del reel ilustrado (fase 1),
+// que trae su propia narración fija.
+export async function generarVozYTiempos(narraciones: { id: string; narracion: string }[], params: ParametrosRegenerarVoz): Promise<ResultadoVozYTiempos> {
+  const textoCompleto = narraciones.map((e) => e.narracion).join(" ");
   const { audioUrl, palabras, silencios } = await generarVoz(textoCompleto, {
     openaiKey: params.openaiKey,
     voz: params.voz,
     cloudinary: params.cloudinary,
   });
-  const { palabrasPorEscena: palabrasPorEscenaCrudo, puntaje } = alinearPalabras(
-    escenas.map((e) => ({ id: e.id, narracion: e.narracion ?? "" })),
-    palabras
-  );
+  const { palabrasPorEscena: palabrasPorEscenaCrudo, puntaje } = alinearPalabras(narraciones, palabras);
   const { tiemposRender, palabrasPorEscena, segmentosAudio, palabrasFlat, tramosPorEscena } = construirCamposDeTiempo(palabrasPorEscenaCrudo, silencios);
 
   const hallazgosPalabrasPerdidas = verificarPalabrasCompletas(palabrasFlat, tramosPorEscena);
@@ -135,7 +160,7 @@ export async function regenerarVozParaGuion(escenas: Guion["escenas"], params: P
 
   return {
     ok: true,
-    campos: { tiemposRender, palabrasPorEscena, segmentosAudio, narracionHash: calcularHashNarracion(escenas), vozUrl: audioUrl },
+    campos: { tiemposRender, palabrasPorEscena, segmentosAudio, vozUrl: audioUrl },
     puntajeAlineacion: puntaje,
     crudo: { palabrasPorEscenaCrudo, silencios },
   };
