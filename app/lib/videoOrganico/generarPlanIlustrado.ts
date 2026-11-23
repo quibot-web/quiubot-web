@@ -3,10 +3,13 @@
 // cada reintento con los problemas del anterior. Si no sale válido, el
 // reel sigue con su estilo de siempre (nunca se bloquea la pieza).
 import type { PlanIlustrado } from "@/video/ilustrado/motor/plan";
-import { ajustarPlanConTiempos, validarPlanIlustrado } from "@/video/ilustrado/motor/validarPlan";
+import { ajustarPlanConTiempos, rellenarRitmoPorTiempo, repararRitmoPorPalabras, validarPlanIlustrado } from "@/video/ilustrado/motor/validarPlan";
 import { construirPromptPlanIlustrado } from "@/video/ilustrado/promptPlanIlustrado";
 
-export type ResultadoPlanIlustrado = { ok: true; plan: PlanIlustrado; intentos: number } | { ok: false; errores: string[]; intentos: number };
+// "historial": los problemas de CADA intento (se registran todos, no solo el último).
+export type ResultadoPlanIlustrado =
+  | { ok: true; plan: PlanIlustrado; intentos: number; ajustes: string[]; historial: string[][] }
+  | { ok: false; errores: string[]; intentos: number; historial: string[][] };
 
 export async function generarPlanIlustrado(
   escenas: { id: string; narracion: string }[],
@@ -14,6 +17,7 @@ export async function generarPlanIlustrado(
   maxIntentos = 3
 ): Promise<ResultadoPlanIlustrado> {
   let errores: string[] | undefined;
+  const historial: string[][] = [];
   for (let intento = 1; intento <= maxIntentos; intento++) {
     const respuesta = await llamarIA(construirPromptPlanIlustrado(escenas, errores));
     let crudo: unknown;
@@ -21,13 +25,24 @@ export async function generarPlanIlustrado(
       crudo = JSON.parse(respuesta);
     } catch {
       errores = ["La respuesta no fue un JSON válido."];
+      historial.push(errores);
       continue;
     }
-    const problemas = validarPlanIlustrado(crudo, escenas);
-    if (problemas.length === 0) return { ok: true, plan: crudo as PlanIlustrado, intentos: intento };
+    // Si la forma es válida, primero se arreglan solos los huecos de
+    // ritmo (micro-acciones) y recién después se valida todo.
+    let candidato = crudo;
+    let ajustes: string[] = [];
+    if (validarPlanIlustrado(crudo, escenas).every((p) => p.includes("sin ningún cambio"))) {
+      const reparado = repararRitmoPorPalabras(crudo as PlanIlustrado, escenas);
+      candidato = reparado.plan;
+      ajustes = reparado.ajustes;
+    }
+    const problemas = validarPlanIlustrado(candidato, escenas);
+    if (problemas.length === 0) return { ok: true, plan: candidato as PlanIlustrado, intentos: intento, ajustes, historial };
     errores = problemas;
+    historial.push(problemas);
   }
-  return { ok: false, errores: errores ?? [], intentos: maxIntentos };
+  return { ok: false, errores: errores ?? [], intentos: maxIntentos, historial };
 }
 
 // Tras editar una narración y regenerar la voz: el plan apunta a
@@ -41,7 +56,7 @@ export async function planTrasRegenerarVoz<G extends { escenas: { id: string; na
 ): Promise<{ guion: G; estado: "sin_plan" | "se_mantiene" | "replanificado" | "respaldo" }> {
   if (!guion.ilustrado && !opciones.activo) return { guion, estado: "sin_plan" };
   const narraciones = guion.escenas.map((e) => ({ id: e.id, narracion: e.narracion ?? "" }));
-  const ajustar = (plan: PlanIlustrado) => (guion.palabrasPorEscena ? ajustarPlanConTiempos(plan, guion.palabrasPorEscena).plan : plan);
+  const ajustar = (plan: PlanIlustrado) => (guion.palabrasPorEscena ? ajustarConVozReal(plan, guion.palabrasPorEscena).plan : plan);
   if (guion.ilustrado && validarPlanIlustrado(guion.ilustrado, narraciones).length === 0) return { guion: { ...guion, ilustrado: ajustar(guion.ilustrado) }, estado: "se_mantiene" };
   if (opciones.activo) {
     const r = await generarPlanIlustrado(narraciones, opciones.llamarIA);
@@ -51,3 +66,12 @@ export async function planTrasRegenerarVoz<G extends { escenas: { id: string; na
   delete sinPlan.ilustrado;
   return { guion: sinPlan, estado: "respaldo" };
 }
+
+// Con la voz real: separa acciones de lugares distintos muy juntas y
+// rellena con micro-acciones cualquier tramo de más de 2,5 s sin cambio.
+export function ajustarConVozReal(plan: PlanIlustrado, palabrasPorEscena: { escena_id: string; palabras: { inicio_s: number; fin_s?: number }[] }[]): { plan: PlanIlustrado; ajustes: string[] } {
+  const separado = ajustarPlanConTiempos(plan, palabrasPorEscena);
+  const rellenado = rellenarRitmoPorTiempo(separado.plan, palabrasPorEscena);
+  return { plan: rellenado.plan, ajustes: [...separado.ajustes, ...rellenado.ajustes] };
+}
+

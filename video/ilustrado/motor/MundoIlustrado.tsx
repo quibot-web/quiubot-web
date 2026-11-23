@@ -5,6 +5,7 @@ import type { ComponentType } from "react";
 import { camaraEnCuadro } from "../tiempoIlustrado";
 import { Celular, Fondo, Moneda, SombraPiso } from "../Objetos";
 import { rampa } from "./animacion";
+import { pulsoDeCamara } from "./camara";
 import { CATALOGO, type IdEscena, type IdIsla } from "./catalogo";
 import { ALTO_PANTALLA, ANCHO_PANTALLA, seTocan, vistaDelMundo } from "./geometria";
 import { disparosDeEscena } from "./plan";
@@ -58,7 +59,7 @@ export type PropsMundo = {
 export function MundoIlustrado({ frame, fps, reel, paleta, tema, marca, fotoUrl, recursos = recursosSinGenerar(fotoUrl) }: PropsMundo) {
   // Cámara + una deriva leve para que nunca esté quieta.
   const base = camaraEnCuadro(reel.camara, frame);
-  const cam = { x: base.x + Math.sin(frame / 40) * 8, y: base.y + Math.cos(frame / 52) * 8, zoom: base.zoom * (1 + Math.sin(frame / 70) * 0.01) };
+  const cam = { x: base.x + Math.sin(frame / 40) * 8, y: base.y + Math.cos(frame / 52) * 8, zoom: base.zoom * (1 + Math.sin(frame / 70) * 0.01) * pulsoDeCamara(frame, reel.pulsos ?? []) };
   const vista = vistaDelMundo(cam);
   const pisoEnPantalla = ALTO_PANTALLA / 2 + (PISO_Y - cam.y) * cam.zoom;
   const props = (escena: IdEscena): PropsEscena => ({ frame, fps, d: disparosDeEscena(reel.disparos, escena), paleta, tema, marca, fotoUrl, recursos });

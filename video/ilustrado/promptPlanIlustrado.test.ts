@@ -6,7 +6,9 @@ describe("prompt del plan ilustrado", () => {
   const prompt = construirPromptPlanIlustrado([{ id: "e1", narracion: "Pagas anuncios y nadie te compra" }]);
 
   it("trae todo el catálogo y la narración con cada palabra numerada", () => {
-    for (const e of ID_ESCENAS) for (const a of Object.keys(CATALOGO[e].acciones)) expect(prompt).toContain(a);
+    for (const e of ID_ESCENAS) for (const a of Object.keys(CATALOGO[e].acciones).filter((x) => x !== "micro")) expect(prompt).toContain(a);
+    // La micro-acción la inserta el código, no la IA.
+    expect(prompt).not.toMatch(/· micro:/);
     expect(prompt).toContain("e1: [0]Pagas [1]anuncios [2]y [3]nadie [4]te [5]compra");
   });
 

@@ -2,7 +2,7 @@
 // cuadro (puro, se calcula una vez): línea de tiempo, disparos, dónde va
 // cada isla, cámara, qué pantalla muestra el celular y monedas que viajan.
 import { construirLineaDeTiempo, type LineaDeTiempo, type PuntoCamara, type TiemposIlustrado } from "../tiempoIlustrado";
-import { BOCA_BILLETERA_LOCAL, CATALOGO, type IdEscena } from "./catalogo";
+import { BOCA_BILLETERA_LOCAL, CATALOGO, MICRO, type IdEscena } from "./catalogo";
 import { puntosCamaraAutomatica, tomasDeCamara, type Toma } from "./camara";
 import { resolverDisparos, type Disparo, type PlanIlustrado } from "./plan";
 import { construirRecorrido, type Recorrido } from "./recorrido";
@@ -18,6 +18,8 @@ export type ReelPreparado = {
   camara: PuntoCamara[];
   pantallas: CambioPantalla[];
   viajes: Viaje[];
+  // Cuadros de las micro-acciones (acercamiento corto de cámara).
+  pulsos: number[];
 };
 
 export const DURACION_VIAJE = 20;
@@ -33,7 +35,7 @@ export function prepararReel(tiempos: TiemposIlustrado, plan: PlanIlustrado, fps
   // acción de la nueva pantalla (así ya está cuando llega la cámara).
   const pantallas: CambioPantalla[] = [];
   for (const d of disparos) {
-    if (CATALOGO[d.escena].isla !== "celular") continue;
+    if (CATALOGO[d.escena].isla !== "celular" || d.accion === MICRO) continue;
     const actual = pantallas[pantallas.length - 1];
     if (actual?.pantalla === d.escena) continue;
     const cuadro = actual ? Math.max(actual.cuadro + 10, Math.min(d.inicioFrase, d.cuadro - 10)) : 0;
@@ -53,5 +55,6 @@ export function prepararReel(tiempos: TiemposIlustrado, plan: PlanIlustrado, fps
       viajes.push({ desde, hacia, cuadro: d.cuadro - 8, duracion: DURACION_VIAJE });
     }
   }
-  return { linea, disparos, recorrido, tomas, camara, pantallas, viajes };
+  const pulsos = disparos.filter((d) => d.accion === MICRO).map((d) => d.cuadro);
+  return { linea, disparos, recorrido, tomas, camara, pantallas, viajes, pulsos };
 }

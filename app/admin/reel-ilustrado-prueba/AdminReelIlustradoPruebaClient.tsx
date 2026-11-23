@@ -18,7 +18,7 @@ type Fase = "inactivo" | "generando_voz" | "renderizando" | "listo" | "error";
 type Resultado = { duracionVideo: number; segundosRender: number; conVoz: boolean; voz: string | null; navegador: string };
 
 
-export default function AdminReelIlustradoPruebaClient() {
+export default function AdminReelIlustradoPruebaClient({ estado }: { estado: { activo: boolean; correosEnLaVariable: number; sesion: string | null } }) {
   const [fase, setFase] = useState<Fase>("inactivo");
   const [error, setError] = useState<string | null>(null);
   const [progreso, setProgreso] = useState(0);
@@ -98,6 +98,11 @@ export default function AdminReelIlustradoPruebaClient() {
       <h1 style={{ fontSize: 24, fontWeight: 800, marginBottom: 6 }}>Reel ilustrado (prueba del motor)</h1>
       <p style={{ color: "#555", marginBottom: 20, lineHeight: 1.5 }}>
         Renderiza en este navegador el reel &ldquo;Por qué tus anuncios no venden&rdquo; con el motor genérico (escenas, acciones y cámara automática) y mide el tiempo. Meta de la fase 1: como máximo {META_SEGUNDOS_POR_SEGUNDO} s de render por cada segundo de video. Deja esta pestaña al frente mientras renderiza.
+      </p>
+
+      {/* ¿La variable REELS_ILUSTRADOS_EMAILS se está leyendo en este servidor y esta cuenta está en ella? */}
+      <p style={{ fontSize: 14, padding: "10px 14px", borderRadius: 10, marginBottom: 16, background: estado.activo ? "#E7F6EC" : "#FDECEA", color: estado.activo ? "#0F5A2C" : "#8A1C12" }}>
+        Reels ilustrados en /contenido: <strong>{estado.activo ? "activo para esta cuenta" : "NO activo para esta cuenta"}</strong> · la variable tiene {estado.correosEnLaVariable} correo(s) · sesión: {estado.sesion ?? "sin correo"}
       </p>
 
       <div style={{ display: "flex", gap: 12, flexWrap: "wrap", marginBottom: 12 }}>

@@ -17,7 +17,7 @@ describe("generarPlanIlustrado", () => {
   it("si el primer intento falla, reintenta con los problemas en el prompt y acepta el segundo", async () => {
     const llamar = vi.fn().mockResolvedValueOnce(JSON.stringify(INVALIDO)).mockResolvedValueOnce(JSON.stringify(VALIDO));
     const r = await generarPlanIlustrado(ESCENAS, llamar);
-    expect(r).toEqual({ ok: true, plan: VALIDO, intentos: 2 });
+    expect(r).toMatchObject({ ok: true, plan: VALIDO, intentos: 2 });
     expect(llamar.mock.calls[1][0]).toMatch(/TU RESPUESTA ANTERIOR TUVO ESTOS PROBLEMAS[\s\S]*vuela/);
   });
 
@@ -45,7 +45,8 @@ describe("planTrasRegenerarVoz (editar una narración)", () => {
     const llamar = vi.fn().mockResolvedValue(JSON.stringify(nuevo));
     const r = await planTrasRegenerarVoz({ escenas: corta, ilustrado: VALIDO as never, palabrasPorEscena: tiempos([7, 5]) }, { activo: true, llamarIA: llamar });
     expect(r.estado).toBe("replanificado");
-    expect((r.guion.ilustrado as { frases: { acciones: { palabra: number }[] }[] } | undefined)?.frases[1].acciones[0].palabra).toBe(4);
+    const e2 = (r.guion.ilustrado as { frases: { acciones: { accion: string; palabra: number }[] }[] } | undefined)?.frases[1];
+    expect(e2?.acciones.find((a) => a.accion === "sale_moneda")?.palabra).toBe(4);
   });
 
   it("si no calza y la cuenta ya no está en la lista, o la IA no logra un plan válido: vuelve a su estilo (sin 'ilustrado')", async () => {

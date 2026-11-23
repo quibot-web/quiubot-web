@@ -7,3 +7,18 @@ export function reelIlustradoActivo(email: string | null | undefined, lista = pr
   const correos = lista.split(",").map((c) => c.trim().toLowerCase()).filter(Boolean);
   return correos.includes(email.trim().toLowerCase());
 }
+
+// "j***l@gmail.com": para mostrar qué sesión se comparó, sin el correo completo.
+export function enmascararCorreo(email: string): string {
+  const limpio = email.trim().toLowerCase();
+  const [usuario, dominio] = limpio.split("@");
+  if (!dominio) return "***";
+  return usuario.length <= 2 ? `${usuario[0] ?? ""}***@${dominio}` : `${usuario[0]}***${usuario[usuario.length - 1]}@${dominio}`;
+}
+
+// Estado para la página de admin: ¿la variable se está leyendo y esta
+// cuenta está en ella? Nunca devuelve la lista ni el correo completo.
+export function estadoReelIlustrado(email: string | null | undefined, lista = process.env.REELS_ILUSTRADOS_EMAILS): { activo: boolean; correosEnLaVariable: number; sesion: string | null } {
+  const correos = (lista ?? "").split(",").map((c) => c.trim()).filter(Boolean);
+  return { activo: reelIlustradoActivo(email, lista), correosEnLaVariable: correos.length, sesion: email ? enmascararCorreo(email) : null };
+}

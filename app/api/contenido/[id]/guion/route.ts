@@ -384,7 +384,8 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
           email: emailBusqueda,
           paso: "plan_ilustrado_respaldo",
           errorMensaje: "El plan ilustrado no salió válido; el reel usa su estilo de siempre.",
-          detalleTecnico: resultado.planIlustrado.errores.join(" || "),
+          // Los problemas de CADA intento, no solo del último.
+          detalleTecnico: resultado.planIlustrado.historial.map((h, i) => `intento ${i + 1}: ${h.join(" | ")}`).join(" || "),
         });
       }
 

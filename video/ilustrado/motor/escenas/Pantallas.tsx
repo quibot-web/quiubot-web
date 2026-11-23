@@ -7,7 +7,7 @@ import { IconoCheck } from "../../../iconos";
 import { ALTO_BARRA_FEED, ALTO_POST, BarraSuperiorFeed, Burbuja, Post, type TipoPost } from "../../Objetos";
 import { IconoBolsa } from "../../Ilustraciones";
 import { ImagenFija } from "../../imagenesFijas";
-import { claves, primero, rampa } from "../animacion";
+import { claves, latido, primero, rampa } from "../animacion";
 import { PANTALLA } from "../catalogo";
 import type { PropsEscena } from "./tipos";
 
@@ -63,6 +63,10 @@ export function coreografiaFeed(acciones: { accion: string; cuadro: number }[]):
       case "se_detiene":
         destino = Math.round(pos);
         res.corazones.push({ post: destino, cuadro: a.cuadro });
+        break;
+      case "micro":
+        // Se desliza un poco, sin cambiar de publicación.
+        destino = Math.round(pos + 0.12) === Math.round(pos) ? pos + 0.12 : pos - 0.12;
         break;
       case "lo_miran":
         res.ojos.push({ post: Math.round(pos), cuadro: a.cuadro, hasta: ordenadas[i + 1]?.cuadro ?? Infinity });
@@ -160,6 +164,8 @@ export function PantallaChat({ frame, fps, d, marca }: PropsEscena) {
   const venta = primero(d.se_vuelve_venta);
   const indiceBolsa = venta === undefined ? -1 : items.map((it, i) => ({ it, i })).filter(({ it }) => it.tipo === "cliente" && it.cuadro <= venta).pop()?.i ?? -1;
   const aBolsa = rampa(frame, venta, 8);
+  // Micro-acción del chat: la cliente aparece "escribiendo" un momento.
+  const escribiendo = (d.micro ?? []).some((c) => frame >= c && frame <= c + 36);
   return (
     <div style={{ position: "absolute", inset: 0, background: "#F7F7FA", display: "flex", flexDirection: "column", fontFamily: "Poppins, sans-serif" }}>
       <div style={{ height: ALTO_BARRA_FEED + 30, background: "#fff", borderBottom: "2px solid #eee", display: "flex", alignItems: "flex-end", gap: 18, padding: "0 26px 22px" }}>
@@ -169,7 +175,7 @@ export function PantallaChat({ frame, fps, d, marca }: PropsEscena) {
           <span style={{ fontSize: 32, fontWeight: 700, color: "#1c1c22" }}>Camila</span>
           <span style={{ fontSize: 22, color: "#2B7A3F", display: "flex", alignItems: "center", gap: 8 }}>
             <span style={{ width: 12, height: 12, borderRadius: 6, background: "#2BB24C", display: "inline-block" }} />
-            En línea
+            {escribiendo ? "escribiendo" : "En línea"}
           </span>
         </div>
       </div>
@@ -226,7 +232,7 @@ export function PantallaPerfil({ frame, d, marca, fotoUrl }: PropsEscena) {
           {marca.descripcionPerfil && <span style={{ fontSize: 26, color: "#3b3b45" }}>{marca.descripcionPerfil}</span>}
         </div>
       </div>
-      <div style={{ margin: "40px 36px 36px", height: 110, borderRadius: 24, background: siguiendo ? "#0F7A3C" : marca.colorMarca, color: siguiendo ? "#fff" : colorTextoSobre(marca.colorMarca), display: "flex", alignItems: "center", justifyContent: "center", gap: 14, fontSize: 48, fontWeight: 800, transform: `scale(${siguiendo && toque !== undefined ? 1 + 0.05 * (1 - rampa(frame, toque + 3, 8)) : 1})` }}>
+      <div style={{ margin: "40px 36px 36px", height: 110, borderRadius: 24, background: siguiendo ? "#0F7A3C" : marca.colorMarca, color: siguiendo ? "#fff" : colorTextoSobre(marca.colorMarca), display: "flex", alignItems: "center", justifyContent: "center", gap: 14, fontSize: 48, fontWeight: 800, transform: `scale(${(siguiendo && toque !== undefined ? 1 + 0.05 * (1 - rampa(frame, toque + 3, 8)) : 1) * (1 + 0.04 * latido(frame, d.micro))})` }}>
         {siguiendo ? "Siguiendo" : "Seguir"}
         {siguiendo && <IconoCheck tamano={48} color="#fff" />}
       </div>

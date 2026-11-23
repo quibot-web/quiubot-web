@@ -10,7 +10,7 @@
 //   acercamiento lento para que nunca esté muerta), y no se va de una
 //   toma hasta que su última acción se vio al menos 0,4 s.
 import type { PuntoCamara } from "../tiempoIlustrado";
-import { CATALOGO, definicionAccion, unionRects, type IdIsla } from "./catalogo";
+import { CATALOGO, MICRO, definicionAccion, unionRects, type IdIsla } from "./catalogo";
 import { ALTO_PANTALLA, ANCHO_PANTALLA, desplazar, encuadre, ocupacion, type Encuadre, type Rect } from "./geometria";
 import type { Disparo } from "./plan";
 import type { Recorrido } from "./recorrido";
@@ -34,6 +34,8 @@ const igual = (a: Rect, b: Rect) => a.x === b.x && a.y === b.y && a.ancho === b.
 export function tomasDeCamara(disparos: Disparo[], recorrido: Recorrido): Toma[] {
   const tomas: Toma[] = [];
   for (const d of disparos) {
+    // La micro-acción no cambia de toma (ver pulsoDeCamara).
+    if (d.accion === MICRO) continue;
     const f = focoGlobal(d, recorrido);
     const ultima = tomas[tomas.length - 1];
     if (ultima) {
@@ -90,3 +92,16 @@ export function puntosCamaraAutomatica(tomas: Toma[], total: number, fps: number
   puntos.push({ cuadro: fin, ...ultima, zoom: ultima.zoom * empuje(fin - llegadaAnterior) });
   return puntos;
 }
+
+// Micro-acción: acercamiento corto (+5% en ~0,4 s) que se suelta en ~1,3 s.
+// Multiplica el zoom de la toma en curso; no la cambia.
+export function pulsoDeCamara(frame: number, pulsos: number[]): number {
+  let extra = 0;
+  for (const p of pulsos) {
+    const t = frame - p;
+    if (t < 0 || t > 52) continue;
+    extra = Math.max(extra, t < 12 ? 0.05 * Math.sin((t / 12) * (Math.PI / 2)) : 0.05 * (1 - (t - 12) / 40));
+  }
+  return 1 + extra;
+}
+

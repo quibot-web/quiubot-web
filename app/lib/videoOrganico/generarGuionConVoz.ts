@@ -1,6 +1,5 @@
 import "server-only";
-import { generarPlanIlustrado } from "./generarPlanIlustrado";
-import { ajustarPlanConTiempos } from "@/video/ilustrado/motor/validarPlan";
+import { ajustarConVozReal, generarPlanIlustrado } from "./generarPlanIlustrado";
 import type { PlanIlustrado } from "@/video/ilustrado/motor/plan";
 import { asignarEstilo, elegirEstilo, estilosDisponibles, idsFotosSinTexto } from "@/video/estilos/estilos";
 import { GuionSchema, idsDeMediaUsados, type Guion, type RecetaOrganicaId } from "@/video/guion.schema";
@@ -82,7 +81,10 @@ export type ParametrosGenerarGuionConVoz = {
 };
 
 // Qué pasó con el plan ilustrado (para registrar y mostrar al admin).
-export type EstadoPlanIlustrado = { estado: "no_aplica" } | { estado: "generado"; intentos: number; ajustes: string[] } | { estado: "respaldo"; errores: string[] };
+export type EstadoPlanIlustrado =
+  | { estado: "no_aplica" }
+  | { estado: "generado"; intentos: number; ajustes: string[]; historial: string[][] }
+  | { estado: "respaldo"; errores: string[]; historial: string[][] };
 
 export type ResultadoGenerarGuionConVoz =
   | {
@@ -263,9 +265,10 @@ export async function generarGuionConVoz(params: ParametrosGenerarGuionConVoz): 
     const narraciones = resultado.guion.escenas.map((e) => ({ id: e.id, narracion: e.narracion ?? "" }));
     const llamar = params.llamarIAPlan ?? ((prompt: string) => llamarOpenAI(params.apiKeyUsuario, prompt));
     const r = await generarPlanIlustrado(narraciones, llamar);
-    if (r.ok) plan = r.plan;
-    else estadoPlan = { estado: "respaldo", errores: r.errores };
-    if (r.ok) estadoPlan = { estado: "generado", intentos: r.intentos, ajustes: [] };
+    if (r.ok) {
+      plan = r.plan;
+      estadoPlan = { estado: "generado", intentos: r.intentos, ajustes: r.ajustes, historial: r.historial };
+    } else estadoPlan = { estado: "respaldo", errores: r.errores, historial: r.historial };
   }
 
   // Voz real -- única llamada de toda esta función que cuesta dinero de
@@ -295,10 +298,11 @@ export async function generarGuionConVoz(params: ParametrosGenerarGuionConVoz): 
     estilo: asignarEstilo(resultado.guion.escenas, estiloElegido, { fotosSinTexto }),
   };
   if (plan && resultadoVoz.campos.palabrasPorEscena) {
-    // Con los tiempos reales: separa acciones de lugares distintos que quedaron muy juntas.
-    const { plan: ajustado, ajustes } = ajustarPlanConTiempos(plan, resultadoVoz.campos.palabrasPorEscena);
+    // Con la voz real: separa acciones de lugares distintos muy juntas y
+    // rellena tramos de más de 2,5 s sin cambio (la regla final es por tiempo).
+    const { plan: ajustado, ajustes } = ajustarConVozReal(plan, resultadoVoz.campos.palabrasPorEscena);
     guionFinal.ilustrado = ajustado;
-    if (estadoPlan.estado === "generado") estadoPlan = { ...estadoPlan, ajustes };
+    if (estadoPlan.estado === "generado") estadoPlan = { ...estadoPlan, ajustes: [...estadoPlan.ajustes, ...ajustes] };
   }
 
   return { ok: true, guion: guionFinal, puntajeAlineacion: resultadoVoz.puntajeAlineacion, intentosGuion, crudo: resultadoVoz.crudo, planIlustrado: estadoPlan };

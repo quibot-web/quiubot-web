@@ -79,6 +79,7 @@ export const CATALOGO = {
   feed: {
     isla: "celular",
     acciones: {
+      micro: { descripcion: "el feed se desliza un poco (micro-acción neutra)", foco: ZONA_POST },
       aparece_anuncio: { descripcion: "el feed se detiene en un anuncio de la tienda", foco: ZONA_POST },
       lo_miran: { descripcion: "aparecen ojos mirando el anuncio", foco: ZONA_POST },
       pasa_de_largo: { descripcion: "el dedo sigue y el anuncio pasa de largo", foco: ZONA_POST },
@@ -92,6 +93,7 @@ export const CATALOGO = {
   chat: {
     isla: "celular",
     acciones: {
+      micro: { descripcion: "aparece \"escribiendo\" (micro-acción neutra)", foco: ZONA_CHAT },
       llega_mensaje: { descripcion: "llega un mensaje del cliente", foco: ZONA_CHAT },
       responde: { descripcion: "la tienda responde al instante (burbuja verde)", foco: ZONA_CHAT },
       se_vuelve_venta: { descripcion: "el último mensaje del cliente se convierte en una bolsa de compra", foco: ZONA_CHAT },
@@ -100,6 +102,7 @@ export const CATALOGO = {
   perfil: {
     isla: "celular",
     acciones: {
+      micro: { descripcion: "el botón Seguir late (micro-acción neutra)", foco: ZONA_PERFIL },
       aparece: { descripcion: "se abre el perfil de la cuenta", foco: ZONA_PERFIL },
       toque_seguir: { descripcion: "el dedo toca Seguir y cambia a Siguiendo", foco: ZONA_PERFIL },
     },
@@ -107,6 +110,7 @@ export const CATALOGO = {
   billetera: {
     isla: "billetera",
     acciones: {
+      micro: { descripcion: "la billetera se mece (micro-acción neutra)", foco: ZONA_BILLETERA },
       sale_moneda: { descripcion: "una moneda grande sale de la billetera y cae", foco: ZONA_BILLETERA },
       se_cierra: { descripcion: "la billetera se cierra: deja de salir dinero", foco: ZONA_BILLETERA },
       recibe_moneda: { descripcion: "una moneda llega a la billetera", foco: ZONA_BILLETERA },
@@ -116,6 +120,7 @@ export const CATALOGO = {
   multitud: {
     isla: "multitud",
     acciones: {
+      micro: { descripcion: "la gente se balancea (micro-acción neutra)", foco: ZONA_MULTITUD },
       foco_barre: { descripcion: "un foco de luz barre a toda la gente", foco: ZONA_MULTITUD },
       todos_tenues: { descripcion: "toda la gente queda tenue (hablarle a todos)", foco: ZONA_MULTITUD },
       se_iluminan: { descripcion: "se iluminan solo los que sí pueden comprar", foco: ZONA_ELEGIDOS },
@@ -125,6 +130,7 @@ export const CATALOGO = {
   reloj_cliente: {
     isla: "reloj_cliente",
     acciones: {
+      micro: { descripcion: "el cliente se mueve inquieto (micro-acción neutra)", foco: ZONA_RELOJ_CLIENTE },
       espera: { descripcion: "un cliente espera junto a un reloj", foco: ZONA_RELOJ_CLIENTE },
       reloj_acelera: { descripcion: "el reloj gira cada vez más rápido", foco: ZONA_RELOJ_CLIENTE },
       cliente_se_va: { descripcion: "el cliente se cansa y se va", foco: ZONA_RELOJ_CLIENTE },
@@ -133,12 +139,19 @@ export const CATALOGO = {
   grafica: {
     isla: "grafica",
     acciones: {
+      micro: { descripcion: "acercamiento corto de cámara (micro-acción neutra)", foco: GRAFICA_LOCAL },
       sube: { descripcion: "las barras y la línea suben", foco: GRAFICA_LOCAL },
     },
   },
 } as const satisfies Record<string, DefinicionEscena>;
 
 export type IdEscena = keyof typeof CATALOGO;
+
+// Micro-acción neutra (fase 2, arreglo de ritmo): la escena que está en
+// pantalla hace un gesto chico y la cámara se acerca un poco, SIN cambiar
+// de toma. El código la inserta para que nunca pasen más de 2,5 s sin
+// cambio; no la elige la IA (no aparece en el prompt).
+export const MICRO = "micro";
 export type AccionDe<E extends IdEscena> = keyof (typeof CATALOGO)[E]["acciones"] & string;
 export const ID_ESCENAS = Object.keys(CATALOGO) as IdEscena[];
 

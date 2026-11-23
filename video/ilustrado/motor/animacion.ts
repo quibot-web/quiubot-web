@@ -22,3 +22,14 @@ export const primero = (cuadros: number[] | undefined) => cuadros?.[0];
 export const cuantas = (cuadros: number[] | undefined, frame: number) => (cuadros ?? []).filter((c) => frame >= c).length;
 // El último disparo de una acción hasta este cuadro.
 export const ultimo = (cuadros: number[] | undefined, frame: number) => [...(cuadros ?? [])].reverse().find((c) => frame >= c);
+
+// Micro-acción (gesto neutro): 0 -> 1 -> 0 en ~0,8 s después de cada disparo.
+export function latido(frame: number, cuadros: number[] | undefined, duracion = 24): number {
+  let v = 0;
+  for (const c of cuadros ?? []) {
+    const t = frame - c;
+    if (t >= 0 && t <= duracion) v = Math.max(v, Math.sin((t / duracion) * Math.PI));
+  }
+  return v;
+}
+

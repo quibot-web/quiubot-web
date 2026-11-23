@@ -528,6 +528,24 @@ describe("POST /api/contenido/[id]/guion -- receta con voz vs. receta de siempre
     vi.unstubAllGlobals();
   });
 
+  it("plan ilustrado en respaldo: registra los problemas de los 3 intentos y la pieza se guarda igual con su estilo", async () => {
+    piezaActual = { id: "pieza-1", receta_organica: "consejos_numerados", estado: "borrador", media_ids: null, semana: "2026-11-09", tema: null, gancho_tipo: "pregunta" };
+    vi.stubGlobal("fetch", vi.fn());
+    generarGuionConVozMock.mockResolvedValue({
+      ok: true,
+      guion: { version: 1, formato: "9x16", fps: 30, uso: "organico", receta_organica: "consejos_numerados", escenas: [], publicacion: { caption: "cap", hashtags: ["#a", "#b", "#c"] }, vozUrl: "https://cloudinary.test/voz.mp3" },
+      puntajeAlineacion: 1,
+      intentosGuion: 1,
+      crudo: { palabrasPorEscenaCrudo: [], silencios: [] },
+      planIlustrado: { estado: "respaldo", errores: ["c"], historial: [["a"], ["b"], ["c"]] },
+    });
+    const res = await POST(req(), contexto());
+    expect(res.status).toBe(200);
+    expect(registrarErrorMock).toHaveBeenCalledWith(expect.objectContaining({ paso: "plan_ilustrado_respaldo", detalleTecnico: "intento 1: a || intento 2: b || intento 3: c" }));
+    expect(updatesRealizados.at(-1)?.voz_url).toBe("https://cloudinary.test/voz.mp3");
+    vi.unstubAllGlobals();
+  });
+
   it("cuenta en REELS_ILUSTRADOS_EMAILS: pide el plan ilustrado; otra cuenta, no", async () => {
     piezaActual = { id: "pieza-1", receta_organica: "consejos_numerados", estado: "borrador", media_ids: null, semana: "2026-11-09", tema: null, gancho_tipo: "pregunta" };
     vi.stubGlobal("fetch", vi.fn());

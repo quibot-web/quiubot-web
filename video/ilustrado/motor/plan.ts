@@ -19,7 +19,7 @@ export function problemasDelPlan(plan: PlanIlustrado, palabrasPorFrase: Record<s
     if (total === undefined) problemas.push(`${f.escena_id}: la frase no existe en la narración`);
     for (const a of f.acciones) {
       if (!ID_ESCENAS.includes(a.escena)) problemas.push(`${f.escena_id}: escena desconocida "${a.escena}"`);
-      else if (!definicionAccion(a.escena, a.accion)) problemas.push(`${f.escena_id}: la escena "${a.escena}" no tiene la acción "${a.accion}" (tiene: ${Object.keys(CATALOGO[a.escena].acciones).join(", ")})`);
+      else if (!definicionAccion(a.escena, a.accion)) problemas.push(`${f.escena_id}: la escena "${a.escena}" no tiene la acción "${a.accion}" (tiene: ${Object.keys(CATALOGO[a.escena].acciones).filter((x) => x !== "micro").join(", ")})`);
       if (total !== undefined && (!Number.isInteger(a.palabra) || a.palabra < 0 || a.palabra >= total)) problemas.push(`${f.escena_id}: palabra ${a.palabra} fuera de rango (0-${total - 1})`);
     }
   }

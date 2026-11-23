@@ -3,7 +3,7 @@
 // reacciona a los cuadros de sus acciones (d). Sin texto.
 import { spring } from "remotion";
 import { Billetera, Grafica, Moneda, Persona, Reloj, SombraPiso } from "../../Objetos";
-import { rampa, cuantas, primero } from "../animacion";
+import { rampa, cuantas, latido, primero } from "../animacion";
 import { BILLETERA_LOCAL, BOCA_BILLETERA_LOCAL, CLIENTE_LOCAL, ELEGIDOS_MULTITUD, GRAFICA_LOCAL, ISLAS, PERSONAS_MULTITUD, RELOJ_LOCAL } from "../catalogo";
 import type { PropsEscena } from "./tipos";
 import { ImagenFija } from "../../imagenesFijas";
@@ -21,7 +21,10 @@ export function IslaBilletera({ frame, fps, d }: PropsEscena) {
   const candado = cierre !== undefined && frame >= cierre ? spring({ frame: frame - cierre, fps, config: { damping: 11 } }) : 0;
   return (
     <>
-      <Billetera inflado={Math.max(0.2, Math.min(1.1, inflado))} rect={BILLETERA_LOCAL} />
+      {/* Micro-acción: la billetera se mece un poco. */}
+      <div style={{ position: "absolute", inset: 0, transformOrigin: `${BOCA_BILLETERA_LOCAL.x}px ${BILLETERA_LOCAL.y + BILLETERA_LOCAL.alto}px`, transform: `rotate(${4 * latido(frame, d.micro) * Math.sin((frame / 4) * Math.PI)}deg)` }}>
+        <Billetera inflado={Math.max(0.2, Math.min(1.1, inflado))} rect={BILLETERA_LOCAL} />
+      </div>
       {/* Monedas grandes que saltan de la billetera y caen */}
       {salidas.map((c, i) => {
         if (frame < c || frame > c + 50) return null;
@@ -86,7 +89,13 @@ export function IslaMultitud({ frame, d, recursos }: PropsEscena) {
         const bajoElFoco = barrido >= 0 && Math.abs(p.x - centroFoco) < 280 + 750 * todosTenue && (iluminan === undefined || frame < iluminan) ? 0.5 : 0;
         const luz = elegido ? Math.max(elegidos, todosTenue * 0.3, bajoElFoco) : Math.max(todosTenue * 0.3, bajoElFoco) * (1 - elegidos);
         const opacidad = elegido ? 1 : 1 - 0.5 * elegidos;
-        return <Persona key={p.id} brilloUrl={recursos.brilloLuz} x={p.x} pies={p.pies} escala={p.escala} luz={luz} mirarArriba={elegido ? rampa(frame, miran, 10) : 0} opacidad={opacidad} variante={i * 3 + p.fila} />;
+        // Micro-acción: la gente se balancea (cada uno con su fase).
+        const balanceo = latido(frame, d.micro, 30) * Math.sin(frame / 3 + i) * 14;
+        return (
+          <div key={p.id} style={{ position: "absolute", left: 0, top: 0, transform: `translateY(${balanceo}px)` }}>
+            <Persona brilloUrl={recursos.brilloLuz} x={p.x} pies={p.pies} escala={p.escala} luz={luz} mirarArriba={elegido ? rampa(frame, miran, 10) : 0} opacidad={opacidad} variante={i * 3 + p.fila} />
+          </div>
+        );
       })}
     </>
   );
@@ -103,7 +112,9 @@ export function IslaRelojCliente({ frame, d, recursos }: PropsEscena) {
   const arranca = seVa === undefined ? undefined : seVa + 10;
   const salida = rampa(frame, arranca, 36);
   const impaciente = seVa !== undefined && frame >= seVa && salida === 0 ? Math.abs(Math.sin((frame - seVa) / 2)) * 14 : 0;
-  const pasos = arranca !== undefined ? Math.abs(Math.sin((frame - arranca) / 3)) * 30 * Math.min(1, salida * 4) + impaciente : 0;
+  // Micro-acción: el cliente se mueve inquieto.
+  const inquieto = latido(frame, d.micro, 24) * Math.abs(Math.sin(frame / 2.5)) * 18;
+  const pasos = (arranca !== undefined ? Math.abs(Math.sin((frame - arranca) / 3)) * 30 * Math.min(1, salida * 4) + impaciente : 0) + inquieto;
   return (
     <>
       <Reloj cx={RELOJ_LOCAL.cx} cy={RELOJ_LOCAL.cy} tamano={RELOJ_LOCAL.tamano} angulo={angulo} aparicion={1} />

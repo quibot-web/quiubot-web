@@ -1,0 +1,285 @@
+{
+ "_origen": "Pieza real 5d9ff2d4 (staging, 23 nov 2026): narraciones y tiempos por palabra de la voz. Frases de 8-10 palabras: con ellas la IA falló el plan por 'hay 8 palabras sin ningún cambio'.",
+ "escenas": [
+  {
+   "id": "e1",
+   "narracion": "Tarde: tus clientes escriben y el negocio sigue en silencio."
+  },
+  {
+   "id": "e2",
+   "narracion": "Activa notificaciones en Meta Business Suite para ver cada mensaje."
+  },
+  {
+   "id": "e3",
+   "narracion": "Guarda respuestas rápidas para horario, ubicación y disponibilidad."
+  },
+  {
+   "id": "e4",
+   "narracion": "Asigna una persona por turno para responder cada mensaje."
+  },
+  {
+   "id": "e5",
+   "narracion": "Así, cada alerta activa una respuesta lista y un responsable."
+  },
+  {
+   "id": "e6",
+   "narracion": "Sigue a Quiubot para más consejos sobre tus campañas."
+  }
+ ],
+ "palabrasPorEscena": [
+  {
+   "escena_id": "e1",
+   "palabras": [
+    {
+     "texto": "Tarde:",
+     "inicio_s": 0
+    },
+    {
+     "texto": "tus",
+     "inicio_s": 0.65
+    },
+    {
+     "texto": "clientes",
+     "inicio_s": 0.71
+    },
+    {
+     "texto": "escriben",
+     "inicio_s": 1.21
+    },
+    {
+     "texto": "y",
+     "inicio_s": 1.69
+    },
+    {
+     "texto": "el",
+     "inicio_s": 2.17
+    },
+    {
+     "texto": "negocio",
+     "inicio_s": 2.37
+    },
+    {
+     "texto": "sigue",
+     "inicio_s": 2.73
+    },
+    {
+     "texto": "en",
+     "inicio_s": 3.01
+    },
+    {
+     "texto": "silencio.",
+     "inicio_s": 3.53
+    }
+   ]
+  },
+  {
+   "escena_id": "e2",
+   "palabras": [
+    {
+     "texto": "Activa",
+     "inicio_s": 4.03
+    },
+    {
+     "texto": "notificaciones",
+     "inicio_s": 4.09
+    },
+    {
+     "texto": "en",
+     "inicio_s": 4.87
+    },
+    {
+     "texto": "Meta",
+     "inicio_s": 5.21
+    },
+    {
+     "texto": "Business",
+     "inicio_s": 5.45
+    },
+    {
+     "texto": "Suite",
+     "inicio_s": 5.71
+    },
+    {
+     "texto": "para",
+     "inicio_s": 6.28
+    },
+    {
+     "texto": "ver",
+     "inicio_s": 6.432
+    },
+    {
+     "texto": "cada",
+     "inicio_s": 6.692
+    },
+    {
+     "texto": "mensaje.",
+     "inicio_s": 6.972
+    }
+   ]
+  },
+  {
+   "escena_id": "e3",
+   "palabras": [
+    {
+     "texto": "Guarda",
+     "inicio_s": 7.792
+    },
+    {
+     "texto": "respuestas",
+     "inicio_s": 7.932
+    },
+    {
+     "texto": "rápidas",
+     "inicio_s": 8.432
+    },
+    {
+     "texto": "para",
+     "inicio_s": 9.182
+    },
+    {
+     "texto": "horario,",
+     "inicio_s": 9.35
+    },
+    {
+     "texto": "ubicación",
+     "inicio_s": 9.98
+    },
+    {
+     "texto": "y",
+     "inicio_s": 10.2
+    },
+    {
+     "texto": "disponibilidad.",
+     "inicio_s": 10.76
+    }
+   ]
+  },
+  {
+   "escena_id": "e4",
+   "palabras": [
+    {
+     "texto": "Asigna",
+     "inicio_s": 11.78
+    },
+    {
+     "texto": "una",
+     "inicio_s": 11.86
+    },
+    {
+     "texto": "persona",
+     "inicio_s": 12.08
+    },
+    {
+     "texto": "por",
+     "inicio_s": 12.42
+    },
+    {
+     "texto": "turno",
+     "inicio_s": 12.74
+    },
+    {
+     "texto": "para",
+     "inicio_s": 13.12
+    },
+    {
+     "texto": "responder",
+     "inicio_s": 13.5
+    },
+    {
+     "texto": "cada",
+     "inicio_s": 13.86
+    },
+    {
+     "texto": "mensaje.",
+     "inicio_s": 14.34
+    }
+   ]
+  },
+  {
+   "escena_id": "e5",
+   "palabras": [
+    {
+     "texto": "Así,",
+     "inicio_s": 15.12
+    },
+    {
+     "texto": "cada",
+     "inicio_s": 15.57
+    },
+    {
+     "texto": "alerta",
+     "inicio_s": 15.63
+    },
+    {
+     "texto": "activa",
+     "inicio_s": 16.07
+    },
+    {
+     "texto": "una",
+     "inicio_s": 16.41
+    },
+    {
+     "texto": "respuesta",
+     "inicio_s": 16.65
+    },
+    {
+     "texto": "lista",
+     "inicio_s": 17.05
+    },
+    {
+     "texto": "y",
+     "inicio_s": 17.7
+    },
+    {
+     "texto": "un",
+     "inicio_s": 17.839
+    },
+    {
+     "texto": "responsable.",
+     "inicio_s": 18.119
+    }
+   ]
+  },
+  {
+   "escena_id": "e6",
+   "palabras": [
+    {
+     "texto": "Sigue",
+     "inicio_s": 18.999
+    },
+    {
+     "texto": "a",
+     "inicio_s": 19.019
+    },
+    {
+     "texto": "Quiubot",
+     "inicio_s": 19.359
+    },
+    {
+     "texto": "para",
+     "inicio_s": 19.829
+    },
+    {
+     "texto": "más",
+     "inicio_s": 19.981
+    },
+    {
+     "texto": "consejos",
+     "inicio_s": 20.241
+    },
+    {
+     "texto": "sobre",
+     "inicio_s": 20.641
+    },
+    {
+     "texto": "tus",
+     "inicio_s": 20.861
+    },
+    {
+     "texto": "campañas.",
+     "inicio_s": 21.121
+    }
+   ]
+  }
+ ]
+}

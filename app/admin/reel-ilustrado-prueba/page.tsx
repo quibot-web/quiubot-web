@@ -2,6 +2,7 @@ import { auth } from "@/auth";
 import { redirect } from "next/navigation";
 import { supabaseAdmin } from "@/lib/supabase";
 import AdminReelIlustradoPruebaClient from "./AdminReelIlustradoPruebaClient";
+import { estadoReelIlustrado } from "@/app/lib/reelIlustrado";
 
 // Reel ilustrado, fase 1: arnés de prueba del motor genérico. Solo
 // admin: genera la voz real del guion del prototipo (o usa tiempos
@@ -24,5 +25,7 @@ export default async function ReelIlustradoPruebaPage() {
     redirect("/");
   }
 
-  return <AdminReelIlustradoPruebaClient />;
+  // Se calcula en el servidor (donde vive la variable): el cliente solo
+  // recibe sí/no, cuántos correos hay y el correo de la sesión enmascarado.
+  return <AdminReelIlustradoPruebaClient estado={estadoReelIlustrado(session!.user!.email)} />;
 }

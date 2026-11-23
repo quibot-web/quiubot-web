@@ -69,7 +69,8 @@ for (const [nombre, tiempos] of TIEMPOS) {
         return ocupacion(foco, cam) >= 0.5 && centro >= FRANJA_SEGURA.arriba && centro <= FRANJA_SEGURA.abajo;
       };
       const tarde: string[] = [];
-      for (const d of reel.disparos) {
+      // Las micro-acciones no cambian de toma: no se encuadran solas.
+      for (const d of reel.disparos.filter((x) => x.accion !== "micro")) {
         const llega = Array.from({ length: 25 }, (_, k) => d.cuadro + k).find((f) => bienEncuadrado(d, f));
         if (llega === undefined) tarde.push(`${d.frase} ${d.escena}.${d.accion}`);
       }
@@ -77,8 +78,8 @@ for (const [nombre, tiempos] of TIEMPOS) {
     });
 
     it("casi todas las acciones (>= 85%) ya están encuadradas ~0,3 s después de su palabra", () => {
-      const aTiempo = reel.disparos.filter((d) => ocupacion(focoGlobal(d, reel.recorrido), camaraEnCuadro(reel.camara, d.cuadro + 10)) >= 0.5).length;
-      expect(aTiempo / reel.disparos.length).toBeGreaterThanOrEqual(0.85);
+      const aTiempo = reel.disparos.filter((d) => d.accion !== "micro").filter((d) => ocupacion(focoGlobal(d, reel.recorrido), camaraEnCuadro(reel.camara, d.cuadro + 10)) >= 0.5).length;
+      expect(aTiempo / reel.disparos.filter((d) => d.accion !== "micro").length).toBeGreaterThanOrEqual(0.85);
     });
 
     it("sin mareo: velocidad y zoom por cuadro acotados, y nunca un corte", () => {
