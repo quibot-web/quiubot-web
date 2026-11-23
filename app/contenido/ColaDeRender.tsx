@@ -163,7 +163,17 @@ export default function ColaDeRender({
           let durationInFrames: number;
           let defaultProps: Record<string, unknown>;
           let duracionS: number;
-          if (esPiezaConVoz) {
+          // Reel ilustrado (fase 2): solo si el guion trae plan (cuentas de
+          // REELS_ILUSTRADOS_EMAILS); si no, el reel con estilo de siempre.
+          const { propsReelIlustradoDesdeGuion } = await import("@/video/ilustrado/desdeGuion");
+          const propsIlustrado = esPiezaConVoz ? propsReelIlustradoDesdeGuion(guionARenderizar, medios, pistaUrl) : null;
+          if (propsIlustrado) {
+            const { ReelIlustrado, duracionReelIlustrado } = await import("@/video/ilustrado/ReelIlustrado");
+            component = ReelIlustrado as unknown as React.ComponentType<Record<string, unknown>>;
+            durationInFrames = duracionReelIlustrado(propsIlustrado);
+            defaultProps = propsIlustrado as unknown as Record<string, unknown>;
+            duracionS = durationInFrames / guionARenderizar.fps;
+          } else if (esPiezaConVoz) {
             const { ReelAutomatico, duracionReelAutomaticoEnCuadros } = await import("@/video/visuales/ReelAutomatico");
             component = ReelAutomatico as unknown as React.ComponentType<Record<string, unknown>>;
             durationInFrames = duracionReelAutomaticoEnCuadros(guionARenderizar);

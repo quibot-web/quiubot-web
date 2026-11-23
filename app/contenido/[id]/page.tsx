@@ -13,6 +13,7 @@ import type { Guion, Escena } from "@/video/guion.schema";
 import type { MediosResueltos } from "@/video/escenas/tipos";
 import { duracionEnCuadros } from "@/video/Composicion";
 import { duracionReelAutomaticoEnCuadros } from "@/video/visuales/ReelAutomatico";
+import { duracionReelIlustrado } from "@/video/ilustrado/ReelIlustrado";
 
 const VistaPrevia = dynamic(() => import("@/app/video/VistaPrevia"), { ssr: false });
 const VistaPreviaConVoz = dynamic(() => import("@/app/video/VistaPreviaConVoz"), { ssr: false });
@@ -530,7 +531,7 @@ export default function RevisionPiezaPage({ params }: { params: Promise<{ id: st
                 <VistaPrevia guion={guion} medios={medios} pistaUrl={pistaUrl} mostrarZonaSegura={false} />
               )}
               <p style={{ fontSize: 11, color: "#888", marginTop: 8 }}>
-                {((esPiezaConVoz || !!guion.vozUrl ? duracionReelAutomaticoEnCuadros(guion) : duracionEnCuadros(guion)) / guion.fps).toFixed(1)}s
+                {((esPiezaConVoz || !!guion.vozUrl ? (guion.ilustrado && guion.tiemposRender ? duracionReelIlustrado({ tiempos: { tiemposRender: guion.tiemposRender, palabrasPorEscena: guion.palabrasPorEscena ?? [], segmentosAudio: guion.segmentosAudio ?? [] } }) : duracionReelAutomaticoEnCuadros(guion)) : duracionEnCuadros(guion)) / guion.fps).toFixed(1)}s{guion.ilustrado ? " · ilustrado" : ""}
               </p>
             </div>
           </div>

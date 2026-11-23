@@ -8,6 +8,7 @@ import { familiaDeFuente } from "../fuentes";
 import type { TemaGuion } from "../tema";
 import { paletaNoche } from "../estilos/estilos";
 import { CapaVoz } from "../visuales/CapaVoz";
+import { CapaMusicaConDucking } from "../visuales/CapaMusicaConDucking";
 import { construirLineaDeTiempo, type TiemposIlustrado } from "./tiempoIlustrado";
 import { MundoIlustrado } from "./motor/MundoIlustrado";
 import { Subtitulo } from "./motor/Subtitulo";
@@ -25,6 +26,9 @@ export type PropsReelIlustrado = {
   fotoUrl?: string;
   tema: TemaGuion;
   marca: MarcaIlustrada;
+  // Música de fondo con ducking bajo la voz (como ReelAutomatico).
+  pistaMusicaUrl?: string | null;
+  volumenMusica?: number;
 };
 
 const FPS = 30;
@@ -33,7 +37,7 @@ export function duracionReelIlustrado(props: Pick<PropsReelIlustrado, "tiempos">
   return Math.max(1, construirLineaDeTiempo(props.tiempos, FPS).duracionCuadros);
 }
 
-export function ReelIlustrado({ tiempos, plan, vozUrl, fotoUrl, tema, marca }: PropsReelIlustrado) {
+export function ReelIlustrado({ tiempos, plan, vozUrl, fotoUrl, tema, marca, pistaMusicaUrl, volumenMusica = 0.35 }: PropsReelIlustrado) {
   const frame = useCurrentFrame();
   const { fps } = useVideoConfig();
   const reel = useMemo(() => prepararReel(tiempos, plan, fps), [tiempos, plan, fps]);
@@ -64,6 +68,15 @@ export function ReelIlustrado({ tiempos, plan, vozUrl, fotoUrl, tema, marca }: P
     <AbsoluteFill style={{ fontFamily: familiaDeFuente(tema.fuente), background: paleta.fondoProfundo, overflow: "hidden" }}>
       {recursos && <MundoIlustrado frame={frame} fps={fps} reel={reel} paleta={paleta} tema={tema} marca={marca} fotoUrl={foto} recursos={recursos} />}
       <Subtitulo linea={reel.linea} frame={frame} luz={paleta.luz} />
+      {pistaMusicaUrl && reel.linea.palabras.length > 0 && (
+        <CapaMusicaConDucking
+          url={pistaMusicaUrl}
+          volumenNormal={volumenMusica}
+          volumenConVoz={volumenMusica * 0.3}
+          inicioVoz_s={reel.linea.palabras[0].desde / fps}
+          finVoz_s={reel.linea.palabras[reel.linea.palabras.length - 1].hasta / fps}
+        />
+      )}
       {/* Voz: cada escena reproduce sus tramos ya compactados (mismo criterio que ReelAutomatico). */}
       {vozUrl &&
         reel.linea.escenas.map((e) => {

@@ -3,6 +3,8 @@
 import { Player } from "@remotion/player";
 import { ReelAutomatico, duracionReelAutomaticoEnCuadros } from "@/video/visuales/ReelAutomatico";
 import type { Guion } from "@/video/guion.schema";
+import { ReelIlustrado, duracionReelIlustrado } from "@/video/ilustrado/ReelIlustrado";
+import { propsReelIlustradoDesdeGuion } from "@/video/ilustrado/desdeGuion";
 import type { MediosResueltos } from "@/video/escenas/tipos";
 
 // Gemelo de VistaPrevia.tsx para piezas con pipeline de voz (Fase B
@@ -16,6 +18,23 @@ import type { MediosResueltos } from "@/video/escenas/tipos";
 // unsafely-treat-insecure-origin-as-secure que sí hace falta para el
 // render real (ColaDeRender.tsx).
 export default function VistaPreviaConVoz({ guion, pistaMusicaUrl, medios }: { guion: Guion; pistaMusicaUrl: string | null; medios?: MediosResueltos }) {
+  // Reel ilustrado (fase 2): si el guion trae plan, se ve el reel ilustrado.
+  const propsIlustrado = propsReelIlustradoDesdeGuion(guion, medios, pistaMusicaUrl);
+  if (propsIlustrado) {
+    return (
+      <Player
+        component={ReelIlustrado}
+        inputProps={propsIlustrado}
+        durationInFrames={duracionReelIlustrado(propsIlustrado)}
+        fps={guion.fps}
+        compositionWidth={1080}
+        compositionHeight={1920}
+        style={{ width: "100%", maxWidth: 320, borderRadius: 12, overflow: "hidden" }}
+        controls
+        loop
+      />
+    );
+  }
   return (
     <Player
       component={ReelAutomatico}
