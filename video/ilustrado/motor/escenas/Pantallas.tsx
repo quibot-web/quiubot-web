@@ -242,7 +242,7 @@ export function PantallaPerfil({ frame, d, marca, fotoUrl }: PropsEscena) {
             {/* <img>, no background url(): el renderizador del navegador no dibuja fondos con imagen. */}
             {t === "foto" ? (
               // eslint-disable-next-line @next/next/no-img-element -- dibujo del video; precargada en ReelIlustrado
-              <img src={fotoUrl} alt="" decoding="sync" style={{ display: "block", width: "100%", height: "100%", objectFit: "cover" }} />
+              <img src={fotoUrl} alt="" decoding="sync" crossOrigin="anonymous" style={{ display: "block", width: "100%", height: "100%", objectFit: "cover" }} />
             ) : (
               <ImagenFija nombre={`ilu-${t}`} ancho="100%" alto="100%" estilo={{ objectFit: "cover" }} />
             )}

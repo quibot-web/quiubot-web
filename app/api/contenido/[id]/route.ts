@@ -20,6 +20,7 @@ import { urlPistaMusical } from "@/app/lib/cloudinaryUrl";
 import { vozDesactualizada } from "@/app/lib/videoOrganico/hashNarracion";
 import { llamarOpenAI, regenerarVozParaGuion } from "@/app/lib/videoOrganico/generarGuionConVoz";
 import { planTrasRegenerarVoz } from "@/app/lib/videoOrganico/generarPlanIlustrado";
+import { registrarError } from "@/lib/registrarError";
 import { reelIlustradoActivo } from "@/app/lib/reelIlustrado";
 
 const VOZ_POR_DEFECTO = "cedar";
@@ -239,6 +240,22 @@ export async function PATCH(req: NextRequest, { params }: { params: Promise<{ id
     if (!filas || filas.length === 0) {
       return NextResponse.json({ error: "Esta pieza ya se está renderizando (u otra pestaña la tomó)." }, { status: 409 });
     }
+    return NextResponse.json({ ok: true });
+  }
+
+  if (cuerpo?.accion === "registrar_respaldo_ilustrado") {
+    // El reel ilustrado falló en el navegador y la cola lo renderizó con
+    // su estilo de siempre: solo se registra el motivo (no cambia la pieza).
+    const motivo = typeof cuerpo.motivo === "string" ? cuerpo.motivo.slice(0, 1500) : "sin detalle";
+    const navegador = typeof cuerpo.navegador === "string" ? cuerpo.navegador.slice(0, 300) : "desconocido";
+    await registrarError({
+      origen: "render_ilustrado_respaldo",
+      userId: usuario!.id,
+      email: emailBusqueda,
+      paso: "render_navegador",
+      errorMensaje: "El reel ilustrado no se pudo renderizar en el navegador; se usó su estilo de siempre.",
+      detalleTecnico: `pieza ${id} · ${navegador} · ${motivo}`,
+    });
     return NextResponse.json({ ok: true });
   }
 

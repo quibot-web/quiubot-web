@@ -17,7 +17,12 @@ const VOZ_POR_DEFECTO = "cedar";
 
 export const maxDuration = 120;
 
-export async function POST() {
+export async function POST(req: Request) {
+  // conFotoAlbum: además de la voz (ya en Cloudinary), una foto del álbum
+  // del admin (Cloudinary) -- reproduce el caso real de /contenido, con
+  // recursos de otro origen (ver video/ilustrado/recursosLocales.ts).
+  const cuerpo = await req.json().catch(() => null);
+  const conFotoAlbum = cuerpo?.conFotoAlbum === true;
   const session = await auth();
   if (!session?.user?.email) return NextResponse.json({ error: "No autorizado" }, { status: 401 });
   const email = session.user.email.trim().toLowerCase();
@@ -55,7 +60,15 @@ export async function POST() {
     });
     if (!resultado.ok) return NextResponse.json({ error: resultado.error, resumenErrores: resultado.resumenErrores }, { status: resultado.status });
     const { tiemposRender, palabrasPorEscena, segmentosAudio, vozUrl } = resultado.campos;
-    return NextResponse.json({ tiempos: { tiemposRender, palabrasPorEscena, segmentosAudio }, vozUrl, voz, puntajeAlineacion: resultado.puntajeAlineacion });
+    let fotoUrl: string | null = null;
+    if (conFotoAlbum) {
+      // Solo lectura: la imagen más reciente del álbum, de preferencia sin texto encima.
+      const { data: imagenes } = await supabaseAdmin.from("album_creativos").select("url_imagen, analisis").eq("user_id", usuario.id).eq("tipo", "imagen").order("creado_en", { ascending: false }).limit(20);
+      const sinTexto = (imagenes ?? []).find((i) => (i.analisis as { tiene_texto?: boolean } | null)?.tiene_texto === false);
+      fotoUrl = (sinTexto ?? imagenes?.[0])?.url_imagen ?? null;
+      if (!fotoUrl) return NextResponse.json({ error: "Tu álbum no tiene imágenes: sube una para probar el modo con foto del álbum." }, { status: 400 });
+    }
+    return NextResponse.json({ tiempos: { tiemposRender, palabrasPorEscena, segmentosAudio }, vozUrl, voz, puntajeAlineacion: resultado.puntajeAlineacion, fotoUrl });
   } catch (err) {
     const detalle = String(err instanceof Error ? err.message : err);
     if (/insufficient_quota|credit_balance_exhausted|no tiene créditos/.test(detalle)) {

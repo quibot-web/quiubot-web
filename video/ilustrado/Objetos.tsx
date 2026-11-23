@@ -58,7 +58,7 @@ export function Fondo({ camX, horizonte: h, fondo, profundo, luz, brilloUrl }: {
       {/* Luz de fondo detrás de la escena, sobre el horizonte (halo horneado en el color de luz) */}
       {brilloUrl && (
         // eslint-disable-next-line @next/next/no-img-element -- dibujo del video
-        <img src={brilloUrl} alt="" decoding="sync" style={{ position: "absolute", left: -360, top: horizonte - 1000, width: 1800, height: 1300, opacity: 0.55 }} />
+        <img src={brilloUrl} alt="" decoding="sync" crossOrigin="anonymous" style={{ position: "absolute", left: -360, top: horizonte - 1000, width: 1800, height: 1300, opacity: 0.55 }} />
       )}
       {/* Piso */}
       <div style={{ position: "absolute", left: 0, right: 0, top: horizonte, bottom: 0, overflow: "hidden", background: `linear-gradient(180deg, ${mezclarColoresHex(fondo, luz, 0.18)} 0%, ${profundo} 100%)` }}>
@@ -201,10 +201,10 @@ export function Post({
                 apagada y la clara son dos imágenes horneadas y se cruzan
                 con opacidad. */}
             {/* eslint-disable-next-line @next/next/no-img-element -- dibujo del video; precargada en ReelIlustrado */}
-            <img alt="" decoding="sync" src={apagado ? fotoClaraUrl ?? fotoUrl : fotoUrl} style={{ position: "absolute", inset: 0, width: "100%", height: "100%", objectFit: "cover" }} />
+            <img alt="" decoding="sync" crossOrigin="anonymous" src={apagado ? fotoClaraUrl ?? fotoUrl : fotoUrl} style={{ position: "absolute", inset: 0, width: "100%", height: "100%", objectFit: "cover" }} />
             {apagado && brillo < 1 && (
               // eslint-disable-next-line @next/next/no-img-element -- dibujo del video; precargada en ReelIlustrado
-              <img alt="" decoding="sync" src={fotoApagadaUrl ?? fotoUrl} style={{ position: "absolute", inset: 0, width: "100%", height: "100%", objectFit: "cover", opacity: 1 - brillo }} />
+              <img alt="" decoding="sync" crossOrigin="anonymous" src={fotoApagadaUrl ?? fotoUrl} style={{ position: "absolute", inset: 0, width: "100%", height: "100%", objectFit: "cover", opacity: 1 - brillo }} />
             )}
           </>
         ) : (
@@ -345,7 +345,7 @@ export function Persona({
     <div style={{ position: "absolute", left: x - 70 * escala, top: pies - 280 * escala, width: 140 * escala, height: 280 * escala, opacity: opacidad, transform: espejo ? "scaleX(-1)" : undefined }}>
       {luz > 0.05 && brilloUrl && (
         // eslint-disable-next-line @next/next/no-img-element -- dibujo del video
-        <img src={brilloUrl} alt="" decoding="sync" style={{ position: "absolute", left: -60 * escala, top: 20 * escala, width: 260 * escala, height: 290 * escala, opacity: 0.75 * luz }} />
+        <img src={brilloUrl} alt="" decoding="sync" crossOrigin="anonymous" style={{ position: "absolute", left: -60 * escala, top: 20 * escala, width: 260 * escala, height: 290 * escala, opacity: 0.75 * luz }} />
       )}
       <svg viewBox="0 0 140 280" width={140 * escala} height={280 * escala} style={{ position: "absolute", left: 0, top: 0, overflow: "visible" }}>
         <ellipse cx="70" cy="274" rx="60" ry="9" fill="rgba(0,0,0,0.4)" />

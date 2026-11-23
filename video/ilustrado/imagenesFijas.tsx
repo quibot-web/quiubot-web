@@ -166,7 +166,7 @@ export function urlImagenFija(nombre: NombreImagenFija): string {
 
 export function ImagenFija({ nombre, ancho, alto, estilo }: { nombre: NombreImagenFija; ancho: number | string; alto: number | string; estilo?: CSSProperties }) {
   // eslint-disable-next-line @next/next/no-img-element -- dibujo del video, no una página
-  return <img src={urlImagenFija(nombre)} alt="" decoding="sync" style={{ display: "block", width: ancho, height: alto, ...estilo }} />;
+  return <img src={urlImagenFija(nombre)} alt="" decoding="sync" crossOrigin="anonymous" style={{ display: "block", width: ancho, height: alto, ...estilo }} />;
 }
 
 // Publicaciones genéricas del feed como una sola imagen cada una (las
@@ -177,7 +177,7 @@ export const ESCALA_POST_FIJO = 1.5;
 export const urlPostFijo = (tipo: TipoPostFijo) => staticFile(`ilustrado/post-${tipo}.png`);
 export function ImagenPostFijo({ tipo }: { tipo: TipoPostFijo }) {
   // eslint-disable-next-line @next/next/no-img-element -- dibujo del video, no una página
-  return <img src={urlPostFijo(tipo)} alt="" decoding="sync" style={{ display: "block", width: "100%", height: "100%" }} />;
+  return <img src={urlPostFijo(tipo)} alt="" decoding="sync" crossOrigin="anonymous" style={{ display: "block", width: "100%", height: "100%" }} />;
 }
 
 export function urlsImagenesFijas(): string[] {
@@ -193,6 +193,8 @@ export function precargarImagenes(urls: string[]): Promise<void> {
       let p = precargadas.get(url);
       if (!p) {
         const img = new Image();
+        // Igual que las <img> del reel: con CORS (una imagen sin CORS contamina el canvas del render).
+        img.crossOrigin = "anonymous";
         img.decoding = "sync";
         p = new Promise<void>((resolver) => {
           img.onload = () => img.decode().catch(() => undefined).finally(resolver);

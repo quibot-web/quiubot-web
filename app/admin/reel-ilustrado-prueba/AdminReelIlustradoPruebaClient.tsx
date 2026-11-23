@@ -15,7 +15,8 @@ const META_SEGUNDOS_POR_SEGUNDO = 5;
 const TEMA = { color_primario: "#534AB7", color_secundario: "#B9B2FF", fuente: "moderna" as const, logo_url: null, nombre_marca: "Quiubot", instagramUsuario: "quiubot" };
 
 type Fase = "inactivo" | "generando_voz" | "renderizando" | "listo" | "error";
-type Resultado = { duracionVideo: number; segundosRender: number; conVoz: boolean; voz: string | null; navegador: string };
+type Modo = "sin_voz" | "voz_local" | "cloudinary";
+type Resultado = { duracionVideo: number; segundosRender: number; modo: Modo; voz: string | null; navegador: string };
 
 
 export default function AdminReelIlustradoPruebaClient({ estado }: { estado: { activo: boolean; correosEnLaVariable: number; sesion: string | null } }) {
@@ -28,7 +29,8 @@ export default function AdminReelIlustradoPruebaClient({ estado }: { estado: { a
   const urlRef = useRef<string | null>(null);
   const entorno = { navegador: useNombreNavegador() ?? "", equipo: useDescripcionEquipo() ?? "" };
 
-  async function correr(conVoz: boolean) {
+  async function correr(modo: Modo) {
+    const conVoz = modo !== "sin_voz";
     setError(null);
     setResultado(null);
     setProgreso(0);
@@ -44,14 +46,17 @@ export default function AdminReelIlustradoPruebaClient({ estado }: { estado: { a
       let tiempos: TiemposIlustrado;
       let vozUrl: string | null = null;
       let voz: string | null = null;
+      // Modo Cloudinary: foto del álbum (otro origen), como en /contenido.
+      let fotoUrl: string | undefined;
       if (conVoz) {
         setFase("generando_voz");
-        const res = await fetch("/api/admin/reel-ilustrado-prueba/voz", { method: "POST" });
+        const res = await fetch("/api/admin/reel-ilustrado-prueba/voz", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ conFotoAlbum: modo === "cloudinary" }) });
         const datos = await res.json().catch(() => ({}));
         if (!res.ok) throw new Error([datos.error ?? "No se pudo generar la voz.", ...(datos.resumenErrores ?? [])].join(" "));
         tiempos = datos.tiempos;
         vozUrl = datos.vozUrl;
         voz = datos.voz;
+        fotoUrl = datos.fotoUrl ?? undefined;
       } else {
         const { tiemposSinteticos } = await import("@/video/ilustrado/guionPrototipo");
         tiempos = tiemposSinteticos();
@@ -60,7 +65,7 @@ export default function AdminReelIlustradoPruebaClient({ estado }: { estado: { a
       setFase("renderizando");
       const { ReelIlustrado, duracionReelIlustrado } = await import("@/video/ilustrado/ReelIlustrado");
       const { PLAN_PROTOTIPO, MARCA_PROTOTIPO } = await import("@/video/ilustrado/planPrototipo");
-      const props = { tiempos, plan: PLAN_PROTOTIPO, vozUrl, tema: TEMA, marca: MARCA_PROTOTIPO };
+      const props = { tiempos, plan: PLAN_PROTOTIPO, vozUrl, fotoUrl, tema: TEMA, marca: MARCA_PROTOTIPO };
       const durationInFrames = duracionReelIlustrado(props);
       const inicio = performance.now();
       const reloj = setInterval(() => setTranscurrido((performance.now() - inicio) / 1000), 500);
@@ -79,7 +84,7 @@ export default function AdminReelIlustradoPruebaClient({ estado }: { estado: { a
         const url = URL.createObjectURL(blob);
         urlRef.current = url;
         setUrlVideo(url);
-        setResultado({ duracionVideo: durationInFrames / 30, segundosRender, conVoz, voz, navegador: nombreNavegador(navigator.userAgent) });
+        setResultado({ duracionVideo: durationInFrames / 30, segundosRender, modo, voz, navegador: nombreNavegador(navigator.userAgent) });
         setFase("listo");
       } finally {
         clearInterval(reloj);
@@ -107,14 +112,21 @@ export default function AdminReelIlustradoPruebaClient({ estado }: { estado: { a
 
       <div style={{ display: "flex", gap: 12, flexWrap: "wrap", marginBottom: 12 }}>
         <button
-          onClick={() => correr(true)}
+          onClick={() => correr("voz_local")}
           disabled={ocupado}
           style={{ padding: "10px 16px", borderRadius: 8, border: "none", background: ocupado ? "#bbb" : "#534AB7", color: "#fff", fontWeight: 700, cursor: ocupado ? "default" : "pointer" }}
         >
           Con voz real (usa tu llave de OpenAI)
         </button>
         <button
-          onClick={() => correr(false)}
+          onClick={() => correr("cloudinary")}
+          disabled={ocupado}
+          style={{ padding: "10px 16px", borderRadius: 8, border: "none", background: ocupado ? "#bbb" : "#0F7A3C", color: "#fff", fontWeight: 700, cursor: ocupado ? "default" : "pointer" }}
+        >
+          Como en /contenido (voz y foto del álbum en Cloudinary)
+        </button>
+        <button
+          onClick={() => correr("sin_voz")}
           disabled={ocupado}
           style={{ padding: "10px 16px", borderRadius: 8, border: "1px solid #534AB7", background: "#fff", color: "#534AB7", fontWeight: 700, cursor: ocupado ? "default" : "pointer" }}
         >
@@ -142,7 +154,7 @@ export default function AdminReelIlustradoPruebaClient({ estado }: { estado: { a
             {porSegundo.toFixed(2)} s de render por segundo de video {porSegundo <= META_SEGUNDOS_POR_SEGUNDO ? "· cumple la meta" : `· NO cumple la meta (≤ ${META_SEGUNDOS_POR_SEGUNDO})`}
           </p>
           <p style={{ color: "#555" }}>
-            Video de {resultado.duracionVideo.toFixed(1)} s renderizado en {resultado.segundosRender.toFixed(0)} s en <strong>{resultado.navegador}</strong> · {resultado.conVoz ? `con voz real (${resultado.voz})` : "sin voz, tiempos sintéticos (solo diagnóstico: los reels reales siempre llevan voz)"}
+            Video de {resultado.duracionVideo.toFixed(1)} s renderizado en {resultado.segundosRender.toFixed(0)} s en <strong>{resultado.navegador}</strong> · {resultado.modo === "cloudinary" ? `voz y foto del álbum desde Cloudinary, como en /contenido (${resultado.voz})` : resultado.modo === "voz_local" ? `con voz real (${resultado.voz})` : "sin voz, tiempos sintéticos (solo diagnóstico: los reels reales siempre llevan voz)"}
           </p>
         </div>
       )}

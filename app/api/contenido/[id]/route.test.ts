@@ -6,6 +6,8 @@ import { fixtureMitoVerdad } from "@/video/fixtures/organico/mitoVerdad";
 
 const authMock = vi.fn();
 vi.mock("@/auth", () => ({ auth: (...args: unknown[]) => authMock(...args) }));
+const registrarErrorMock = vi.fn();
+vi.mock("@/lib/registrarError", () => ({ registrarError: (...args: unknown[]) => registrarErrorMock(...args) }));
 
 let usuarioActual: Record<string, unknown> | null = null;
 let piezaActual: Record<string, unknown> | null = null;
@@ -291,6 +293,22 @@ describe("PATCH /api/contenido/[id] -- regenerar_voz", () => {
     expect(updatesRealizados.length).toBe(0);
     vi.doUnmock("@/lib/crypto");
     vi.doUnmock("@/app/lib/videoOrganico/generarGuionConVoz");
+  });
+});
+
+describe("PATCH /api/contenido/[id] -- registrar_respaldo_ilustrado", () => {
+  beforeEach(() => {
+    authMock.mockResolvedValue({ user: { email: "marca@quiubot.com" } });
+    usuarioActual = USUARIO_ADMIN;
+    updatesRealizados = [];
+    registrarErrorMock.mockReset();
+  });
+
+  it("registra el motivo con origen render_ilustrado_respaldo y no toca la pieza", async () => {
+    const res = await PATCH(patchReq({ accion: "registrar_respaldo_ilustrado", motivo: "Failed to construct 'VideoFrame': tainted", navegador: "Chrome/157" }), contexto());
+    expect(res.status).toBe(200);
+    expect(registrarErrorMock).toHaveBeenCalledWith(expect.objectContaining({ origen: "render_ilustrado_respaldo", paso: "render_navegador", detalleTecnico: expect.stringContaining("tainted") }));
+    expect(updatesRealizados).toHaveLength(0);
   });
 });
 

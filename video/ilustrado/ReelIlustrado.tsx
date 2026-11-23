@@ -17,6 +17,7 @@ import type { PlanIlustrado } from "./motor/plan";
 import type { MarcaIlustrada } from "./motor/escenas/tipos";
 import { precargarImagenes, urlsImagenesFijas } from "./imagenesFijas";
 import { generarRecursos, type RecursosGenerados } from "./imagenesGeneradas";
+import { aUrlLocal } from "./recursosLocales";
 
 export type PropsReelIlustrado = {
   tiempos: TiemposIlustrado;
@@ -32,6 +33,8 @@ export type PropsReelIlustrado = {
 };
 
 const FPS = 30;
+// Fase 3 la reemplaza por una foto apta del álbum o un producto ilustrado.
+const FOTO_POR_DEFECTO = () => staticFile("demo-organico/foto-producto-ceramica.jpg");
 
 export function duracionReelIlustrado(props: Pick<PropsReelIlustrado, "tiempos">): number {
   return Math.max(1, construirLineaDeTiempo(props.tiempos, FPS).duracionCuadros);
@@ -42,31 +45,35 @@ export function ReelIlustrado({ tiempos, plan, vozUrl, fotoUrl, tema, marca, pis
   const { fps } = useVideoConfig();
   const reel = useMemo(() => prepararReel(tiempos, plan, fps), [tiempos, plan, fps]);
   const paleta = paletaNoche(tema);
-  const foto = fotoUrl ?? staticFile("demo-organico/foto-producto-ceramica.jpg");
+  const foto = fotoUrl ?? FOTO_POR_DEFECTO();
   // Una sola espera al inicio: imágenes fijas, foto y recursos horneados
   // (foto apagada/clara, halo de luz). El mundo se monta recién cuando
   // todo está listo: así cada <img> nace con su imagen ya disponible y el
   // cuadro 0 sale completo (nunca el celular en blanco).
   const { delayRender, continueRender } = useDelayRender();
   const [espera] = useState(() => delayRender("Precargando imágenes del reel ilustrado"));
-  const [recursos, setRecursos] = useState<RecursosGenerados | null>(null);
+  const [listo, setListo] = useState<{ recursos: RecursosGenerados; foto: string } | null>(null);
   useEffect(() => {
     let vigente = true;
     (async () => {
-      const generados = await generarRecursos(foto, paleta.luz);
-      await precargarImagenes([...urlsImagenesFijas(), foto, generados.fotoApagada, generados.fotoClara, generados.brilloLuz].filter(Boolean));
-      if (vigente) setRecursos(generados);
+      // La foto remota (álbum en Cloudinary) se baja con CORS y se usa
+      // como blob: local; si no se puede, la foto por defecto -- nunca
+      // una imagen remota sin CORS (contamina el canvas y el render falla).
+      const fotoLocal = (await aUrlLocal(foto)) ?? FOTO_POR_DEFECTO();
+      const generados = await generarRecursos(fotoLocal, paleta.luz);
+      await precargarImagenes([...urlsImagenesFijas(), fotoLocal, generados.fotoApagada, generados.fotoClara, generados.brilloLuz].filter(Boolean));
+      if (vigente) setListo({ recursos: generados, foto: fotoLocal });
     })();
     return () => {
       vigente = false;
     };
   }, [foto, paleta.luz]);
   useEffect(() => {
-    if (recursos) continueRender(espera);
-  }, [recursos, espera, continueRender]);
+    if (listo) continueRender(espera);
+  }, [listo, espera, continueRender]);
   return (
     <AbsoluteFill style={{ fontFamily: familiaDeFuente(tema.fuente), background: paleta.fondoProfundo, overflow: "hidden" }}>
-      {recursos && <MundoIlustrado frame={frame} fps={fps} reel={reel} paleta={paleta} tema={tema} marca={marca} fotoUrl={foto} recursos={recursos} />}
+      {listo && <MundoIlustrado frame={frame} fps={fps} reel={reel} paleta={paleta} tema={tema} marca={marca} fotoUrl={listo.foto} recursos={listo.recursos} />}
       <Subtitulo linea={reel.linea} frame={frame} luz={paleta.luz} />
       {pistaMusicaUrl && reel.linea.palabras.length > 0 && (
         <CapaMusicaConDucking

@@ -158,37 +158,16 @@ export default function ColaDeRender({
           return;
         }
 
-        async function renderizarConGuion(guionARenderizar: Guion): Promise<{ blob: Blob; duracionS: number }> {
-          let component: React.ComponentType<Record<string, unknown>>;
-          let durationInFrames: number;
-          let defaultProps: Record<string, unknown>;
-          let duracionS: number;
-          // Reel ilustrado (fase 2): solo si el guion trae plan (cuentas de
-          // REELS_ILUSTRADOS_EMAILS); si no, el reel con estilo de siempre.
-          const { propsReelIlustradoDesdeGuion } = await import("@/video/ilustrado/desdeGuion");
-          const propsIlustrado = esPiezaConVoz ? propsReelIlustradoDesdeGuion(guionARenderizar, medios, pistaUrl) : null;
-          if (propsIlustrado) {
-            const { ReelIlustrado, duracionReelIlustrado } = await import("@/video/ilustrado/ReelIlustrado");
-            component = ReelIlustrado as unknown as React.ComponentType<Record<string, unknown>>;
-            durationInFrames = duracionReelIlustrado(propsIlustrado);
-            defaultProps = propsIlustrado as unknown as Record<string, unknown>;
-            duracionS = durationInFrames / guionARenderizar.fps;
-          } else if (esPiezaConVoz) {
-            const { ReelAutomatico, duracionReelAutomaticoEnCuadros } = await import("@/video/visuales/ReelAutomatico");
-            component = ReelAutomatico as unknown as React.ComponentType<Record<string, unknown>>;
-            durationInFrames = duracionReelAutomaticoEnCuadros(guionARenderizar);
-            defaultProps = { guion: guionARenderizar, medios, pistaMusicaUrl: pistaUrl, mostrarZonaSegura: false };
-            duracionS = guionARenderizar.escenas.reduce((acc, e) => acc + e.duracion_s, 0);
-          } else {
-            const { Composicion, duracionEnCuadros } = await import("@/video/Composicion");
-            component = Composicion as unknown as React.ComponentType<Record<string, unknown>>;
-            durationInFrames = duracionEnCuadros(guionARenderizar);
-            defaultProps = { guion: guionARenderizar, medios, pistaUrl, mostrarZonaSegura: false };
-            duracionS = guionARenderizar.escenas.reduce((acc, e) => acc + e.duracion_s, 0);
-          }
-          const inicio = performance.now();
+        // Respaldo del reel ilustrado (staging 23 nov 2026): si falla en el
+        // navegador, esta pieza se renderiza con su estilo de siempre
+        // (Noche / Color pleno / Foto) y el motivo queda en errores. Una
+        // vez que falló, los re-renders del control de calidad de esta
+        // misma pasada ya no lo intentan. La pieza nunca queda trabada.
+        let ilustradoDesactivado = false;
+
+        async function renderizar(component: React.ComponentType<Record<string, unknown>>, durationInFrames: number, defaultProps: Record<string, unknown>, fps: number): Promise<Blob> {
           const resultado = await renderMediaOnWeb({
-            composition: { id: `cola-${pieza.id}`, component, durationInFrames, fps: guionARenderizar.fps, width: 1080, height: 1920, defaultProps },
+            composition: { id: `cola-${pieza.id}`, component, durationInFrames, fps, width: 1080, height: 1920, defaultProps },
             inputProps: defaultProps,
             container: "mp4",
             videoCodec: "h264",
@@ -196,10 +175,46 @@ export default function ColaDeRender({
             licenseKey: LICENCIA_REMOTION,
             onProgress: (p: { progress: number }) => actualizarEstado(pieza.id, { progreso: Math.round((p.progress ?? 0) * 100) }),
           });
-          const blob = await resultado.getBlob();
-          const segundosReales = (performance.now() - inicio) / 1000;
-          setSegundosPorSegundoDeVideo(segundosReales / Math.max(duracionS, 1));
-          return { blob, duracionS };
+          return resultado.getBlob();
+        }
+
+        async function renderizarConGuion(guionARenderizar: Guion): Promise<{ blob: Blob; duracionS: number }> {
+          const inicio = performance.now();
+          const medir = (blob: Blob, duracionS: number) => {
+            setSegundosPorSegundoDeVideo((performance.now() - inicio) / 1000 / Math.max(duracionS, 1));
+            return { blob, duracionS };
+          };
+          // Reel ilustrado (fase 2): solo si el guion trae plan (cuentas de
+          // REELS_ILUSTRADOS_EMAILS); si no, el reel con estilo de siempre.
+          const { propsReelIlustradoDesdeGuion } = await import("@/video/ilustrado/desdeGuion");
+          const propsIlustrado = esPiezaConVoz && !ilustradoDesactivado ? propsReelIlustradoDesdeGuion(guionARenderizar, medios, pistaUrl) : null;
+          if (propsIlustrado) {
+            const { ReelIlustrado, duracionReelIlustrado } = await import("@/video/ilustrado/ReelIlustrado");
+            const durationInFrames = duracionReelIlustrado(propsIlustrado);
+            try {
+              const blob = await renderizar(ReelIlustrado as unknown as React.ComponentType<Record<string, unknown>>, durationInFrames, propsIlustrado as unknown as Record<string, unknown>, guionARenderizar.fps);
+              return medir(blob, durationInFrames / guionARenderizar.fps);
+            } catch (err) {
+              ilustradoDesactivado = true;
+              const motivo = err instanceof Error ? err.message : String(err);
+              await fetch(`/api/contenido/${pieza.id}`, {
+                method: "PATCH",
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify({ accion: "registrar_respaldo_ilustrado", motivo, navegador: navigator.userAgent }),
+              }).catch(() => undefined);
+              actualizarEstado(pieza.id, { progreso: 0 });
+            }
+          }
+          if (esPiezaConVoz) {
+            const { ReelAutomatico, duracionReelAutomaticoEnCuadros } = await import("@/video/visuales/ReelAutomatico");
+            const defaultProps = { guion: guionARenderizar, medios, pistaMusicaUrl: pistaUrl, mostrarZonaSegura: false };
+            const blob = await renderizar(ReelAutomatico as unknown as React.ComponentType<Record<string, unknown>>, duracionReelAutomaticoEnCuadros(guionARenderizar), defaultProps, guionARenderizar.fps);
+            return medir(blob, guionARenderizar.escenas.reduce((acc, e) => acc + e.duracion_s, 0));
+          }
+          const { Composicion, duracionEnCuadros } = await import("@/video/Composicion");
+          const defaultProps = { guion: guionARenderizar, medios, pistaUrl, mostrarZonaSegura: false };
+          const blob = await renderizar(Composicion as unknown as React.ComponentType<Record<string, unknown>>, duracionEnCuadros(guionARenderizar), defaultProps, guionARenderizar.fps);
+          return medir(blob, guionARenderizar.escenas.reduce((acc, e) => acc + e.duracion_s, 0));
         }
 
         let { blob } = await renderizarConGuion(guion);
