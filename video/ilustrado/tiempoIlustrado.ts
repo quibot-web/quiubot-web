@@ -54,8 +54,10 @@ export function construirLineaDeTiempo(t: TiemposIlustrado, fps: number): LineaD
 // suave entre ellos (ease in-out). Nunca corta: siempre interpola.
 export type PuntoCamara = { cuadro: number; x: number; y: number; zoom: number };
 
+// Seno in-out: la velocidad máxima es ~1,57 veces la promedio (con la
+// cúbica era 3 veces) -- arranca y frena suave sin un tirón en el medio.
 function suave(t: number): number {
-  return t < 0.5 ? 4 * t * t * t : 1 - Math.pow(-2 * t + 2, 3) / 2;
+  return 0.5 - Math.cos(Math.PI * t) / 2;
 }
 
 export function camaraEnCuadro(puntos: PuntoCamara[], frame: number): { x: number; y: number; zoom: number } {

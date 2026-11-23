@@ -7,9 +7,9 @@ import type { CSSProperties } from "react";
 
 export type TipoIlustracion = "comida" | "ropa" | "paisaje" | "mascota";
 
-export function Ilustracion({ tipo, estilo }: { tipo: TipoIlustracion; estilo?: CSSProperties }) {
+export function Ilustracion({ tipo, estilo, ancho = "100%", alto = "100%" }: { tipo: TipoIlustracion; estilo?: CSSProperties; ancho?: number | string; alto?: number | string }) {
   return (
-    <svg viewBox="0 0 700 700" width="100%" height="100%" preserveAspectRatio="xMidYMid slice" style={{ display: "block", ...estilo }}>
+    <svg viewBox="0 0 700 700" width={ancho} height={alto} preserveAspectRatio="xMidYMid slice" style={{ display: "block", ...estilo }}>
       {tipo === "comida" && <Comida />}
       {tipo === "ropa" && <Ropa />}
       {tipo === "paisaje" && <Paisaje />}

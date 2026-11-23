@@ -18,8 +18,10 @@ import { fixturePreguntaComunidad } from "./fixtures/organico/preguntaComunidad"
 import { fixtureDetrasDeMarca } from "./fixtures/organico/detrasDeMarca";
 import { ReelConsejosNumerados, duracionReelConsejosNumeradosEnCuadros } from "./fixtures/organico/referencia/ReelConsejosNumerados";
 import { ReelMitoVerdad, duracionReelMitoVerdadEnCuadros } from "./fixtures/organico/referencia/ReelMitoVerdad";
-import { PrototipoIlustrado, duracionPrototipoIlustrado, type PropsPrototipoIlustrado } from "./ilustrado/PrototipoIlustrado";
+import { ReelIlustrado, duracionReelIlustrado, type PropsReelIlustrado } from "./ilustrado/ReelIlustrado";
 import { tiemposSinteticos } from "./ilustrado/guionPrototipo";
+import { MARCA_PROTOTIPO, PLAN_PROTOTIPO } from "./ilustrado/planPrototipo";
+import { ALTO_POST_FIJO, ANCHO_POST_FIJO, PostFijo } from "./ilustrado/PostFijo";
 import { ReelAutomatico, duracionReelAutomaticoEnCuadros, type PropsReelAutomatico } from "./visuales/ReelAutomatico";
 import { BancoGanchoCierre, BancoVisuales, type PropsBancoGanchoCierre, type PropsBancoVisuales } from "./BancoVisuales";
 
@@ -137,19 +139,21 @@ function RemotionRoot() {
         height={1920}
         defaultProps={{ tipo: "anuncio_boton", estado: "antes", textos: {} } satisfies PropsBancoVisuales}
       />
-      {/* Prototipo de reel ilustrado (un mundo 2.5D, cámara continua):
-          tiempos sintéticos por defecto; el mp4 se renderiza con la voz
-          real y sus tiempos (script local). */}
+      {/* Reel ilustrado (motor genérico, fase 1): por defecto el plan del
+          prototipo con tiempos sintéticos; el mp4 con voz real se
+          renderiza con la voz y sus tiempos (arnés admin o script local). */}
       <Composition
-        id="prototipo-ilustrado"
-        component={PrototipoIlustrado}
+        id="reel-ilustrado"
+        component={ReelIlustrado}
         durationInFrames={30}
         fps={30}
         width={1080}
         height={1920}
-        calculateMetadata={({ props }) => ({ durationInFrames: duracionPrototipoIlustrado(props) })}
-        defaultProps={{ tiempos: tiemposSinteticos(), vozUrl: null, tema: TEMA_PROTOTIPO } satisfies PropsPrototipoIlustrado}
+        calculateMetadata={({ props }) => ({ durationInFrames: duracionReelIlustrado(props) })}
+        defaultProps={{ tiempos: tiemposSinteticos(), plan: PLAN_PROTOTIPO, vozUrl: null, tema: TEMA_PROTOTIPO, marca: MARCA_PROTOTIPO } satisfies PropsReelIlustrado}
       />
+      {/* Solo para generar public/ilustrado/post-<tipo>.png (video/ilustrado/generarPostsFijos.ts). */}
+      <Composition id="post-fijo" component={PostFijo} durationInFrames={1} fps={30} width={ANCHO_POST_FIJO} height={ALTO_POST_FIJO} defaultProps={{ tipo: "comida" as const }} />
       {/* Reel con voz completo desde un guion guardado
           (video/renderReelAutomatico.ts) -- para revisar estilos con el
           render real. La duración sale del guion (tiemposRender). */}
