@@ -26,6 +26,7 @@ import { obtenerSaludInstagram } from "@/app/lib/metaInstagramSalud";
 import { generarGuionConVoz } from "@/app/lib/videoOrganico/generarGuionConVoz";
 import { reelIlustradoActivo } from "@/app/lib/reelIlustrado";
 import { clasificarIdea, proponerSerie } from "@/app/lib/ideaUsuario";
+import { erroresDatosDelGuion } from "@/app/lib/videoOrganico/datosReales";
 import { VENTANA_ROTACION } from "@/video/estilos/estilos";
 
 // Receta que ya pasó al pipeline nuevo (narración + voz real, ver
@@ -518,7 +519,9 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
     // Solo mito_verdad -- no es una regla general de COPY QUE VENDE.
     const erroresVerdadTibia = recetaId === "mito_verdad" ? detectarVerdadTibia(textosEscenas).map((m) => `verdad tibia: ${m}`) : [];
 
-    const erroresTotales = [...erroresReceta, ...erroresMedia, ...erroresCopy, ...erroresVacios, ...erroresVerdadTibia];
+    // Datos reales en todas las recetas: solo lo que escribió el usuario o está en la marca/producto.
+    const erroresDatos = erroresDatosDelGuion(resultado.data, entrada);
+    const erroresTotales = [...erroresReceta, ...erroresMedia, ...erroresCopy, ...erroresVacios, ...erroresVerdadTibia, ...erroresDatos];
     intentosRegistrados.push({ errores: erroresTotales, crudo });
     if (erroresTotales.length > 0) {
       return { ok: false, errores: erroresTotales };

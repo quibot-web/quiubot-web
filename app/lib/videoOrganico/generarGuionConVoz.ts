@@ -1,6 +1,6 @@
 import "server-only";
-import { LIMITE_IDEA, MAX_PARTES_SERIE, clasificarIdea, detectarDatosInventados, verificarIdeaRespetada, type PropuestaSerie } from "@/app/lib/ideaUsuario";
-import type { ProductoResumenNegocio } from "@/video/promptGuionOrganico";
+import { LIMITE_IDEA, MAX_PARTES_SERIE, clasificarIdea, verificarIdeaRespetada, type PropuestaSerie } from "@/app/lib/ideaUsuario";
+import { erroresDatosDelGuion } from "./datosReales";
 import { ajustarConVozReal, generarPlanIlustrado } from "./generarPlanIlustrado";
 import type { PlanIlustrado } from "@/video/ilustrado/motor/plan";
 import { asignarEstilo, elegirEstilo, estilosDisponibles, idsFotosSinTexto } from "@/video/estilos/estilos";
@@ -190,7 +190,6 @@ export async function generarGuionConVoz(params: ParametrosGenerarGuionConVoz): 
   // escribió o que tiene la marca.
   const idea = params.entrada.tema?.trim() ?? "";
   const esIdea = clasificarIdea(idea) === "idea";
-  const fuentesReales = [idea, params.entrada.infoAdicionalMarca ?? "", ...params.entrada.productos.map(textoProducto), params.entrada.productoPieza ? textoProducto(params.entrada.productoPieza) : ""].join("\n");
   let propuestaSerie: PropuestaSerie | null = null;
 
   async function intentar(erroresPrevios?: string[]): Promise<{ ok: true; guion: Guion } | { ok: false; errores: string[] }> {
@@ -264,7 +263,10 @@ export async function generarGuionConVoz(params: ParametrosGenerarGuionConVoz): 
     const hallazgosEstructura = validarEstructuraConsejosNumeradosAudio(resultado.data.escenas).map((h) => `${h.escenaId}: ${h.mensaje}`);
 
     const textosConVoz = [...resultado.data.escenas.map((e) => e.narracion ?? ""), ...textosEscenas, resultado.data.publicacion?.caption ?? ""];
-    const erroresIdea = esIdea ? [...verificarIdeaRespetada(idea, textosConVoz), ...detectarDatosInventados(textosConVoz, fuentesReales)] : [];
+    // Idea desarrollada: sus puntos en su orden. Datos reales: en TODOS
+    // los guiones (tema corto o idea), solo lo que escribió el usuario o
+    // está en los datos de la marca/producto.
+    const erroresIdea = [...(esIdea ? verificarIdeaRespetada(idea, textosConVoz) : []), ...erroresDatosDelGuion(resultado.data, params.entrada)];
 
     const erroresTotales = [...erroresReceta, ...erroresMedia, ...erroresCopy, ...erroresVacios, ...hallazgosAudio, ...hallazgosEstructura, ...erroresIdea];
     intentosRegistrados.push({ errores: erroresTotales });
@@ -336,10 +338,4 @@ export async function generarGuionConVoz(params: ParametrosGenerarGuionConVoz): 
   }
 
   return { ok: true, guion: guionFinal, puntajeAlineacion: resultadoVoz.puntajeAlineacion, intentosGuion, crudo: resultadoVoz.crudo, planIlustrado: estadoPlan };
-}
-
-// Un producto del catálogo como texto (fuente de datos reales: su precio y lo que destaca).
-function textoProducto(p: Pick<ProductoResumenNegocio, "nombre" | "precio_cop" | "destacar">): string {
-  const precio = p.precio_cop ? `$${p.precio_cop.toLocaleString("es-CO")} ${p.precio_cop}` : "";
-  return `${p.nombre} ${precio} ${p.destacar ?? ""}`;
 }

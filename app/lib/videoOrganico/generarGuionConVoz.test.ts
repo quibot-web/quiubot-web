@@ -389,6 +389,19 @@ describe("generarGuionConVoz", () => {
       expect(delUsuario.ok).toBe(true);
     });
 
+    it("tema corto sin precio: un guion con precio o 'envío gratis' se rechaza y nunca se paga la voz", async () => {
+      const conDatos = { ...GUION_CON_AUDIO_VALIDO, escenas: GUION_CON_AUDIO_VALIDO.escenas.map((e) => (e.id === "e5" ? { ...e, narracion: "Marca lista con envío gratis desde $45.000" } : e)) };
+      vi.stubGlobal("fetch", vi.fn().mockResolvedValue(respuestaOpenAI(conDatos)));
+      prepararVozOk();
+      const r = await generarGuionConVoz(conIdea("vender más por WhatsApp"));
+      expect(r.ok).toBe(false);
+      if (!r.ok) {
+        expect((r.resumenErrores ?? []).join(" ")).toMatch(/\$45\.000/);
+        expect((r.resumenErrores ?? []).join(" ")).toMatch(/envío gratis/);
+      }
+      expect(generarVozMock).not.toHaveBeenCalled();
+    });
+
     it("idea corta (un tema): se genera como siempre, sin exigir puntos", async () => {
       vi.stubGlobal("fetch", vi.fn().mockResolvedValue(respuestaOpenAI(GUION_CON_AUDIO_VALIDO)));
       prepararVozOk();

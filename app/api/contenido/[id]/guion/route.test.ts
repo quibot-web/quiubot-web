@@ -357,6 +357,20 @@ describe("POST /api/contenido/[id]/guion", () => {
     vi.unstubAllGlobals();
   });
 
+  it("datos reales en recetas sin voz: un precio o 'envío gratis' que nadie escribió se rechaza", async () => {
+    const guionConDatos = {
+      ...GUION_VALIDO_CRUDO,
+      escenas: GUION_VALIDO_CRUDO.escenas.map((e) => (e.id === "e2" ? { ...e, params: { ...e.params, respuesta: "Desde $45.000 y envío gratis" } } : e)),
+    };
+    vi.stubGlobal("fetch", vi.fn().mockResolvedValue(respuestaOpenAI(guionConDatos)));
+    const res = await POST(req(), contexto());
+    const body = await res.json();
+    expect(res.status).toBe(502);
+    expect(body.resumenErrores.join(" ")).toMatch(/\$45\.000.*no lo inventes/);
+    expect(body.resumenErrores.join(" ")).toMatch(/envío gratis/);
+    vi.unstubAllGlobals();
+  });
+
   it("copy abstracto ('una forma más clara'): se rechaza en cualquier receta orgánica", async () => {
     const guionAbstracto = {
       ...GUION_VALIDO_CRUDO,
