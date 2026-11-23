@@ -109,24 +109,37 @@ export function verificarIdeaRespetada(idea: string, textosGuion: string[]): str
 // envío, promoción) son datos reales de la marca y se pueden decir y
 // mostrar. Uno que no esté en la idea ni en los datos de la marca es
 // inventado y se rechaza.
+// Solo DATOS U OFERTAS CONCRETAS (24 nov 2026): una cifra, un %, un
+// plazo, un horario, "envío gratis", "2x1", "garantía de 1 año", "12
+// cuotas". Nombrar el concepto en un consejo ("no regales descuentos",
+// "explica tu garantía", "ofrece cuotas", "publica tu horario") NO es un
+// dato y pasa.
+// Con número: el valor (o su número) tiene que estar en las fuentes.
 const PATRONES_DATO: { etiqueta: string; patron: RegExp }[] = [
   { etiqueta: "precio", patron: /\$\s?\d[\d.,]*(?:\s?(?:mil|k))?/g },
   { etiqueta: "porcentaje", patron: /\b\d{1,3}\s?%/g },
   { etiqueta: "hora", patron: /\b\d{1,2}(?::\d{2})?\s?(?:a\.?\s?m\.?|p\.?\s?m\.?|am|pm)(?![a-z])/g },
+  { etiqueta: "horario", patron: /\bde \d{1,2}(?::\d{2})? a \d{1,2}(?::\d{2})?\b|\b24\s?\/\s?7\b/g },
   { etiqueta: "promoción", patron: /\b\d\s?x\s?\d\b/g },
+  { etiqueta: "garantía", patron: /\bgarant[ií]as? de \d+\s?(?:a[nñ]os?|mes(?:es)?|d[ií]as?)\b|\b\d+\s?(?:a[nñ]os?|mes(?:es)?|d[ií]as?) de garant[ií]a\b/g },
+  { etiqueta: "cuotas", patron: /\b\d+\s?cuotas\b|\bhasta \d+\s?cuotas\b/g },
+  { etiqueta: "plazo", patron: /\b(?:entrega|env[ií]o|despacho|llega|te llega|lo recibes)\b[^.\n]{0,20}?\b(?:en )?\d+\s?(?:h|horas?|d[ií]as?(?: h[aá]biles)?)\b/g },
 ];
-const CLAVES_SIN_VALOR: { etiqueta: string; patron: RegExp }[] = [
-  { etiqueta: "envío gratis", patron: /\benv[ií]os? gratis\b|\bdomicilios? gratis\b/ },
-  { etiqueta: "garantía", patron: /\bgarant[ií]as?\b/ },
-  { etiqueta: "cuotas", patron: /\bcuotas?\b|\ba plazos\b/ },
-  { etiqueta: "descuento", patron: /\bdescuentos?\b/ },
+// Ofertas concretas sin número: tienen que estar escritas en las fuentes.
+const OFERTAS_SIN_NUMERO: { etiqueta: string; patron: RegExp }[] = [
+  { etiqueta: "envío gratis", patron: /\benv[ií]os? gratis\b|\bdomicilios? gratis\b|\benv[ií]o sin costo\b/ },
+  { etiqueta: "cuotas sin interés", patron: /\bcuotas sin inter[eé]s(?:es)?\b|\bsin intereses\b/ },
+  { etiqueta: "devolución gratis", patron: /\bdevoluci[oó]n(?:es)? gratis\b/ },
 ];
 
 const soloDigitos = (s: string) => s.replace(/[^\d]/g, "");
 const compacto = (s: string) => s.replace(/\s+/g, "");
 
 export function detectarDatosInventados(textosGuion: string[], fuentesReales: string): string[] {
-  const guion = normalizar(textosGuion.join(" \n "));
+  // Se busca en el texto en minúsculas CON tildes (los patrones aceptan
+  // las dos formas) para que el motivo muestre lo que dice el guion; se
+  // compara contra las fuentes sin tildes.
+  const guion = textosGuion.join(" \n ").toLowerCase();
   const fuentes = normalizar(fuentesReales);
   // Cada número que escribió el usuario o está en los datos de la marca ("$45.000" -> 45000).
   const numerosFuentes = new Set([...fuentes.matchAll(/\d[\d.,:]*/g)].map((m) => soloDigitos(m[0])));
@@ -135,11 +148,11 @@ export function detectarDatosInventados(textosGuion: string[], fuentesReales: st
     for (const m of guion.matchAll(patron)) {
       const valor = m[0].trim();
       const digitos = soloDigitos(valor);
-      const esta = compacto(fuentes).includes(compacto(valor)) || (etiqueta !== "promoción" && digitos !== "" && numerosFuentes.has(digitos));
+      const esta = compacto(fuentes).includes(compacto(normalizar(valor))) || (etiqueta !== "promoción" && digitos !== "" && numerosFuentes.has(digitos));
       if (!esta) problemas.push(`el guion dice "${valor}" (${etiqueta}) y ese dato no lo escribió el usuario ni está en los datos de la marca -- no lo inventes`);
     }
   }
-  for (const { etiqueta, patron } of CLAVES_SIN_VALOR) {
+  for (const { etiqueta, patron } of OFERTAS_SIN_NUMERO) {
     if (patron.test(guion) && !patron.test(fuentes)) problemas.push(`el guion promete "${etiqueta}" y eso no lo escribió el usuario ni está en los datos de la marca -- no lo inventes`);
   }
   return [...new Set(problemas)];

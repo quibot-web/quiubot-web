@@ -71,10 +71,9 @@ describe("datos del usuario permitidos vs datos inventados", () => {
     expect(p.join(" ")).toMatch(/\$79\.900/);
     expect(p.join(" ")).toMatch(/20 ?%/);
     expect(p.join(" ")).toMatch(/2x1/);
-    expect(p.join(" ")).toMatch(/descuento/);
   });
-  it("sin datos en la idea, prometer envío gratis o garantía es inventar", () => {
-    expect(detectarDatosInventados(["Con envío gratis y garantía"], "cómo elegir la talla").length).toBe(2);
+  it("sin datos en la idea, prometer envío gratis o una garantía concreta es inventar", () => {
+    expect(detectarDatosInventados(["Con envío gratis y garantía de 1 año"], "cómo elegir la talla").length).toBe(2);
   });
 });
 
@@ -85,3 +84,50 @@ describe("límites del campo", () => {
     expect(CrearPiezaManualSchema.safeParse({ ...base, tema: "a".repeat(LIMITE_IDEA + 1) }).success).toBe(false);
   });
 });
+
+// Riesgo anotado (24 nov 2026): nombrar un concepto en un consejo no es
+// un dato. Solo se bloquean datos u ofertas CONCRETAS que nadie dio.
+describe("concepto mencionado vs dato concreto", () => {
+  const SIN_DATOS = "cómo vender más por WhatsApp. Plataforma de publicidad en Meta para pymes.";
+
+  it("mencionar el concepto pasa (descuentos, garantía, cuotas, horario, envío, entrega)", () => {
+    const consejos = [
+      "No regales descuentos sin una razón.",
+      "Explica tu garantía en la descripción.",
+      "Ofrece cuotas si vendes productos caros.",
+      "Publica tu horario de atención en el perfil.",
+      "Cuenta cómo funcionan tus envíos.",
+      "Di cuánto se demora la entrega.",
+      "Si tienes descuento, ponlo arriba.",
+    ];
+    for (const c of consejos) expect(detectarDatosInventados([c], SIN_DATOS), c).toEqual([]);
+  });
+
+  it("un dato u oferta concreta que nadie dio se rechaza", () => {
+    const casos: [string, RegExp][] = [
+      ["Pon tu jean a $89.900", /\$89\.900/],
+      ["Llévalo con 20% de descuento", /20 ?%/],
+      ["Aprovecha el 2x1 de esta semana", /2x1/],
+      ["Te damos garantía de 1 año", /garantía de 1 año/],
+      ["Págalo en 12 cuotas", /12 cuotas/],
+      ["Págalo en cuotas sin interés", /cuotas sin interés/],
+      ["Con envío gratis a todo el país", /envío gratis/],
+      ["La entrega es en 24 horas", /24 horas/],
+      ["Atendemos de 8 a 6", /de 8 a 6/],
+      ["Abierto 24/7", /24 ?\/ ?7/],
+      ["Abrimos a las 9 am", /9 am/],
+    ];
+    for (const [texto, motivo] of casos) {
+      const p = detectarDatosInventados([texto], SIN_DATOS);
+      expect(p.length, texto).toBeGreaterThan(0);
+      expect(p.join(" "), texto).toMatch(motivo);
+    }
+  });
+
+  it("el mismo dato concreto escrito por el usuario (o en la marca) pasa", () => {
+    const delUsuario = "Garantía de 1 año, hasta 12 cuotas sin interés, envío gratis, entrega en 24 horas, atendemos de 8 a 6 y 2x1 los martes.";
+    const guion = ["Te damos garantía de 1 año", "Págalo en 12 cuotas sin interés", "Con envío gratis", "La entrega es en 24 horas", "Atendemos de 8 a 6", "Aprovecha el 2x1"];
+    expect(detectarDatosInventados(guion, delUsuario)).toEqual([]);
+  });
+});
+
