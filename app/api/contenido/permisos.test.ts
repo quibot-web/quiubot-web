@@ -252,6 +252,19 @@ describe("lo que el cliente no puede hacer ni en sus propias piezas", () => {
     expect(tablas.publicaciones_organicas.find((p) => p.id === "pieza-a")!.estado).toBe("error");
   });
 
+  it("reel rechazado por calidad: su dueño lo devuelve a borrador para arreglarlo (guion intacto, hallazgos guardados); otro usuario no puede", async () => {
+    tablas.publicaciones_organicas.find((p) => p.id === "pieza-a")!.control_calidad = { aprobado: false, hallazgos: ["x"] };
+    como("b@cliente.com");
+    expect((await rutaPieza.PATCH(json("/api/contenido/pieza-a", "PATCH", { accion: "volver_a_borrador" }), ctx("pieza-a"))).status).toBe(404);
+    expect(tablas.publicaciones_organicas.find((p) => p.id === "pieza-a")!.estado).toBe("error");
+    como("a@cliente.com");
+    expect((await rutaPieza.PATCH(json("/api/contenido/pieza-a", "PATCH", { accion: "volver_a_borrador" }), ctx("pieza-a"))).status).toBe(200);
+    const a = tablas.publicaciones_organicas.find((p) => p.id === "pieza-a")!;
+    expect(a).toMatchObject({ estado: "borrador", tipo_error: null, control_calidad: { hallazgosPrevios: ["x"] } });
+    // Una pieza que no fue rechazada por calidad no se toca así.
+    expect((await rutaPieza.PATCH(json("/api/contenido/pieza-a", "PATCH", { accion: "volver_a_borrador" }), ctx("pieza-a"))).status).toBe(400);
+  });
+
   it("música: el cliente solo ve y solo puede elegir pistas con licencia; admin ve también las de prueba", async () => {
     como("a@cliente.com");
     expect(((await (await rutaMusica.GET()).json()).pistas as Fila[]).map((p) => p.id)).toEqual(["pista-licencia"]);

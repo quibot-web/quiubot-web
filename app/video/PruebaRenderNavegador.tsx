@@ -1,5 +1,6 @@
 "use client";
 
+import { OPCIONES_CODIFICACION_REEL } from "@/video/configRender";
 import { useState } from "react";
 import type { Guion } from "@/video/guion.schema";
 import type { MediosResueltos } from "@/video/escenas/tipos";
@@ -40,7 +41,7 @@ export default function PruebaRenderNavegador({
       const { canRenderMediaOnWeb, renderMediaOnWeb } = await import("@remotion/web-renderer");
       const { Composicion, duracionEnCuadros } = await import("@/video/Composicion");
 
-      const check = await canRenderMediaOnWeb({ width: 1080, height: 1920, container: "mp4", videoCodec: "h264", audioCodec: "aac" });
+      const check = await canRenderMediaOnWeb({ width: 1080, height: 1920, container: "mp4", videoCodec: "h264", audioCodec: "aac", videoBitrate: OPCIONES_CODIFICACION_REEL.videoBitrate });
       if (!check.canRender) {
         setEstado("error");
         setMensaje(
@@ -65,6 +66,7 @@ export default function PruebaRenderNavegador({
         container: "mp4",
         videoCodec: "h264",
         audioCodec: "aac",
+        ...OPCIONES_CODIFICACION_REEL,
         licenseKey: "free-license",
       });
 

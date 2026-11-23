@@ -1,4 +1,5 @@
 "use client";
+import { OPCIONES_CODIFICACION_REEL } from "@/video/configRender";
 import { useRef, useState } from "react";
 import type { TiemposIlustrado } from "@/video/ilustrado/tiempoIlustrado";
 import { nombreNavegador } from "@/app/lib/navegador";
@@ -40,7 +41,7 @@ export default function AdminReelIlustradoPruebaClient({ estado }: { estado: { a
     setUrlVideo(null);
     try {
       const { canRenderMediaOnWeb, renderMediaOnWeb } = await import("@remotion/web-renderer");
-      const check = await canRenderMediaOnWeb({ width: 1080, height: 1920, container: "mp4", videoCodec: "h264", audioCodec: "aac" });
+      const check = await canRenderMediaOnWeb({ width: 1080, height: 1920, container: "mp4", videoCodec: "h264", audioCodec: "aac", videoBitrate: OPCIONES_CODIFICACION_REEL.videoBitrate });
       if (!check.canRender) throw new Error("Este navegador no puede preparar videos acá. Usa Chrome en un computador.");
 
       let tiempos: TiemposIlustrado;
@@ -77,6 +78,7 @@ export default function AdminReelIlustradoPruebaClient({ estado }: { estado: { a
           container: "mp4",
           videoCodec: "h264",
           audioCodec: "aac",
+          ...OPCIONES_CODIFICACION_REEL,
           licenseKey: LICENCIA_REMOTION,
           onProgress: (p: { progress: number }) => setProgreso(Math.round((p.progress ?? 0) * 100)),
         });

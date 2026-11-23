@@ -4,6 +4,8 @@ import { useEffect, useState, useCallback, use } from "react";
 import dynamic from "next/dynamic";
 import { useRouter } from "next/navigation";
 import EditorEscena from "@/app/video/EditorEscena";
+import { motivosEnLenguajeSimple } from "@/app/lib/videoOrganico/motivosQCSimples";
+import { urlWhatsappSoporte } from "@/app/lib/contacto";
 import { rotuloEscena } from "@/app/lib/videoOrganico/rotuloEscena";
 import { labelReceta, formatoFechaLarga, evaluarEliminacion, puedePublicarAhora, type PublicacionOrganica } from "@/app/lib/contenido";
 import ConfirmarEliminarReel from "../ConfirmarEliminarReel";
@@ -108,6 +110,20 @@ export default function RevisionPiezaPage({ params }: { params: Promise<{ id: st
       }
     })();
   }, [cargar]);
+
+  // Reel rechazado por el control de calidad: vuelve a borrador para que
+  // el cliente lo arregle (ver PATCH "volver_a_borrador").
+  async function volverABorrador(): Promise<boolean> {
+    setErrorMsg(null);
+    const res = await fetch(`/api/contenido/${id}`, { method: "PATCH", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ accion: "volver_a_borrador" }) });
+    if (!res.ok) {
+      const data = await res.json().catch(() => ({}));
+      setErrorMsg(data.error || "No se pudo volver a editar este reel.");
+      return false;
+    }
+    await cargar();
+    return true;
+  }
 
   async function generarGuion(opciones?: { unSoloReel?: boolean }) {
     setGenerando(true);
@@ -369,7 +385,45 @@ export default function RevisionPiezaPage({ params }: { params: Promise<{ id: st
         {pieza.estado === "error" && pieza.tipo_error === "calidad" && (
           <div style={{ background: "#FDECEC", border: "1px solid #E8A0A0", borderRadius: 14, padding: 16, marginBottom: 16 }}>
             <p style={{ fontSize: 13, color: "#8A1F1F", fontWeight: 700, margin: "0 0 8px" }}>El control de calidad rechazó este reel.</p>
-            {rol !== "admin" && <p style={{ fontSize: 12.5, color: "#8A1F1F", margin: 0 }}>Encontramos un problema en el audio o la imagen de este reel. Escríbenos y lo revisamos contigo.</p>}
+            {rol !== "admin" && (
+              <>
+                <ul style={{ fontSize: 12.5, color: "#8A1F1F", margin: "0 0 12px", paddingLeft: 18 }}>
+                  {motivosEnLenguajeSimple(pieza.control_calidad?.hallazgos).map((m, i) => (
+                    <li key={i}>{m}</li>
+                  ))}
+                </ul>
+                <p style={{ fontSize: 12.5, color: "#8A1F1F", margin: "0 0 10px" }}>Puedes arreglarlo tú mismo o escribirnos y lo revisamos contigo.</p>
+                <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
+                  <button
+                    type="button"
+                    disabled={generando}
+                    style={botonPrimario}
+                    onClick={async () => {
+                      if (await volverABorrador()) await generarGuion();
+                    }}
+                  >
+                    {generando ? "Generando…" : "Regenerar guion"}
+                  </button>
+                  <button
+                    type="button"
+                    style={botonSecundario}
+                    onClick={async () => {
+                      if (await volverABorrador()) setTimeout(() => document.getElementById("editor-narracion")?.scrollIntoView({ behavior: "smooth", block: "start" }), 50);
+                    }}
+                  >
+                    Editar narración
+                  </button>
+                  <a
+                    href={urlWhatsappSoporte(`Hola, mi reel "${pieza.tema ?? "sin tema"}" (${pieza.id.slice(0, 8)}) no pasó el control de calidad. ¿Me ayudan?`)}
+                    target="_blank"
+                    rel="noreferrer"
+                    style={{ ...botonSecundario, textDecoration: "none", display: "inline-block" }}
+                  >
+                    Escríbenos
+                  </a>
+                </div>
+              </>
+            )}
             {rol === "admin" && Array.isArray(pieza.control_calidad?.hallazgos) && (
               <ul style={{ fontSize: 12, color: "#8A1F1F", margin: "0 0 10px", paddingLeft: 18 }}>
                 {(pieza.control_calidad!.hallazgos as string[]).map((h, i) => (
@@ -493,6 +547,7 @@ export default function RevisionPiezaPage({ params }: { params: Promise<{ id: st
                   {generando ? "Regenerando…" : "Regenerar guion"}
                 </button>
               </div>
+              <div id="editor-narracion" />
               {guion.escenas.map((escena, i) => (
                 <EditorEscena
                   key={escena.id}

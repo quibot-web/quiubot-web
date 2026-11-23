@@ -1,5 +1,6 @@
 "use client";
 
+import { OPCIONES_CODIFICACION_REEL, TAMANO_MAXIMO_VIDEO_BYTES } from "@/video/configRender";
 import { erroresQCIlustrado, momentosControlIlustrado } from "@/app/lib/videoOrganico/controlCalidadIlustrado";
 import { useNombreNavegador } from "@/app/lib/useNavegador";
 import { useEffect, useRef, useState, useCallback } from "react";
@@ -39,8 +40,7 @@ interface EstadoPiezaCola {
 }
 
 const LICENCIA_REMOTION = "free-license";
-// Margen bajo los 25 MB que el servidor acepta sin truncar (next.config.ts).
-const TAMANO_MAXIMO_VIDEO_BYTES = 24 * 1024 * 1024;
+
 
 export default function ColaDeRender({
   piezasAprobadas,
@@ -183,7 +183,7 @@ export default function ColaDeRender({
 
         const { canRenderMediaOnWeb, renderMediaOnWeb } = await import("@remotion/web-renderer");
 
-        const check = await canRenderMediaOnWeb({ width: 1080, height: 1920, container: "mp4", videoCodec: "h264", audioCodec: "aac" });
+        const check = await canRenderMediaOnWeb({ width: 1080, height: 1920, container: "mp4", videoCodec: "h264", audioCodec: "aac", videoBitrate: OPCIONES_CODIFICACION_REEL.videoBitrate });
         if (!check.canRender) {
           actualizarEstado(pieza.id, { fase: "error", errorMsg: "Este navegador no puede preparar videos acá. Abre Quiubot desde un computador con Chrome." });
           return;
@@ -207,6 +207,7 @@ export default function ColaDeRender({
             container: "mp4",
             videoCodec: "h264",
             audioCodec: "aac",
+            ...OPCIONES_CODIFICACION_REEL,
             licenseKey: LICENCIA_REMOTION,
             onProgress: (p: { progress: number }) => actualizarEstado(pieza.id, { progreso: Math.round((p.progress ?? 0) * 100) }),
           });

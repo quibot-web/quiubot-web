@@ -307,6 +307,28 @@ export async function PATCH(req: NextRequest, { params }: { params: Promise<{ id
     return NextResponse.json({ ok: true });
   }
 
+  if (cuerpo?.accion === "volver_a_borrador") {
+    // El control de calidad rechazó el reel: el cliente lo arregla él mismo
+    // ("Regenerar guion" o "Editar narración"), así que la pieza vuelve a
+    // borrador con su guion intacto. Los hallazgos quedan guardados como
+    // referencia (hallazgosPrevios) y la pieza vuelve a pasar por el
+    // control completo cuando se apruebe de nuevo.
+    const { data: piezaActual } = await supabaseAdmin.from("publicaciones_organicas").select("estado, tipo_error, control_calidad").eq("id", id).eq("user_id", usuario.id).maybeSingle();
+    if (!piezaActual) return NextResponse.json({ error: "Pieza no encontrada." }, { status: 404 });
+    if (piezaActual.estado !== "error" || piezaActual.tipo_error !== "calidad") {
+      return NextResponse.json({ error: "Solo un reel que no pasó el control de calidad vuelve a borrador así." }, { status: 400 });
+    }
+    const hallazgos = (piezaActual.control_calidad as { hallazgos?: unknown } | null)?.hallazgos ?? null;
+    const { error: errorUpdate } = await supabaseAdmin
+      .from("publicaciones_organicas")
+      .update({ estado: "borrador", tipo_error: null, error: null, control_calidad: hallazgos ? { hallazgosPrevios: hallazgos } : null, actualizado_en: new Date().toISOString() })
+      .eq("id", id)
+      .eq("user_id", usuario.id)
+      .eq("estado", "error");
+    if (errorUpdate) return NextResponse.json({ error: "No se pudo volver a editar este reel." }, { status: 503 });
+    return NextResponse.json({ ok: true });
+  }
+
   // Saltarse el control de calidad es decisión de admin, nunca del cliente.
   if ((cuerpo?.accion === "forzar_sin_calidad" || cuerpo?.accion === "publicar_igual") && !esAdmin(usuario)) {
     return NextResponse.json({ error: "Este reel no pasó el control de calidad. Escríbenos y lo revisamos contigo." }, { status: 403 });

@@ -1,4 +1,5 @@
 "use client";
+import { OPCIONES_CODIFICACION_REEL } from "@/video/configRender";
 import { useRef, useState } from "react";
 import type { Guion } from "@/video/guion.schema";
 import type { SilencioLargo } from "@/app/lib/videoOrganico/encontrarSilenciosLargos";
@@ -104,7 +105,7 @@ export default function AdminReelAutomaticoPruebaClient() {
       const { canRenderMediaOnWeb, renderMediaOnWeb } = await import("@remotion/web-renderer");
       const { ReelAutomatico, duracionReelAutomaticoEnCuadros } = await import("@/video/visuales/ReelAutomatico");
 
-      const check = await canRenderMediaOnWeb({ width: 1080, height: 1920, container: "mp4", videoCodec: "h264", audioCodec: "aac" });
+      const check = await canRenderMediaOnWeb({ width: 1080, height: 1920, container: "mp4", videoCodec: "h264", audioCodec: "aac", videoBitrate: OPCIONES_CODIFICACION_REEL.videoBitrate });
       if (!check.canRender) {
         setError("Este navegador no puede preparar videos acá. Abre Quiubot desde un computador con Chrome.");
         setFase("error");
@@ -171,6 +172,7 @@ export default function AdminReelAutomaticoPruebaClient() {
           container: "mp4",
           videoCodec: "h264",
           audioCodec: "aac",
+          ...OPCIONES_CODIFICACION_REEL,
           licenseKey: LICENCIA_REMOTION,
           onProgress: (p: { progress: number }) => setProgresoRender(Math.round((p.progress ?? 0) * 100)),
         });

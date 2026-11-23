@@ -216,7 +216,10 @@ export function combinarHallazgosConImagenes(hallazgos: HallazgoVision[], cuadro
 export function erroresDesdeQC(hallazgos: HallazgoVision[], silencio: ResultadoSilencio, silenciosLargos: SilencioLargo[] | "no_verificado"): string[] {
   const errores = hallazgos
     .filter((h) => h.pantalla_vacia || h.texto_superpuesto || h.contraste_bajo)
-    .map((h) => `El control de calidad (visión) encontró un problema real en el cuadro "${h.cuadro}": ${h.nota}`);
+    .map((h) => {
+      const problemas = [h.pantalla_vacia && "pantalla vacía", h.texto_superpuesto && "texto encimado", h.contraste_bajo && "contraste bajo"].filter(Boolean).join(", ");
+      return `El control de calidad (visión) encontró un problema real en el cuadro "${h.cuadro}" (${problemas}): ${h.nota}`;
+    });
   if (silencio === "silencioso") errores.push("El audio final mezclado salió en silencio -- revisa que ninguna narracion haya quedado vacía o con un texto raro para la voz.");
   if (Array.isArray(silenciosLargos)) {
     for (const s of silenciosLargos) {
