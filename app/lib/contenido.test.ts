@@ -130,11 +130,11 @@ describe("CrearPiezaManualSchema", () => {
     expect(r.success).toBe(true);
   });
 
-  it("rechaza un tema de más de 200 caracteres", () => {
+  it("rechaza una idea de más de 1500 caracteres (antes el tema tenía 200)", () => {
     const r = CrearPiezaManualSchema.safeParse({
       receta_organica: "mito_verdad",
       programada_para: isoEnElFuturo(48),
-      tema: "x".repeat(201),
+      tema: "x".repeat(1501),
     });
     expect(r.success).toBe(false);
   });

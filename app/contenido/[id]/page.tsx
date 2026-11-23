@@ -7,6 +7,9 @@ import EditorEscena from "@/app/video/EditorEscena";
 import { rotuloEscena } from "@/app/lib/videoOrganico/rotuloEscena";
 import { labelReceta, formatoFechaLarga, evaluarEliminacion, puedePublicarAhora, type PublicacionOrganica } from "@/app/lib/contenido";
 import ConfirmarEliminarReel from "../ConfirmarEliminarReel";
+import PropuestaSerie from "../PropuestaSerie";
+import CampoIdea from "../CampoIdea";
+import type { PropuestaSerie as PropuestaSerieDatos } from "@/app/lib/ideaUsuario";
 import SelectorFechaHora from "../SelectorFechaHora";
 import { urlDescargaCloudinary } from "@/app/lib/cloudinaryUrl";
 import type { Guion, Escena } from "@/video/guion.schema";
@@ -34,6 +37,8 @@ export default function RevisionPiezaPage({ params }: { params: Promise<{ id: st
   const [aprobando, setAprobando] = useState(false);
   const [tema, setTema] = useState("");
   const [guardandoTema, setGuardandoTema] = useState(false);
+  // La idea no cabe en un reel: propuesta de serie (nunca se recorta en silencio).
+  const [propuestaSerie, setPropuestaSerie] = useState<PropuestaSerieDatos | null>(null);
   const [avisoInfoIncompleta, setAvisoInfoIncompleta] = useState(false);
   const [textoCopiado, setTextoCopiado] = useState(false);
   const [pistaUrl, setPistaUrl] = useState<string | null>(null);
@@ -107,6 +112,10 @@ export default function RevisionPiezaPage({ params }: { params: Promise<{ id: st
     try {
       const res = await fetch(`/api/contenido/${id}/guion`, { method: "POST" });
       const data = await res.json();
+      if (res.status === 422 && data.propuestaSerie) {
+        setPropuestaSerie(data.propuestaSerie as PropuestaSerieDatos);
+        return;
+      }
       if (!res.ok) {
         // resumenErrores: motivos reales del último intento (pedido
         // explícito) -- solo para admin. El cliente (cuando exista acá)
@@ -444,17 +453,21 @@ export default function RevisionPiezaPage({ params }: { params: Promise<{ id: st
           <div style={{ background: "#fff", borderRadius: 14, border: "1px solid #e5e5e5", padding: 24, textAlign: "center" }}>
             <p style={{ fontSize: 14, color: "#666", marginBottom: 12 }}>Esta pieza todavía no tiene guion.</p>
             <div style={{ textAlign: "left", maxWidth: 420, margin: "0 auto 16px" }}>
-              <label style={{ display: "block", fontSize: 12, fontWeight: 700, color: "#444", marginBottom: 6 }}>Tema (opcional)</label>
-              <input
-                value={tema}
-                onChange={(e) => setTema(e.target.value)}
-                onBlur={guardarTema}
-                maxLength={200}
-                placeholder='Ej. "por qué tus anuncios no traen mensajes"'
-                disabled={guardandoTema}
-                style={{ width: "100%", padding: 10, borderRadius: 8, border: "1px solid #ddd", fontSize: 13, fontFamily: "inherit" }}
-              />
+              <CampoIdea valor={tema} onCambio={setTema} onBlur={guardarTema} deshabilitado={guardandoTema} />
             </div>
+            {propuestaSerie && pieza && (
+              <PropuestaSerie
+                piezaId={pieza.id}
+                programadaPara={pieza.programada_para}
+                propuesta={propuestaSerie}
+                onCancelar={() => setPropuestaSerie(null)}
+                onCreada={async () => {
+                  setPropuestaSerie(null);
+                  await cargar();
+                  await generarGuion();
+                }}
+              />
+            )}
             <button type="button" onClick={generarGuion} disabled={generando} style={botonPrimario}>
               {generando ? "Generando…" : "Generar guion"}
             </button>

@@ -11,6 +11,7 @@ import type { PiezaDisponible } from "./promptGuion";
 import { TIPOS_VISUAL_DOS_ESTADOS } from "./visuales/schema";
 import { NOMBRES_ICONOS } from "./nombresIconos";
 import { LIMITES_TEXTO_GIGANTE } from "./estilos/textoGigante";
+import { MAX_PARTES_SERIE, MAX_PUNTOS_POR_REEL, clasificarIdea } from "../app/lib/ideaUsuario";
 
 // Resumen de un producto/servicio del catálogo (app/lib/productos.ts)
 // -- solo los campos que describen QUÉ es, nunca más (ver seccionNegocio).
@@ -308,7 +309,20 @@ export function seccionEjeDelReel(entrada: Pick<EntradaGuionOrganico, "tema" | "
   const lineas: string[] = ["EJE DEL REEL (lo más importante de este guion -- todo el reel gira alrededor de esto):"];
   const tema = entrada.tema?.trim();
   const producto = entrada.productoPieza;
-  if (tema) {
+  if (tema && clasificarIdea(tema) === "idea") {
+    // "Tu idea para el video" (24 nov 2026): el usuario escribió su propia
+    // idea desarrollada; el guion la sigue, no la reemplaza.
+    lineas.push(
+      `- IDEA DEL USUARIO PARA ESTE VIDEO (síguela; es SU mensaje, no lo cambies):
+"""
+${tema}
+"""`,
+      `- Respeta sus puntos, en SU orden, sus ejemplos y sus frases (también su frase de cierre). Solo adáptalos al formato reel: gancho, frases cortas para la voz, la duración y las reglas de siempre. NO agregues puntos que el usuario no pidió ni cambies lo que quiere decir. Si trae menos de ${MAX_PUNTOS_POR_REEL} puntos, completa las escenas de consejo con SU ejemplo o SU desarrollo, nunca con puntos nuevos.`,
+      `- Los datos que el usuario escribió en su idea (precio, horario, envío, promociones, condiciones) son datos REALES de la marca: puedes decirlos y mostrarlos tal cual, aunque arriba diga que no menciones precios ni ofertas. Cualquier dato que NO escribió (ni está en QUÉ HACE ESTE NEGOCIO) sigue prohibido: no lo inventes.`,
+      `- Si la idea NO cabe en un reel de ~30 segundos (más de ${MAX_PUNTOS_POR_REEL} puntos o más contenido del que se puede decir en ~80 palabras), NO la recortes ni la resumas en silencio: responde SOLO este JSON, que divide la idea en 2 a ${MAX_PARTES_SERIE} reels con TODOS sus puntos en su orden:
+{"no_cabe": true, "motivo": "por qué no cabe, en una frase para el usuario", "partes": [{"titulo": "...", "idea": "la parte de la idea del usuario que va en este reel, con sus palabras"}]}`
+    );
+  } else if (tema) {
     lineas.push(
       `- TEMA PEDIDO PARA ESTA PIEZA: "${tema}". El gancho, cada consejo y el cierre son sobre ESTE tema y nada más. Ejemplo de cómo se aplica: si el tema fuera "fotos de producto", los consejos serían sobre fotos (luz, fondo, mostrar el producto en uso), nunca sobre botones, WhatsApp o tiempos de respuesta.`
     );

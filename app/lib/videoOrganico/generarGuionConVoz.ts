@@ -1,4 +1,6 @@
 import "server-only";
+import { LIMITE_IDEA, MAX_PARTES_SERIE, clasificarIdea, detectarDatosInventados, verificarIdeaRespetada, type PropuestaSerie } from "@/app/lib/ideaUsuario";
+import type { ProductoResumenNegocio } from "@/video/promptGuionOrganico";
 import { ajustarConVozReal, generarPlanIlustrado } from "./generarPlanIlustrado";
 import type { PlanIlustrado } from "@/video/ilustrado/motor/plan";
 import { asignarEstilo, elegirEstilo, estilosDisponibles, idsFotosSinTexto } from "@/video/estilos/estilos";
@@ -95,7 +97,7 @@ export type ResultadoGenerarGuionConVoz =
       crudo: { palabrasPorEscenaCrudo: unknown; silencios: unknown };
       planIlustrado: EstadoPlanIlustrado;
     }
-  | { ok: false; status: number; error: string; resumenErrores?: string[] };
+  | { ok: false; status: number; error: string; resumenErrores?: string[]; propuestaSerie?: PropuestaSerie };
 
 export type ParametrosRegenerarVoz = { openaiKey: string; voz: string; cloudinary: CredencialesCloudinary };
 
@@ -183,6 +185,14 @@ export async function generarGuionConVoz(params: ParametrosGenerarGuionConVoz): 
   const maxReintentos = params.maxReintentos ?? 2;
   const intentosRegistrados: { errores: string[] }[] = [];
 
+  // "Tu idea para el video": si el usuario escribió una idea desarrollada,
+  // el guion la sigue (puntos y orden) y solo usa los datos que él
+  // escribió o que tiene la marca.
+  const idea = params.entrada.tema?.trim() ?? "";
+  const esIdea = clasificarIdea(idea) === "idea";
+  const fuentesReales = [idea, params.entrada.infoAdicionalMarca ?? "", ...params.entrada.productos.map(textoProducto), params.entrada.productoPieza ? textoProducto(params.entrada.productoPieza) : ""].join("\n");
+  let propuestaSerie: PropuestaSerie | null = null;
+
   async function intentar(erroresPrevios?: string[]): Promise<{ ok: true; guion: Guion } | { ok: false; errores: string[] }> {
     const prompt = construirPromptGuionOrganicoConAudio(params.entrada, erroresPrevios);
     const contenido = await llamarOpenAI(params.apiKeyUsuario, prompt);
@@ -197,6 +207,20 @@ export async function generarGuionConVoz(params: ParametrosGenerarGuionConVoz): 
     }
 
     const crudoObj = crudo as Record<string, unknown>;
+    // La idea no cabe en un reel: la IA propone una serie (no se recorta en silencio).
+    if (esIdea && crudoObj?.no_cabe === true) {
+      const partes = Array.isArray(crudoObj.partes) ? (crudoObj.partes as { titulo?: unknown; idea?: unknown }[]) : [];
+      const validas = partes
+        .filter((p) => typeof p?.idea === "string" && p.idea.trim().length > 0)
+        .map((p, i) => ({ titulo: typeof p.titulo === "string" && p.titulo.trim() ? p.titulo.trim().slice(0, 120) : `Parte ${i + 1}`, idea: (p.idea as string).trim().slice(0, LIMITE_IDEA) }));
+      if (validas.length >= 2 && validas.length <= MAX_PARTES_SERIE) {
+        propuestaSerie = { motivo: typeof crudoObj.motivo === "string" ? crudoObj.motivo.slice(0, 300) : "Tu idea no cabe en un reel de ~30 segundos.", partes: validas };
+        return { ok: false, errores: [] };
+      }
+      const errores = [`"no_cabe" necesita entre 2 y ${MAX_PARTES_SERIE} partes, cada una con su "idea".`];
+      intentosRegistrados.push({ errores });
+      return { ok: false, errores };
+    }
     const escenasSinNumeracionDoble = limpiarNumeracionItemsLista(crudoObj?.escenas);
     const escenasAjustadas = ajustarDuracionesProporcional(escenasSinNumeracionDoble, params.duracionObjetivoS);
     const hashtagsLimpios = limpiarHashtags(crudoObj?.hashtags);
@@ -239,7 +263,10 @@ export async function generarGuionConVoz(params: ParametrosGenerarGuionConVoz): 
     const hallazgosAudio = validarEdicionDesdeAudio(resultado.data.escenas).map((h) => `${h.escenaId}: ${h.mensaje}`);
     const hallazgosEstructura = validarEstructuraConsejosNumeradosAudio(resultado.data.escenas).map((h) => `${h.escenaId}: ${h.mensaje}`);
 
-    const erroresTotales = [...erroresReceta, ...erroresMedia, ...erroresCopy, ...erroresVacios, ...hallazgosAudio, ...hallazgosEstructura];
+    const textosConVoz = [...resultado.data.escenas.map((e) => e.narracion ?? ""), ...textosEscenas, resultado.data.publicacion?.caption ?? ""];
+    const erroresIdea = esIdea ? [...verificarIdeaRespetada(idea, textosConVoz), ...detectarDatosInventados(textosConVoz, fuentesReales)] : [];
+
+    const erroresTotales = [...erroresReceta, ...erroresMedia, ...erroresCopy, ...erroresVacios, ...hallazgosAudio, ...hallazgosEstructura, ...erroresIdea];
     intentosRegistrados.push({ errores: erroresTotales });
     if (erroresTotales.length > 0) return { ok: false, errores: erroresTotales };
 
@@ -248,11 +275,14 @@ export async function generarGuionConVoz(params: ParametrosGenerarGuionConVoz): 
 
   let resultado = await intentar(params.erroresPrevios);
   let intentosGuion = 1;
-  while (!resultado.ok && intentosGuion <= maxReintentos) {
+  while (!resultado.ok && !propuestaSerie && intentosGuion <= maxReintentos) {
     resultado = await intentar(resultado.errores);
     intentosGuion += 1;
   }
 
+  if (propuestaSerie) {
+    return { ok: false, status: 422, error: "Tu idea no cabe en un reel de ~30 segundos.", propuestaSerie };
+  }
   if (!resultado.ok) {
     return { ok: false, status: 502, error: "No se pudo generar un guion válido (narración/visual) después de varios intentos.", resumenErrores: resultado.errores };
   }
@@ -306,4 +336,10 @@ export async function generarGuionConVoz(params: ParametrosGenerarGuionConVoz): 
   }
 
   return { ok: true, guion: guionFinal, puntajeAlineacion: resultadoVoz.puntajeAlineacion, intentosGuion, crudo: resultadoVoz.crudo, planIlustrado: estadoPlan };
+}
+
+// Un producto del catálogo como texto (fuente de datos reales: su precio y lo que destaca).
+function textoProducto(p: Pick<ProductoResumenNegocio, "nombre" | "precio_cop" | "destacar">): string {
+  const precio = p.precio_cop ? `$${p.precio_cop.toLocaleString("es-CO")} ${p.precio_cop}` : "";
+  return `${p.nombre} ${precio} ${p.destacar ?? ""}`;
 }

@@ -1,5 +1,6 @@
 "use client";
 
+import CampoIdea from "./CampoIdea";
 import { useEffect, useState, useCallback } from "react";
 import { useRouter } from "next/navigation";
 import {
@@ -762,14 +763,7 @@ function FormularioAgregarReel({ fechaInicial, onCerrar, onCreado }: { fechaInic
           </div>
         </div>
 
-        <label style={etiquetaCampo}>Tema (opcional)</label>
-        <input
-          value={tema}
-          onChange={(e) => setTema(e.target.value)}
-          maxLength={200}
-          placeholder='Ej. "por qué tus anuncios no traen mensajes"'
-          style={campo}
-        />
+        <CampoIdea valor={tema} onCambio={setTema} />
 
         <label style={etiquetaCampo}>Producto o servicio (opcional)</label>
         <SelectorProducto valor={productoValor} onCambio={alCambiarProducto} errorGuardado={errorProducto} onValidezCambia={setProductoValido} />

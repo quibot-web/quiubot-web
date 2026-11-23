@@ -108,3 +108,20 @@ describe("eje del reel: tema y producto de la pieza", () => {
     expect(prompt).not.toContain('vuelve a visual "celular_chat", el MISMO tipo que el gancho');
   });
 });
+
+describe("tu idea para el video en el prompt (24 nov 2026)", () => {
+  it("idea desarrollada: el prompt la cita entera y pide seguir sus puntos en orden, usar solo sus datos y proponer una serie si no cabe", () => {
+    const idea = "Mucha gente compra la talla equivocada.\n1. Mide tu prenda favorita.\n2. Compara con la tabla.\nEl jean está a $89.900.";
+    const s = seccionEjeDelReel({ tema: idea, productoPieza: null });
+    expect(s).toContain(idea);
+    expect(s).toMatch(/en SU orden/);
+    expect(s).toMatch(/NO agregues puntos que el usuario no pidió/);
+    expect(s).toMatch(/datos REALES de la marca/);
+    expect(s).toMatch(/"no_cabe": true/);
+  });
+  it("tema corto: como siempre", () => {
+    const s = seccionEjeDelReel({ tema: "cómo elegir la talla", productoPieza: null });
+    expect(s).toMatch(/TEMA PEDIDO PARA ESTA PIEZA: "cómo elegir la talla"/);
+    expect(s).not.toMatch(/no_cabe/);
+  });
+});

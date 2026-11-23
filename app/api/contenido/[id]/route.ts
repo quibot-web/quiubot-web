@@ -21,6 +21,7 @@ import { vozDesactualizada } from "@/app/lib/videoOrganico/hashNarracion";
 import { llamarOpenAI, regenerarVozParaGuion } from "@/app/lib/videoOrganico/generarGuionConVoz";
 import { planTrasRegenerarVoz } from "@/app/lib/videoOrganico/generarPlanIlustrado";
 import { registrarError } from "@/lib/registrarError";
+import { LIMITE_IDEA } from "@/app/lib/ideaUsuario";
 import { reelIlustradoActivo } from "@/app/lib/reelIlustrado";
 
 const VOZ_POR_DEFECTO = "cedar";
@@ -155,7 +156,8 @@ export async function PATCH(req: NextRequest, { params }: { params: Promise<{ id
     // Tema puntual de la pieza (ej. "por qué tus anuncios no traen
     // mensajes") -- editable en la revisión antes de generar el guion,
     // mismo guard que "editar" (solo mientras sigue en borrador).
-    const tema = typeof cuerpo.tema === "string" ? cuerpo.tema.trim().slice(0, 200) || null : null;
+    // Tema corto o idea completa del usuario (hasta LIMITE_IDEA caracteres).
+    const tema = typeof cuerpo.tema === "string" ? cuerpo.tema.trim().slice(0, LIMITE_IDEA) || null : null;
 
     const { error: errorUpdate } = await supabaseAdmin
       .from("publicaciones_organicas")

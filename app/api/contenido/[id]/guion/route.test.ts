@@ -546,6 +546,34 @@ describe("POST /api/contenido/[id]/guion -- receta con voz vs. receta de siempre
     vi.unstubAllGlobals();
   });
 
+  it("idea con más de 3 puntos: propone la serie (422) SIN llamar a la IA ni a la voz; con más de 9, pide acortarla", async () => {
+    const idea = "Errores al vender por WhatsApp.\n1. Tardar en responder\n2. No saludar por el nombre\n3. Mandar audios largos\n4. No dar el precio\n5. No hacer seguimiento";
+    piezaActual = { id: "pieza-1", receta_organica: "consejos_numerados", estado: "borrador", media_ids: null, semana: "2026-11-09", tema: idea, gancho_tipo: "pregunta" };
+    vi.stubGlobal("fetch", vi.fn());
+    const res = await POST(req(), contexto());
+    const body = await res.json();
+    expect(res.status).toBe(422);
+    expect(body.propuestaSerie.partes).toHaveLength(2);
+    expect(generarGuionConVozMock).not.toHaveBeenCalled();
+
+    piezaActual = { ...piezaActual, tema: Array.from({ length: 10 }, (_, i) => `${i + 1}. punto número ${i + 1}`).join("\n") };
+    const res2 = await POST(req(), contexto());
+    expect(res2.status).toBe(422);
+    expect((await res2.json()).error).toMatch(/demasiados puntos/);
+    expect(generarGuionConVozMock).not.toHaveBeenCalled();
+    vi.unstubAllGlobals();
+  });
+
+  it("propuesta de serie que viene de la IA (idea en prosa que no cabe): la ruta la devuelve con 422", async () => {
+    piezaActual = { id: "pieza-1", receta_organica: "consejos_numerados", estado: "borrador", media_ids: null, semana: "2026-11-09", tema: "una idea larga en prosa ".repeat(10), gancho_tipo: "pregunta" };
+    vi.stubGlobal("fetch", vi.fn());
+    generarGuionConVozMock.mockResolvedValue({ ok: false, status: 422, error: "Tu idea no cabe en un reel de ~30 segundos.", propuestaSerie: { motivo: "m", partes: [{ titulo: "a", idea: "x" }, { titulo: "b", idea: "y" }] } });
+    const res = await POST(req(), contexto());
+    expect(res.status).toBe(422);
+    expect((await res.json()).propuestaSerie.partes).toHaveLength(2);
+    vi.unstubAllGlobals();
+  });
+
   it("cuenta en REELS_ILUSTRADOS_EMAILS: pide el plan ilustrado; otra cuenta, no", async () => {
     piezaActual = { id: "pieza-1", receta_organica: "consejos_numerados", estado: "borrador", media_ids: null, semana: "2026-11-09", tema: null, gancho_tipo: "pregunta" };
     vi.stubGlobal("fetch", vi.fn());

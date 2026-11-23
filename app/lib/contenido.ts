@@ -1,4 +1,5 @@
 import { z } from "zod";
+import { LIMITE_IDEA } from "./ideaUsuario";
 import { GANCHO_TIPOS_ORGANICO, RECETAS_ORGANICAS_IDS, type GanchoTipoOrganico, type RecetaOrganicaId } from "@/video/guion.schema";
 import { fechaBogota, inicioDiaBogota } from "@/app/lib/fechaBogota";
 
@@ -386,7 +387,8 @@ export const CrearPiezaManualSchema = z
     programada_para: z.iso.datetime({ offset: true }),
     producto_id: z.uuid().optional().nullable(),
     media_ids: z.array(z.uuid()).max(3).optional(),
-    tema: z.string().trim().max(200).optional().nullable(),
+    // "Tu idea para el video": un tema corto o la idea completa del usuario.
+    tema: z.string().trim().max(LIMITE_IDEA).optional().nullable(),
   })
   .superRefine((v, ctx) => {
     if (RECETAS_QUE_EXIGEN_MEDIA.includes(v.receta_organica) && (v.media_ids?.length ?? 0) === 0) {

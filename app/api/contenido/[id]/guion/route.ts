@@ -25,6 +25,7 @@ import type { RecetaOrganicaId } from "@/video/guion.schema";
 import { obtenerSaludInstagram } from "@/app/lib/metaInstagramSalud";
 import { generarGuionConVoz } from "@/app/lib/videoOrganico/generarGuionConVoz";
 import { reelIlustradoActivo } from "@/app/lib/reelIlustrado";
+import { clasificarIdea, proponerSerie } from "@/app/lib/ideaUsuario";
 import { VENTANA_ROTACION } from "@/video/estilos/estilos";
 
 // Receta que ya pasó al pipeline nuevo (narración + voz real, ver
@@ -347,6 +348,16 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
     const recetaConAudio = recetaParaPromptConAudio(entrada);
 
     try {
+      // "Tu idea para el video": más de 3 puntos marcados no caben en un
+      // reel de ~30 s -- se propone la serie sin gastar IA ni voz.
+      const serie = clasificarIdea(entrada.tema) === "idea" ? proponerSerie(entrada.tema ?? "") : "cabe";
+      if (serie === null) {
+        return NextResponse.json({ error: "Tu idea tiene demasiados puntos incluso para una serie de 3 reels. Acórtala o divídela tú en varias ideas." }, { status: 422 });
+      }
+      if (serie !== "cabe") {
+        return NextResponse.json({ error: "Tu idea no cabe en un reel de ~30 segundos.", propuestaSerie: serie }, { status: 422 });
+      }
+
       const resultado = await generarGuionConVoz({
         apiKeyUsuario,
         cloudinary: { cloudName: usuario.cloudinary_name, apiKey: cloudinaryKey, apiSecret: cloudinarySecret },
@@ -372,7 +383,7 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
           errorMensaje: resultado.error,
           detalleTecnico: (resultado.resumenErrores ?? []).join(" || "),
         });
-        return NextResponse.json({ error: resultado.error, resumenErrores: resultado.resumenErrores }, { status: resultado.status });
+        return NextResponse.json({ error: resultado.error, resumenErrores: resultado.resumenErrores, propuestaSerie: resultado.propuestaSerie }, { status: resultado.status });
       }
 
       // Plan ilustrado que no salió válido: la pieza sigue con su estilo,

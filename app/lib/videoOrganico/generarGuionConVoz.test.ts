@@ -336,4 +336,65 @@ describe("generarGuionConVoz", () => {
       expect(resultado.guion.ilustrado).toBeUndefined();
     });
   });
+
+  describe("tu idea para el video (24 nov 2026)", () => {
+    // Las 3 narraciones de consejo del guion de prueba, como idea del usuario.
+    const IDEA = "Quiero un reel para vender más por WhatsApp, con mis palabras.\n1. Pon un boton de contacto visible\n2. Conecta tu anuncio con WhatsApp\n3. Responde cada mensaje rapido\nCierre: Síguenos ya";
+    const conIdea = (tema: string) => {
+      const base = parametrosBase();
+      return { ...base, entrada: { ...base.entrada, tema } };
+    };
+    function prepararVozOk() {
+      generarVozMock.mockImplementation(async (texto: string) => ({ audioUrl: "https://cloudinary.test/voz.mp3", palabras: palabrasParaTexto(texto), silencios: [] }));
+    }
+
+    it("idea larga respetada: el guion que sigue sus puntos en su orden se acepta", async () => {
+      vi.stubGlobal("fetch", vi.fn().mockResolvedValue(respuestaOpenAI(GUION_CON_AUDIO_VALIDO)));
+      prepararVozOk();
+      const r = await generarGuionConVoz(conIdea(IDEA));
+      expect(r.ok).toBe(true);
+    });
+
+    it("idea larga NO respetada (orden cambiado): se reintenta y si sigue igual, falla diciendo qué punto", async () => {
+      const ideaAlReves = "Quiero un reel para vender más por WhatsApp, con mis palabras.\n1. Responde cada mensaje rapido\n2. Conecta tu anuncio con WhatsApp\n3. Pon un boton de contacto visible";
+      vi.stubGlobal("fetch", vi.fn().mockResolvedValue(respuestaOpenAI(GUION_CON_AUDIO_VALIDO)));
+      prepararVozOk();
+      const r = await generarGuionConVoz(conIdea(ideaAlReves));
+      expect(r.ok).toBe(false);
+      if (r.ok) return;
+      expect((r.resumenErrores ?? []).join(" ")).toMatch(/respeta el orden/);
+      expect(generarVozMock).not.toHaveBeenCalled();
+    });
+
+    it("idea que no cabe: la IA propone la serie y se devuelve SIN pagar la voz ni reintentar", async () => {
+      const fetchMock = vi.fn().mockResolvedValue(respuestaOpenAI({ no_cabe: true, motivo: "Son muchos pasos para 30 segundos.", partes: [{ titulo: "Parte 1", idea: "primeros pasos" }, { titulo: "Parte 2", idea: "últimos pasos" }] }));
+      vi.stubGlobal("fetch", fetchMock);
+      const r = await generarGuionConVoz(conIdea(`${IDEA}\nAdemás quiero explicar cómo armar un catálogo y cómo usar etiquetas, con ejemplos de mi tienda y de mis clientes de este año.`));
+      expect(r.ok).toBe(false);
+      if (r.ok) return;
+      expect(r.status).toBe(422);
+      expect(r.propuestaSerie?.partes).toHaveLength(2);
+      expect(fetchMock).toHaveBeenCalledTimes(1);
+      expect(generarVozMock).not.toHaveBeenCalled();
+    });
+
+    it("dato inventado (precio que el usuario no escribió) se rechaza; el mismo dato escrito por el usuario se acepta", async () => {
+      const conPrecio = { ...GUION_CON_AUDIO_VALIDO, escenas: GUION_CON_AUDIO_VALIDO.escenas.map((e) => (e.id === "e5" ? { ...e, narracion: "Marca lista desde $45.000" } : e)) };
+      vi.stubGlobal("fetch", vi.fn().mockResolvedValue(respuestaOpenAI(conPrecio)));
+      prepararVozOk();
+      const inventado = await generarGuionConVoz(conIdea(IDEA));
+      expect(inventado.ok).toBe(false);
+      if (!inventado.ok) expect((inventado.resumenErrores ?? []).join(" ")).toMatch(/\$45\.000.*no lo inventes/);
+      const delUsuario = await generarGuionConVoz(conIdea(`${IDEA}\nEl kit cuesta $45.000.`));
+      expect(delUsuario.ok).toBe(true);
+    });
+
+    it("idea corta (un tema): se genera como siempre, sin exigir puntos", async () => {
+      vi.stubGlobal("fetch", vi.fn().mockResolvedValue(respuestaOpenAI(GUION_CON_AUDIO_VALIDO)));
+      prepararVozOk();
+      const r = await generarGuionConVoz(conIdea("vender más por WhatsApp"));
+      expect(r.ok).toBe(true);
+    });
+  });
 });
+
