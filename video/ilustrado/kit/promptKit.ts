@@ -28,7 +28,7 @@ import {
   VERBOS_OBJETO,
   VERBOS_PERSONAJE,
 } from "./catalogoKit";
-import { ID_TODOS, VERBOS_TODOS } from "./composicion";
+import { ID_TODOS, VERBOS_TODOS, posicionesCercaDeLaPuerta } from "./composicion";
 import { PREFIJO_EXTRA } from "./ambiente";
 import { COMPOSICION_SALON } from "./planPrototipoKit";
 
@@ -92,7 +92,8 @@ ${verbosObjeto}
   8. Pon solo a los protagonistas (los que la narración nombra o que hacen algo): el código completa el lugar con gente de fondo (niños sentados en el salón, clientes en la tienda, gente en la calle), variada y mirando lo que pasa (sus ids empiezan con "${PREFIJO_EXTRA}"; no los uses).
   9. Nunca en fila: con 3 o más personajes usa profundidades distintas (alguien "plano": "fondo" o sentado en un pupitre).
   10. Si la narración dice que alguien se aburre o se distrae, usa <id>.se_distrae (o ${ID_TODOS}.se_distrae): pone cara de aburrido y mira para otro lado.
-  11. Llegar e irse: <id>.entra (aparece por la puerta del lugar y camina a su lugar; si lo primero que hace es entrar, antes no está) y <id>.se_va (camina hacia la puerta y desaparece). Quien está sentado no entra ni se va. Solo entra quien no está y solo se va quien está: para que alguien "vuelva", primero <id>.se_va y después <id>.entra. Quien se fue no hace nada hasta que vuelve a entrar.
+  11. Llegar e irse: <id>.entra (aparece por la puerta del lugar y camina a su lugar; si lo primero que hace es entrar, antes no está) y <id>.se_va (camina hacia la puerta y desaparece). Quien está sentado no entra ni se va. Solo entra quien no está y solo se va quien está: para que alguien "vuelva", primero <id>.se_va y después <id>.entra. Quien se fue no hace nada hasta que vuelve a entrar. Quien entra o se va tiene que estar cerca de la puerta del lugar (${(["tienda", "cocina", "calle"] as const).map((f) => `en ${f === "calle" ? "la calle" : f === "cocina" ? "la cocina" : "la tienda"}: ${posicionesCercaDeLaPuerta(f).map((x) => `"${x}"`).join(", ")}`).join("; ")}).
+      Nadie se va sonriendo de donde no lo atendieron: si se va porque lo ignoraron, lo hicieron esperar o algo salió mal, unas palabras antes pon <id>.se_aburre (o <id>.triste). Ejemplo: "Cuando un cliente entra y nadie lo saluda, se va" = cliente.entra en "un", vendedor.mira_el_celular en "y", cliente.se_aburre en "saluda" y cliente.se_va en "va".
       Para "no se vende solo", "nadie lo mira" o "pasa desapercibido": el producto solo en su lugar (en la vitrina o el estante, con <id>.destaca) y una o dos personas que <id>.pasa_de_largo (cruzan el cuadro mirando al frente, sin mirarlo; no están antes ni después). Ejemplo: "Una torta en la vitrina no se vende sola" = torta "sobre" la vitrina + cliente.pasa_de_largo en "no" y abuela.pasa_de_largo en "sola".
       Para "nadie lo saluda" usa al vendedor con <id>.mira_el_celular (y un celular en su mano). Para "compra", la bolsa en la mano de quien compra ("en_mano_de", "visible": false) y <bolsa>.aparece en la palabra.
   6. En el mismo lugar del kit, deja al menos 1 palabra entre acciones de elementos distintos (la cámara corta a cada uno).

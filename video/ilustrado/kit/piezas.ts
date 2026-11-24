@@ -3,7 +3,7 @@
 // solo dibuja <img> con transformaciones: barato y sin serializar SVG por
 // cuadro (meta <= 5 s de render por segundo de video).
 import { EXPRESIONES, MOTIVOS_DIBUJO, type MotivoDibujo, type TipoObjeto } from "./catalogoKit";
-import { svgBolsa, svgCaja, svgCarro, svgCelular, svgFondo, svgHelado, svgMesa, svgMostrador, svgMoto, svgTorta, svgVitrina } from "./dibujoLugares";
+import { svgBolsa, svgCaja, svgCarro, svgCelular, svgFondo, svgHelado, svgHojaPuerta, svgMesa, svgMostrador, svgMoto, svgTorta, svgVitrina } from "./dibujoLugares";
 import { svgAntebrazo, svgBrazo, svgCabeza, svgCuerpo, svgPeloAtras, svgPierna, svgRasgos, type AspectoPersonaje, type Cara, type Ojos, type ParteSvg } from "./dibujoPersonaje";
 import { svgCartelera, svgDibujo, svgDulces, svgPupitre, svgSalon, svgSilla } from "./dibujoObjetos";
 import type { ComposicionUbicada } from "./composicion";
@@ -12,6 +12,7 @@ import type { FormaMano } from "./poses";
 export const claveAspecto = (a: AspectoPersonaje) => [a.tipo, a.piel, a.pelo, a.peinado, a.ropa, a.ropa2, a.accesorio].join("-");
 export const clave = {
   fondo: (cu: ComposicionUbicada) => `fondo:${cu.c.fondo}:${cu.pared}`,
+  hojaPuerta: (cu: ComposicionUbicada) => `puerta:${cu.c.fondo}`,
   cuerpo: (a: AspectoPersonaje) => `cuerpo:${claveAspecto(a)}`,
   // Quien camina: el cuerpo sin piernas y cada pierna aparte (la de atrás, más oscura).
   cuerpoCamina: (a: AspectoPersonaje) => `cuerpocamina:${claveAspecto(a)}`,
@@ -69,6 +70,7 @@ export function piezasDeComposicion(cu: ComposicionUbicada): Pieza[] {
   };
   if (cu.c.fondo === "salon") poner(clave.fondo(cu), () => svgSalon(cu.pared));
   else poner(clave.fondo(cu), () => svgFondo(cu.c.fondo, cu.pared));
+  poner(clave.hojaPuerta(cu), () => svgHojaPuerta(cu.c.fondo));
   for (const u of cu.personajes) {
     const a = u.aspecto;
     poner(clave.cuerpo(a), () => svgCuerpo(a));

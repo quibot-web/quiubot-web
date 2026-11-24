@@ -13,7 +13,8 @@ import { problemasDelPlan, type PlanIlustrado } from "./plan";
 import { caminantesDePlan, crearRegistro, type Registro } from "./registro";
 import { ComposicionKitSchema } from "../kit/catalogoKit";
 import { problemasVariedad, VariedadSchema, type HuellaVisual } from "../kit/variedad";
-import { problemasComposicion } from "../kit/composicion";
+import { DISTANCIA_MAXIMA_PUERTA, caminoDe, posicionesCercaDeLaPuerta, problemasComposicion } from "../kit/composicion";
+import { PUERTAS } from "../kit/dibujoLugares";
 import { esExtra } from "../kit/ambiente";
 import { planoLimpio } from "./camara";
 
@@ -105,6 +106,12 @@ export function validarPlanIlustrado(plan: unknown, escenas: { id: string; narra
       if (!presente.has(clave)) presente.set(clave, verbo !== "entra" && verbo !== "pasa_de_largo");
       const esta = presente.get(clave)!;
       const pos = (inicioDe[a.frase] ?? 0) + a.palabra;
+      // Por la puerta: quien entra o se va tiene que estar cerca de ella (el
+      // plano muestra el recorrido entero, de su lugar a la puerta).
+      const cu = registro.composicion(a.escena)!;
+      const u = cu.personajes.find((x) => x.per.id === id)!;
+      if ((verbo === "entra" || verbo === "se_va") && PUERTAS[cu.c.fondo] && Math.abs(caminoDe(u, cu.c.fondo)) > DISTANCIA_MAXIMA_PUERTA)
+        problemas.push(`${a.frase}: "${id}" está muy lejos de la puerta de ${a.escena} para "${a.accion}"; ponlo en "posicion": ${posicionesCercaDeLaPuerta(cu.c.fondo).map((x) => `"${x}"`).join(" o ")}`);
       if (verbo === "entra") {
         if (esta) problemas.push(`${a.frase}: "${id}" ya está en ${a.escena} cuando "${a.accion}"; para que vuelva, primero ${id}.se_va (o quita esta entrada)`);
         // Irse y volver: la salida tiene que verse completa (~1,3 s caminando).

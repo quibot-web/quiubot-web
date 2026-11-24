@@ -14,7 +14,8 @@ import { BOLSA, CAJA, CELULAR, HELADO, TORTA, VENTANA_COCINA_X, coloresEntorno }
 import { CARTELERA, DIBUJO, DULCES, SALON, VENTANA_SALON, Y_LINEAS_PISO, casillaCartelera } from "./dibujoObjetos";
 import { oscurecer, aclarar, type Cara } from "./dibujoPersonaje";
 import { clave, motivoDe, motivosCartelera, type ImagenesKit, type ImagenPieza } from "./piezas";
-import { ANGOSTO_CAMINANDO, caminataEn, presenciaDe, rectEnPresencia } from "./presencia";
+import { ANGOSTO_CAMINANDO, aperturaPuerta, caminataEn, presenciaDe, rectEnPresencia } from "./presencia";
+import { PUERTAS } from "./dibujoLugares";
 import { apunteHacia, conVueltasAParado, estadoPose, poseEnCuadro, posicionMano, type AngulosBrazo, type CambioPose, type EstadoPose } from "./poses";
 
 // objetivos: a qué apunta cada acción que lo tiene ("profesora.senala" en
@@ -312,7 +313,7 @@ function Personaje({ u, cu, frame, fps, d, imagenes, objetivos, atenciones, vist
   const rasgos = (exPedida: Expresion, opacidad: number) => {
     const ex: Cara = bosteza && exPedida === "aburrido" ? "bostezo" : exPedida;
     const img = imagenes[clave.rasgos(a, ex, ex === "bostezo" ? "abiertos" : ojos)] ?? imagenes[clave.rasgos(a, ex, "abiertos")];
-    if (!img || opacidad <= 0) return null;
+    if (!img || opacidad <= 0 || pres.deEspaldas) return null;
     // Los rasgos se corren hacia donde mira (giro de 3/4 sin redibujar).
     return <Img key={ex} img={img} estilo={{ opacity: opacidad, transform: `translateX(${g * 16}px)` }} />;
   };
@@ -529,6 +530,23 @@ function Entorno({ cu }: { cu: ComposicionUbicada }) {
 }
 
 // ---------- Escena ----------
+// La puerta del lugar mientras alguien entra o se va: el vano (la luz de
+// afuera) y la hoja que gira en su bisagra (izquierda). Cerrada no se
+// dibuja: es la del fondo.
+function PuertaAbierta({ cu, d, frame, imagenes }: { cu: ComposicionUbicada; d: DisparosEscena; frame: number; imagenes: ImagenesKit }) {
+  const puerta = PUERTAS[cu.c.fondo];
+  const hoja = imagenes[clave.hojaPuerta(cu)];
+  const a = aperturaPuerta(cu, d, frame);
+  if (!puerta || !hoja || a <= 0) return null;
+  return (
+    <div style={{ position: "absolute", left: puerta.x, top: puerta.y, width: puerta.ancho, height: puerta.alto }}>
+      <div style={{ position: "absolute", inset: 0, background: puerta.afuera }} />
+      {/* El borde de la hoja abierta, un poco más oscuro (se ve de canto). */}
+      <Img img={hoja} estilo={{ transformOrigin: "0 50%", transform: `scaleX(${1 - 0.82 * a})`, boxShadow: `inset -${Math.round(10 * a)}px 0 0 rgba(40,30,20,0.35)` }} />
+    </div>
+  );
+}
+
 export function EscenaKit({ cu, frame, fps, d: disparos, imagenes, objetivos, vista }: PropsEscenaKit) {
   const seVe = (r: Rect | null | undefined) => !vista || !r || seTocan(r, vista, MARGEN_VISTA);
   const fondo = imagenes[clave.fondo(cu)];
@@ -642,6 +660,7 @@ export function EscenaKit({ cu, frame, fps, d: disparos, imagenes, objetivos, vi
     <>
       <Entorno cu={cu} />
       {fondo && <Img img={fondo} />}
+      <PuertaAbierta cu={cu} d={d} frame={frame} imagenes={imagenes} />
       {capasPared}
       {piso.map((x) => x.nodo)}
     </>

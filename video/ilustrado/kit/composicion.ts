@@ -28,8 +28,10 @@ import {
   DE_MANO,
   VEHICULOS,
   LUGARES_DE_OBJETO,
+  POSICIONES,
+  type Posicion,
 } from "./catalogoKit";
-import { BOLSA, CAJA, CARRO, CELULAR, HELADO, MESA, MOSTRADOR, MOTO, PUERTA_X, TORTA, VITRINA } from "./dibujoLugares";
+import { BOLSA, CAJA, CARRO, CELULAR, HELADO, MESA, MOSTRADOR, MOTO, PUERTAS, PUERTA_X, TORTA, VITRINA } from "./dibujoLugares";
 import { CARTELERA, DIBUJO, DULCES, PUPITRE, SALON, SILLA, casillaCartelera } from "./dibujoObjetos";
 import type { AspectoPersonaje } from "./dibujoPersonaje";
 import { ropasDePaleta, type Variedad } from "./variedad";
@@ -43,7 +45,7 @@ export const ISLA_KIT: Record<Fondo, { ancho: number; alto: number }> = {
   calle: { ancho: SALON.ancho, alto: SALON.alto },
 };
 
-const POS_X = { izquierda: 360, centro_izquierda: 740, centro: 1100, centro_derecha: 1460, derecha: 1840 } as const;
+export const POS_X = { izquierda: 360, centro_izquierda: 740, centro: 1100, centro_derecha: 1460, derecha: 1840 } as const;
 const PIES = { frente: 1445, fondo: 1205 } as const;
 const ESCALA = { frente: 1, fondo: 0.8 } as const;
 // Los niños, un poco más grandes en el mundo: con el zoom máximo de la
@@ -242,8 +244,18 @@ export const VERBOS_TODOS = {
 // recorrido de todo el lugar no cabe en ningún plano sin cortarlo.
 export const CAMINO_MAXIMO = 420;
 export const CAMINO_LATERAL = 680;
+// Con puerta dibujada (tienda, cocina, calle): camina justo hasta la puerta
+// y la cruza (ver presencia.ts); el validador pide que quien entra o se va
+// esté a DISTANCIA_MAXIMA_PUERTA o menos, para que el plano no quede tan
+// abierto. Sin puerta (salón): hacia el costado, hasta salir del cuadro.
+export const DISTANCIA_MAXIMA_PUERTA = 620;
+// Las posiciones desde donde se puede entrar o irse por la puerta del lugar.
+export function posicionesCercaDeLaPuerta(fondo: Fondo): Posicion[] {
+  return POSICIONES.filter((p) => Math.abs(PUERTA_X[fondo] - POS_X[p]) <= DISTANCIA_MAXIMA_PUERTA);
+}
 export function caminoDe(u: PersonajeUbicado, fondo: Fondo): number {
   const d = PUERTA_X[fondo] - u.cx;
+  if (PUERTAS[fondo]) return d;
   // Ya está junto a la puerta: sale (o entra) caminando hacia el costado más
   // cercano (dibujados de frente, salir "hacia el fondo" parecía quedarse
   // quieto); al tocar el borde del cuadro se desvanece.
@@ -330,9 +342,11 @@ export function accionesDeComposicion(cu: ComposicionUbicada): Record<string, De
       // Caminar se ve de cuerpo entero; las demás acciones de alguien de pie,
       // en plano medio (de la cabeza a medio muslo): un adulto de cuerpo
       // entero queda chico y con piso de sobra (revisión de la tanda 2).
+      // Con puerta: el recorrido entero hasta la puerta (que queda detrás).
+      const camino = caminoDe(u, cu.c.fondo);
       const foco =
         verbo === "entra" || verbo === "se_va"
-          ? union(r, { ...r, x: r.x + tramoVisible(caminoDe(u, cu.c.fondo)) })
+          ? union(r, { ...r, x: r.x + (PUERTAS[cu.c.fondo] ? camino : tramoVisible(camino)) })
           : verbo === "pasa_de_largo"
             ? union({ ...r, x: r.x + centroDePaso(u, cu) - PASO_LARGO }, { ...r, x: r.x + centroDePaso(u, cu) + PASO_LARGO })
             : u.sentado

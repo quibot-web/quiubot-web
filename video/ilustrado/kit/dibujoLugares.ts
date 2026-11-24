@@ -15,6 +15,35 @@ const Y_PARED = SALON.pared.y1;
 // y camina a su lugar; el que se va camina hasta ahí y desaparece.
 export const PUERTA_X: Record<Fondo, number> = { salon: 2120, tienda: 330, cocina: 2060, calle: 1100 };
 
+// La hoja de cada puerta (lo que se abre, en coordenadas de la isla) y el
+// color del vano al abrirla: quien entra o se va cruza la puerta abierta
+// (revisión de la tanda 2: salir caminando de costado no se leía como
+// "se va"). El salón no tiene puerta dibujada: ahí se sale por el costado.
+export type Puerta = { x: number; y: number; ancho: number; alto: number; afuera: string };
+export const PUERTAS: Partial<Record<Fondo, Puerta>> = {
+  tienda: { x: PUERTA_X.tienda - 130, y: 300, ancho: 260, alto: Y_PARED - 300, afuera: "#FFF1CF" },
+  cocina: { x: PUERTA_X.cocina - 90, y: 340, ancho: 180, alto: Y_PARED - 340, afuera: "#FFF1CF" },
+  calle: { x: PUERTA_X.calle - 130, y: 620, ancho: 260, alto: Y_PARED - 620, afuera: "#4A3B45" },
+};
+
+// La hoja sola (igual a como está pintada en el fondo), para abrirla.
+export function svgHojaPuerta(fondo: Fondo): ParteSvg | null {
+  const p = PUERTAS[fondo];
+  if (!p) return null;
+  const { ancho: w, alto: h } = p;
+  const s: string[] = [];
+  if (fondo === "cocina") {
+    s.push(`<rect x="0" y="0" width="${w}" height="${h}" fill="#C98E5A"/><circle cx="${PUERTA_X.cocina + 60 - p.x}" cy="${680 - p.y}" r="12" fill="#E8C34A"/>`);
+  } else if (fondo === "tienda") {
+    s.push(`<rect x="0" y="0" width="${w}" height="${h}" fill="#BFE3F2"/>`);
+    s.push(`<path d="M30 40 l60 -40 M30 120 l120 -100" stroke="#FFFFFF" stroke-width="16" opacity="0.6"/>`);
+    s.push(`<rect x="${w / 2 - 7}" y="0" width="14" height="${h}" fill="#6E4628"/><rect x="${w / 2 + 22}" y="360" width="14" height="70" rx="6" fill="#E8C34A"/>`);
+  } else {
+    s.push(`<rect x="0" y="0" width="${w}" height="${h}" fill="#BFE3F2"/><rect x="${w / 2 - 6}" y="0" width="12" height="${h}" fill="#6E4628"/>`);
+  }
+  return { svg: svg(w, h, s.join("")), ancho: w, alto: h, ancla: { x: 0, y: 0 } };
+}
+
 // Ventana de la cocina (a donde mira el que se distrae).
 export const VENTANA_COCINA_X = 1740;
 

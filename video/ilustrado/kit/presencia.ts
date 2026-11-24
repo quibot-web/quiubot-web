@@ -4,6 +4,7 @@
 import type { DisparosEscena } from "../motor/plan";
 import type { Rect } from "../motor/geometria";
 import { PASO_LARGO, caminoDe, centroDePaso, type ComposicionUbicada, type PersonajeUbicado } from "./composicion";
+import { PUERTAS } from "./dibujoLugares";
 
 // "entra": aparece en la puerta del lugar y camina hasta su lugar; "se_va":
 // camina hasta la puerta y desaparece. Si lo primero que hace es entrar, no
@@ -12,7 +13,8 @@ export const CUADROS_CAMINAR = 36;
 // escala: al entrar o salir por la puerta del fondo (sin caminar de lado), se
 // achica un poco, como si se alejara.
 // dy: hacia atrás (al salir por la puerta del fondo); pasa: va de largo (mira al frente).
-export type Presencia = { dx: number; dy?: number; alpha: number; camina: boolean; mira?: "izquierda" | "derecha"; t: number; escala?: number; pasa?: boolean };
+// deEspaldas: cruzando la puerta hacia afuera (o recién entrando): sin rasgos de la cara.
+export type Presencia = { dx: number; dy?: number; alpha: number; camina: boolean; mira?: "izquierda" | "derecha"; t: number; escala?: number; pasa?: boolean; deEspaldas?: boolean };
 export const CUADROS_PASAR = 46;
 export const PROFUNDIDAD_PUERTA = 170;
 // Paso de caminar: arranca suave y sigue a paso parejo (al irse); al
@@ -45,6 +47,7 @@ export function presenciaDe(u: PersonajeUbicado, cu: ComposicionUbicada, d: Disp
     const alpha = Math.min(1, t / 10, (CUADROS_PASAR - t) / 10);
     return { dx: centroDePaso(u, cu) + dir * PASO_LARGO * (2 * kp - 1), alpha, camina: true, mira: dir < 0 ? "izquierda" : "derecha", t, pasa: true };
   }
+  if (PUERTAS[cu.c.fondo]) return porLaPuerta(u, cu, ultimo.tipo, t);
   const k = Math.min(1, t / CUADROS_CAMINAR);
   const suave = k * k * (3 - 2 * k);
   // Por la puerta del fondo (sin caminar de lado): camina hacia atrás
@@ -68,6 +71,81 @@ export function presenciaDe(u: PersonajeUbicado, cu: ComposicionUbicada, d: Disp
   return { dx: hasta * arrancar(k), alpha: 1 - Math.max(0, (t - (CUADROS_CAMINAR - 8)) / 8), camina: true, mira: hacia(hasta), t };
 }
 
+
+// ---------- Entrar y salir por la puerta (tienda, cocina, calle) ----------
+// Irse: camina de costado hasta la puerta, la puerta se abre, da un paso
+// hacia el vano (se achica un poco) y desaparece; la puerta se cierra.
+// Entrar: al revés. Así se lee "se va" / "llega" aunque el dibujo sea de
+// frente (revisión de la tanda 2).
+export const VELOCIDAD_CAMINAR = 18; // unidades de la isla por cuadro
+export const CUADROS_ABRIR = 8;
+export const CUADROS_CRUZAR = 18;
+export const CUADROS_CERRAR = 8;
+const suaveK = (k: number) => (k <= 0 ? 0 : k >= 1 ? 1 : k * k * (3 - 2 * k));
+
+function hastaLaPuerta(u: PersonajeUbicado, cu: ComposicionUbicada): { dist: number; cuadros: number } {
+  const dist = caminoDe(u, cu.c.fondo);
+  return { dist, cuadros: Math.abs(dist) < 80 ? 0 : Math.round(Math.abs(dist) / VELOCIDAD_CAMINAR) };
+}
+// Cuándo empieza a cruzar la puerta (desde la acción): al irse, cuando llegó
+// a la puerta y ya está abierta; al entrar, apenas se abre.
+function inicioCruce(cuadros: number, tipo: "entra" | "se_va"): number {
+  return tipo === "se_va" ? Math.max(cuadros, CUADROS_ABRIR) : CUADROS_ABRIR - 2;
+}
+
+// Cuántos cuadros dura entrar o irse (la cámara no corta antes).
+export function duracionCaminar(u: PersonajeUbicado, cu: ComposicionUbicada, tipo: "entra" | "se_va"): number {
+  if (!PUERTAS[cu.c.fondo]) return CUADROS_CAMINAR;
+  const { cuadros } = hastaLaPuerta(u, cu);
+  const cruce = inicioCruce(cuadros, tipo);
+  return tipo === "se_va" ? cruce + CUADROS_CRUZAR + CUADROS_CERRAR : cruce + CUADROS_CRUZAR + Math.max(cuadros, CUADROS_CERRAR);
+}
+
+function porLaPuerta(u: PersonajeUbicado, cu: ComposicionUbicada, tipo: "entra" | "se_va", t: number): Presencia {
+  const { dist, cuadros } = hastaLaPuerta(u, cu);
+  const hacia = (dx: number): "izquierda" | "derecha" | undefined => (cuadros === 0 ? undefined : dx < 0 ? "izquierda" : "derecha");
+  const cruce = inicioCruce(cuadros, tipo);
+  // Cruzando: camina hacia el fondo hasta el umbral (los pies suben al piso
+  // de la puerta y se achica hasta caber en el vano) y ahí desaparece.
+  // q = 0 delante de la puerta, 1 ya del otro lado.
+  const puerta = PUERTAS[cu.c.fondo]!;
+  const escalaVano = Math.min(1, (0.9 * puerta.alto) / (u.p.alto * u.escala));
+  const enVano = (q: number): Presencia => {
+    const k = suaveK(Math.min(1, q / 0.75));
+    return { dx: dist, dy: (puerta.y + puerta.alto - u.pies) * k, escala: 1 + (escalaVano - 1) * k, alpha: q < 0.7 ? 1 : Math.max(0, 1 - (q - 0.7) / 0.3), camina: true, mira: hacia(dist), t, deEspaldas: q > 0.2 };
+  };
+  if (tipo === "se_va") {
+    if (t < cuadros) return { dx: dist * arrancar(t / cuadros), alpha: 1, camina: true, mira: hacia(dist), t };
+    // Espera en la puerta mientras se abre.
+    if (t < cruce) return { dx: dist, alpha: 1, camina: false, mira: hacia(dist), t };
+    const q = (t - cruce) / CUADROS_CRUZAR;
+    return q >= 1 ? { dx: dist, alpha: 0, camina: false, t } : enVano(q);
+  }
+  if (t < cruce) return { dx: dist, alpha: 0, camina: false, t };
+  const q = 1 - (t - cruce) / CUADROS_CRUZAR;
+  if (q > 0) return { ...enVano(q), alpha: q > 0.65 ? Math.max(0, (1 - q) / 0.35) : 1, mira: hacia(-dist) };
+  const k = cuadros === 0 ? 1 : (t - cruce - CUADROS_CRUZAR) / cuadros;
+  return k >= 1 ? { dx: 0, alpha: 1, camina: false, t } : { dx: dist * (1 - frenar(k)), alpha: 1, camina: true, mira: hacia(-dist), t };
+}
+
+// Cuánto está abierta la puerta del lugar en este cuadro (0 cerrada, 1 abierta).
+export function aperturaPuerta(cu: ComposicionUbicada, d: DisparosEscena, frame: number): number {
+  if (!PUERTAS[cu.c.fondo]) return 0;
+  let a = 0;
+  for (const u of cu.personajes) {
+    const { cuadros } = hastaLaPuerta(u, cu);
+    for (const tipo of ["entra", "se_va"] as const) {
+      for (const c of d[`${u.per.id}.${tipo}`] ?? []) {
+        const t = frame - c;
+        const cruce = inicioCruce(cuadros, tipo);
+        const abre = tipo === "se_va" ? cruce - CUADROS_ABRIR : 0;
+        const cierra = cruce + CUADROS_CRUZAR;
+        a = Math.max(a, suaveK((t - abre) / CUADROS_ABRIR) * (1 - suaveK((t - cierra) / CUADROS_CERRAR)));
+      }
+    }
+  }
+  return a;
+}
 
 // Ciclo de paso (ángulos en grados; paso: rebote, en fracción del alto). fase = t / 3.2: un paso
 // cada ~10 cuadros. Las piernas abren en tijera; el cuerpo sube cuando

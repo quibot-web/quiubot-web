@@ -156,6 +156,8 @@ export const VERBOS_PERSONAJE = {
   saluda: { pose: "saludar", expresion: "feliz", descripcion: "saluda con la mano, sonriendo" },
   come: { pose: "comer", expresion: "feliz", descripcion: "come lo que tiene en la mano y lo disfruta" },
   mira_el_celular: { pose: "mirar_celular", descripcion: "mira el celular y no le presta atención a nadie" },
+  // Se aburre de pie (sin apoyar la cabeza): quien espera y nadie lo atiende.
+  se_aburre: { expresion: "aburrido", descripcion: "se aburre de esperar: cara de aburrido, mira para otro lado" },
   // Caminan entre su lugar y la puerta del lugar (aparece o desaparece en ella).
   entra: { descripcion: "entra por la puerta y camina hasta su lugar" },
   se_va: { descripcion: "camina hasta la puerta y se va" },

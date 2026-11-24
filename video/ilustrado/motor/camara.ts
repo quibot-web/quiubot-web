@@ -17,7 +17,7 @@ import { disparosDeEscena, type Disparo, type DisparosEscena } from "./plan";
 import type { Recorrido } from "./recorrido";
 import { VERBOS_PERSONAJE } from "../kit/catalogoKit";
 import { ID_TODOS, aIsla, enCamino, rectCabezaTorso, rectPersonaje } from "../kit/composicion";
-import { CUADROS_CAMINAR, presenciaDe, rectEnPresencia } from "../kit/presencia";
+import { duracionCaminar, presenciaDe, rectEnPresencia } from "../kit/presencia";
 import type { MovimientoCamara } from "../kit/variedad";
 import { ZOOM_MAXIMO_KIT, cabeEnFranja, encuadrarKit, encuadreSeguro, ocupacionUtil, type Cuerpo, type ResultadoEncuadre } from "./encuadreKit";
 export { ZOOM_MAXIMO_KIT };
@@ -198,7 +198,38 @@ export function tomasDeCamara(disparos: Disparo[], recorrido: Recorrido, registr
     }
     tomas.push({ desde: d.cuadro, ultimaAccion: d.cuadro, focos: [f], encuadre: encuadrar([f], esCelular), celular: esCelular, escena: d.escena });
   }
-  return tomas;
+  return conCorteTrasSalida(tomas, disparos, recorrido, registro);
+}
+
+// Después de que alguien se va (cruzó la puerta y se cerró), el lugar vacío
+// se ve como mucho VACIO_TRAS_SALIDA: luego se corta a quien sigue ahí (el
+// más cercano a quien se fue), nunca un plano vacío mientras la voz sigue
+// (revisión de la tanda 2: la tienda vacía durante "si lo atiendes rápido").
+export const VACIO_TRAS_SALIDA = 15;
+function conCorteTrasSalida(tomas: Toma[], disparos: Disparo[], recorrido: Recorrido, registro: Registro): Toma[] {
+  const res = [...tomas];
+  for (const d of disparos) {
+    const [id, verbo] = d.accion.split(".");
+    const cu = registro.composicion(d.escena);
+    if (verbo !== "se_va" || !cu) continue;
+    const fin = d.cuadro + cuadrosCaminando(d, registro);
+    const i = res.findIndex((t) => t.desde > fin);
+    const siguiente = res[i];
+    // Sin plano siguiente (el reel termina en el lugar) o corte pronto: nada que hacer.
+    if (!siguiente || siguiente.desde - fin <= VACIO_TRAS_SALIDA) continue;
+    const enEscena = disparosDeEscena(disparos, d.escena);
+    const quedan = cu.personajes.filter((u) => u.per.id !== id && presenciaDe(u, cu, enEscena, fin).alpha >= 1 && presenciaDe(u, cu, enEscena, siguiente.desde - 1).alpha >= 1);
+    if (!quedan.length) continue;
+    const xSale = cu.personajes.find((x) => x.per.id === id)?.cx ?? 0;
+    const otro = quedan.reduce((a, b) => (Math.abs(b.cx - xSale) < Math.abs(a.cx - xSale) ? b : a));
+    const tiempo: VentanaCuerpos = { d: enEscena, desde: fin, hasta: siguiente.desde };
+    const e = encuadreDeAccionKit(d.escena, `${otro.per.id}.quieto`, undefined, recorrido, registro, tiempo);
+    if (!e) continue;
+    // Se corta apenas se cierra la puerta (si queda poco, igual: mejor un plano corto que el lugar vacío).
+    const desde = fin + Math.max(0, Math.min(VACIO_TRAS_SALIDA - 8, siguiente.desde - fin - MIN_PLANO_KIT));
+    res.splice(i, 0, { desde, ultimaAccion: desde, focos: e.focos, encuadre: e.r.encuadre, celular: false, escena: d.escena });
+  }
+  return res;
 }
 
 // Una acción en un lugar del kit (ver encuadreKit.ts para las reglas).
@@ -212,7 +243,7 @@ function tomaDelKit(tomas: Toma[], d: Disparo, f: Rect, recorrido: Recorrido, re
   const ultima = tomas[tomas.length - 1];
   const mismoLugar = ultima?.escena === d.escena;
   // Quien entra o se va camina hasta este cuadro (la toma no se corta antes).
-  const caminaHasta = verbo === "entra" || verbo === "se_va" ? d.cuadro + CUADROS_CAMINAR : undefined;
+  const caminaHasta = verbo === "entra" || verbo === "se_va" ? d.cuadro + cuadrosCaminando(d, registro) : undefined;
   const sigueCaminando = (t: Toma) => {
     if (caminaHasta !== undefined) t.caminaHasta = Math.max(t.caminaHasta ?? 0, caminaHasta);
   };
@@ -373,8 +404,15 @@ function seTocanMucho(a: Rect, b: Rect): boolean {
 
 // Cuánto hay que seguir viendo una acción antes de cortar: quien entra o se
 // va, hasta que termina de caminar (la salida se ve completa).
-function verAccion(a: Disparo): number {
-  return /\.(entra|se_va)$/.test(a.accion) ? Math.max(VER_ACCION, CUADROS_CAMINAR) : VER_ACCION;
+function verAccion(a: Disparo, registro: Registro): number {
+  return /\.(entra|se_va)$/.test(a.accion) ? Math.max(VER_ACCION, cuadrosCaminando(a, registro)) : VER_ACCION;
+}
+// Cuánto camina quien entra o se va (hasta cruzar la puerta, si hay).
+function cuadrosCaminando(a: Disparo, registro: Registro): number {
+  const [id, verbo] = a.accion.split(".");
+  const cu = registro.composicion(a.escena);
+  const u = cu?.personajes.find((x) => x.per.id === id);
+  return cu && u && (verbo === "entra" || verbo === "se_va") ? duracionCaminar(u, cu, verbo) : 36;
 }
 
 export function conCobertura(tomasOriginales: Toma[], disparos: Disparo[], recorrido: Recorrido, registro: Registro, total: number): Toma[] {
@@ -418,7 +456,7 @@ export function conCobertura(tomasOriginales: Toma[], disparos: Disparo[], recor
       return area(interseccion(f, v)) >= 0.4 * area(f) || area(interseccion(c.focos[0], f)) >= 0.8 * area(c.focos[0]);
     };
     // Nunca se corta mientras alguien entra o se va caminando.
-    const libre = (c: number) => !acciones.some((a) => c > a.cuadro && c < a.cuadro + verAccion(a));
+    const libre = (c: number) => !acciones.some((a) => c > a.cuadro && c < a.cuadro + verAccion(a, registro));
     let k = 0;
     // Desde cuándo se ve de verdad: la primera toma, desde el cuadro 0; la
     // que sigue a la puerta del celular, desde el corte (unos cuadros antes).
@@ -429,8 +467,8 @@ export function conCobertura(tomasOriginales: Toma[], disparos: Disparo[], recor
       let trasCaminar = false; // el corte es justo cuando termina de caminar
       if (enPrincipal) {
         let estorbo: Disparo | undefined;
-        for (const a of acciones) if (corte > a.cuadro - ANTES_ACCION && corte < a.cuadro + verAccion(a)) {
-          corte = a.cuadro + verAccion(a);
+        for (const a of acciones) if (corte > a.cuadro - ANTES_ACCION && corte < a.cuadro + verAccion(a, registro)) {
+          corte = a.cuadro + verAccion(a, registro);
           estorbo ??= a;
         }
         // Correr el corte después de la acción dejaría el plano principal
@@ -439,7 +477,7 @@ export function conCobertura(tomasOriginales: Toma[], disparos: Disparo[], recor
         if (estorbo && (corte - inicio > MAX_PLANO_KIT || fin - corte < MIN_PLANO_KIT)) {
           // Si en "antes" alguien todavía camina, se corta apenas termina
           // (la cobertura que sigue muestra la acción que viene).
-          const tras = libre(antes) ? antes : Math.max(...acciones.filter((a) => antes > a.cuadro && antes < a.cuadro + verAccion(a)).map((a) => a.cuadro + verAccion(a)));
+          const tras = libre(antes) ? antes : Math.max(...acciones.filter((a) => antes > a.cuadro && antes < a.cuadro + verAccion(a, registro)).map((a) => a.cuadro + verAccion(a, registro)));
           if (tras - inicio >= CORTE_MINIMO_KIT && tras < estorbo.cuadro && fin - tras >= MIN_PLANO_KIT) {
             corte = tras;
             trasCaminar = tras !== antes;
@@ -465,7 +503,7 @@ export function conCobertura(tomasOriginales: Toma[], disparos: Disparo[], recor
       if (pendiente && pendiente.cuadro - ANTES_ACCION - corte < MIN_PLANO_KIT && enPrincipal && !trasCaminar) {
         const antes = pendiente.cuadro - ANTES_ACCION - MIN_PLANO_KIT;
         // Si en "antes" alguien todavía camina, se corta apenas termina.
-        const tras = libre(antes) ? antes : Math.max(...acciones.filter((a) => antes > a.cuadro && antes < a.cuadro + verAccion(a)).map((a) => a.cuadro + verAccion(a)));
+        const tras = libre(antes) ? antes : Math.max(...acciones.filter((a) => antes > a.cuadro && antes < a.cuadro + verAccion(a, registro)).map((a) => a.cuadro + verAccion(a, registro)));
         if (tras - inicio >= CORTE_MINIMO_KIT && tras < pendiente.cuadro) {
           corte = tras;
           ({ c, n } = elegir(corte));

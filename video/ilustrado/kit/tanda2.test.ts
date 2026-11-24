@@ -11,7 +11,7 @@ import tiemposTienda from "../fixtures/tiemposTienda.json";
 import tiemposTorta from "../fixtures/tiemposTorta.json";
 import { camaraDelCuadro, prepararReel } from "../motor/preparar";
 import { metricasKit } from "../motor/metricasKit";
-import { cuerposEnCuadro } from "../motor/camara";
+import { VACIO_TRAS_SALIDA, cuerposEnCuadro } from "../motor/camara";
 import { carasCortadas } from "../motor/encuadreKit";
 import { disparosDeEscena, type PlanIlustrado } from "../motor/plan";
 import { validarPlanIlustrado } from "../motor/validarPlan";
@@ -19,10 +19,11 @@ import { crearRegistro } from "../motor/registro";
 import { ComposicionKitSchema, TIPOS_PERSONAJE } from "./catalogoKit";
 import { problemasComposicion, rectCabezaTorso, ubicarComposicion } from "./composicion";
 import { CUADROS_PASAR, EscenaKit, presenciaDe, tapanCaras } from "./EscenaKit";
-import { caminataEn, rectEnPresencia } from "./presencia";
+import { CUADROS_CERRAR, CUADROS_CRUZAR, aperturaPuerta, caminataEn, duracionCaminar, rectEnPresencia } from "./presencia";
 import { svgCuerpo, svgPierna, type AspectoPersonaje } from "./dibujoPersonaje";
 import { piezasDeComposicion, urlsSinRasterizar } from "./piezas";
 import type { TiemposIlustrado } from "../tiempoIlustrado";
+import { vistaDelMundo } from "../motor/geometria";
 
 const casos = [
   ["tienda", planTienda, tiemposTienda],
@@ -108,14 +109,22 @@ describe("tanda 2: reglas de composición y presencia", () => {
     const salida = d["cliente.se_va"][0];
     expect(presenciaDe(cliente, cu, d, primeraEntrada + 2).alpha).toBeLessThan(0.5);
     expect(presenciaDe(cliente, cu, d, primeraEntrada + 60).alpha).toBe(1);
-    // Saliendo: camina (o se desvanece en la puerta) y ya no está del todo.
-    const saliendo = presenciaDe(cliente, cu, d, salida + 10);
-    expect(saliendo.camina).toBe(true);
-    // Se aleja caminando de lado (bien visible), mirando hacia donde va.
-    expect(Math.abs(saliendo.dx)).toBeGreaterThan(50);
-    expect(saliendo.mira).toBeDefined();
-    // Y al final de la salida ya no está (sin volver a entrar).
-    expect(presenciaDe(cliente, cu, { "cliente.se_va": [100] }, 136).alpha).toBe(0);
+    // Saliendo por la puerta: se abre, camina hacia el fondo (sube y se
+    // achica hasta caber en el vano), de espaldas, y desaparece; se cierra.
+    const dur = duracionCaminar(cliente, cu, "se_va");
+    const cruzando = presenciaDe(cliente, cu, d, salida + dur - CUADROS_CERRAR - CUADROS_CRUZAR / 2);
+    expect(cruzando.camina).toBe(true);
+    expect(cruzando.deEspaldas).toBe(true);
+    expect(cruzando.dy!).toBeLessThan(0);
+    expect(cruzando.escala!).toBeLessThan(1);
+    expect(aperturaPuerta(cu, d, salida + dur - CUADROS_CERRAR - CUADROS_CRUZAR / 2)).toBe(1);
+    // Al final ya no está, la puerta quedó cerrada (sin volver a entrar).
+    expect(presenciaDe(cliente, cu, { "cliente.se_va": [100] }, 100 + dur).alpha).toBe(0);
+    expect(aperturaPuerta(cu, { "cliente.se_va": [100] }, 100 + dur)).toBe(0);
+    // Quien está lejos de la puerta primero camina de costado hasta ella, mirando hacia allá.
+    const lejos = { ...cliente, cx: cliente.cx + 500 };
+    const caminando = presenciaDe(lejos, cu, { "cliente.se_va": [0] }, 10);
+    expect(caminando.camina && caminando.dx < -50 && caminando.mira === "izquierda").toBe(true);
   });
 
   it("la misma persona (mismo id) en dos lugares se ve igual", () => {
@@ -243,5 +252,36 @@ describe("caminar se lee como caminar (piernas, brazos, cuerpo)", () => {
     // La pierna suelta es la misma forma (mismo rectángulo) que la del cuerpo de pie.
     const rect = pierna.match(/<rect x="[^"]+" y="0" width="([^"]+)" height="([^"]+)"/)!;
     expect(quieto).toContain(`width="${rect[1]}" height="${rect[2]}"`);
+  });
+});
+
+describe("después de que alguien se va, el lugar vacío dura poco", () => {
+  it("se corta a quien sigue ahí (la vendedora) a más tardar VACIO_TRAS_SALIDA después de cerrar la puerta", () => {
+    // La tienda, con la vuelta del cliente más tarde (en "que"): queda un hueco largo.
+    const plan = structuredClone(planTienda) as PlanIlustrado;
+    const entra = plan.frases[1].acciones.find((a) => a.accion === "cliente.entra")!;
+    entra.palabra = 8;
+    expect(validarPlanIlustrado(plan, tiemposTienda.escenas)).toEqual([]);
+    const reel = prepararReel(tiemposTienda as TiemposIlustrado, plan, 30, "");
+    const cu = reel.registro.composicion("k_tienda")!;
+    const cliente = cu.personajes.find((u) => u.per.id === "cliente")!;
+    const d = disparosDeEscena(reel.disparos, "k_tienda");
+    const fin = d["cliente.se_va"][0] + duracionCaminar(cliente, cu, "se_va");
+    const corte = reel.tomas.find((t) => t.desde >= fin && t.escena === "k_tienda");
+    expect(corte).toBeDefined();
+    expect(corte!.desde - fin).toBeLessThanOrEqual(VACIO_TRAS_SALIDA);
+    // El plano nuevo muestra a la vendedora (su cabeza adentro del encuadre).
+    const vendedor = cu.personajes.find((u) => u.per.id === "vendedor")!;
+    const isla = reel.recorrido[reel.registro.escena("k_tienda")!.isla];
+    const ct = rectCabezaTorso(vendedor);
+    const v = vistaDelMundo(corte!.encuadre);
+    const c = { x: ct.x + ct.ancho / 2 + isla.x, y: ct.y + ct.alto / 2 + isla.y };
+    expect(c.x > v.x && c.x < v.x + v.ancho && c.y > v.y && c.y < v.y + v.alto).toBe(true);
+  });
+
+  it("quien entra o se va lejos de la puerta: el validador le pide acercarse", () => {
+    const plan = structuredClone(planTienda) as PlanIlustrado;
+    plan.composiciones![0].personajes.find((x) => x.id === "cliente")!.posicion = "derecha";
+    expect(validarPlanIlustrado(plan, tiemposTienda.escenas).join(" ")).toMatch(/muy lejos de la puerta.*"izquierda" o "centro_izquierda"/);
   });
 });
