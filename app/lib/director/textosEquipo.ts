@@ -145,7 +145,7 @@ export function textoReelPublicacionError(params: { motivo: "reconexion" | "revi
 // para Instagram). Los 2 últimos siguen en "lista": apenas se resuelva
 // el motivo, el Publicador lo sube en su siguiente vuelta.
 export function textoReelVencido(params: {
-  motivo: "sin_video" | "requiere_confirmacion" | "musica_sin_licencia" | "atrasada";
+  motivo: "sin_video" | "requiere_confirmacion" | "musica_sin_licencia" | "atrasada" | "plan_sin_contenido";
   piezaId?: string;
   horasMaximas?: number;
 }): MensajeEquipoContenido {
@@ -155,6 +155,14 @@ export function textoReelVencido(params: {
       textoInterno: "Director, no publiqué un reel porque estaba muy atrasado -- queda para que decidan si sale ahora o se reprograma.",
       respuestaDirector: "Entendido, le pregunto qué prefiere.",
       acciones: [{ label: "Publicar ahora o reprogramar", tipo: "link", href: params.piezaId ? `/contenido/${params.piezaId}` : "/contenido" }],
+    };
+  }
+  if (params.motivo === "plan_sin_contenido") {
+    return {
+      texto: "Tus reels programados están en pausa: Contenido está incluido en Crecimiento y Escala. Si subes de plan, se publican solos a su hora (los que lleven más de 2 horas de atraso quedan vencidos y puedes reprogramarlos).",
+      textoInterno: "Director, dejé en pausa los reels programados de esta cuenta: su plan ya no incluye Contenido.",
+      respuestaDirector: "Entendido, le cuento qué incluye cada plan.",
+      acciones: [{ label: "Ver planes", tipo: "link", href: "/billing" }],
     };
   }
   if (params.motivo === "requiere_confirmacion") {

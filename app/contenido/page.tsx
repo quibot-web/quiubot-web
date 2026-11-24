@@ -301,7 +301,17 @@ export default function ContenidoPage() {
           </div>
         </div>
 
-        {avisoPlan && <AvisoPlan aviso={avisoPlan} />}
+        {avisoPlan && (
+          <AvisoPlan
+            aviso={
+              // Reels programados de un cliente sin plan con Contenido: en pausa
+              // (el publicador no los sube; se reanudan si vuelve a subir de plan).
+              avisoPlan.codigo === "plan_sin_contenido" && piezas.some((p) => p.estado === "lista" || p.estado === "aprobada")
+                ? { ...avisoPlan, mensaje: "Tus reels programados están en pausa: Contenido está incluido en Crecimiento y Escala. Si subes de plan, se publican solos a su hora." }
+                : avisoPlan
+            }
+          />
+        )}
 
         <div style={{ display: "flex", gap: 10, marginBottom: 12, flexWrap: "wrap", alignItems: "center" }}>
           {!avisoPlan && (

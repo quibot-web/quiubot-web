@@ -13,6 +13,7 @@ import {
 } from "@/app/lib/instagramPublicar";
 import { textoReelPublicado, textoReelPublicacionError, textoReelVencido } from "@/app/lib/director/textosEquipo";
 import type { MensajeEquipoContenido, TipoEventoEquipo } from "@/app/lib/director/mensajeEquipo.schema";
+import { puedeCrearContenido } from "@/app/lib/planContenido";
 
 // Publicador automático de contenido orgánico (paso 4 de la
 // integración de Fase B v2.0, docs/diseno/plan_contenido_organico.md
@@ -24,7 +25,9 @@ import type { MensajeEquipoContenido, TipoEventoEquipo } from "@/app/lib/directo
 //      → "vencida" con aviso, sin tocar Meta (nunca publicar algo viejo,
 //      ni en la primera vuelta después de encender el publicador).
 //   3. Avisar (una sola vez) las "lista" vencidas que NO se pueden
-//      publicar solas (QC forzado sin confirmar, música sin licencia).
+//      publicar solas (QC forzado sin confirmar, música sin licencia, o
+//      su dueño ya no tiene un plan con Contenido: quedan en pausa y se
+//      reanudan solas si vuelve a subir de plan).
 //   4. Contenedores en "procesando": FINISHED → media_publish.
 //   5. Reclamar "lista" vencidas (RPC atómica) → cupo → contenedor REELS.
 // El polling de Meta vive entre vueltas (paso 4 de la siguiente
@@ -49,7 +52,28 @@ type PiezaPublicador = Pick<
   "id" | "user_id" | "plataforma" | "guion" | "caption" | "hashtags" | "url_video" | "control_calidad" | "ig_container_id" | "intentos" | "programada_para"
 >;
 
-type UsuarioMeta = { id: string; email: string | null; meta_page_id: string | null; meta_access_token: string | null };
+type UsuarioMeta = {
+  id: string;
+  email: string | null;
+  meta_page_id: string | null;
+  meta_access_token: string | null;
+  rol: string | null;
+  plan: string | null;
+  activo: boolean | null;
+  en_trial: boolean | null;
+  trial_termina_en: string | null;
+  fecha_vencimiento: string | null;
+};
+
+// Plan sin Contenido (Arranque) o vencido (23 nov 2026): sus reels
+// programados quedan en pausa en "lista" -- nunca se publican así, y se
+// reanudan solos si vuelve a subir de plan dentro de la ventana de
+// RETRASO_MAXIMO_PUBLICACION_HORAS (después, vencerListasAtrasadas).
+// Misma regla que /contenido (planContenido.ts) y que la RPC
+// (docs/sql/contenido_organico_publicador_plan.sql).
+export function enPausaPorPlan(usuario: UsuarioMeta | undefined): boolean {
+  return !usuario || !puedeCrearContenido(usuario);
+}
 
 export type MotivoBloqueo = "no_es_instagram" | "requiere_confirmacion" | "musica_sin_licencia";
 
@@ -159,7 +183,10 @@ export async function avisarPublicador(params: { userId: string; piezaId: string
 
 async function cargarUsuarios(ids: string[]): Promise<Map<string, UsuarioMeta>> {
   if (ids.length === 0) return new Map();
-  const { data } = await supabaseAdmin.from("usuarios").select("id, email, meta_page_id, meta_access_token").in("id", [...new Set(ids)]);
+  const { data } = await supabaseAdmin
+    .from("usuarios")
+    .select("id, email, meta_page_id, meta_access_token, rol, plan, activo, en_trial, trial_termina_en, fecha_vencimiento")
+    .in("id", [...new Set(ids)]);
   return new Map((data ?? []).map((u) => [u.id as string, u as UsuarioMeta]));
 }
 
@@ -349,8 +376,18 @@ export async function avisarListasBloqueadas(ahora = new Date()): Promise<number
     .limit(50);
   const piezas = (data ?? []) as Pick<PublicacionOrganica, "id" | "user_id" | "plataforma" | "guion" | "control_calidad">[];
   const pistas = await cargarPistasConLicenciaInstagram(piezas);
+  const usuarios = await cargarUsuarios(piezas.map((p) => p.user_id));
   let avisadas = 0;
+  const avisadosPorPlan = new Set<string>();
   for (const pieza of piezas) {
+    // Plan sin Contenido: un solo aviso por cliente por día (no uno por reel).
+    if (enPausaPorPlan(usuarios.get(pieza.user_id))) {
+      if (avisadosPorPlan.has(pieza.user_id)) continue;
+      avisadosPorPlan.add(pieza.user_id);
+      await avisarPublicador({ userId: pieza.user_id, piezaId: `plan-${ahora.toISOString().slice(0, 10)}`, tipoEvento: "reel_vencido", contenido: textoReelVencido({ motivo: "plan_sin_contenido" }), sufijo: "plan_sin_contenido" });
+      avisadas++;
+      continue;
+    }
     const motivo = motivoBloqueoPublicacion(pieza, pistas);
     if (motivo !== "requiere_confirmacion" && motivo !== "musica_sin_licencia") continue;
     await avisarPublicador({ userId: pieza.user_id, piezaId: pieza.id, tipoEvento: "reel_vencido", contenido: textoReelVencido({ motivo }), sufijo: motivo });
@@ -481,8 +518,8 @@ async function devolverALista(piezaId: string, intentos?: number) {
 
 // 5. Reclamar "lista" vencidas con la RPC atómica (FOR UPDATE SKIP
 // LOCKED, nunca la misma pieza en dos vueltas) → cupo → contenedor REELS.
-export async function reclamarYCrearContenedores(): Promise<{ reclamadas: number; contenedores: number; devueltas: number; conError: number; sinCupo: number }> {
-  const resumen = { reclamadas: 0, contenedores: 0, devueltas: 0, conError: 0, sinCupo: 0 };
+export async function reclamarYCrearContenedores(): Promise<{ reclamadas: number; contenedores: number; devueltas: number; conError: number; sinCupo: number; enPausaPorPlan: number }> {
+  const resumen = { reclamadas: 0, contenedores: 0, devueltas: 0, conError: 0, sinCupo: 0, enPausaPorPlan: 0 };
   const { data, error } = await supabaseAdmin.rpc("reclamar_publicaciones_organicas_vencidas", {
     p_limite: LIMITE_POR_CORRIDA,
     p_retraso_maximo_minutos: RETRASO_MAXIMO_PUBLICACION_HORAS * 60,
@@ -504,6 +541,14 @@ export async function reclamarYCrearContenedores(): Promise<{ reclamadas: number
   for (const pieza of piezas) {
     const usuario = usuarios.get(pieza.user_id);
     const email = usuario?.email ?? null;
+
+    // Plan sin Contenido: en pausa, de vuelta a "lista" sin tocar Meta
+    // (barrera del código; la RPC con el filtro de plan ya ni la reclama).
+    if (enPausaPorPlan(usuario)) {
+      await devolverALista(pieza.id);
+      resumen.enPausaPorPlan++;
+      continue;
+    }
 
     // Segunda barrera (ver motivoBloqueoPublicacion).
     if (motivoBloqueoPublicacion(pieza, pistas)) {

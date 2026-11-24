@@ -72,6 +72,10 @@ function rpcReclamar(args: { p_limite?: number; p_retraso_maximo_minutos?: numbe
     if (p.estado !== "lista" || String(p.programada_para) > ahora || String(p.programada_para) < desde) return false;
     if (rpcSinFiltros) return true;
     if (p.plataforma !== "instagram") return false;
+    // Filtro 5 (docs/sql/contenido_organico_publicador_plan.sql): dueño con plan con Contenido al día.
+    const u = (tablas.usuarios ?? []).find((x) => x.id === p.user_id);
+    const vigente = !!u && (u.rol === "admin" || (["crecimiento", "escala"].includes(String(u.plan)) && ((u.en_trial === true && String(u.trial_termina_en) >= ahora) || (u.activo === true && String(u.fecha_vencimiento) >= ahora))));
+    if (!vigente) return false;
     const qc = p.control_calidad as { aprobado?: boolean; publicarIgual?: boolean } | null;
     if (qc && qc.aprobado === false && qc.publicarIgual !== true) return false;
     const pistaId = (p.guion as { musica?: { pista_id?: string } } | null)?.musica?.pista_id;
@@ -172,7 +176,7 @@ const mensajes = () => tablas.mensajes_equipo ?? [];
 
 beforeEach(() => {
   tablas = {
-    usuarios: [{ id: "u1", email: "marca@quiubot.com", meta_page_id: "page1", meta_access_token: "tok" }],
+    usuarios: [{ id: "u1", email: "marca@quiubot.com", meta_page_id: "page1", meta_access_token: "tok", rol: "usuario", plan: "escala", activo: true, en_trial: false, trial_termina_en: null, fecha_vencimiento: enMin(60 * 24 * 20) }],
     publicaciones_organicas: [],
     pistas_musicales: [
       { id: "11111111-1111-4111-8111-111111111111", licencia_url: "https://licencia", plataformas_permitidas: ["instagram"] },
@@ -492,5 +496,64 @@ describe("una vuelta completa en dos corridas", () => {
     await ejecutarPublicadorOrganico();
     expect(llamadasMeta.filter((l) => l.url.includes("/media_publish"))).toHaveLength(1);
     expect(llamadasMeta.filter((l) => l.url.endsWith("/ig1/media"))).toHaveLength(1);
+  });
+});
+
+describe("cliente que baja a Arranque con reels programados: quedan en pausa", () => {
+  const bajarAArranque = () => Object.assign(tablas.usuarios[0], { plan: "arranque", fecha_vencimiento: null });
+
+  it("no se publica nada ni se toca Meta; la pieza sigue en 'lista' y llega UN aviso por cliente (aunque tenga 2 reels)", async () => {
+    bajarAArranque();
+    tablas.publicaciones_organicas.push(pieza({ id: "p1" }), pieza({ id: "p2", programada_para: haceMin(3) }));
+    await ejecutarPublicadorOrganico();
+    expect(piezaDb("p1").estado).toBe("lista");
+    expect(piezaDb("p2").estado).toBe("lista");
+    expect(llamadasMeta).toEqual([]);
+    const avisos = mensajes().filter((m) => String((m.contenido as { texto?: string }).texto).startsWith("Tus reels programados están en pausa"));
+    expect(avisos).toHaveLength(1);
+    expect((avisos[0].contenido as { texto: string }).texto).toMatch(/Contenido está incluido en Crecimiento y Escala/);
+    // La siguiente vuelta no repite el aviso el mismo día.
+    await ejecutarPublicadorOrganico();
+    expect(mensajes().filter((m) => String((m.contenido as { texto?: string }).texto).startsWith("Tus reels programados"))).toHaveLength(1);
+  });
+
+  it("aunque la base todavía tenga la RPC vieja (sin el filtro de plan), el código la devuelve a 'lista' sin tocar Meta", async () => {
+    bajarAArranque();
+    rpcSinFiltros = true;
+    tablas.publicaciones_organicas.push(pieza());
+    const r = await reclamarYCrearContenedores();
+    expect(r.enPausaPorPlan).toBe(1);
+    expect(piezaDb("p1").estado).toBe("lista");
+    expect(llamadasMeta).toEqual([]);
+  });
+
+  it("se reanuda sola si vuelve a subir de plan (dentro de las 2 h): la siguiente vuelta la publica", async () => {
+    bajarAArranque();
+    tablas.publicaciones_organicas.push(pieza());
+    await ejecutarPublicadorOrganico();
+    expect(piezaDb("p1").estado).toBe("lista");
+    Object.assign(tablas.usuarios[0], { plan: "crecimiento", fecha_vencimiento: enMin(60 * 24 * 30) });
+    await ejecutarPublicadorOrganico(); // crea el contenedor
+    await ejecutarPublicadorOrganico(); // FINISHED -> publica
+    expect(piezaDb("p1").estado).toBe("publicada");
+  });
+
+  it("plan vencido (Escala con fecha pasada) también pausa; prueba gratis vigente publica", async () => {
+    Object.assign(tablas.usuarios[0], { fecha_vencimiento: haceMin(60) });
+    tablas.publicaciones_organicas.push(pieza());
+    await ejecutarPublicadorOrganico();
+    expect(piezaDb("p1").estado).toBe("lista");
+    expect(llamadasMeta).toEqual([]);
+    Object.assign(tablas.usuarios[0], { activo: false, en_trial: true, trial_termina_en: enMin(60 * 24 * 5) });
+    await ejecutarPublicadorOrganico();
+    expect(piezaDb("p1").estado).not.toBe("lista");
+  });
+
+  it("si su hora ya pasó más de 2 h, queda vencida como siempre (no se publica al volver a subir de plan)", async () => {
+    bajarAArranque();
+    tablas.publicaciones_organicas.push(pieza({ programada_para: haceMin(3 * 60) }));
+    await ejecutarPublicadorOrganico();
+    expect(piezaDb("p1").estado).toBe("vencida");
+    expect(llamadasMeta).toEqual([]);
   });
 });

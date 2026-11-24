@@ -45,6 +45,7 @@ export default function PrivacidadPage() {
               <li>Crear y administrar tu cuenta, y prestarte el servicio de la plataforma.</li>
               <li>Generar, con apoyo de inteligencia artificial, estrategia publicitaria, creativos, contenido y campañas para tus redes sociales.</li>
               <li>Publicar y monitorear tus campañas en Meta Ads a través de tu cuenta de Meta conectada.</li>
+              <li>Publicar en tu cuenta de Instagram profesional los reels que tú programes o apruebes en la sección Contenido, en la fecha y hora que elijas.</li>
               <li>Procesar el pago de tu suscripción y gestionar la facturación.</li>
               <li>Brindarte soporte y comunicarte novedades sobre el servicio.</li>
               <li>Prevenir fraude y proteger la seguridad de la plataforma.</li>
@@ -65,7 +66,8 @@ export default function PrivacidadPage() {
               <li>
                 <strong>Datos de tu cuenta de Meta conectada:</strong> token de acceso, cuenta
                 publicitaria, página de Facebook, cuenta de Instagram, y píxel — todo lo
-                necesario para publicar y monitorear tus campañas en Meta Ads.
+                necesario para publicar y monitorear tus campañas en Meta Ads, y para publicar
+                en Instagram los reels que tú programes o apruebes.
               </li>
               <li>
                 <strong>ADN de marca:</strong> el análisis de identidad visual que genera
@@ -98,15 +100,47 @@ export default function PrivacidadPage() {
           </section>
 
           <section style={{ marginBottom: 28 }}>
-            <h2 style={sectionTitle}>4. Terceros que procesan tus datos</h2>
+            <h2 style={sectionTitle}>4. Publicación de contenido en Instagram</h2>
+            <p>
+              Cuando programas o apruebas un reel en la sección <strong>Contenido</strong>, Quiubot
+              lo publica en la cuenta de Instagram profesional que conectaste, en la fecha y hora
+              que elegiste, usando los permisos que autorizaste al conectar tu cuenta de Meta.
+              Quiubot <strong>solo publica lo que tú programaste o aprobaste</strong>: nunca publica
+              otro contenido, ni lee ni publica nada más en tu cuenta.
+            </p>
+            <p>Para publicar, Quiubot usa estos datos de Meta:</p>
+            <ul style={{ margin: "8px 0 0", paddingLeft: 20 }}>
+              <li>El token de acceso que autorizaste al conectar tu cuenta de Meta.</li>
+              <li>El identificador de tu página de Facebook y de la cuenta de Instagram profesional vinculada a ella.</li>
+              <li>El cupo diario de publicaciones que Instagram permite a tu cuenta, para no pasarlo.</li>
+              <li>Una vez publicado, el identificador y el enlace del reel, para mostrártelo en Quiubot.</li>
+            </ul>
+            <p style={{ marginTop: 8 }}>
+              El video, el texto y los hashtags que se publican son los que tú revisaste en
+              Contenido.
+            </p>
+            <p>
+              <strong>Cómo revocar el acceso:</strong> puedes quitarle a Quiubot el acceso a tu
+              cuenta en cualquier momento desde la configuración de tu cuenta de Facebook
+              (Configuración y privacidad → Configuración → Integraciones comerciales → Quiubot →
+              Eliminar). Desde ese momento Quiubot ya no puede publicar en tu Instagram, y los
+              reels que tenías programados no se suben. También puedes pedir que eliminemos la
+              conexión y todos tus datos, como se explica en{" "}
+              <a href="/eliminar-datos" style={linkStyle}>quiubot.site/eliminar-datos</a>.
+            </p>
+          </section>
+
+          <section style={{ marginBottom: 28 }}>
+            <h2 style={sectionTitle}>5. Terceros que procesan tus datos</h2>
             <p>
               Para prestar el servicio, Quiubot comparte o procesa datos a través de estos terceros:
             </p>
             <ul style={{ margin: "8px 0 0", paddingLeft: 20 }}>
               <li>
-                <strong>Meta (Facebook/Instagram Ads y píxel):</strong> recibe los datos de tu
+                <strong>Meta (Facebook, Instagram, Ads y píxel):</strong> recibe los datos de tu
                 cuenta publicitaria, página, cuenta de Instagram y píxel que autorizas al
-                conectar tu cuenta de Meta, para publicar y medir tus campañas.
+                conectar tu cuenta de Meta, para publicar y medir tus campañas, y los reels que
+                programas o apruebas para publicarlos en tu Instagram.
               </li>
               <li>
                 <strong>OpenAI y Cloudinary:</strong> procesan tu contenido (texto, imágenes y
@@ -125,7 +159,7 @@ export default function PrivacidadPage() {
           </section>
 
           <section style={{ marginBottom: 28 }}>
-            <h2 style={sectionTitle}>5. Derechos del titular</h2>
+            <h2 style={sectionTitle}>6. Derechos del titular</h2>
             <p>
               Como titular de tus datos personales, de acuerdo con la Ley 1581 de 2012, tienes derecho a:
             </p>
@@ -145,7 +179,7 @@ export default function PrivacidadPage() {
           </section>
 
           <section style={{ marginBottom: 28 }}>
-            <h2 style={sectionTitle}>6. Procedimiento de consultas y reclamos</h2>
+            <h2 style={sectionTitle}>7. Procedimiento de consultas y reclamos</h2>
             <p>
               Puedes ejercer tus derechos escribiendo a{" "}
               <a href="mailto:juanjosepalaciosvillarreal@gmail.com" style={linkStyle}>juanjosepalaciosvillarreal@gmail.com</a>{" "}
@@ -169,7 +203,7 @@ export default function PrivacidadPage() {
           </section>
 
           <section style={{ marginBottom: 28 }}>
-            <h2 style={sectionTitle}>7. Transferencias internacionales de datos</h2>
+            <h2 style={sectionTitle}>8. Transferencias internacionales de datos</h2>
             <p>
               Meta, OpenAI y Cloudinary procesan datos en servidores ubicados fuera de Colombia.
               Al aceptar esta política y usar la plataforma, autorizas estas transferencias
@@ -178,7 +212,7 @@ export default function PrivacidadPage() {
           </section>
 
           <section style={{ marginBottom: 28 }}>
-            <h2 style={sectionTitle}>8. Vigencia</h2>
+            <h2 style={sectionTitle}>9. Vigencia</h2>
             <p>
               Esta política aplica mientras tu cuenta esté activa, y tus datos se conservan por el
               tiempo adicional que exijan las normas legales aplicables o que sea necesario para
@@ -189,7 +223,7 @@ export default function PrivacidadPage() {
           </section>
 
           <section>
-            <h2 style={sectionTitle}>9. Modificaciones a esta política</h2>
+            <h2 style={sectionTitle}>10. Modificaciones a esta política</h2>
             <p>
               Esta política puede actualizarse periódicamente. Los cambios entran en vigencia
               desde su publicación en esta misma página, con la fecha de actualización indicada
