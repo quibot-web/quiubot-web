@@ -17,13 +17,20 @@ import { supabaseAdmin } from "@/lib/supabase";
 export type UsuarioAcceso = {
   id: string;
   rol: string | null;
+  plan: string | null;
   activo: boolean | null;
   en_trial: boolean | null;
   trial_termina_en: string | null;
   fecha_vencimiento: string | null;
 };
 
-const COLUMNAS_ACCESO = "id, rol, activo, en_trial, trial_termina_en, fecha_vencimiento";
+const COLUMNAS_ACCESO = "id, rol, plan, activo, en_trial, trial_termina_en, fecha_vencimiento";
+
+// Planes que incluyen Contenido (decisión 23 nov 2026). La prueba gratis
+// hoy es plan "escala" (medido en la base), así que entra mientras dure.
+// Arranque ve la página y sus piezas, pero no crea, genera ni publica.
+export const PLANES_CON_CONTENIDO = ["crecimiento", "escala"] as const;
+export const MENSAJE_PLAN_SIN_CONTENIDO = "Contenido está incluido en los planes Crecimiento y Escala. Sube de plan para crear y publicar tus reels.";
 
 export const MENSAJE_SUSCRIPCION_INACTIVA = "Tu plan no está activo. Renueva tu suscripción para seguir creando y publicando contenido.";
 
@@ -39,10 +46,27 @@ export function suscripcionActiva(usuario: Pick<UsuarioAcceso, "rol" | "activo" 
   return usuario.activo === true && !!usuario.fecha_vencimiento && new Date(usuario.fecha_vencimiento) >= ahora;
 }
 
-// Sesión + usuario + suscripción activa. columnasExtra: lo que la ruta
-// necesita además (ej. "openai_key, cloudinary_name").
+// ¿Puede crear, generar, renderizar y publicar? Admin siempre; si no, un
+// plan con Contenido y vigente (pago al día o prueba gratis sin vencer).
+export function puedeCrearContenido(usuario: Pick<UsuarioAcceso, "rol" | "plan" | "activo" | "en_trial" | "trial_termina_en" | "fecha_vencimiento">, ahora = new Date()): boolean {
+  if (esAdmin(usuario)) return true;
+  return (PLANES_CON_CONTENIDO as readonly string[]).includes(usuario.plan ?? "") && suscripcionActiva(usuario, ahora);
+}
+
+// Por qué no puede crear: plan sin Contenido (subir de plan) o plan con
+// Contenido pero vencido (renovar).
+export function motivoSinContenido(usuario: Pick<UsuarioAcceso, "plan">): { codigo: "plan_sin_contenido" | "suscripcion_inactiva"; mensaje: string } {
+  return (PLANES_CON_CONTENIDO as readonly string[]).includes(usuario.plan ?? "")
+    ? { codigo: "suscripcion_inactiva", mensaje: MENSAJE_SUSCRIPCION_INACTIVA }
+    : { codigo: "plan_sin_contenido", mensaje: MENSAJE_PLAN_SIN_CONTENIDO };
+}
+
+// Sesión + usuario + (salvo soloLectura) un plan con Contenido vigente.
+// soloLectura: ver la página, el calendario y sus propias piezas (Arranque
+// también). columnasExtra: lo que la ruta necesita además.
 export async function accesoContenido<Extra extends object = Record<never, never>>(
-  columnasExtra = ""
+  columnasExtra = "",
+  opciones: { soloLectura?: boolean } = {}
 ): Promise<{ usuario: UsuarioAcceso & Extra; email: string; error?: undefined } | { error: NextResponse; usuario?: undefined; email?: undefined }> {
   const session = await auth();
   if (!session?.user?.email) return { error: NextResponse.json({ error: "No autorizado" }, { status: 401 }) };
@@ -51,7 +75,10 @@ export async function accesoContenido<Extra extends object = Record<never, never
   const { data: usuario } = await supabaseAdmin.from("usuarios").select(columnas).eq("email", email).single();
   if (!usuario) return { error: NextResponse.json({ error: "Usuario no encontrado" }, { status: 404 }) };
   const u = usuario as unknown as UsuarioAcceso & Extra;
-  if (!suscripcionActiva(u)) return { error: NextResponse.json({ error: MENSAJE_SUSCRIPCION_INACTIVA, codigo: "suscripcion_inactiva" }, { status: 403 }) };
+  if (!opciones.soloLectura && !puedeCrearContenido(u)) {
+    const m = motivoSinContenido(u);
+    return { error: NextResponse.json({ error: m.mensaje, codigo: m.codigo }, { status: 403 }) };
+  }
   return { usuario: u, email };
 }
 

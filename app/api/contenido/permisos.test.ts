@@ -43,10 +43,10 @@ function consulta(tabla: string) {
     eq: (c: string, v: unknown) => (filtros.push((f) => f[c] === v), q),
     neq: (c: string, v: unknown) => (filtros.push((f) => f[c] !== v), q),
     in: (c: string, vs: unknown[]) => (filtros.push((f) => vs.includes(f[c])), q),
-    gte: () => q,
-    lte: () => q,
-    lt: () => q,
-    gt: () => q,
+    gte: (c: string, v: string) => (filtros.push((f) => String(f[c] ?? "") >= v), q),
+    lte: (c: string, v: string) => (filtros.push((f) => String(f[c] ?? "") <= v), q),
+    lt: (c: string, v: string) => (filtros.push((f) => f[c] != null && String(f[c]) < v), q),
+    gt: (c: string, v: string) => (filtros.push((f) => f[c] != null && String(f[c]) > v), q),
     is: (c: string, v: unknown) => (filtros.push((f) => (f[c] ?? null) === v), q),
     not: (c: string, _o: string, v: unknown) => (filtros.push((f) => (f[c] ?? null) !== v), q),
     or: () => q,
@@ -107,11 +107,14 @@ beforeEach(() => {
   escrituras = [];
   tablas = {
     usuarios: [
-      { id: "a", email: "a@cliente.com", rol: "user", activo: true, fecha_vencimiento: futuro(20), en_trial: false, openai_key: "ka", cloudinary_name: "ca", cloudinary_key: "k", cloudinary_secret: "s" },
-      { id: "b", email: "b@cliente.com", rol: "user", activo: true, fecha_vencimiento: futuro(20), en_trial: false, openai_key: "kb", cloudinary_name: "cb", cloudinary_key: "k", cloudinary_secret: "s" },
-      { id: "adm", email: "admin@quiubot.com", rol: "admin", activo: true, fecha_vencimiento: null, en_trial: false },
-      { id: "vencido", email: "v@cliente.com", rol: "user", activo: true, fecha_vencimiento: futuro(-1), en_trial: false },
-      { id: "prueba", email: "p@cliente.com", rol: "user", activo: false, fecha_vencimiento: null, en_trial: true, trial_termina_en: futuro(5) },
+      { id: "a", email: "a@cliente.com", rol: "usuario", plan: "crecimiento", activo: true, fecha_vencimiento: futuro(20), en_trial: false, openai_key: "ka", cloudinary_name: "ca", cloudinary_key: "k", cloudinary_secret: "s" },
+      { id: "b", email: "b@cliente.com", rol: "usuario", plan: "escala", activo: true, fecha_vencimiento: futuro(20), en_trial: false, openai_key: "kb", cloudinary_name: "cb", cloudinary_key: "k", cloudinary_secret: "s" },
+      { id: "adm", email: "admin@quiubot.com", rol: "admin", plan: "escala", activo: true, fecha_vencimiento: null, en_trial: false },
+      { id: "vencido", email: "v@cliente.com", rol: "usuario", plan: "crecimiento", activo: true, fecha_vencimiento: futuro(-1), en_trial: false },
+      // La prueba gratis hoy es plan "escala" (medido en la base, 23 nov 2026).
+      { id: "prueba", email: "p@cliente.com", rol: "usuario", plan: "escala", activo: false, fecha_vencimiento: null, en_trial: true, trial_termina_en: futuro(5) },
+      { id: "prueba-vencida", email: "pv@cliente.com", rol: "usuario", plan: "escala", activo: false, fecha_vencimiento: null, en_trial: true, trial_termina_en: futuro(-1) },
+      { id: "arranque", email: "ar@cliente.com", rol: "usuario", plan: "arranque", activo: true, fecha_vencimiento: null, en_trial: false, openai_key: "kr" },
     ],
     publicaciones_organicas: [
       { id: PIEZA_DE_B, user_id: "b", estado: "borrador", tema: "Tema de B", receta_organica: "consejos_numerados", semana: "2026-11-23", programada_para: futuro(3), guion: GUION_B, media_ids: null, control_calidad: null },
@@ -221,20 +224,56 @@ describe("admin: ve todo, pero solo cambia lo suyo", () => {
   });
 });
 
-describe("suscripción activa (en vez de rol admin)", () => {
-  it("cliente con plan pagado o en prueba vigente: entra; con el plan vencido: 403 con el motivo, en todas las rutas", async () => {
-    como("a@cliente.com");
-    expect((await rutaAcceso.GET()).status).toBe(200);
+describe("planes: solo Crecimiento y Escala (vigentes) usan Contenido; Arranque solo lo ve", () => {
+  const puede = async (email: string) => {
+    como(email);
+    return (await (await rutaAcceso.GET()).json()) as { puedeCrear: boolean; motivo?: { codigo: string; mensaje: string } };
+  };
+
+  it("Crecimiento y Escala al día, la prueba gratis vigente (plan escala) y admin: pueden crear", async () => {
+    expect((await puede("a@cliente.com")).puedeCrear).toBe(true);
+    expect((await puede("b@cliente.com")).puedeCrear).toBe(true);
+    expect((await puede("p@cliente.com")).puedeCrear).toBe(true);
+    expect((await puede("admin@quiubot.com")).puedeCrear).toBe(true);
     como("p@cliente.com");
-    expect((await rutaAcceso.GET()).status).toBe(200);
-    como("v@cliente.com");
-    const res = await rutaAcceso.GET();
-    expect(res.status).toBe(403);
-    expect(await res.json()).toMatchObject({ codigo: "suscripcion_inactiva" });
-    expect((await rutaLista.GET(json("/api/contenido", "GET"))).status).toBe(403);
-    expect((await rutaPieza.GET(json("/api/contenido/x", "GET"), ctx("x"))).status).toBe(403);
-    expect((await rutaGuion.POST(json("/api/contenido/x/guion", "POST", {}), ctx("x"))).status).toBe(403);
-    expect((await rutaMusica.GET()).status).toBe(403);
+    expect((await rutaLista.POST(json("/api/contenido", "POST", { receta_organica: "mito_verdad", programada_para: futuro(2) }))).status).toBe(201);
+  });
+
+  it("Arranque: ve la página y su calendario, pero no crea, genera, renderiza ni publica (aviso para subir de plan)", async () => {
+    const a = await puede("ar@cliente.com");
+    expect(a).toMatchObject({ puedeCrear: false, motivo: { codigo: "plan_sin_contenido" } });
+    expect(a.motivo!.mensaje).toMatch(/Crecimiento y Escala/);
+    tablas.publicaciones_organicas.push({ id: "pieza-ar", user_id: "arranque", estado: "borrador", tema: "t", receta_organica: "consejos_numerados", semana: "2026-11-23", programada_para: futuro(3), guion: GUION_B, control_calidad: null });
+    como("ar@cliente.com");
+    expect((await rutaLista.GET(json("/api/contenido", "GET"))).status).toBe(200);
+    expect((await rutaPieza.GET(json("/api/contenido/pieza-ar", "GET"), ctx("pieza-ar"))).status).toBe(200);
+    const bloqueadas = [
+      await rutaLista.POST(json("/api/contenido", "POST", { receta_organica: "mito_verdad", programada_para: futuro(2) })),
+      await rutaGuion.POST(json("/api/contenido/pieza-ar/guion", "POST", {}), ctx("pieza-ar")),
+      await rutaPieza.PATCH(json("/api/contenido/pieza-ar", "PATCH", { accion: "aprobar" }), ctx("pieza-ar")),
+      await rutaPieza.PATCH(json("/api/contenido/pieza-ar", "PATCH", { accion: "iniciar_render" }), ctx("pieza-ar")),
+      await rutaPieza.PATCH(json("/api/contenido/pieza-ar", "PATCH", { accion: "publicar_ahora" }), ctx("pieza-ar")),
+      await rutaVideo.POST(form("/api/contenido/pieza-ar/video-listo", "archivo"), ctx("pieza-ar")),
+      await rutaVision.POST(json("/api/contenido/pieza-ar/control-calidad", "POST", { cuadros: [] }), ctx("pieza-ar")),
+      await rutaSerie.POST(json("/api/contenido/pieza-ar/serie", "POST", { partes: [] }), ctx("pieza-ar")),
+    ];
+    for (const r of bloqueadas) {
+      expect(r.status).toBe(403);
+      expect(await r.json()).toMatchObject({ codigo: "plan_sin_contenido" });
+    }
+    expect(generarGuion).not.toHaveBeenCalled();
+    expect(escrituras.filter((e) => e.op !== "select" && e.tabla === "publicaciones_organicas" && e.filas.some((f) => f.user_id === "arranque")).map((e) => ({ op: e.op, valores: e.valores }))).toEqual([]);
+  });
+
+  it("Crecimiento vencido y prueba gratis vencida: ven la página, y crear pide renovar", async () => {
+    for (const email of ["v@cliente.com", "pv@cliente.com"]) {
+      expect(await puede(email), email).toMatchObject({ puedeCrear: false, motivo: { codigo: "suscripcion_inactiva" } });
+      como(email);
+      expect((await rutaLista.GET(json("/api/contenido", "GET"))).status).toBe(200);
+      const r = await rutaGuion.POST(json("/api/contenido/x/guion", "POST", {}), ctx("x"));
+      expect(r.status).toBe(403);
+      expect(await r.json()).toMatchObject({ codigo: "suscripcion_inactiva" });
+    }
   });
 
   it("sin sesión: 401", async () => {

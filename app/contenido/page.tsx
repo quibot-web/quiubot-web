@@ -102,6 +102,8 @@ export default function ContenidoPage() {
   const esMobile = useEsMobile();
   const [paso, setPaso] = useState<Paso>("cargando");
   const [sinAcceso, setSinAcceso] = useState<{ mensaje: string | null; suscripcion: boolean }>({ mensaje: null, suscripcion: false });
+  // Arranque (o plan vencido): ve la página, pero no crea ni genera.
+  const [avisoPlan, setAvisoPlan] = useState<{ codigo: string; mensaje: string } | null>(null);
   const [vista, setVista] = useState<Vista>("semana");
   const [semana, setSemana] = useState<string>(() => lunesDeLaSemana(hoyBogota()));
   const [mes, setMes] = useState<string>(() => hoyBogota().slice(0, 7));
@@ -153,6 +155,7 @@ export default function ContenidoPage() {
           setPaso("sin-acceso");
           return;
         }
+        if (!accesoData.puedeCrear && accesoData.motivo) setAvisoPlan(accesoData.motivo);
         fetch("/api/marca-adn")
           .then((r) => r.json())
           .then((d) => setAdnMarca(d.adn_marca ?? null))
@@ -216,6 +219,7 @@ export default function ContenidoPage() {
   }
 
   function abrirFormulario(fecha: string) {
+    if (avisoPlan) return;
     setFechaFormulario(fecha);
     setMostrarFormulario(true);
   }
@@ -297,16 +301,22 @@ export default function ContenidoPage() {
           </div>
         </div>
 
+        {avisoPlan && <AvisoPlan aviso={avisoPlan} />}
+
         <div style={{ display: "flex", gap: 10, marginBottom: 12, flexWrap: "wrap", alignItems: "center" }}>
-          <button type="button" style={botonPrimario} onClick={() => abrirFormulario(fechaInicialGenerica)}>
-            ＋ Agregar reel
-          </button>
+          {!avisoPlan && (
+            <button type="button" style={botonPrimario} onClick={() => abrirFormulario(fechaInicialGenerica)}>
+              ＋ Agregar reel
+            </button>
+          )}
           <button type="button" style={{ ...botonSecundario, opacity: 0.6, cursor: "not-allowed" }} disabled title="Disponible pronto -- el Director todavía no arma el calendario solo.">
             Pedir propuesta al Director (próximamente)
           </button>
-          <button type="button" style={botonSecundario} onClick={refrescar} disabled={cargandoDatos}>
-            Preparar mis videos
-          </button>
+          {!avisoPlan && (
+            <button type="button" style={botonSecundario} onClick={refrescar} disabled={cargandoDatos}>
+              Preparar mis videos
+            </button>
+          )}
           <span style={{ fontSize: 12, color: "#666", marginLeft: "auto" }}>
             {resumen.total} reels · {resumen.listos} listos · {resumen.publicados} publicados · {resumen.porAprobar} por aprobar
           </span>
@@ -320,7 +330,7 @@ export default function ContenidoPage() {
           </p>
         )}
 
-        <ColaDeRender piezasAprobadas={piezas.filter((p) => p.estado === "aprobada")} onPiezaLista={refrescar} />
+        {!avisoPlan && <ColaDeRender piezasAprobadas={piezas.filter((p) => p.estado === "aprobada")} onPiezaLista={refrescar} />}
 
         {esMobile ? (
           <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
@@ -835,6 +845,17 @@ function FormularioAgregarReel({ fechaInicial, onCerrar, onCreado }: { fechaInic
           onCerrar={() => setMostrarSelectorAlbum(false)}
         />
       )}
+    </div>
+  );
+}
+
+function AvisoPlan({ aviso }: { aviso: { codigo: string; mensaje: string } }) {
+  return (
+    <div style={{ background: "#F3F2FE", border: "1px solid #C9C5F2", borderRadius: 14, padding: 16, marginBottom: 16, display: "flex", gap: 12, alignItems: "center", flexWrap: "wrap" }}>
+      <span style={{ fontSize: 13.5, color: "#3C3489", fontWeight: 700, flex: 1, minWidth: 220 }}>{aviso.mensaje}</span>
+      <a href="/billing" style={{ padding: "10px 16px", borderRadius: 10, background: "#534AB7", color: "#fff", fontWeight: 700, textDecoration: "none" }}>
+        {aviso.codigo === "suscripcion_inactiva" ? "Renovar mi plan" : "Ver planes"}
+      </a>
     </div>
   );
 }

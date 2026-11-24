@@ -12,7 +12,7 @@ import { fechaBogota, hoyBogota, inicioDiaBogota, finDiaBogota } from "@/app/lib
 // (solo lectura). Ver app/lib/accesoContenido.ts.
 
 export async function GET(req: NextRequest) {
-  const acceso = await accesoContenido();
+  const acceso = await accesoContenido("", { soloLectura: true });
   if (acceso.error) return acceso.error;
   const { usuario, email: emailBusqueda } = acceso;
   const dueno = duenoParaLeer(usuario, req.nextUrl.searchParams.get("usuario"));

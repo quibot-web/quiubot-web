@@ -151,10 +151,12 @@ describe("GET /api/contenido", () => {
     expect(res.status).toBe(401);
   });
 
-  it("no admin: 403", async () => {
-    usuarioActual = { id: "user-1", rol: "cliente" };
-    const res = await GET(getReq());
+  it("cliente sin plan con Contenido (Arranque): puede VER su calendario (200), pero no crear un reel (403, subir de plan)", async () => {
+    usuarioActual = { id: "user-1", rol: "usuario", plan: "arranque", activo: true };
+    expect((await GET(getReq())).status).toBe(200);
+    const res = await POST(postReq({ receta_organica: "mito_verdad", programada_para: isoEnElFuturo(48) }));
     expect(res.status).toBe(403);
+    expect(await res.json()).toMatchObject({ codigo: "plan_sin_contenido" });
   });
 
   it("sin ?semana: usa la semana de hoy y devuelve las piezas", async () => {

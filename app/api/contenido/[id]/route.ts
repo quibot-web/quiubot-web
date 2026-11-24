@@ -33,7 +33,7 @@ const VOZ_POR_DEFECTO = "cedar";
 
 export async function GET(req: NextRequest, { params }: { params: Promise<{ id: string }> }) {
   const { id } = await params;
-  const acceso = await accesoContenido();
+  const acceso = await accesoContenido("", { soloLectura: true });
   if (acceso.error) return acceso.error;
   const { usuario } = acceso;
 

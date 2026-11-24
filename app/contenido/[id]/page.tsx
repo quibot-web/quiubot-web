@@ -30,6 +30,8 @@ export default function RevisionPiezaPage({ params }: { params: Promise<{ id: st
   const router = useRouter();
   const [paso, setPaso] = useState<Paso>("cargando");
   const [sinAcceso, setSinAcceso] = useState<{ mensaje: string | null; suscripcion: boolean }>({ mensaje: null, suscripcion: false });
+  // Arranque (o plan vencido): ve la página, pero no crea ni genera.
+  const [avisoPlan, setAvisoPlan] = useState<{ codigo: string; mensaje: string } | null>(null);
   const [pieza, setPieza] = useState<PublicacionOrganica | null>(null);
   const [medios, setMedios] = useState<MediosResueltos>({});
   const [guion, setGuion] = useState<Guion | null>(null);
@@ -98,6 +100,7 @@ export default function RevisionPiezaPage({ params }: { params: Promise<{ id: st
           return;
         }
         setRol(accesoData.esAdmin ? "admin" : "user");
+        if (!accesoData.puedeCrear && accesoData.motivo) setAvisoPlan(accesoData.motivo);
         // Pistas para el selector "Música": el cliente solo ve las que se
         // pueden publicar; admin, todas (ver /api/contenido/musica).
         fetch("/api/contenido/musica")
@@ -382,6 +385,8 @@ export default function RevisionPiezaPage({ params }: { params: Promise<{ id: st
           </p>
         )}
 
+        {avisoPlan && <AvisoPlan aviso={avisoPlan} />}
+
         {pieza.estado === "error" && pieza.tipo_error === "calidad" && (
           <div style={{ background: "#FDECEC", border: "1px solid #E8A0A0", borderRadius: 14, padding: 16, marginBottom: 16 }}>
             <p style={{ fontSize: 13, color: "#8A1F1F", fontWeight: 700, margin: "0 0 8px" }}>El control de calidad rechazó este reel.</p>
@@ -396,7 +401,7 @@ export default function RevisionPiezaPage({ params }: { params: Promise<{ id: st
                 <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
                   <button
                     type="button"
-                    disabled={generando}
+                    disabled={generando || !!avisoPlan}
                     style={botonPrimario}
                     onClick={async () => {
                       if (await volverABorrador()) await generarGuion();
@@ -533,7 +538,7 @@ export default function RevisionPiezaPage({ params }: { params: Promise<{ id: st
                 }}
               />
             )}
-            <button type="button" onClick={() => generarGuion()} disabled={generando} style={botonPrimario}>
+            <button type="button" onClick={() => generarGuion()} disabled={generando || !!avisoPlan} style={botonPrimario}>
               {generando ? "Generando…" : "Generar guion"}
             </button>
           </div>
@@ -543,7 +548,7 @@ export default function RevisionPiezaPage({ params }: { params: Promise<{ id: st
           <div style={{ display: "grid", gridTemplateColumns: "1fr 320px", gap: 24, alignItems: "start" }}>
             <div>
               <div style={{ display: "flex", gap: 10, marginBottom: 12 }}>
-                <button type="button" onClick={() => generarGuion()} disabled={generando} style={botonSecundario}>
+                <button type="button" onClick={() => generarGuion()} disabled={generando || !!avisoPlan} style={botonSecundario}>
                   {generando ? "Regenerando…" : "Regenerar guion"}
                 </button>
               </div>
@@ -616,6 +621,17 @@ export default function RevisionPiezaPage({ params }: { params: Promise<{ id: st
           </div>
         )}
       </div>
+    </div>
+  );
+}
+
+function AvisoPlan({ aviso }: { aviso: { codigo: string; mensaje: string } }) {
+  return (
+    <div style={{ background: "#F3F2FE", border: "1px solid #C9C5F2", borderRadius: 14, padding: 16, marginBottom: 16, display: "flex", gap: 12, alignItems: "center", flexWrap: "wrap" }}>
+      <span style={{ fontSize: 13.5, color: "#3C3489", fontWeight: 700, flex: 1, minWidth: 220 }}>{aviso.mensaje}</span>
+      <a href="/billing" style={{ padding: "10px 16px", borderRadius: 10, background: "#534AB7", color: "#fff", fontWeight: 700, textDecoration: "none" }}>
+        {aviso.codigo === "suscripcion_inactiva" ? "Renovar mi plan" : "Ver planes"}
+      </a>
     </div>
   );
 }
