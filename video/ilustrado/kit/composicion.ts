@@ -4,7 +4,6 @@
 // ve (para el control de calidad por visión).
 import type { Rect } from "../motor/geometria";
 import {
-  ACCESORIOS,
   COLORES_ROPA,
   NOMBRE_FONDO,
   NOMBRE_OBJETO,
@@ -21,13 +20,28 @@ import {
   type Peinado,
   type Pose,
   type TipoPersonaje,
+  type Fondo,
+  type TipoObjeto,
+  esMayor,
+  PARA_SENTARSE,
+  MUEBLES,
+  DE_MANO,
+  VEHICULOS,
+  LUGARES_DE_OBJETO,
 } from "./catalogoKit";
+import { BOLSA, CAJA, CARRO, CELULAR, HELADO, MESA, MOSTRADOR, MOTO, PUERTA_X, TORTA, VITRINA } from "./dibujoLugares";
 import { CARTELERA, DIBUJO, DULCES, PUPITRE, SALON, SILLA, casillaCartelera } from "./dibujoObjetos";
 import type { AspectoPersonaje } from "./dibujoPersonaje";
 import { ropasDePaleta, type Variedad } from "./variedad";
 import { estadoPose, posicionMano, proporciones, topeDePose, type Proporciones } from "./poses";
 
-export const ISLA_KIT = { salon: { ancho: SALON.ancho, alto: SALON.alto } } as const;
+// Todos los lugares del kit miden lo mismo (mismas casillas y profundidades).
+export const ISLA_KIT: Record<Fondo, { ancho: number; alto: number }> = {
+  salon: { ancho: SALON.ancho, alto: SALON.alto },
+  tienda: { ancho: SALON.ancho, alto: SALON.alto },
+  cocina: { ancho: SALON.ancho, alto: SALON.alto },
+  calle: { ancho: SALON.ancho, alto: SALON.alto },
+};
 
 const POS_X = { izquierda: 360, centro_izquierda: 740, centro: 1100, centro_derecha: 1460, derecha: 1840 } as const;
 const PIES = { frente: 1445, fondo: 1205 } as const;
@@ -35,7 +49,7 @@ const ESCALA = { frente: 1, fondo: 0.8 } as const;
 // Los niños, un poco más grandes en el mundo: con el zoom máximo de la
 // cámara un niño solo ocupaba el 47 % de la pantalla (el mínimo es 50 %).
 // Siguen siendo más chicos que la profesora.
-const ESCALA_TIPO: Record<TipoPersonaje, number> = { profesora: 1, nino: 1.12, nina: 1.12 };
+const ESCALA_TIPO: Record<TipoPersonaje, number> = { profesora: 1, nino: 1.12, nina: 1.12, vendedor: 1, vendedora: 1, cliente: 1, emprendedor: 1, emprendedora: 1, mama: 1, papa: 1, abuela: 0.97, abuelo: 0.97 };
 const PARED_X = { pared_izquierda: 620, pared_centro: 1100, pared_derecha: 1580 } as const;
 const PARED_Y = 470;
 
@@ -49,7 +63,20 @@ export function hashTexto(s: string): number {
   return h >>> 0;
 }
 const elegir = <T>(xs: readonly T[], h: number, salto = 0): T => xs[(h + salto) % xs.length];
-const PEINADOS_POR_TIPO: Record<TipoPersonaje, Peinado[]> = { profesora: ["mono", "largo", "corto", "rizado"], nino: ["corto", "rizado"], nina: ["colitas", "largo", "rizado", "mono"] };
+const PEINADOS_POR_TIPO: Record<TipoPersonaje, Peinado[]> = {
+  profesora: ["mono", "largo", "corto", "rizado"],
+  nino: ["corto", "rizado"],
+  nina: ["colitas", "largo", "rizado", "mono"],
+  vendedor: ["corto", "rizado"],
+  vendedora: ["mono", "largo", "colitas", "rizado"],
+  cliente: ["corto", "rizado", "largo"],
+  emprendedor: ["corto", "rizado"],
+  emprendedora: ["largo", "mono", "rizado", "corto"],
+  mama: ["largo", "mono", "rizado", "corto"],
+  papa: ["corto", "rizado"],
+  abuela: ["mono", "corto"],
+  abuelo: ["corto"],
+};
 const ROPAS = Object.keys(COLORES_ROPA).filter((c) => c !== "blanco") as ColorRopa[];
 
 // ropas: la paleta del reel (variedad entre reels); sin paleta, todas.
@@ -62,25 +89,55 @@ export function aspectoDe(per: PersonajeKit, semilla: string, indice: number, ro
   return {
     tipo: per.tipo,
     piel: per.piel ?? elegir(Object.keys(PIELES) as AspectoPersonaje["piel"][], h >>> 9),
-    pelo: per.pelo ?? elegir((Object.keys(PELOS) as AspectoPersonaje["pelo"][]).filter((c) => per.tipo === "profesora" || c !== "canoso"), h >>> 13),
+    // Los mayores, canosos; los demás, nunca (salvo la profesora).
+    pelo: per.pelo ?? (esMayor(per.tipo) ? "canoso" : elegir((Object.keys(PELOS) as AspectoPersonaje["pelo"][]).filter((c) => per.tipo === "profesora" || c !== "canoso"), h >>> 13)),
     peinado: per.peinado ?? elegir(PEINADOS_POR_TIPO[per.tipo], h >>> 17),
     ropa,
     ropa2,
-    accesorio: per.accesorio ?? (per.tipo === "profesora" ? elegir(ACCESORIOS, h >>> 21) : "ninguno"),
+    accesorio: per.accesorio ?? accesorioPorDefecto(per.tipo, h >>> 21),
   };
+}
+
+function accesorioPorDefecto(tipo: TipoPersonaje, h: number): AspectoPersonaje["accesorio"] {
+  if (tipo === "profesora") return elegir(["ninguno", "gafas"] as const, h);
+  if (esMayor(tipo)) return elegir(tipo === "abuelo" ? (["gafas", "bigote", "gafas"] as const) : (["gafas", "gafas", "ninguno"] as const), h);
+  if (tipo === "papa" || tipo === "vendedor" || tipo === "emprendedor") return elegir(["ninguno", "bigote", "ninguno", "gafas"] as const, h);
+  if (tipo === "cliente" || tipo === "mama" || tipo === "vendedora" || tipo === "emprendedora") return elegir(["ninguno", "ninguno", "gafas"] as const, h);
+  return "ninguno";
 }
 
 // ---------- Ubicación ----------
 // sentado: detrás de un pupitre (la silla atrás, el pupitre adelante tapa las piernas).
-export type PersonajeUbicado = { per: PersonajeKit; aspecto: AspectoPersonaje; p: Proporciones; cx: number; pies: number; escala: number; espejo: boolean; sentado?: { pupitre: Rect; silla: Rect } };
+export type PersonajeUbicado = { per: PersonajeKit; aspecto: AspectoPersonaje; p: Proporciones; cx: number; pies: number; escala: number; espejo: boolean; sentado?: { pupitre: Rect; silla: Rect; mueble: TipoObjeto };
+  // Si en el plan entra o se va: cuánto camina hasta la puerta (la cámara
+  // lo cuida en todo el recorrido).
+  caminoDx?: number;
+};
 export type ObjetoUbicado = { obj: ObjetoKit; rect: Rect | null }; // null: en la mano de alguien
 export type ComposicionUbicada = { c: ComposicionKit; pared: Pared; isla: { ancho: number; alto: number }; personajes: PersonajeUbicado[]; objetos: ObjetoUbicado[] };
 
-function tamObjeto(o: ObjetoKit): { ancho: number; alto: number } {
-  if (o.tipo === "cartelera") return { ancho: CARTELERA.ancho, alto: CARTELERA.alto };
-  if (o.tipo === "pupitre") return { ancho: PUPITRE.ancho * ESCALA[o.plano], alto: PUPITRE.alto * ESCALA[o.plano] };
-  if (o.tipo === "dibujo") return { ancho: DIBUJO.ancho * 1.4, alto: DIBUJO.alto * 1.4 };
-  return { ancho: DULCES.ancho * 1.2, alto: DULCES.alto * 1.2 };
+// Tamaño base de cada objeto en el mundo (antes del plano: atrás, 0,8).
+const TAM_BASE: Record<TipoObjeto, { ancho: number; alto: number }> = {
+  cartelera: { ancho: CARTELERA.ancho, alto: CARTELERA.alto },
+  dibujo: { ancho: DIBUJO.ancho * 1.4, alto: DIBUJO.alto * 1.4 },
+  dulces: { ancho: DULCES.ancho * 1.2, alto: DULCES.alto * 1.2 },
+  pupitre: PUPITRE,
+  torta: TORTA,
+  helado: HELADO,
+  caja: CAJA,
+  bolsa: BOLSA,
+  celular: CELULAR,
+  moto: MOTO,
+  carro: CARRO,
+  mostrador: MOSTRADOR,
+  vitrina: VITRINA,
+  mesa: MESA,
+};
+function tamObjeto(o: ObjetoKit, plano: "frente" | "fondo" = o.plano): { ancho: number; alto: number } {
+  const t = TAM_BASE[o.tipo];
+  // Lo que va en la pared no se achica con el plano.
+  const k = o.lugar?.startsWith("pared_") ? 1 : ESCALA[plano];
+  return { ancho: t.ancho * k, alto: t.alto * k };
 }
 
 export function ubicarComposicion(c: ComposicionKit, semilla: string, variedad?: Partial<Variedad>): ComposicionUbicada {
@@ -88,7 +145,8 @@ export function ubicarComposicion(c: ComposicionKit, semilla: string, variedad?:
   const objetos = ubicarObjetos(c);
   const personajes = c.personajes.map((per, i): PersonajeUbicado => {
     const p = proporciones(per.tipo);
-    const pupitre = per.sentado_en ? objetos.find((o) => o.obj.id === per.sentado_en && o.obj.tipo === "pupitre")?.rect : null;
+    const asiento = per.sentado_en ? objetos.find((o) => o.obj.id === per.sentado_en && (PARA_SENTARSE as readonly string[]).includes(o.obj.tipo)) : undefined;
+    const pupitre = asiento?.rect ?? null;
     if (pupitre) {
       // Sentado: la cintura queda un poco debajo de la tapa del pupitre.
       const plano = c.objetos.find((o) => o.id === per.sentado_en)!.plano;
@@ -98,7 +156,7 @@ export function ubicarComposicion(c: ComposicionKit, semilla: string, variedad?:
       const ws = SILLA.ancho * ESCALA[plano];
       const hs = SILLA.alto * ESCALA[plano];
       const silla = { x: cx - ws / 2, y: pupitre.y + pupitre.alto - hs - 20 * ESCALA[plano], ancho: ws, alto: hs };
-      return { per, aspecto: aspectoDe(per, semilla, i, ropas), p, cx, pies, escala, espejo: per.mira === "izquierda", sentado: { pupitre, silla } };
+      return { per, aspecto: aspectoDe(per, semilla, i, ropas), p, cx, pies, escala, espejo: per.mira === "izquierda", sentado: { pupitre, silla, mueble: asiento!.obj.tipo } };
     }
     const escala = ESCALA[per.plano] * ESCALA_TIPO[per.tipo];
     return { per, aspecto: aspectoDe(per, semilla, i, ropas), p, cx: POS_X[per.posicion], pies: PIES[per.plano], escala, espejo: per.mira === "izquierda" };
@@ -108,7 +166,7 @@ export function ubicarComposicion(c: ComposicionKit, semilla: string, variedad?:
 }
 
 function ubicarObjetos(c: ComposicionKit): ObjetoUbicado[] {
-  return c.objetos.map((obj) => {
+  const base = c.objetos.map((obj): ObjetoUbicado => {
     if (obj.en_mano_de || !obj.lugar) return { obj, rect: null };
     const t = tamObjeto(obj);
     if (obj.lugar.startsWith("pared_")) {
@@ -117,6 +175,20 @@ function ubicarObjetos(c: ComposicionKit): ObjetoUbicado[] {
     }
     const x = POS_X[obj.lugar.replace("piso_", "") as keyof typeof POS_X];
     return { obj, rect: { x: x - t.ancho / 2, y: PIES[obj.plano] - t.alto, ancho: t.ancho, alto: t.alto } };
+  });
+  // Encima de un mueble: en la repisa de la vitrina, o sobre el mostrador
+  // o la mesa; varios en el mismo mueble, repartidos a lo ancho.
+  return base.map((u) => {
+    if (!u.obj.sobre) return u;
+    const mueble = base.find((m) => m.obj.id === u.obj.sobre && m.rect);
+    if (!mueble?.rect) return u;
+    const m = mueble.rect;
+    const t = tamObjeto(u.obj, mueble.obj.plano);
+    const hermanos = c.objetos.filter((o) => o.sobre === u.obj.sobre);
+    const i = hermanos.findIndex((o) => o.id === u.obj.id);
+    const x = m.x + (m.ancho * (i + 1)) / (hermanos.length + 1) - t.ancho / 2;
+    const apoyo = mueble.obj.tipo === "vitrina" ? m.y + m.alto * VITRINA.repisa : m.y + 6;
+    return { ...u, rect: { x, y: apoyo - t.alto, ancho: t.ancho, alto: t.alto } };
   });
 }
 
@@ -160,7 +232,24 @@ export const VERBOS_TODOS = {
   levanta_la_mano: "todos levantan la mano",
   se_distrae: "todos se aburren y se distraen",
   presta_atencion: "todos prestan atención",
+  saluda: "todos saludan",
 } as const satisfies Partial<Record<keyof typeof VERBOS_PERSONAJE, string>>;
+
+// Cuánto camina quien entra o se va: hacia la puerta del lugar, como
+// mucho CAMINO_MAXIMO (aparece o desaparece con un fundido al final): un
+// recorrido de todo el lugar no cabe en ningún plano sin cortarlo.
+export const CAMINO_MAXIMO = 420;
+export function caminoDe(u: PersonajeUbicado, fondo: Fondo): number {
+  const d = PUERTA_X[fondo] - u.cx;
+  // Ya está en la puerta: no camina de lado; sale (o entra) por ella, al fondo.
+  if (Math.abs(d) < 80) return 0;
+  return Math.sign(d) * Math.min(Math.abs(d), CAMINO_MAXIMO);
+}
+
+// Un rectángulo del personaje extendido a todo su recorrido (si camina).
+export function enCamino(u: PersonajeUbicado, r: Rect): Rect {
+  return u.caminoDx ? union(r, { ...r, x: r.x + u.caminoDx }) : r;
+}
 
 export function rectElemento(cu: ComposicionUbicada, id: string, pose?: Pose): Rect | null {
   const per = cu.personajes.find((x) => x.per.id === id);
@@ -199,8 +288,13 @@ export function accionesDeComposicion(cu: ComposicionUbicada): Record<string, De
   const res: Record<string, DefAccionKit> = {};
   for (const u of cu.personajes) {
     for (const [verbo, def] of Object.entries(VERBOS_PERSONAJE)) {
+      // Sentado no se entra ni se va caminando.
+      if ((verbo === "entra" || verbo === "se_va") && u.sentado) continue;
       const pose = "pose" in def ? def.pose : undefined;
-      res[`${u.per.id}.${verbo}`] = { descripcion: `${nombreElemento(cu, u.per.id)} ${def.descripcion}`, foco: rectPersonaje(u, pose) };
+      const r = rectPersonaje(u, pose);
+      // Entrar o irse: el foco es todo el recorrido, de la puerta a su lugar.
+      const foco = verbo === "entra" || verbo === "se_va" ? union(r, { ...r, x: r.x + caminoDe(u, cu.c.fondo) }) : r;
+      res[`${u.per.id}.${verbo}`] = { descripcion: `${nombreElemento(cu, u.per.id)} ${def.descripcion}`, foco };
     }
   }
   if (cu.personajes.length >= 2) {
@@ -273,14 +367,26 @@ export function problemasComposicion(c: ComposicionKit): string[] {
     if (o.tipo === "cartelera" && o.en_mano_de) p.push(`${c.id}: una cartelera no va en la mano`);
   }
   if (c.objetos.filter((o) => o.tipo === "cartelera").length > 1) p.push(`${c.id}: solo una cartelera por composición`);
-  for (const o of c.objetos) if (o.tipo === "pupitre" && (o.en_mano_de || !o.lugar?.startsWith("piso_"))) p.push(`${c.id}: el pupitre "${o.id}" va en el piso`);
+  for (const o of c.objetos) {
+    const de = (xs: readonly string[]) => xs.includes(o.tipo);
+    if ((de(MUEBLES) || de(VEHICULOS)) && !o.lugar?.startsWith("piso_")) p.push(`${c.id}: "${o.id}" (${o.tipo}) va en el piso`);
+    if ((o.en_mano_de || o.sobre) && !de(DE_MANO)) p.push(`${c.id}: "${o.id}" (${o.tipo}) no se sostiene en la mano ni va encima de un mueble`);
+    if (o.lugar?.startsWith("pared_") && o.tipo !== "cartelera" && o.tipo !== "dibujo") p.push(`${c.id}: "${o.id}" (${o.tipo}) no va en la pared`);
+    if (o.lugar?.startsWith("piso_") && de(DE_MANO) && o.tipo !== "caja" && o.tipo !== "bolsa") p.push(`${c.id}: "${o.id}" (${o.tipo}) no va en el piso: ponlo en la mano de alguien o "sobre" un mueble (mostrador, vitrina o mesa)`);
+    if (o.sobre) {
+      const m = c.objetos.find((x) => x.id === o.sobre);
+      if (!m || !["mostrador", "vitrina", "mesa"].includes(m.tipo)) p.push(`${c.id}: "${o.id}" está sobre "${o.sobre}", que no es un mostrador, una vitrina ni una mesa de la composición`);
+    }
+    const lugares = LUGARES_DE_OBJETO[o.tipo];
+    if (lugares && !lugares.includes(c.fondo)) p.push(`${c.id}: "${o.id}" (${o.tipo}) no va en ${c.fondo}; va en: ${lugares.join(", ")}`);
+  }
   // Un dibujo en el piso no se entiende (primera corrida real de la IA, 24 nov 2026).
   for (const o of c.objetos) if (o.tipo === "dibujo" && o.lugar?.startsWith("piso_")) p.push(`${c.id}: el dibujo "${o.id}" va en la pared o en la mano de alguien, no en el piso`);
   // Cada personaje sostiene una sola cosa.
   const manos = c.objetos.flatMap((o) => (o.en_mano_de ? [o.en_mano_de] : []));
   for (const id of new Set(manos)) if (manos.filter((x) => x === id).length > 1) p.push(`${c.id}: "${id}" sostiene más de una cosa; cada personaje sostiene una sola`);
   for (const x of c.personajes) {
-    if (x.sentado_en && !c.objetos.some((o) => o.id === x.sentado_en && o.tipo === "pupitre")) p.push(`${c.id}: "${x.id}" está sentado en "${x.sentado_en}", que no es un pupitre de la composición`);
+    if (x.sentado_en && !c.objetos.some((o) => o.id === x.sentado_en && (PARA_SENTARSE as readonly string[]).includes(o.tipo))) p.push(`${c.id}: "${x.id}" está sentado en "${x.sentado_en}", que no es un pupitre ni una mesa de la composición`);
     if (x.mira_a && !ids.includes(x.mira_a)) p.push(`${c.id}: "${x.id}" mira a "${x.mira_a}", que no existe en la composición`);
   }
   const sentados = c.personajes.flatMap((x) => (x.sentado_en ? [x.sentado_en] : []));

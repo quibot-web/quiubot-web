@@ -209,6 +209,49 @@ reintento) y otras el código.
 - **Lugares:** se le muestran a la IA y se le pide rotar cuando la
   narración lo permite; no se fuerza.
 
+## Tanda 2: negocio (24 nov 2026)
+
+- **Lugares:** tienda (estantes con productos, puerta de vidrio), cocina
+  (mesón, estufa, nevera, ventana) y calle (fachadas con toldos, la puerta
+  de una tienda, andén). Miden lo mismo que el salón, cada uno con su
+  entorno (en la calle, cielo arriba y asfalto abajo).
+- **Personajes:**
+  - vendedor/a (delantal);
+  - cliente (chaqueta);
+  - emprendedor/a (saco);
+  - mamá y papá;
+  - abuela y abuelo (canosos, gafas, saco, arrugas leves);
+  - accesorio nuevo: bigote.
+- **Objetos:** torta, helado, caja, bolsa, celular, moto y carro, más los
+  muebles mostrador, vitrina y mesa.
+  - Campo nuevo `sobre` (encima de un mueble: "la torta en la vitrina").
+  - Uno se puede sentar a la mesa como al pupitre.
+  - El validador dice dónde tiene sentido cada cosa: vehículos solo en la
+    calle; muebles y vehículos en el piso; cosas de mano en la mano o
+    sobre un mueble.
+- **Verbos nuevos:**
+  - saluda, come y mira_el_celular;
+  - entra y se_va: camina hacia o desde la puerta (como mucho 420
+    unidades) con un fundido; si ya está en la puerta, sale por ella
+    achicándose;
+  - moto/carro: llega y se_va; celular: vibra; todos.saluda.
+- **Reglas nuevas:**
+  - solo entra quien no está y solo se va quien está (validador);
+  - quien está sentado no camina;
+  - la misma persona (mismo id) en dos lugares se ve igual;
+  - el celular de quien lo mira solo se ve mientras lo mira;
+  - el relleno de ambiente: clientes en la tienda, gente en la calle,
+    niños en la cocina, nunca detrás de un mueble o vehículo de adelante;
+  - la cámara cuida a quien camina en todo su recorrido.
+- **Ritmo:**
+  - una cobertura dura al menos 24 cuadros y hay mínimo 20 cuadros entre
+    cortes;
+  - la duración de un plano se cuenta desde que se ve (cuadro 0, o el
+    corte de la puerta);
+  - `metricasKit` cuenta A → B corto → A como un solo plano (caso reel_1).
+- **Pruebas:** planes reales de la IA (`planIATienda.json`,
+  `planIATorta.json`) y 40 composiciones al azar en los cuatro lugares.
+
 ## Pendiente (después de aprobar el estilo)
 
 1. **La IA compone con el kit:** prompt con las listas cerradas, elección literal por frase y metáforas completas. Si el concepto no existe, la composición más cercana; nunca texto.

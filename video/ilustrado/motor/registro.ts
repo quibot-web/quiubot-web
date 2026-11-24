@@ -10,7 +10,7 @@ import { ComposicionKitSchema, type ComposicionKitEntrada } from "../kit/catalog
 import { completarAmbiente } from "../kit/ambiente";
 import type { Variedad } from "../kit/variedad";
 import { planoLimpio } from "./camara";
-import { accionesDeComposicion, descripcionVisible, focoDeAccionKit, focoReducidoKit, rectPersonaje, ubicarComposicion, type ComposicionUbicada } from "../kit/composicion";
+import { caminoDe, accionesDeComposicion, descripcionVisible, focoDeAccionKit, focoReducidoKit, rectPersonaje, ubicarComposicion, type ComposicionUbicada } from "../kit/composicion";
 
 export type DefAccion = { descripcion: string; foco: Rect };
 export type DefEscena = { isla: string; celular: boolean; acciones: Record<string, DefAccion>; visible: string };
@@ -27,8 +27,11 @@ export type Registro = {
 };
 
 // variedad: pared y paleta de ropa del reel (variedad entre reels).
-export function crearRegistro(composiciones: ComposicionKitEntrada[] = [], semilla = "", opciones: { ambiente?: boolean; variedad?: Partial<Variedad> } = {}): Registro {
+// caminantes: por composición, quiénes entran o se van en el plan (la
+// cámara los cuida en todo su recorrido); ver caminantesDePlan.
+export function crearRegistro(composiciones: ComposicionKitEntrada[] = [], semilla = "", opciones: { ambiente?: boolean; variedad?: Partial<Variedad>; caminantes?: Record<string, string[]> } = {}): Registro {
   const kit = new Map<string, { cu: ComposicionUbicada; def: DefEscena }>();
+  const aspectos = new Map<string, ComposicionUbicada["personajes"][number]["aspecto"]>();
   for (const entrada of composiciones) {
     // Normaliza con el esquema (valores por defecto: plano, mira, pose...).
     const parseada = ComposicionKitSchema.safeParse(entrada);
@@ -39,6 +42,13 @@ export function crearRegistro(composiciones: ComposicionKitEntrada[] = [], semil
     const limpia = (x: typeof parseada.data) => !cartelera || planoLimpio(x.id, `${cartelera.id}.destaca`, undefined, crearRegistro([x], semilla, { ambiente: false })).ok;
     const c = opciones.ambiente === false ? parseada.data : completarAmbiente(parseada.data, semilla, limpia(parseada.data) ? limpia : () => true);
     const cu = ubicarComposicion(c, semilla, opciones.variedad);
+    // La misma persona (mismo id) en otra composición se ve igual.
+    for (const u of cu.personajes) {
+      const antes = aspectos.get(u.per.id);
+      if (antes && antes.tipo === u.aspecto.tipo) u.aspecto = antes;
+      else aspectos.set(u.per.id, u.aspecto);
+    }
+    for (const u of cu.personajes) if (opciones.caminantes?.[c.id]?.includes(u.per.id)) u.caminoDx = caminoDe(u, c.fondo);
     const acciones = accionesDeComposicion(cu);
     // Micro-acción neutra: la gente respira y la cámara se acerca un poco.
     const todos = cu.personajes.map((u) => rectPersonaje(u));
@@ -73,3 +83,15 @@ export function crearRegistro(composiciones: ComposicionKitEntrada[] = [], semil
 
 // Solo el catálogo fijo (planes sin composiciones y pruebas viejas).
 export const REGISTRO_CATALOGO = crearRegistro();
+
+// Quiénes entran o se van, por composición (para crearRegistro).
+export function caminantesDePlan(plan: { frases: { acciones: { escena: string; accion: string }[] }[] }): Record<string, string[]> {
+  const res: Record<string, string[]> = {};
+  for (const a of plan.frases.flatMap((f) => f.acciones)) {
+    const [id, verbo] = a.accion.split(".");
+    if (verbo !== "entra" && verbo !== "se_va") continue;
+    const lista = (res[a.escena] ??= []);
+    if (!lista.includes(id)) lista.push(id);
+  }
+  return res;
+}

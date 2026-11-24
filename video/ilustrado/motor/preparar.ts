@@ -3,7 +3,7 @@
 // cada isla, cámara, qué pantalla muestra el celular y monedas que viajan.
 import { camaraEnCuadro, construirLineaDeTiempo, type LineaDeTiempo, type PuntoCamara, type TiemposIlustrado } from "../tiempoIlustrado";
 import { BOCA_BILLETERA_LOCAL, MICRO, type IdEscena } from "./catalogo";
-import { crearRegistro, REGISTRO_CATALOGO, type Registro } from "./registro";
+import { caminantesDePlan, crearRegistro, REGISTRO_CATALOGO, type Registro } from "./registro";
 import { conCobertura, cuerposEnMundo, encuadreDeAccionKit, planDeCamara, pulsoDeCamara, tomasDeCamara, type Puerta, type Toma } from "./camara";
 import { encuadrarKit } from "./encuadreKit";
 import type { MovimientoCamara } from "../kit/variedad";
@@ -38,7 +38,7 @@ export const DURACION_VIAJE = 20;
 // semilla: varía lo que la IA no fija en el kit (ropa, piel, peinado,
 // pared), así dos reels no se ven iguales.
 export function prepararReel(tiempos: TiemposIlustrado, plan: PlanIlustrado, fps: number, semilla = ""): ReelPreparado {
-  const registro = crearRegistro(plan.composiciones ?? [], semilla, { variedad: plan.variedad });
+  const registro = crearRegistro(plan.composiciones ?? [], semilla, { variedad: plan.variedad, caminantes: caminantesDePlan(plan) });
   const linea = construirLineaDeTiempo(tiempos, fps);
   const disparos = resolverDisparos(plan, linea);
   const recorrido = construirRecorrido(disparos, registro);

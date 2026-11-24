@@ -10,7 +10,7 @@
 import { z } from "zod";
 import { CATALOGO, ID_ESCENAS, MICRO, definicionAccion } from "./catalogo";
 import { problemasDelPlan, type PlanIlustrado } from "./plan";
-import { crearRegistro, type Registro } from "./registro";
+import { caminantesDePlan, crearRegistro, type Registro } from "./registro";
 import { ComposicionKitSchema } from "../kit/catalogoKit";
 import { problemasVariedad, VariedadSchema, type HuellaVisual } from "../kit/variedad";
 import { problemasComposicion } from "../kit/composicion";
@@ -75,7 +75,7 @@ export function validarPlanIlustrado(plan: unknown, escenas: { id: string; narra
   const parseado = PlanIlustradoSchema.safeParse(plan);
   if (!parseado.success) return parseado.error.issues.map((i) => `${i.path.join(".") || "plan"}: ${i.message}`);
   const p = parseado.data as PlanIlustrado;
-  const registro = crearRegistro(p.composiciones);
+  const registro = crearRegistro(p.composiciones, "", { caminantes: caminantesDePlan(p) });
   const islaDe = islaEn(registro);
   const palabras = Object.fromEntries(escenas.map((e) => [e.id, contarPalabras(e.narracion)]));
   const problemas = [...(parseado.data.composiciones ?? []).flatMap((c) => problemasComposicion(c)), ...problemasDelPlan(p, palabras, registro), ...problemasVariedad(p, opciones.historial ?? [])];
@@ -83,6 +83,27 @@ export function validarPlanIlustrado(plan: unknown, escenas: { id: string; narra
   const ids = p.frases.map((f) => f.escena_id);
   const esperados = escenas.map((e) => e.id);
   if (ids.join("|") !== esperados.join("|")) problemas.push(`el plan debe tener una entrada por frase, en orden: ${esperados.join(", ")} (llegó: ${ids.join(", ")})`);
+  // Entrar e irse (tanda 2): solo entra quien no está (al principio, si su
+  // primera acción es entrar, o después de irse) y solo se va quien está;
+  // quien se fue no hace nada hasta que vuelve a entrar.
+  if (problemas.length === 0) {
+    const presente = new Map<string, boolean>();
+    const enOrden = p.frases.flatMap((f) => f.acciones.map((a) => ({ ...a, frase: f.escena_id }))).filter((a) => registro.composicion(a.escena) && a.accion !== MICRO);
+    for (const a of enOrden) {
+      const [id, verbo] = a.accion.split(".");
+      if (!registro.composicion(a.escena)!.personajes.some((u) => u.per.id === id)) continue;
+      const clave = `${a.escena}|${id}`;
+      if (!presente.has(clave)) presente.set(clave, verbo !== "entra");
+      const esta = presente.get(clave)!;
+      if (verbo === "entra") {
+        if (esta) problemas.push(`${a.frase}: "${id}" ya está en ${a.escena} cuando "${a.accion}"; para que vuelva, primero ${id}.se_va (o quita esta entrada)`);
+        presente.set(clave, true);
+      } else if (verbo === "se_va") {
+        if (!esta) problemas.push(`${a.frase}: "${id}" no está en ${a.escena} cuando "${a.accion}"`);
+        presente.set(clave, false);
+      } else if (!esta) problemas.push(`${a.frase}: "${id}" se fue de ${a.escena} y no puede "${a.accion}" hasta que vuelva a entrar (${id}.entra)`);
+    }
+  }
   // Reglas de director (revisión de la v6): cada acción del kit se puede
   // mostrar con un plano limpio; si no, se le dice a la IA quién estorba.
   if (problemas.length === 0) {

@@ -1,0 +1,159 @@
+{
+ "composiciones": [
+  {
+   "id": "k_tienda",
+   "fondo": "tienda",
+   "pared": "crema",
+   "personajes": [
+    {
+     "id": "vendedor",
+     "tipo": "vendedor",
+     "posicion": "centro_derecha",
+     "plano": "fondo",
+     "mira": "izquierda",
+     "pose": "mirar_celular",
+     "expresion": "normal",
+     "ropa": "verde",
+     "ropa2": "blanco",
+     "piel": "triguena",
+     "pelo": "negro",
+     "peinado": "corto",
+     "mira_a": "celular"
+    },
+    {
+     "id": "cliente",
+     "tipo": "cliente",
+     "posicion": "izquierda",
+     "plano": "frente",
+     "mira": "derecha",
+     "pose": "parado",
+     "expresion": "normal",
+     "ropa": "azul",
+     "ropa2": "gris",
+     "piel": "morena",
+     "pelo": "castano",
+     "peinado": "corto",
+     "mira_a": "vendedor"
+    }
+   ],
+   "objetos": [
+    {
+     "id": "mostrador",
+     "tipo": "mostrador",
+     "lugar": "piso_centro_derecha",
+     "plano": "frente",
+     "visible": true
+    },
+    {
+     "id": "producto",
+     "tipo": "caja",
+     "sobre": "mostrador",
+     "plano": "frente",
+     "visible": true
+    },
+    {
+     "id": "celular",
+     "tipo": "celular",
+     "en_mano_de": "vendedor",
+     "plano": "frente",
+     "visible": true
+    },
+    {
+     "id": "bolsa_compra",
+     "tipo": "bolsa",
+     "en_mano_de": "cliente",
+     "plano": "frente",
+     "visible": false
+    }
+   ]
+  }
+ ],
+ "frases": [
+  {
+   "escena_id": "e1",
+   "acciones": [
+    {
+     "escena": "k_tienda",
+     "accion": "cliente.entra",
+     "palabra": 0
+    },
+    {
+     "escena": "k_tienda",
+     "accion": "micro",
+     "palabra": 4
+    },
+    {
+     "escena": "k_tienda",
+     "accion": "vendedor.mira_el_celular",
+     "palabra": 8
+    },
+    {
+     "escena": "k_tienda",
+     "accion": "cliente.se_va",
+     "palabra": 12
+    }
+   ]
+  },
+  {
+   "escena_id": "e2",
+   "acciones": [
+    {
+     "escena": "k_tienda",
+     "accion": "cliente.entra",
+     "palabra": 0
+    },
+    {
+     "escena": "k_tienda",
+     "accion": "vendedor.presta_atencion",
+     "palabra": 2
+    },
+    {
+     "escena": "k_tienda",
+     "accion": "vendedor.senala",
+     "palabra": 6,
+     "objetivo": "producto"
+    },
+    {
+     "escena": "k_tienda",
+     "accion": "bolsa_compra.aparece",
+     "palabra": 9
+    }
+   ]
+  },
+  {
+   "escena_id": "e3",
+   "acciones": [
+    {
+     "escena": "k_tienda",
+     "accion": "cliente.se_va",
+     "palabra": 0
+    },
+    {
+     "escena": "k_tienda",
+     "accion": "cliente.entra",
+     "palabra": 2
+    }
+   ]
+  },
+  {
+   "escena_id": "e4",
+   "acciones": [
+    {
+     "escena": "perfil",
+     "accion": "aparece",
+     "palabra": 2
+    },
+    {
+     "escena": "perfil",
+     "accion": "toque_seguir",
+     "palabra": 5
+    }
+   ]
+  }
+ ],
+ "variedad": {
+  "pared": "crema",
+  "paleta": "primaria",
+  "camara": "barrer_izquierda"
+ }
+}

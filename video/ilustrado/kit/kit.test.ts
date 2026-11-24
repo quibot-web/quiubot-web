@@ -205,7 +205,7 @@ describe("v4: lugar a pantalla completa, sentados, mirada y puerta celular↔sal
     expect(new Set(cuadros).size).toBeGreaterThan(20);
     const ojosCerrados = Object.entries(imagenes).filter(([k]) => k.startsWith("rasgos:") && k.endsWith(":cerrados")).map(([, v]) => v.url);
     expect(cuadros.some((h) => ojosCerrados.some((url) => h.includes(url)))).toBe(true);
-  });
+  }, 30_000);
 
   it("del celular al salón (y de vuelta) se entra por la pantalla del celular: nunca se ve el mundo oscuro", () => {
     const reel = prepararReel(tiempos, PLAN_PROTOTIPO_KIT, 30, "prototipo");

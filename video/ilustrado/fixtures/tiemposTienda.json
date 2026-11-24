@@ -1,0 +1,316 @@
+{
+ "escenas": [
+  {
+   "id": "e1",
+   "narracion": "Cuando un cliente entra a tu tienda y nadie lo saluda, se va;"
+  },
+  {
+   "id": "e2",
+   "narracion": "si lo atiendes rápido y le muestras lo que busca,"
+  },
+  {
+   "id": "e3",
+   "narracion": "compra y vuelve."
+  },
+  {
+   "id": "e4",
+   "narracion": "Síguenos para más ideas como esta."
+  }
+ ],
+ "tiemposRender": [
+  {
+   "escena_id": "e1",
+   "inicio_s": 0,
+   "fin_s": 4.5312920000000005
+  },
+  {
+   "escena_id": "e2",
+   "inicio_s": 4.5312920000000005,
+   "fin_s": 7.605792000000001
+  },
+  {
+   "escena_id": "e3",
+   "inicio_s": 7.605792000000001,
+   "fin_s": 9.159167
+  },
+  {
+   "escena_id": "e4",
+   "inicio_s": 9.159167,
+   "fin_s": 11.631709
+  }
+ ],
+ "palabrasPorEscena": [
+  {
+   "escena_id": "e1",
+   "palabras": [
+    {
+     "texto": "Cuando",
+     "inicio_s": 0,
+     "fin_s": 0.4000000059604645
+    },
+    {
+     "texto": "un",
+     "inicio_s": 0.4000000059604645,
+     "fin_s": 0.8799999952316284
+    },
+    {
+     "texto": "cliente",
+     "inicio_s": 0.8799999952316284,
+     "fin_s": 1.5199999809265137
+    },
+    {
+     "texto": "entra",
+     "inicio_s": 1.5199999809265137,
+     "fin_s": 1.7799999713897705
+    },
+    {
+     "texto": "a",
+     "inicio_s": 1.7799999713897705,
+     "fin_s": 1.899999976158142
+    },
+    {
+     "texto": "tu",
+     "inicio_s": 1.899999976158142,
+     "fin_s": 2.140000104904175
+    },
+    {
+     "texto": "tienda",
+     "inicio_s": 2.140000104904175,
+     "fin_s": 2.380000114440918
+    },
+    {
+     "texto": "y",
+     "inicio_s": 2.380000114440918,
+     "fin_s": 2.8752500762939452
+    },
+    {
+     "texto": "nadie",
+     "inicio_s": 2.8752500762939452,
+     "fin_s": 3.1152500858306884
+    },
+    {
+     "texto": "lo",
+     "inicio_s": 3.1152500858306884,
+     "fin_s": 3.3752500762939452
+    },
+    {
+     "texto": "saluda,",
+     "inicio_s": 3.3752500762939452,
+     "fin_s": 3.6552500476837158
+    },
+    {
+     "texto": "se",
+     "inicio_s": 4.075500228881836,
+     "fin_s": 4.215500095367432
+    },
+    {
+     "texto": "va;",
+     "inicio_s": 4.215500095367432,
+     "fin_s": 4.335499980926514
+    }
+   ]
+  },
+  {
+   "escena_id": "e2",
+   "palabras": [
+    {
+     "texto": "si",
+     "inicio_s": 4.842250095367433,
+     "fin_s": 4.902250038146974
+    },
+    {
+     "texto": "lo",
+     "inicio_s": 4.902250038146974,
+     "fin_s": 5.082249866485597
+    },
+    {
+     "texto": "atiendes",
+     "inicio_s": 5.082249866485597,
+     "fin_s": 5.402250038146974
+    },
+    {
+     "texto": "rápido",
+     "inicio_s": 5.402250038146974,
+     "fin_s": 5.842250095367433
+    },
+    {
+     "texto": "y",
+     "inicio_s": 5.842250095367433,
+     "fin_s": 6.222250209808351
+    },
+    {
+     "texto": "le",
+     "inicio_s": 6.222250209808351,
+     "fin_s": 6.682249771118165
+    },
+    {
+     "texto": "muestras",
+     "inicio_s": 6.682249771118165,
+     "fin_s": 6.762250171661378
+    },
+    {
+     "texto": "lo",
+     "inicio_s": 6.762250171661378,
+     "fin_s": 6.922250019073488
+    },
+    {
+     "texto": "que",
+     "inicio_s": 6.922250019073488,
+     "fin_s": 7.322250114440919
+    },
+    {
+     "texto": "busca,",
+     "inicio_s": 7.322250114440919,
+     "fin_s": 7.362250076293947
+    }
+   ]
+  },
+  {
+   "escena_id": "e3",
+   "palabras": [
+    {
+     "texto": "compra",
+     "inicio_s": 8.151959038146973,
+     "fin_s": 8.151959038146973
+    },
+    {
+     "texto": "y",
+     "inicio_s": 8.151959038146973,
+     "fin_s": 8.816791732971192
+    },
+    {
+     "texto": "vuelve.",
+     "inicio_s": 8.816791732971192,
+     "fin_s": 8.956792076293945
+    }
+   ]
+  },
+  {
+   "escena_id": "e4",
+   "palabras": [
+    {
+     "texto": "Síguenos",
+     "inicio_s": 9.639709076293945,
+     "fin_s": 9.859709343322754
+    },
+    {
+     "texto": "para",
+     "inicio_s": 9.859709343322754,
+     "fin_s": 10.1597085803833
+    },
+    {
+     "texto": "más",
+     "inicio_s": 10.1597085803833,
+     "fin_s": 10.439709267028809
+    },
+    {
+     "texto": "ideas",
+     "inicio_s": 10.439709267028809,
+     "fin_s": 10.699708542236328
+    },
+    {
+     "texto": "como",
+     "inicio_s": 10.699708542236328,
+     "fin_s": 10.939709267028809
+    },
+    {
+     "texto": "esta.",
+     "inicio_s": 10.939709267028809,
+     "fin_s": 11.179709038146973
+    }
+   ]
+  }
+ ],
+ "segmentosAudio": [
+  {
+   "escena_id": "e1",
+   "tramos": [
+    {
+     "original": {
+      "inicio_s": 0,
+      "fin_s": 2.58025
+     },
+     "compactado": {
+      "inicio_s": 0,
+      "fin_s": 2.58025
+     }
+    },
+    {
+     "original": {
+      "inicio_s": 2.625,
+      "fin_s": 3.888625
+     },
+     "compactado": {
+      "inicio_s": 2.58025,
+      "fin_s": 3.843875
+     }
+    },
+    {
+     "original": {
+      "inicio_s": 4.028375,
+      "fin_s": 4.715792
+     },
+     "compactado": {
+      "inicio_s": 3.843875,
+      "fin_s": 4.5312920000000005
+     }
+    }
+   ]
+  },
+  {
+   "escena_id": "e2",
+   "tramos": [
+    {
+     "original": {
+      "inicio_s": 5.089042,
+      "fin_s": 8.163542
+     },
+     "compactado": {
+      "inicio_s": 4.5312920000000005,
+      "fin_s": 7.605792000000001
+     }
+    }
+   ]
+  },
+  {
+   "escena_id": "e3",
+   "tramos": [
+    {
+     "original": {
+      "inicio_s": 8.413833,
+      "fin_s": 9.170833
+     },
+     "compactado": {
+      "inicio_s": 7.605792000000001,
+      "fin_s": 8.362792
+     }
+    },
+    {
+     "original": {
+      "inicio_s": 9.326,
+      "fin_s": 10.122375
+     },
+     "compactado": {
+      "inicio_s": 8.362792,
+      "fin_s": 9.159167
+     }
+    }
+   ]
+  },
+  {
+   "escena_id": "e4",
+   "tramos": [
+    {
+     "original": {
+      "inicio_s": 10.439458,
+      "fin_s": 12.912
+     },
+     "compactado": {
+      "inicio_s": 9.159167,
+      "fin_s": 11.631709
+     }
+    }
+   ]
+  }
+ ]
+}

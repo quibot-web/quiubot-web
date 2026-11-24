@@ -9,8 +9,9 @@ import { rampa, latido, primero } from "../motor/animacion";
 import type { DisparosEscena } from "../motor/plan";
 import { seTocan, type Rect } from "../motor/geometria";
 import { PAREDES, VERBOS_PERSONAJE, type Expresion, type Pose } from "./catalogoKit";
-import { ID_TODOS, aIsla, casillaHuecoEnIsla, hashTexto, rectElemento, rectPersonaje, type ComposicionUbicada, type PersonajeUbicado } from "./composicion";
-import { CARTELERA, COLOR_LINEA_PISO, COLOR_PISO, DIBUJO, DULCES, SALON, VENTANA_SALON, Y_LINEAS_PISO, casillaCartelera } from "./dibujoObjetos";
+import { ID_TODOS, aIsla, caminoDe, casillaHuecoEnIsla, hashTexto, rectElemento, rectPersonaje, type ComposicionUbicada, type PersonajeUbicado } from "./composicion";
+import { BOLSA, CAJA, CELULAR, HELADO, TORTA, VENTANA_COCINA_X, coloresEntorno } from "./dibujoLugares";
+import { CARTELERA, DIBUJO, DULCES, SALON, VENTANA_SALON, Y_LINEAS_PISO, casillaCartelera } from "./dibujoObjetos";
 import { oscurecer, aclarar, type Cara } from "./dibujoPersonaje";
 import { clave, motivoDe, motivosCartelera, type ImagenesKit, type ImagenPieza } from "./piezas";
 import { apunteHacia, conVueltasAParado, estadoPose, poseEnCuadro, posicionMano, type AngulosBrazo, type CambioPose, type EstadoPose } from "./poses";
@@ -114,9 +115,9 @@ export function tapanCaras(cu: ComposicionUbicada, disparos: DisparosEscena, obj
     const brazos = [...segmentosBrazo(u, e, "mira"), ...segmentosBrazo(u, e, "otro")];
     const enMano = cu.objetos.filter((o) => o.obj.en_mano_de === u.per.id && o.obj.tipo !== "cartelera" && !d[`${o.obj.id}.va_al_hueco`]?.some((c) => c <= frame));
     const rects = enMano
-      .filter((o) => o.obj.tipo === "dibujo" || o.obj.tipo === "dulces")
+      .filter((o) => esDeMano(o.obj.tipo))
       .map((o) => {
-        const tipo = o.obj.tipo as "dibujo" | "dulces";
+        const tipo = o.obj.tipo as DeMano;
         const extra = (1 + 0.22 * destacaDe(d, o.obj.id, frame)) * pop(aparicion(frame, o.obj.visible, primero(d[`${o.obj.id}.aparece`])));
         const om = objetoEnMano(u, tipo, cu, d, objetivos, frame, fps, extra);
         // Un poco más chico que la imagen (el papel y la bolsa tienen bordes transparentes).
@@ -247,7 +248,7 @@ function Personaje({ u, cu, frame, fps, d, imagenes, objetivos, atenciones }: { 
   const distraido = expresion === "aburrido" ? (previa === "aburrido" ? 1 : mezcla) : previa === "aburrido" ? 1 - mezcla : 0;
   // El distraído mira por la ventana (si el lugar tiene) o para el otro lado.
   const cabezaX = aIsla(u, u.p.cabeza.cx, u.p.cabeza.cy).x;
-  const ventanaX = cu.c.fondo === "salon" ? VENTANA_SALON.x + VENTANA_SALON.w / 2 : null;
+  const ventanaX = cu.c.fondo === "salon" ? VENTANA_SALON.x + VENTANA_SALON.w / 2 : cu.c.fondo === "cocina" ? VENTANA_COCINA_X : null;
   const gLejos = ventanaX !== null && Math.abs(ventanaX - cabezaX) > 60 ? Math.max(-1, Math.min(1, (ventanaX - cabezaX) / 200)) : -(Math.sign(gAtento) || (u.espejo ? 1 : -1)) * 0.9;
   const gMundo = gAtento + (gLejos - gAtento) * distraido;
   // Y bosteza cada ~3 s (cara de bostezo unos 0,7 s).
@@ -255,7 +256,13 @@ function Personaje({ u, cu, frame, fps, d, imagenes, objetivos, atenciones }: { 
   const g = gMundo * (u.espejo ? -1 : 1); // en coordenadas locales
   const giroCabeza = e.inclinacion + g * 5 + 7 * distraido + Math.sin((frame + h) / 47) * 1.2;
   const micro = latido(frame, d.micro, 18) * Math.abs(Math.sin(frame / 3)) * 10;
-  const sx = u.escala * (u.espejo ? -1 : 1);
+  // Caminando (entra o se va): corrido, mirando hacia donde va, con paso.
+  const pres = presenciaDe(u, cu, d, frame);
+  if (pres.alpha <= 0) return null;
+  const espejo = pres.mira ? pres.mira === "izquierda" : u.espejo;
+  const paso = pres.camina ? Math.abs(Math.sin(pres.t / 3.2)) * 0.025 * p.alto : 0;
+  const ep = pres.escala ?? 1;
+  const sx = u.escala * ep * (espejo ? -1 : 1);
   const brazo = (lado: "mira" | "otro", ang: AngulosBrazo): ReactNode => {
     const s = lado === "mira" ? -1 : 1;
     const br = imagenes[clave.brazo(a)];
@@ -281,8 +288,8 @@ function Personaje({ u, cu, frame, fps, d, imagenes, objetivos, atenciones }: { 
   const peloAtras = imagenes[clave.peloAtras(a)];
   const giro = (img: ImagenPieza): CSSProperties => ({ transformOrigin: `${img.ancla.x}px ${img.ancla.y}px`, transform: `rotate(${giroCabeza}deg) translateX(${g * 4}px)` });
   return (
-    <div style={{ position: "absolute", left: u.cx, top: u.pies, width: 0, height: 0 }}>
-      <div style={{ position: "absolute", left: -p.cx, top: -p.pies, width: p.ancho, height: p.alto, transformOrigin: `${p.cx}px ${p.pies}px`, transform: `scale(${sx}, ${u.escala * (1 + respira)}) translateY(${e.saltoY - micro}px)` }}>
+    <div style={{ position: "absolute", left: u.cx + pres.dx, top: u.pies, width: 0, height: 0, opacity: pres.alpha }}>
+      <div style={{ position: "absolute", left: -p.cx, top: -p.pies, width: p.ancho, height: p.alto, transformOrigin: `${p.cx}px ${p.pies}px`, transform: `scale(${sx}, ${u.escala * ep * (1 + respira)}) translateY(${e.saltoY - micro - paso}px) rotate(${pres.camina ? Math.sin(pres.t / 3.2) * 2 : 0}deg)` }}>
         {peloAtras && <Img img={peloAtras} estilo={giro(peloAtras)} />}
         <Img img={imagenes[clave.cuerpo(a)]} />
         {brazo("otro", e.otro)}
@@ -337,6 +344,44 @@ function estadoSinMemo(u: PersonajeUbicado, cu: ComposicionUbicada, d: DisparosE
   return { e, pose };
 }
 
+// ---------- Presencia: entrar y salir caminando ----------
+// "entra": aparece en la puerta del lugar y camina hasta su lugar; "se_va":
+// camina hasta la puerta y desaparece. Si lo primero que hace es entrar, no
+// está antes. dx: corrimiento desde su lugar; mira: hacia dónde camina.
+export const CUADROS_CAMINAR = 36;
+// escala: al entrar o salir por la puerta del fondo (sin caminar de lado), se
+// achica un poco, como si se alejara.
+export type Presencia = { dx: number; alpha: number; camina: boolean; mira?: "izquierda" | "derecha"; t: number; escala?: number };
+export function presenciaDe(u: PersonajeUbicado, cu: ComposicionUbicada, d: DisparosEscena, frame: number): Presencia {
+  const id = u.per.id;
+  const eventos = [...(d[`${id}.entra`] ?? []).map((c) => ({ c, tipo: "entra" as const })), ...(d[`${id}.se_va`] ?? []).map((c) => ({ c, tipo: "se_va" as const }))].sort((a, b) => a.c - b.c);
+  if (!eventos.length) return { dx: 0, alpha: 1, camina: false, t: 0 };
+  const hasta = caminoDe(u, cu.c.fondo);
+  const pasados = eventos.filter((e) => e.c <= frame);
+  const ultimo = pasados.at(-1);
+  if (!ultimo) return eventos[0].tipo === "entra" ? { dx: hasta, alpha: 0, camina: false, t: 0 } : { dx: 0, alpha: 1, camina: false, t: 0 };
+  const t = frame - ultimo.c;
+  const k = Math.min(1, t / CUADROS_CAMINAR);
+  const suave = k * k * (3 - 2 * k);
+  const hacia = (dx: number): "izquierda" | "derecha" => (dx < 0 ? "izquierda" : "derecha");
+  if (ultimo.tipo === "entra") {
+    if (k >= 1) return { dx: 0, alpha: 1, camina: false, t };
+    // Si todavía se estaba yendo, da media vuelta desde donde está (no salta a la puerta).
+    const previo = pasados.at(-2);
+    let [dx0, alpha0] = [hasta, 0];
+    if (previo?.tipo === "se_va" && ultimo.c - previo.c < CUADROS_CAMINAR) {
+      const kp = (ultimo.c - previo.c) / CUADROS_CAMINAR;
+      dx0 = hasta * kp * kp * (3 - 2 * kp);
+      alpha0 = 1 - Math.max(0, (ultimo.c - previo.c - (CUADROS_CAMINAR - 8)) / 8);
+    }
+    if (hasta === 0) return { dx: 0, alpha: suave, camina: true, t, escala: 0.9 + 0.1 * suave };
+    return { dx: dx0 * (1 - suave), alpha: alpha0 + (1 - alpha0) * Math.min(1, t / 8), camina: true, mira: hacia(-dx0 || -hasta), t };
+  }
+  if (k >= 1) return { dx: hasta, alpha: 0, camina: false, t };
+  if (hasta === 0) return { dx: 0, alpha: 1 - suave, camina: true, t, escala: 1 - 0.1 * suave };
+  return { dx: hasta * suave, alpha: 1 - Math.max(0, (t - (CUADROS_CAMINAR - 8)) / 8), camina: true, mira: hacia(hasta), t };
+}
+
 // Dónde está la mano del que sostiene un objeto en este cuadro. Al
 // señalar, el objeto pasa a la otra mano (si no, barre lo que señala).
 function manoEnIsla(u: PersonajeUbicado, cu: ComposicionUbicada, d: DisparosEscena, objetivos: ObjetivosKit, frame: number, fps: number) {
@@ -344,21 +389,32 @@ function manoEnIsla(u: PersonajeUbicado, cu: ComposicionUbicada, d: DisparosEsce
   const lado = pose === "senalar" || pose === "apoyar_cabeza" ? "otro" : "mira";
   const m = posicionMano(u.p, e[lado], lado);
   const enIsla = aIsla(u, m.x, m.y);
-  return { x: enIsla.x, y: enIsla.y + e.saltoY * u.escala };
+  return { x: enIsla.x + presenciaDe(u, cu, d, frame).dx, y: enIsla.y + e.saltoY * u.escala };
 }
 
 // Objeto en la mano: donde está la mano, pero bajado lo justo para no
 // tocar ninguna cara (la propia, si va delante del cuerpo, ni la de quien
 // está detrás). Lo usan el render y la verificación (tapanCaras).
-const FORMA_EN_MANO = { dibujo: { ...DIBUJO, ax: 0.5, ay: 0.5, k: 1.4 }, dulces: { ...DULCES, ax: 0.5, ay: 0.6, k: 1.2 } } as const;
-function rectEnMano(tipo: "dibujo" | "dulces", c: { x: number; y: number }, escala: number): Rect {
+// Cada cosa de mano: tamaño, punto por donde se agarra y escala en la mano.
+const FORMA_EN_MANO = {
+  dibujo: { ...DIBUJO, ax: 0.5, ay: 0.5, k: 1.4 },
+  dulces: { ...DULCES, ax: 0.5, ay: 0.6, k: 1.2 },
+  torta: { ...TORTA, ax: 0.5, ay: 0.6, k: 0.6 },
+  helado: { ...HELADO, ax: 0.5, ay: 0.72, k: 0.9 },
+  caja: { ...CAJA, ax: 0.5, ay: 0.5, k: 0.85 },
+  bolsa: { ...BOLSA, ax: 0.5, ay: 40 / BOLSA.alto, k: 0.85 },
+  celular: { ...CELULAR, ax: 0.5, ay: 0.5, k: 0.9 },
+} as const;
+type DeMano = keyof typeof FORMA_EN_MANO;
+const esDeMano = (t: string): t is DeMano => t in FORMA_EN_MANO;
+function rectEnMano(tipo: DeMano, c: { x: number; y: number }, escala: number): Rect {
   const f = FORMA_EN_MANO[tipo];
   return { x: c.x - f.ancho * f.ax * escala, y: c.y - f.alto * f.ay * escala, ancho: f.ancho * escala, alto: f.alto * escala };
 }
 function destacaDe(d: DisparosEscena, id: string, frame: number): number {
   return (d[`${id}.destaca`] ?? []).reduce((acc, c) => Math.max(acc, frame >= c && frame < c + 24 ? Math.sin(((frame - c) / 24) * Math.PI) : 0), 0);
 }
-function objetoEnMano(u: PersonajeUbicado, tipo: "dibujo" | "dulces", cu: ComposicionUbicada, d: DisparosEscena, objetivos: ObjetivosKit, frame: number, fps: number, extra: number) {
+function objetoEnMano(u: PersonajeUbicado, tipo: DeMano, cu: ComposicionUbicada, d: DisparosEscena, objetivos: ObjetivosKit, frame: number, fps: number, extra: number) {
   const c0 = manoEnIsla(u, cu, d, objetivos, frame, fps);
   const escala = u.escala * FORMA_EN_MANO[tipo].k * extra;
   const atras = esManosArriba(d, u, cu, objetivos, frame);
@@ -431,8 +487,8 @@ export function conAccionesDeGrupo(cu: ComposicionUbicada, d: DisparosEscena): D
 }
 
 // ---------- Entorno: el lugar continúa más allá de la isla ----------
-function EntornoSalon({ cu }: { cu: ComposicionUbicada }) {
-  const pared = PAREDES[cu.pared];
+function Entorno({ cu }: { cu: ComposicionUbicada }) {
+  const col = coloresEntorno(cu.c.fondo, cu.pared);
   const { ancho, alto } = SALON;
   const y1 = SALON.pared.y1;
   const x0 = -ENTORNO.izquierda;
@@ -441,18 +497,19 @@ function EntornoSalon({ cu }: { cu: ComposicionUbicada }) {
   const bloque = (y: number, h: number, color: string): ReactNode => <div key={`${y}-${color}`} style={{ position: "absolute", left: x0, top: y, width: w, height: h, background: color }} />;
   return (
     <>
-      {bloque(-ENTORNO.arriba, ENTORNO.arriba + techo, aclarar(pared, 0.35))}
-      {bloque(techo, 26, oscurecer(pared, 0.18))}
-      {bloque(techo + 26, y1 - techo - 26, pared)}
-      {bloque(y1 - 120, 120, oscurecer(pared, 0.12))}
-      {bloque(y1 - 124, 10, oscurecer(pared, 0.22))}
-      {bloque(y1, alto - y1 + ENTORNO.abajo, COLOR_PISO)}
-      {bloque(y1, 22, "rgba(60,40,20,0.18)")}
-      {[...Y_LINEAS_PISO, 1700, 1950].map((y) => bloque(y, 5, COLOR_LINEA_PISO))}
-      {/* Lámparas en el techo. */}
-      {[-300, 700, 1500, 2500].map((x) => (
-        <div key={x} style={{ position: "absolute", left: x, top: techo - 60, width: 300, height: 60, borderRadius: "0 0 150px 150px", background: aclarar(pared, 0.7) }} />
-      ))}
+      {col.techo ? bloque(-ENTORNO.arriba, ENTORNO.arriba + techo, col.arriba) : bloque(-ENTORNO.arriba, ENTORNO.arriba + y1, col.arriba)}
+      {col.techo && bloque(techo, 26, oscurecer(col.pared, 0.18))}
+      {col.techo && bloque(techo + 26, y1 - techo - 26, col.pared)}
+      {!col.techo && bloque(120, y1 - 120, col.pared)}
+      {col.zocalo && bloque(y1 - 120, 120, col.zocalo)}
+      {col.zocalo && bloque(y1 - 124, 10, oscurecer(col.pared, 0.22))}
+      {bloque(y1, alto - y1, col.piso)}
+      {bloque(alto, ENTORNO.abajo, col.abajo)}
+      {bloque(y1, 22, "rgba(60,40,20,0.15)")}
+      {[...Y_LINEAS_PISO].map((y) => bloque(y, 5, col.lineaPiso))}
+      {/* Lámparas en el techo (adentro). */}
+      {col.techo &&
+        [-300, 700, 1500, 2500].map((x) => <div key={x} style={{ position: "absolute", left: x, top: techo - 60, width: 300, height: 60, borderRadius: "0 0 150px 150px", background: aclarar(col.pared, 0.7) }} />)}
     </>
   );
 }
@@ -475,11 +532,17 @@ export function EscenaKit({ cu, frame, fps, d: disparos, imagenes, objetivos, vi
   const piso: { z: number; nodo: ReactNode }[] = [];
   const enMano = new Map<string, ReactNode[]>();
 
+  const ocupados = new Set(cu.personajes.flatMap((u) => (u.per.sentado_en ? [u.per.sentado_en] : [])));
+  const zDeObjeto = new Map(cu.objetos.flatMap((o) => (o.rect ? [[o.obj.id, o.rect.y + o.rect.alto] as const] : [])));
   for (const o of cu.objetos) {
     const id = o.obj.id;
-    if (o.obj.tipo === "pupitre") continue; // van con quien se sienta (silla atrás, pupitre adelante)
-    const visible = aparicion(frame, o.obj.visible, primero(d[`${id}.aparece`]));
-    if (visible <= 0) continue;
+    if (ocupados.has(id)) continue; // van con quien se sienta (silla atrás, mueble adelante)
+    // Los vehículos "llegan" (como aparecer) y "se van" deslizándose.
+    const llega = primero(d[`${id}.llega`]);
+    const visible = aparicion(frame, o.obj.visible && llega === undefined, primero(d[`${id}.aparece`]) ?? llega);
+    const seVa = primero(d[`${id}.se_va`]);
+    const salida = rampa(frame, seVa, 36);
+    if (visible <= 0 || salida >= 1) continue;
     const destaca = destacaDe(d, id, frame);
     if (o.obj.tipo === "cartelera" && o.rect) {
       const r = o.rect;
@@ -491,21 +554,29 @@ export function EscenaKit({ cu, frame, fps, d: disparos, imagenes, objetivos, vi
       );
       continue;
     }
-    // Objetos en la mano, en la pared o en el piso.
-    const motivo = o.obj.tipo === "dibujo" ? motivoDe(cu, id) : null;
-    const img = o.obj.tipo === "dibujo" ? imagenes[clave.dibujo(motivo!)] : imagenes[clave.dulces()];
+    // Objetos en la mano, en la pared, sobre un mueble o en el piso.
+    const img = imagenes[o.obj.tipo === "dibujo" ? clave.dibujo(motivoDe(cu, id)) : clave.objeto(o.obj.tipo)];
     if (!img) continue;
     const duenio = o.obj.en_mano_de ? cu.personajes.find((u) => u.per.id === o.obj.en_mano_de) : undefined;
-    const escalaObjeto = (duenio?.escala ?? 1) * (o.obj.tipo === "dibujo" ? 1.4 : 1.2);
+    // El celular de quien "mira el celular" solo se ve mientras lo mira: al
+    // atender o saludar, lo guarda (si no, parece que sigue en el celular).
+    if (o.obj.tipo === "celular" && duenio && d[`${duenio.per.id}.mira_el_celular`]?.length && estadoEnCuadro(duenio, cu, d, objetivos ?? [], frame, fps).pose !== "mirar_celular") continue;
+    const grande = !esDeMano(o.obj.tipo); // muebles y vehículos: sin "pop" al destacar
+    const escalaObjeto = o.rect ? o.rect.ancho / img.ancho : (duenio?.escala ?? 1) * (esDeMano(o.obj.tipo) ? FORMA_EN_MANO[o.obj.tipo].k : 1);
     let c: { x: number; y: number };
-    let escala = escalaObjeto * (1 + 0.22 * destaca) * pop(visible);
-    if (duenio && (o.obj.tipo === "dibujo" || o.obj.tipo === "dulces")) {
+    let escala = escalaObjeto * (grande ? 1 : (1 + 0.22 * destaca) * pop(visible));
+    if (duenio && esDeMano(o.obj.tipo)) {
       const om = objetoEnMano(duenio, o.obj.tipo, cu, d, objetivos ?? [], frame, fps, (1 + 0.22 * destaca) * pop(visible));
       c = om.c;
       escala = om.escala;
-    } else if (o.rect) c = { x: o.rect.x + o.rect.ancho / 2, y: o.rect.y + o.rect.alto / 2 };
+    } else if (o.rect) c = { x: o.rect.x + img.ancla.x * escalaObjeto, y: o.rect.y + img.ancla.y * escalaObjeto };
     else continue;
+    // Vehículo que llega (desde la izquierda) o se va (hacia la derecha).
+    if (llega !== undefined && visible < 1) c = { x: c.x - (1 - visible) * 700, y: c.y };
+    if (salida > 0) c = { x: c.x + salida * salida * 900, y: c.y };
     let rot = 0;
+    // El celular vibra.
+    for (const v of d[`${id}.vibra`] ?? []) if (frame >= v && frame < v + 20) rot = Math.sin((frame - v) * 2.2) * 9;
     const volando = vuelo?.obj.id === id && hueco !== null && tVuelo > 0;
     if (volando && hueco) {
       const destino = { x: hueco.x + hueco.ancho / 2, y: hueco.y + hueco.alto / 2 };
@@ -516,12 +587,14 @@ export function EscenaKit({ cu, frame, fps, d: disparos, imagenes, objetivos, vi
     const capa = (
       <div key={id} style={{ position: "absolute", left: c.x, top: c.y, width: 0, height: 0 }}>
         {destaca > 0 && <div style={{ position: "absolute", left: (-img.ancho * escala) / 2 - 24, top: (-img.alto * escala) / 2 - 24, width: img.ancho * escala + 48, height: img.alto * escala + 48, borderRadius: 24, background: `rgba(255,255,255,${0.35 * destaca})` }} />}
-        <Img img={img} estilo={{ left: -img.ancla.x, top: -img.ancla.y, opacity: visible, transformOrigin: `${img.ancla.x}px ${img.ancla.y}px`, transform: `scale(${escala}) rotate(${rot}deg)` }} />
+        <Img img={img} estilo={{ left: -img.ancla.x, top: -img.ancla.y, opacity: visible * (1 - salida), transformOrigin: `${img.ancla.x}px ${img.ancla.y}px`, transform: `scale(${escala}) rotate(${rot}deg)` }} />
       </div>
     );
     if (volando) piso.push({ z: 1e6, nodo: capa }); // vuela por encima de todo
     else if (duenio) enMano.set(duenio.per.id, [...(enMano.get(duenio.per.id) ?? []), capa]);
     else if (o.obj.lugar?.startsWith("pared_")) capasPared.push(capa);
+    // Encima de un mueble: justo delante de él.
+    else if (o.obj.sobre) piso.push({ z: (zDeObjeto.get(o.obj.sobre) ?? (o.rect ? o.rect.y + o.rect.alto : 0)) + 0.5, nodo: capa });
     else if (o.rect) piso.push({ z: o.rect.y + o.rect.alto, nodo: capa });
   }
 
@@ -533,7 +606,7 @@ export function EscenaKit({ cu, frame, fps, d: disparos, imagenes, objetivos, vi
     const s = u.sentado;
     const z = zDe(u);
     const silla = imagenes[clave.silla()];
-    const pupitre = imagenes[clave.pupitre()];
+    const pupitre = s ? imagenes[clave.objeto(s.mueble)] : undefined;
     piso.push({
       z,
       nodo: (
@@ -548,15 +621,10 @@ export function EscenaKit({ cu, frame, fps, d: disparos, imagenes, objetivos, vi
       ),
     });
   }
-  // Pupitres vacíos (sin nadie sentado).
-  for (const o of cu.objetos) {
-    if (o.obj.tipo !== "pupitre" || !o.rect || cu.personajes.some((u) => u.per.sentado_en === o.obj.id)) continue;
-    piso.push({ z: o.rect.y + o.rect.alto, nodo: <Img key={o.obj.id} img={imagenes[clave.pupitre()]} estilo={{ left: o.rect.x, top: o.rect.y, width: o.rect.ancho, height: o.rect.alto }} /> });
-  }
   piso.sort((a, b) => a.z - b.z);
   return (
     <>
-      {cu.c.fondo === "salon" && <EntornoSalon cu={cu} />}
+      <Entorno cu={cu} />
       {fondo && <Img img={fondo} />}
       {capasPared}
       {piso.map((x) => x.nodo)}

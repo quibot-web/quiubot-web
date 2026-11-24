@@ -2,7 +2,8 @@
 // convierten a PNG una sola vez al precargar (en el navegador). El render
 // solo dibuja <img> con transformaciones: barato y sin serializar SVG por
 // cuadro (meta <= 5 s de render por segundo de video).
-import { EXPRESIONES, MOTIVOS_DIBUJO, type MotivoDibujo } from "./catalogoKit";
+import { EXPRESIONES, MOTIVOS_DIBUJO, type MotivoDibujo, type TipoObjeto } from "./catalogoKit";
+import { svgBolsa, svgCaja, svgCarro, svgCelular, svgFondo, svgHelado, svgMesa, svgMostrador, svgMoto, svgTorta, svgVitrina } from "./dibujoLugares";
 import { svgAntebrazo, svgBrazo, svgCabeza, svgCuerpo, svgPeloAtras, svgRasgos, type AspectoPersonaje, type Cara, type Ojos, type ParteSvg } from "./dibujoPersonaje";
 import { svgCartelera, svgDibujo, svgDulces, svgPupitre, svgSalon, svgSilla } from "./dibujoObjetos";
 import type { ComposicionUbicada } from "./composicion";
@@ -18,6 +19,8 @@ export const clave = {
   brazo: (a: AspectoPersonaje) => `brazo:${claveAspecto(a)}`,
   antebrazo: (a: AspectoPersonaje, m: FormaMano) => `antebrazo:${claveAspecto(a)}:${m}`,
   cartelera: () => "cartelera",
+  // Cualquier objeto por su tipo (dulces y pupitre conservan su clave).
+  objeto: (t: TipoObjeto) => t as string,
   dibujo: (m: MotivoDibujo) => `dibujo:${m}`,
   dulces: () => "dulces",
   pupitre: () => "pupitre",
@@ -25,6 +28,19 @@ export const clave = {
 };
 
 export type Pieza = { clave: string; parte: ParteSvg };
+
+const SVG_OBJETO: Partial<Record<TipoObjeto, () => ParteSvg>> = {
+  dulces: svgDulces,
+  torta: svgTorta,
+  helado: svgHelado,
+  caja: svgCaja,
+  bolsa: svgBolsa,
+  celular: svgCelular,
+  moto: svgMoto,
+  carro: svgCarro,
+  mostrador: svgMostrador,
+  vitrina: svgVitrina,
+};
 
 // Motivos de la cartelera: los 11 primeros que NO usa un dibujo suelto de
 // la composición (el dibujo elegido no aparece repetido en la cartelera).
@@ -49,6 +65,7 @@ export function piezasDeComposicion(cu: ComposicionUbicada): Pieza[] {
     if (parte) piezas.set(k, parte);
   };
   if (cu.c.fondo === "salon") poner(clave.fondo(cu), () => svgSalon(cu.pared));
+  else poner(clave.fondo(cu), () => svgFondo(cu.c.fondo, cu.pared));
   for (const u of cu.personajes) {
     const a = u.aspecto;
     poner(clave.cuerpo(a), () => svgCuerpo(a));
@@ -66,10 +83,13 @@ export function piezasDeComposicion(cu: ComposicionUbicada): Pieza[] {
     } else if (o.obj.tipo === "dibujo") {
       const m = motivoDe(cu, o.obj.id);
       poner(clave.dibujo(m), () => svgDibujo(m));
-    } else if (o.obj.tipo === "pupitre") {
-      poner(clave.pupitre(), () => svgPupitre());
+    } else if (o.obj.tipo === "pupitre" || o.obj.tipo === "mesa") {
+      poner(clave.objeto(o.obj.tipo), () => (o.obj.tipo === "pupitre" ? svgPupitre() : svgMesa()));
       poner(clave.silla(), () => svgSilla());
-    } else poner(clave.dulces(), () => svgDulces());
+    } else {
+      const t = o.obj.tipo;
+      poner(clave.objeto(t), () => SVG_OBJETO[t]?.() ?? null);
+    }
   }
   return [...piezas.entries()].map(([k, parte]) => ({ clave: k, parte }));
 }

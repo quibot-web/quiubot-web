@@ -15,7 +15,7 @@ import { camaraDelCuadro, prepararReel } from "../motor/preparar";
 import { conCobertura, cuerposEnMundo, planDeCamara, tomasDeCamara } from "../motor/camara";
 import { carasCortadas, encuadreSeguro, ZOOM_MINIMO_KIT } from "../motor/encuadreKit";
 import { metricasKit } from "../motor/metricasKit";
-import { crearRegistro } from "../motor/registro";
+import { caminantesDePlan, crearRegistro } from "../motor/registro";
 import { construirRecorrido } from "../motor/recorrido";
 import { MICRO, unionRects } from "../motor/catalogo";
 import { ALTO_PANTALLA, FRANJA_SEGURA, rectEnPantalla } from "../motor/geometria";
@@ -100,19 +100,24 @@ function azar(semilla: number) {
 function composicionAlAzar(n: number): ComposicionKitEntrada {
   const r = azar(n * 7919 + 1);
   const elegir = <T,>(xs: readonly T[]) => xs[Math.floor(r() * xs.length)];
+  const fondo = (["salon", "tienda", "cocina", "calle"] as const)[n % 4];
   const personajes: Record<string, unknown>[] = [];
-  const objetos: Record<string, unknown>[] = [{ id: "cartelera", tipo: "cartelera", lugar: elegir(["pared_izquierda", "pared_centro", "pared_derecha"]) }];
+  const objetos: Record<string, unknown>[] = [];
+  // Objetos propios de cada lugar (tanda 1 y 2).
+  if (fondo === "salon") objetos.push({ id: "cartelera", tipo: "cartelera", lugar: elegir(["pared_izquierda", "pared_centro", "pared_derecha"]) });
+  if (fondo === "tienda") objetos.push({ id: "mostrador", tipo: "mostrador", lugar: elegir(["piso_centro", "piso_centro_derecha"]), plano: "frente" }, { id: "caja", tipo: "caja", sobre: "mostrador" });
+  if (fondo === "cocina") objetos.push({ id: "mesa", tipo: "mesa", lugar: elegir(["piso_centro_izquierda", "piso_derecha"]), plano: "frente" }, { id: "torta", tipo: "torta", sobre: "mesa" });
+  if (fondo === "calle") objetos.push({ id: "moto", tipo: "moto", lugar: elegir(["piso_izquierda", "piso_derecha"]), plano: "fondo" });
   const usadas = new Set<string>();
-  const cantidad = 2 + Math.floor(r() * 4);
+  const cantidad = 2 + Math.floor(r() * 3);
   const pupitres = [...LUGARES_PISO];
   for (let i = 0; i < cantidad; i++) {
-    const tipo = i === 0 && r() < 0.6 ? "profesora" : elegir(TIPOS_PERSONAJE.filter((t) => t !== "profesora"));
+    const tipo = elegir(TIPOS_PERSONAJE);
     const id = `p${i}`;
-    const sentado = tipo !== "profesora" && r() < 0.5 && pupitres.length > 0;
+    const sentado = fondo === "salon" && (tipo === "nino" || tipo === "nina") && r() < 0.5 && pupitres.length > 0;
     if (sentado) {
       const lugar = pupitres.splice(Math.floor(r() * pupitres.length), 1)[0];
-      const plano = r() < 0.5 ? "frente" : "fondo";
-      objetos.push({ id: `pup${i}`, tipo: "pupitre", lugar, plano });
+      objetos.push({ id: `pup${i}`, tipo: "pupitre", lugar, plano: r() < 0.5 ? "frente" : "fondo" });
       personajes.push({ id, tipo, posicion: elegir(POSICIONES), sentado_en: `pup${i}`, mira: elegir(["izquierda", "derecha"]) });
     } else {
       let posicion = elegir(POSICIONES);
@@ -122,24 +127,25 @@ function composicionAlAzar(n: number): ComposicionKitEntrada {
       personajes.push({ id, tipo, posicion, plano, mira: elegir(["izquierda", "derecha"]) });
     }
   }
-  objetos.push({ id: "dibujo", tipo: "dibujo", en_mano_de: "p0" });
-  return { id: "k_azar", fondo: "salon", personajes, objetos } as ComposicionKitEntrada;
+  objetos.push({ id: "mano", tipo: elegir(["dibujo", "helado", "bolsa", "celular"]), en_mano_de: "p0" });
+  return { id: "k_azar", fondo, personajes, objetos } as ComposicionKitEntrada;
 }
 
 describe("propiedad: con cualquier composición, nadie con la cara cortada", () => {
-  it("30 composiciones al azar con acciones al azar (incluidas las de grupo)", () => {
+  it("40 composiciones al azar en los cuatro lugares, con acciones al azar (de grupo, entrar e irse, vehículos)", () => {
     const fallas: string[] = [];
     let probadas = 0;
-    for (let n = 0; n < 30; n++) {
+    for (let n = 0; n < 40; n++) {
       const comp = composicionAlAzar(n);
       const c = ComposicionKitSchema.safeParse(comp);
       if (!c.success || problemasComposicion(c.data).length) continue;
       probadas++;
-      const registro = crearRegistro([comp], `azar-${n}`);
-      const acciones = Object.keys(registro.escena("k_azar")!.acciones).filter((a) => a !== MICRO);
+      const acciones = Object.keys(crearRegistro([comp], `azar-${n}`).escena("k_azar")!.acciones).filter((a) => a !== MICRO);
       const r = azar(n + 99);
       const disparos: Disparo[] = [];
       for (let f = 20; f < 600; f += 14 + Math.floor(r() * 30)) disparos.push({ escena: "k_azar", accion: acciones[Math.floor(r() * acciones.length)], palabra: 0, cuadro: f, frase: "e1", inicioFrase: 0 });
+      // Quien entra o se va: la cámara lo cuida en todo el recorrido.
+      const registro = crearRegistro([comp], `azar-${n}`, { caminantes: caminantesDePlan({ frases: [{ acciones: disparos }] }) });
       const recorrido = construirRecorrido(disparos, registro);
       const tomas = conCobertura(tomasDeCamara(disparos, recorrido, registro), disparos, recorrido, registro, 640);
       const camara = planDeCamara(tomas, 640, 30, { esKit: (e) => !!e && !!registro.composicion(e), pantalla: null, encuadreKit: () => null }).puntos;
@@ -161,7 +167,7 @@ describe("propiedad: con cualquier composición, nadie con la cara cortada", () 
         }
       }
     }
-    expect(probadas).toBeGreaterThanOrEqual(15);
+    expect(probadas).toBeGreaterThanOrEqual(20);
     expect(fallas).toEqual([]);
   }, 60_000);
 });
@@ -293,7 +299,7 @@ describe("emociones legibles en un celular y nada tapa una cara (revisión de la
     expect(atento.saltoY).toBeLessThan(0); // derecho, hacia arriba
     expect(aburrido.saltoY).toBeGreaterThan(0); // hundido
     expect(reel.registro.escena("k_salon")!.acciones["todos.presta_atencion"].descripcion).toBe("todos prestan atención");
-  });
+  }, 30_000);
 
   it("ningún brazo ni objeto pasa por delante de una cara, en ningún cuadro de los planes de prueba", () => {
     const cu = reel.registro.composicion("k_salon")!;

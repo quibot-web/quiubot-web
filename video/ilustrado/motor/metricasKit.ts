@@ -1,7 +1,7 @@
 // Métricas de un reel en sus lugares del kit (puro), medidas con la cámara
 // exacta de cada cuadro. Sirven para comparar una composición de la IA con
 // una hecha a mano (revisión de la v6) y para la regla de ritmo de planos.
-import { ALTO_PANTALLA, ANCHO_PANTALLA, vistaDelMundo, type Encuadre, type Rect } from "./geometria";
+import { ALTO_PANTALLA, ANCHO_PANTALLA, seTocan, vistaDelMundo, type Encuadre, type Rect } from "./geometria";
 import { cuerposEnMundo } from "./camara";
 import { ALTO_UTIL } from "./encuadreKit";
 import { camaraDelCuadro, type ReelPreparado } from "./preparar";
@@ -81,6 +81,9 @@ export function metricasKit(reel: ReelPreparado, fps: number): MetricasKit {
       area += Math.max(0, x1 - x0) * Math.max(0, y1 - y0);
     }
     for (const r of objetos) {
+      // Un objeto visible (la vitrina, el mostrador) también es "algo" sobre el piso.
+      // (aunque se vea en parte: si sale por abajo, no queda piso vacío).
+      if (seTocan(r, v)) piesMasBajos = Math.max(piesMasBajos, Math.min(ALTO_PANTALLA, ALTO_PANTALLA / 2 + (r.y + r.alto - cam.y) * cam.zoom));
       const x0 = Math.max(0, ANCHO_PANTALLA / 2 + (r.x - cam.x) * cam.zoom);
       const x1 = Math.min(ANCHO_PANTALLA, ANCHO_PANTALLA / 2 + (r.x + r.ancho - cam.x) * cam.zoom);
       const y0 = Math.max(0, ALTO_PANTALLA / 2 + (r.y - cam.y) * cam.zoom);

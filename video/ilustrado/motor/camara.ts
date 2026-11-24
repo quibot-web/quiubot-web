@@ -16,7 +16,7 @@ import { ALTO_PANTALLA, ANCHO_PANTALLA, acercar, desplazar, encuadre, ocupacion,
 import type { Disparo } from "./plan";
 import type { Recorrido } from "./recorrido";
 import { VERBOS_PERSONAJE } from "../kit/catalogoKit";
-import { ID_TODOS, aIsla, rectCabezaTorso, rectPersonaje } from "../kit/composicion";
+import { ID_TODOS, aIsla, enCamino, rectCabezaTorso, rectPersonaje } from "../kit/composicion";
 import type { MovimientoCamara } from "../kit/variedad";
 import { ZOOM_MAXIMO_KIT, cabeEnFranja, encuadrarKit, encuadreSeguro, ocupacionUtil, type Cuerpo, type ResultadoEncuadre } from "./encuadreKit";
 export { ZOOM_MAXIMO_KIT };
@@ -51,7 +51,8 @@ export function cuerposEnMundo(escena: string, recorrido: Recorrido, registro: R
   const cu = registro.composicion(escena);
   const isla = recorrido[registro.escena(escena)?.isla ?? ""];
   if (!cu || !isla) return [];
-  return cu.personajes.map((u) => ({ id: u.per.id, rect: desplazar(rectCabezaTorso(u), isla.x, isla.y), cabezaY: aIsla(u, u.p.cx, u.p.cabeza.cy).y + isla.y, completo: desplazar(rectPersonaje(u), isla.x, isla.y) }));
+  // Si camina (entra o se va), su cuerpo es todo el recorrido: entero o fuera en cualquier punto.
+  return cu.personajes.map((u) => ({ id: u.per.id, rect: desplazar(enCamino(u, rectCabezaTorso(u)), isla.x, isla.y), cabezaY: aIsla(u, u.p.cx, u.p.cabeza.cy).y + isla.y, completo: desplazar(enCamino(u, rectPersonaje(u)), isla.x, isla.y) }));
 }
 
 // ¿Se puede mostrar esta acción con un plano limpio (zoom normal, nadie
@@ -326,7 +327,8 @@ export function conCobertura(tomasOriginales: Toma[], disparos: Disparo[], recor
   const res: Toma[] = [];
   tomas.forEach((t, i) => {
     const fin = tomas[i + 1]?.desde ?? total;
-    if (!t.escena || !registro.composicion(t.escena) || fin - t.desde <= MAX_PLANO_KIT) {
+    const visibleDesde = i === 0 ? 0 : tomas[i - 1].celular ? t.desde + LLEGAR_TRAS_PALABRA - CUADROS_PUERTA : t.desde;
+    if (!t.escena || !registro.composicion(t.escena) || fin - visibleDesde <= MAX_PLANO_KIT) {
       res.push(t);
       return;
     }
@@ -343,11 +345,23 @@ export function conCobertura(tomasOriginales: Toma[], disparos: Disparo[], recor
       return area(interseccion(f, v)) >= 0.4 * area(f) || area(interseccion(c.focos[0], f)) >= 0.8 * area(c.focos[0]);
     };
     let k = 0;
-    let inicio = t.desde; // inicio del plano actual
+    // Desde cuándo se ve de verdad: la primera toma, desde el cuadro 0; la
+    // que sigue a la puerta del celular, desde el corte (unos cuadros antes).
+    let inicio = i === 0 ? 0 : tomas[i - 1].celular ? t.desde + LLEGAR_TRAS_PALABRA - CUADROS_PUERTA : t.desde;
     let enPrincipal = true;
     for (let vueltas = 0; fin - inicio > MAX_PLANO_KIT && vueltas < 50; vueltas++) {
       let corte = inicio + (enPrincipal ? Math.min(45, MAX_PLANO_KIT) : PLANO_COBERTURA);
-      if (enPrincipal) for (const a of acciones) if (corte > a.cuadro - ANTES_ACCION && corte < a.cuadro + VER_ACCION) corte = a.cuadro + VER_ACCION;
+      if (enPrincipal) {
+        let estorbo: Disparo | undefined;
+        for (const a of acciones) if (corte > a.cuadro - ANTES_ACCION && corte < a.cuadro + VER_ACCION) {
+          corte = a.cuadro + VER_ACCION;
+          estorbo ??= a;
+        }
+        // Correr el corte después de la acción dejaría el plano principal
+        // demasiado largo: se corta antes, con una cobertura que vuelve en la acción.
+        const antes = estorbo ? estorbo.cuadro - ANTES_ACCION - MIN_PLANO_KIT : 0;
+        if (estorbo && (corte - inicio > MAX_PLANO_KIT || fin - corte < MIN_PLANO_KIT) && antes - inicio >= CORTE_MINIMO_KIT) corte = antes;
+      }
       if (fin - corte < MIN_PLANO_KIT) break;
       // Preferir una cobertura que ya muestre las acciones que vienen.
       const ventana = (desde: number) => acciones.filter((a) => a.cuadro >= desde && a.cuadro < desde + PLANO_COBERTURA + 10);
@@ -364,7 +378,7 @@ export function conCobertura(tomasOriginales: Toma[], disparos: Disparo[], recor
       // se corta antes (la cobertura entra entera antes de la acción).
       if (pendiente && pendiente.cuadro - ANTES_ACCION - corte < MIN_PLANO_KIT && enPrincipal) {
         const antes = pendiente.cuadro - ANTES_ACCION - MIN_PLANO_KIT;
-        if (antes - inicio >= MIN_PLANO_KIT) {
+        if (antes - inicio >= CORTE_MINIMO_KIT) {
           corte = antes;
           ({ c, n } = elegir(corte));
           pendiente = ventana(corte).find((a) => !muestra(c, a));

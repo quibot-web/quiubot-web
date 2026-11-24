@@ -3,7 +3,7 @@
 // así los brazos articulados no hacen que el renderizador serialice un SVG
 // distinto en cada cuadro. Estilo del reel ilustrado: formas planas, un lado
 // más oscuro (volumen 2.5D) y sin contornos. Sin texto.
-import { COLORES_ROPA, PELOS, PIELES, type Accesorio, type ColorPelo, type ColorRopa, type Expresion, type Peinado, type Piel, type TipoPersonaje } from "./catalogoKit";
+import { COLORES_ROPA, PELOS, PIELES, ROPA_DE_TIPO, esAdulto, esMayor, type Accesorio, type ColorPelo, type ColorRopa, type Expresion, type Peinado, type Piel, type TipoPersonaje } from "./catalogoKit";
 import { proporciones, type FormaMano, type Proporciones } from "./poses";
 
 export type AspectoPersonaje = { tipo: TipoPersonaje; piel: Piel; pelo: ColorPelo; peinado: Peinado; ropa: ColorRopa; ropa2: ColorRopa; accesorio: Accesorio };
@@ -34,11 +34,15 @@ export function svgCuerpo(a: AspectoPersonaje): ParteSvg {
   // Sombra en el piso.
   partes.push(`<ellipse cx="${cx}" cy="${p.pies}" rx="${p.cuerpoAncho * 0.62}" ry="${p.alto * 0.016}" fill="rgba(20,16,30,0.28)"/>`);
   // Piernas y zapatos.
-  const zapato = a.tipo === "profesora" ? "#3A2B2B" : "#F4F2EE";
-  const suela = a.tipo === "profesora" ? "#241A1A" : oscurecer(ropa2, 0.15);
+  const estilo = ROPA_DE_TIPO[a.tipo];
+  const adulto = esAdulto(a.tipo);
+  const zapato = adulto ? (esMayor(a.tipo) ? "#5A4636" : "#3A2B2B") : "#F4F2EE";
+  const suela = adulto ? "#241A1A" : oscurecer(ropa2, 0.15);
   for (const lado of [-1, 1]) {
     const x = cx + lado * (pi.separacion / 2) - pi.ancho / 2;
-    const color = lado > 0 ? oscurecer(piel, 0.1) : piel;
+    // Con pantalón, las piernas son del color del pantalón.
+    const base = estilo === "pantalon" ? ropa2 : piel;
+    const color = lado > 0 ? oscurecer(base, 0.1) : base;
     partes.push(`<rect x="${x}" y="${pi.y0}" width="${pi.ancho}" height="${pi.y1 - pi.y0}" rx="${pi.ancho / 2}" fill="${color}"/>`);
     partes.push(`<path d="M${x - 8} ${pi.y1 - 6} q0 -22 ${pi.ancho / 2 + 8} -22 q${pi.ancho / 2 + 18} 0 ${pi.ancho / 2 + 26} 26 v10 h-${pi.ancho + 26} z" fill="${zapato}"/>`);
     partes.push(`<rect x="${x - 8}" y="${pi.y1 + 2}" width="${pi.ancho + 26}" height="9" rx="4" fill="${suela}"/>`);
@@ -47,15 +51,57 @@ export function svgCuerpo(a: AspectoPersonaje): ParteSvg {
   partes.push(`<rect x="${cx - p.cuello.ancho / 2}" y="${p.cuello.y0}" width="${p.cuello.ancho}" height="${p.cuello.y1 - p.cuello.y0 + 10}" rx="12" fill="${oscurecer(piel, 0.12)}"/>`);
   const h = t.hombros / 2;
   const c = t.cintura / 2;
-  if (a.tipo === "profesora") {
+  if (estilo === "pantalon") {
+    // Pantalón (ropa2) hasta los zapatos, cinturón, y arriba según quién es.
+    partes.push(`<path d="M${cx - c - 4} ${t.y1 - 30} L${cx - c - 8} ${pi.y0 + 40} L${cx + c + 8} ${pi.y0 + 40} L${cx + c + 4} ${t.y1 - 30} Z" fill="${ropa2}"/>`);
+    partes.push(`<rect x="${cx - c - 4}" y="${t.y1 - 34}" width="${t.cintura + 8}" height="16" fill="${oscurecer(ropa2, 0.35)}"/>`);
+    const conChaqueta = a.tipo === "cliente" || a.tipo === "emprendedor" || a.tipo === "emprendedora" || esMayor(a.tipo);
+    const camisa = conChaqueta ? "#F2F0EA" : ropa;
+    partes.push(`<path d="M${cx - h} ${t.y0 + 40} Q${cx - h} ${t.y0} ${cx - h + 40} ${t.y0} L${cx + h - 40} ${t.y0} Q${cx + h} ${t.y0} ${cx + h} ${t.y0 + 40} L${cx + c + 4} ${t.y1 - 26} L${cx - c - 4} ${t.y1 - 26} Z" fill="${camisa}"/>`);
+    partes.push(`<path d="M${cx + 30} ${t.y0} L${cx + h - 40} ${t.y0} Q${cx + h} ${t.y0} ${cx + h} ${t.y0 + 40} L${cx + c + 4} ${t.y1 - 26} L${cx + 40} ${t.y1 - 26} Z" fill="${oscurecer(camisa, 0.1)}"/>`);
+    // Cuello de camisa.
+    partes.push(`<path d="M${cx - 40} ${t.y0 - 2} L${cx} ${t.y0 + 34} L${cx + 40} ${t.y0 - 2} L${cx + 22} ${t.y0 + 40} L${cx} ${t.y0 + 26} L${cx - 22} ${t.y0 + 40} Z" fill="${oscurecer(camisa, 0.18)}"/>`);
+    if (a.tipo === "vendedor") {
+      // Delantal (claro) con tirantes y bolsillo.
+      const del = "#F4EFE4";
+      partes.push(`<path d="M${cx - c + 6} ${t.y0 + 70} L${cx + c - 6} ${t.y0 + 70} L${cx + c + 16} ${pi.y0 + 120} Q${cx} ${pi.y0 + 132} ${cx - c - 16} ${pi.y0 + 120} Z" fill="${del}"/>`);
+      partes.push(`<path d="M${cx - c + 10} ${t.y0 + 72} L${cx - h + 30} ${t.y0 + 4} M${cx + c - 10} ${t.y0 + 72} L${cx + h - 30} ${t.y0 + 4}" stroke="${del}" stroke-width="12" fill="none"/>`);
+      partes.push(`<rect x="${cx - 46}" y="${t.y1 + 10}" width="92" height="60" rx="10" fill="${oscurecer(del, 0.08)}"/>`);
+      partes.push(`<rect x="${cx - c + 6}" y="${t.y0 + 66}" width="${t.cintura - 12}" height="8" fill="${ropa}"/>`);
+    } else if (conChaqueta) {
+      // Chaqueta (cliente) o saco tejido (mayores), abiertos sobre la camisa clara.
+      for (const l of [-1, 1]) {
+        partes.push(`<path d="M${cx + l * 26} ${t.y0} L${cx + l * (h - 40)} ${t.y0} Q${cx + l * h} ${t.y0} ${cx + l * h} ${t.y0 + 40} L${cx + l * (c + 10)} ${t.y1 - 10} L${cx + l * 30} ${t.y1 - 10} Z" fill="${l > 0 ? oscurecer(ropa, 0.12) : ropa}"/>`);
+      }
+      if (esMayor(a.tipo)) for (let i = 0; i < 3; i++) partes.push(`<circle cx="${cx - 38}" cy="${t.y0 + 60 + i * 50}" r="7" fill="${oscurecer(ropa, 0.35)}"/>`);
+      // Emprendedor/a: saco de solapas, con un bolsillo y un botón.
+      if (a.tipo === "emprendedor" || a.tipo === "emprendedora") {
+        for (const l of [-1, 1]) partes.push(`<path d="M${cx + l * 26} ${t.y0} L${cx + l * 50} ${t.y0 + 70} L${cx + l * 30} ${t.y0 + 110}" stroke="${oscurecer(ropa, 0.3)}" stroke-width="7" fill="none"/>`);
+        partes.push(`<rect x="${cx + 50}" y="${t.y0 + 130}" width="44" height="8" rx="3" fill="${oscurecer(ropa, 0.3)}"/><circle cx="${cx + 34}" cy="${t.y1 - 40}" r="7" fill="${oscurecer(ropa, 0.4)}"/>`);
+      }
+    } else {
+      // Camisa con botones (papá).
+      for (let i = 0; i < 3; i++) partes.push(`<circle cx="${cx}" cy="${t.y0 + 60 + i * 50}" r="6" fill="${oscurecer(ropa, 0.3)}"/>`);
+    }
+  } else if (estilo === "falda") {
     // Falda acampanada (ropa2) y blusa (ropa) con cuello en V.
     partes.push(`<path d="M${cx - c} ${t.y1 - 30} L${cx - c - 70} ${pi.y0 + 170} Q${cx} ${pi.y0 + 200} ${cx + c + 70} ${pi.y0 + 170} L${cx + c} ${t.y1 - 30} Z" fill="${ropa2}"/>`);
     partes.push(`<path d="M${cx + 20} ${t.y1 - 30} L${cx + c + 70} ${pi.y0 + 170} Q${cx + c + 30} ${pi.y0 + 188} ${cx + 30} ${pi.y0 + 196} Z" fill="${oscurecer(ropa2, 0.14)}"/>`);
     partes.push(`<path d="M${cx - h} ${t.y0 + 40} Q${cx - h} ${t.y0} ${cx - h + 40} ${t.y0} L${cx + h - 40} ${t.y0} Q${cx + h} ${t.y0} ${cx + h} ${t.y0 + 40} L${cx + c} ${t.y1} L${cx - c} ${t.y1} Z" fill="${ropa}"/>`);
     partes.push(`<path d="M${cx + 30} ${t.y0} L${cx + h - 40} ${t.y0} Q${cx + h} ${t.y0} ${cx + h} ${t.y0 + 40} L${cx + c} ${t.y1} L${cx + 40} ${t.y1} Z" fill="${oscurecer(ropa, 0.12)}"/>`);
-    partes.push(`<path d="M${cx - 34} ${t.y0} L${cx} ${t.y0 + 70} L${cx + 34} ${t.y0} Z" fill="${piel}"/>`);
+    if (a.tipo === "mama") partes.push(`<path d="M${cx - 38} ${t.y0} Q${cx} ${t.y0 + 46} ${cx + 38} ${t.y0} Z" fill="${piel}"/><path d="M${cx - 30} ${t.y0 + 6} Q${cx} ${t.y0 + 50} ${cx + 30} ${t.y0 + 6}" fill="none" stroke="#F2E6B8" stroke-width="5"/>`);
+    else partes.push(`<path d="M${cx - 34} ${t.y0} L${cx} ${t.y0 + 70} L${cx + 34} ${t.y0} Z" fill="${piel}"/>`);
     partes.push(`<rect x="${cx - c}" y="${t.y1 - 34}" width="${t.cintura}" height="20" fill="${oscurecer(ropa2, 0.3)}"/>`);
-  } else if (a.tipo === "nina") {
+    // Vendedora: delantal claro sobre la blusa y la falda.
+    if (a.tipo === "vendedora") {
+      const del = "#F4EFE4";
+      partes.push(`<path d="M${cx - c + 6} ${t.y0 + 70} L${cx + c - 6} ${t.y0 + 70} L${cx + c + 30} ${pi.y0 + 150} Q${cx} ${pi.y0 + 166} ${cx - c - 30} ${pi.y0 + 150} Z" fill="${del}"/>`);
+      partes.push(`<path d="M${cx - c + 10} ${t.y0 + 72} L${cx - h + 30} ${t.y0 + 4} M${cx + c - 10} ${t.y0 + 72} L${cx + h - 30} ${t.y0 + 4}" stroke="${del}" stroke-width="12" fill="none"/>`);
+      partes.push(`<rect x="${cx - 46}" y="${t.y1 + 10}" width="92" height="60" rx="10" fill="${oscurecer(del, 0.08)}"/>`);
+    }
+    // Abuela: saco tejido abierto sobre la blusa.
+    if (a.tipo === "abuela") for (const l of [-1, 1]) partes.push(`<path d="M${cx + l * 30} ${t.y0} L${cx + l * (h - 40)} ${t.y0} Q${cx + l * h} ${t.y0} ${cx + l * h} ${t.y0 + 40} L${cx + l * (c + 6)} ${t.y1 - 20} L${cx + l * 36} ${t.y1 - 20} Z" fill="${l > 0 ? oscurecer("#B9A88F", 0.12) : "#B9A88F"}"/>`);
+  } else if (estilo === "vestido") {
     // Vestido (ropa) con cuello blanco.
     partes.push(`<path d="M${cx - h} ${t.y0 + 34} Q${cx - h} ${t.y0} ${cx - h + 34} ${t.y0} L${cx + h - 34} ${t.y0} Q${cx + h} ${t.y0} ${cx + h} ${t.y0 + 34} L${cx + c + 56} ${pi.y0 + 96} Q${cx} ${pi.y0 + 120} ${cx - c - 56} ${pi.y0 + 96} Z" fill="${ropa}"/>`);
     partes.push(`<path d="M${cx + 24} ${t.y0} L${cx + h - 34} ${t.y0} Q${cx + h} ${t.y0} ${cx + h} ${t.y0 + 34} L${cx + c + 56} ${pi.y0 + 96} Q${cx + c + 20} ${pi.y0 + 110} ${cx + 30} ${pi.y0 + 116} Z" fill="${oscurecer(ropa, 0.13)}"/>`);
@@ -145,7 +191,7 @@ export function svgRasgos(a: AspectoPersonaje, e: Cara, ojos: Ojos): ParteSvg {
 
 function rasgos(a: AspectoPersonaje, p: Proporciones, e: Cara, ojos: Ojos): string {
   const { cx, cy, rx } = p.cabeza;
-  const nino = a.tipo !== "profesora";
+  const nino = !esAdulto(a.tipo);
   const ojo = nino ? 14 : 12;
   const sep = rx * 0.4;
   const oy = cy + 6;
@@ -211,6 +257,15 @@ function rasgos(a: AspectoPersonaje, p: Proporciones, e: Cara, ojos: Ojos): stri
     for (const l of [-1, 1]) s.push(linea(`M${cx + l * sep - 17} ${oy - 34} Q${cx + l * sep} ${oy - 41} ${cx + l * sep + 17} ${oy - 34}`, 7));
     s.push(linea(`M${cx - 26} ${oy + 44} Q${cx} ${oy + 64} ${cx + 26} ${oy + 44}`, 8));
   }
+  if (a.accesorio === "bigote") {
+    // Bigote del color del pelo, sobre la boca (no la tapa: la boca va más abajo).
+    const pelo = oscurecer(PELOS[a.pelo], 0.1);
+    s.push(`<path d="M${cx - 44} ${oy + 40} Q${cx - 22} ${oy + 18} ${cx} ${oy + 30} Q${cx + 22} ${oy + 18} ${cx + 44} ${oy + 40} Q${cx + 22} ${oy + 34} ${cx} ${oy + 38} Q${cx - 22} ${oy + 34} ${cx - 44} ${oy + 40} Z" fill="${pelo}"/>`);
+  }
+  if (esMayor(a.tipo)) {
+    // Arrugas suaves junto a los ojos.
+    for (const l of [-1, 1]) s.push(`<path d="M${cx + l * (sep + ojo + 12)} ${oy - 4} l${l * 12} -6 M${cx + l * (sep + ojo + 12)} ${oy + 6} l${l * 12} 4" stroke="${oscurecer(PIELES[a.piel], 0.3)}" stroke-width="4" stroke-linecap="round"/>`);
+  }
   if (a.accesorio === "gafas") {
     for (const l of [-1, 1]) s.push(`<circle cx="${cx + l * sep}" cy="${oy + 2}" r="${ojo + 18}" fill="rgba(255,255,255,0.12)" stroke="#2F2A3A" stroke-width="6"/>`);
     s.push(`<path d="M${cx - sep + ojo + 18} ${oy} Q${cx} ${oy - 10} ${cx + sep - ojo - 18} ${oy}" fill="none" stroke="#2F2A3A" stroke-width="6"/>`);
@@ -227,8 +282,8 @@ export function svgBrazo(a: AspectoPersonaje): ParteSvg {
   const H = largo + ancho;
   const ropa = a.tipo === "nina" ? COLORES_ROPA[a.ropa] : COLORES_ROPA[a.ropa];
   const piel = PIELES[a.piel];
-  // Profesora: manga larga hasta el codo; niños: manga corta y brazo de piel.
-  const manga = a.tipo === "profesora" ? largo + ancho / 2 : largo * 0.5;
+  // Adultos: manga larga (vendedor y papá, manga corta); niños: manga corta.
+  const manga = esAdulto(a.tipo) && a.tipo !== "vendedor" && a.tipo !== "vendedora" && a.tipo !== "papa" ? largo + ancho / 2 : largo * 0.5;
   const c = `<rect x="4" y="0" width="${ancho}" height="${H}" rx="${ancho / 2}" fill="${piel}"/><rect x="4" y="0" width="${ancho}" height="${manga}" rx="${ancho / 2}" fill="${ropa}"/><rect x="${4 + ancho * 0.62}" y="${ancho * 0.3}" width="${ancho * 0.38}" height="${manga - ancho * 0.3}" rx="${ancho * 0.19}" fill="${oscurecer(ropa, 0.14)}"/>`;
   return { svg: svg(W, H, c), ancho: W, alto: H, ancla: { x: W / 2, y: ancho / 2 } };
 }

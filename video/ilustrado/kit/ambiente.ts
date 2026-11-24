@@ -6,7 +6,7 @@
 // MIN_SENTADOS_FONDO niños sentados en pupitres al fondo. Los extras varían
 // con la semilla (ropa, piel, peinado), respiran, parpadean y miran lo que
 // pasa (mira_a: la cartelera o el protagonista).
-import { LUGARES_PISO, type ComposicionKit, type ObjetoKit, type PersonajeKit } from "./catalogoKit";
+import { LUGARES_PISO, POSICIONES, type ComposicionKit, type ObjetoKit, type PersonajeKit } from "./catalogoKit";
 import { hashTexto, problemasComposicion } from "./composicion";
 
 export const MIN_PERSONAJES_SALON = 5;
@@ -22,8 +22,16 @@ export function esExtra(id: string): boolean {
 
 // admite: chequeo extra del que llama (el registro verifica que la cartelera
 // siga teniendo un plano limpio con el extra puesto).
+// Otros lugares (tanda 2): gente de fondo, de pie, que encaja con el lugar.
+export const MIN_PERSONAJES: Record<Exclude<ComposicionKit["fondo"], "salon">, number> = { tienda: 3, calle: 3, cocina: 2 };
+const EXTRAS_DE: Record<Exclude<ComposicionKit["fondo"], "salon">, PersonajeKit["tipo"][]> = {
+  tienda: ["cliente", "abuela", "mama", "papa", "emprendedora"],
+  calle: ["cliente", "papa", "abuela", "nino", "mama"],
+  cocina: ["nino", "nina"],
+};
+
 export function completarAmbiente(c: ComposicionKit, semilla: string, admite: (c: ComposicionKit) => boolean = () => true): ComposicionKit {
-  if (c.fondo !== "salon") return c;
+  if (c.fondo !== "salon") return completarOtroLugar(c, semilla, admite);
   const sentadosFondo = c.personajes.filter((p) => p.sentado_en && c.objetos.find((o) => o.id === p.sentado_en)?.plano === "fondo").length;
   let faltan = Math.max(MIN_PERSONAJES_SALON - c.personajes.length, MIN_SENTADOS_FONDO - sentadosFondo, 0);
   faltan = Math.min(faltan, MAX_PERSONAJES_CON_EXTRAS - c.personajes.length);
@@ -66,6 +74,51 @@ export function completarAmbiente(c: ComposicionKit, semilla: string, admite: (c
     if (problemasComposicion(prueba).length > 0 || !admite(prueba)) continue;
     actual = prueba;
     n++;
+  }
+  return actual;
+}
+
+function completarOtroLugar(c: ComposicionKit, semilla: string, admite: (c: ComposicionKit) => boolean): ComposicionKit {
+  if (c.fondo === "salon") return c;
+  const fondo = c.fondo;
+  let faltan = Math.min(MIN_PERSONAJES[fondo] - c.personajes.length, MAX_PERSONAJES_CON_EXTRAS - c.personajes.length);
+  if (faltan <= 0) return c;
+  const protagonista = c.personajes[0];
+  const h = hashTexto(`${semilla}:${c.id}:ambiente`);
+  const ocupadas = new Set(c.personajes.filter((p) => !p.sentado_en).map((p) => `${p.posicion}-${p.plano}`));
+  const dePieAdelante = new Set(c.personajes.filter((p) => !p.sentado_en && p.plano === "frente").map((p) => p.posicion));
+  // Nadie de relleno justo detrás de un mueble o vehículo de adelante (la
+  // vitrina, el mostrador, el carro): se ve tapado y le roba el plano al objeto.
+  const tapados = new Set<number>();
+  for (const o of c.objetos) {
+    if (!o.lugar?.startsWith("piso_") || o.plano !== "frente" || !["mostrador", "vitrina", "mesa", "moto", "carro"].includes(o.tipo)) continue;
+    const i = POSICIONES.indexOf(o.lugar.replace("piso_", "") as (typeof POSICIONES)[number]);
+    for (const j of [i - 1, i, i + 1]) tapados.add(j);
+  }
+  const candidatos = POSICIONES.filter((pos) => !ocupadas.has(`${pos}-fondo`) && !tapados.has(POSICIONES.indexOf(pos))).sort((a, b) => Number(dePieAdelante.has(a)) - Number(dePieAdelante.has(b)) || (hashTexto(a + h) % 7) - (hashTexto(b + h) % 7));
+  let actual = c;
+  let n = 0;
+  for (const posicion of candidatos) {
+    if (faltan <= 0) break;
+    const id = `${PREFIJO_EXTRA}${n + 1}`;
+    const tipos = EXTRAS_DE[fondo];
+    const i = POSICIONES.indexOf(posicion);
+    const xProt = protagonista ? POSICIONES.indexOf(protagonista.posicion) : 2;
+    const extra: PersonajeKit = {
+      id,
+      tipo: tipos[(h + n * 3) % tipos.length],
+      posicion,
+      plano: "fondo",
+      mira: i >= xProt ? "izquierda" : "derecha",
+      pose: "parado",
+      expresion: "normal",
+      ...(protagonista ? { mira_a: protagonista.id } : {}),
+    };
+    const prueba: ComposicionKit = { ...actual, personajes: [...actual.personajes, extra] };
+    n++;
+    if (problemasComposicion(prueba).length > 0 || !admite(prueba)) continue;
+    actual = prueba;
+    faltan--;
   }
   return actual;
 }

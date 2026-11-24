@@ -4,7 +4,7 @@
 // colgando, 90 = horizontal hacia el costado, 180 = arriba); el render los
 // pasa a rotaciones CSS. "mira" es el brazo del lado hacia donde mira el
 // personaje (el que señala u ofrece); el otro brazo es "otro".
-import type { Pose, TipoPersonaje } from "./catalogoKit";
+import { esAdulto, type Pose, type TipoPersonaje } from "./catalogoKit";
 
 export type Proporciones = {
   ancho: number; // lienzo del personaje (coordenadas locales)
@@ -59,7 +59,7 @@ const NINO: Proporciones = {
 };
 
 export function proporciones(tipo: TipoPersonaje): Proporciones {
-  return tipo === "profesora" ? ADULTO : NINO;
+  return esAdulto(tipo) ? ADULTO : NINO;
 }
 
 export type FormaMano = "abierta" | "senala";
@@ -145,6 +145,26 @@ export function estadoPose(pose: Pose, t: number, fps: number, p: Proporciones, 
       const brazo = { hombro, codo: total - hombro, mano: "abierta" as const };
       const rebote = Math.abs(Math.sin(t / 9)) * 0.012 * p.alto;
       return { mira: brazo, otro: brazo, saltoY: -0.015 * p.alto - rebote, inclinacion: -6 + Math.sin(t / 14) * 0.8 };
+    }
+    case "saludar": {
+      // La mano en alto al lado de la cabeza, moviéndose de un lado a otro.
+      const ola = Math.sin(t / 3.2) * 16;
+      return { ...base, mira: { hombro: 128, codo: 26 + ola, mano: "abierta" }, inclinacion: 3 + Math.sin(t / 6) * 1.5 };
+    }
+    case "comer": {
+      // A la boca (debajo de la cara) y de vuelta, cada ~1,3 s.
+      const boca = brazoHacia(p, "mira", { x: p.cx + 14, y: p.cabeza.cy + p.cabeza.ry * 1.05 + p.antebrazo.mano });
+      const pecho = brazoHacia(p, "mira", { x: p.cx + p.hombroDx * 0.9, y: p.torso.y0 + (p.torso.y1 - p.torso.y0) * 0.55 });
+      const k = (1 - Math.cos((2 * Math.PI * t) / 40)) / 2; // 0 = pecho, 1 = boca
+      const m = (a: number, b: number) => a + (b - a) * k;
+      return { ...base, mira: { hombro: m(pecho.hombro, boca.hombro), codo: m(pecho.codo, boca.codo), mano: "abierta" }, inclinacion: 2 + k * 3 };
+    }
+    case "mirar_celular": {
+      // Las dos manos con el celular frente al pecho y la cabeza agachada.
+      const hombro = -6;
+      const total = totalParaManoEn(p, hombro, 16);
+      const brazo = { hombro, codo: total - hombro + 14, mano: "abierta" as const };
+      return { mira: brazo, otro: brazo, saltoY: 0, inclinacion: 7 + Math.sin(t / 30) * 1 };
     }
     case "levantar_mano": {
       // Brazo arriba en diagonal (lejos de la cabeza: vertical quedaba detrás
