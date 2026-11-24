@@ -42,5 +42,7 @@ describe("prompt del plan ilustrado con el kit de escenas (visuales-v2)", () => 
     expect(conKit).toMatch(/Pon solo a los protagonistas/);
     expect(conKit).toMatch(/Nunca en fila/);
     expect(conKit).toContain("se_distrae");
+    expect(conKit).toContain("pasa_de_largo");
+    expect(conKit).toMatch(/no se vende solo/);
   });
 });

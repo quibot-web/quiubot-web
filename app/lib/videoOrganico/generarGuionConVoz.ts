@@ -13,7 +13,7 @@ import { detectarFrasesDescargo, detectarFrasesVacias, recopilarTextosEscenas } 
 import { ajustarDuracionesProporcional, limpiarHashtags, limpiarNumeracionItemsLista } from "@/video/arreglosAutomaticosGuion";
 import { validarEdicionDesdeAudio, validarEstructuraConsejosNumeradosAudio } from "@/video/visuales/validarEdicionDesdeAudio";
 import { generarVoz, type CredencialesCloudinary } from "./generarVoz";
-import { alinearPalabras } from "./alinearPalabras";
+import { alinearPalabras, vozIncompleta } from "./alinearPalabras";
 import { construirCamposDeTiempo } from "./compactarPausas";
 import { UMBRAL_SILENCIO_VOZ_DB } from "./detectarSilenciosReales";
 import { verificarPalabrasCompletas } from "./verificarPalabrasCompletas";
@@ -160,12 +160,17 @@ export type ResultadoVozYTiempos =
 // que trae su propia narración fija.
 export async function generarVozYTiempos(narraciones: { id: string; narracion: string }[], params: ParametrosRegenerarVoz): Promise<ResultadoVozYTiempos> {
   const textoCompleto = narraciones.map((e) => e.narracion).join(" ");
-  const { audioUrl, palabras, silencios } = await generarVoz(textoCompleto, {
-    openaiKey: params.openaiKey,
-    voz: params.voz,
-    cloudinary: params.cloudinary,
-  });
-  const { palabrasPorEscena: palabrasPorEscenaCrudo, puntaje } = alinearPalabras(narraciones, palabras);
+  // La voz puede llegar incompleta (TTS cortada): se revisa con la
+  // alineación ANTES de seguir y se pide una vez más; si vuelve a fallar,
+  // no se entrega (mejor un error claro que un reel sin su última frase).
+  let intento = await generarYAlinear(textoCompleto, narraciones, params);
+  if (vozIncompleta(intento.alineacion).length > 0) intento = await generarYAlinear(textoCompleto, narraciones, params);
+  const faltas = vozIncompleta(intento.alineacion);
+  if (faltas.length > 0) {
+    return { ok: false, status: 502, error: "La voz generada llegó incompleta dos veces (le faltan palabras del guion).", resumenErrores: faltas };
+  }
+  const { audioUrl, silencios } = intento.voz;
+  const { palabrasPorEscena: palabrasPorEscenaCrudo, puntaje } = intento.alineacion;
   const { tiemposRender, palabrasPorEscena, segmentosAudio, palabrasFlat, tramosPorEscena } = construirCamposDeTiempo(palabrasPorEscenaCrudo, silencios);
 
   const hallazgosPalabrasPerdidas = verificarPalabrasCompletas(palabrasFlat, tramosPorEscena, silencios);
@@ -184,6 +189,11 @@ export async function generarVozYTiempos(narraciones: { id: string; narracion: s
     puntajeAlineacion: puntaje,
     crudo: { palabrasPorEscenaCrudo, silencios, silenciosUmbral_db: UMBRAL_SILENCIO_VOZ_DB },
   };
+}
+
+async function generarYAlinear(texto: string, narraciones: { id: string; narracion: string }[], params: ParametrosRegenerarVoz) {
+  const voz = await generarVoz(texto, { openaiKey: params.openaiKey, voz: params.voz, cloudinary: params.cloudinary });
+  return { voz, alineacion: alinearPalabras(narraciones, voz.palabras) };
 }
 
 export async function generarGuionConVoz(params: ParametrosGenerarGuionConVoz): Promise<ResultadoGenerarGuionConVoz> {

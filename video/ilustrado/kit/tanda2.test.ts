@@ -11,14 +11,15 @@ import tiemposTienda from "../fixtures/tiemposTienda.json";
 import tiemposTorta from "../fixtures/tiemposTorta.json";
 import { camaraDelCuadro, prepararReel } from "../motor/preparar";
 import { metricasKit } from "../motor/metricasKit";
-import { cuerposEnMundo } from "../motor/camara";
+import { cuerposEnCuadro } from "../motor/camara";
 import { carasCortadas } from "../motor/encuadreKit";
 import { disparosDeEscena, type PlanIlustrado } from "../motor/plan";
 import { validarPlanIlustrado } from "../motor/validarPlan";
 import { crearRegistro } from "../motor/registro";
 import { ComposicionKitSchema, TIPOS_PERSONAJE } from "./catalogoKit";
-import { problemasComposicion, ubicarComposicion } from "./composicion";
-import { EscenaKit, presenciaDe, tapanCaras } from "./EscenaKit";
+import { problemasComposicion, rectCabezaTorso, ubicarComposicion } from "./composicion";
+import { CUADROS_PASAR, EscenaKit, presenciaDe, tapanCaras } from "./EscenaKit";
+import { rectEnPresencia } from "./presencia";
 import { piezasDeComposicion, urlsSinRasterizar } from "./piezas";
 import type { TiemposIlustrado } from "../tiempoIlustrado";
 
@@ -36,11 +37,10 @@ describe("tanda 2: los planes de negocio de la IA cumplen todas las reglas", () 
       expect(m.planoMasLargo).toBeLessThanOrEqual(2.2);
       expect(m.pisoVacioMaximo).toBeLessThanOrEqual(0.25);
       for (const id of Object.keys(reel.recorrido).filter((x) => reel.registro.composicion(x))) {
-        const cuerpos = cuerposEnMundo(id, reel.recorrido, reel.registro);
         const cu = reel.registro.composicion(id)!;
         const d = disparosDeEscena(reel.disparos, id);
         for (let f = 0; f < reel.linea.duracionCuadros; f++) {
-          expect(carasCortadas(camaraDelCuadro(reel, f), cuerpos), `${id} cuadro ${f}`).toEqual([]);
+          expect(carasCortadas(camaraDelCuadro(reel, f), cuerposEnCuadro(id, reel.recorrido, reel.registro, d, f)), `${id} cuadro ${f}`).toEqual([]);
           if (f % 3 === 0) expect(tapanCaras(cu, d, [], f, 30), `${id} cuadro ${f}`).toEqual([]);
         }
       }
@@ -90,8 +90,12 @@ describe("tanda 2: reglas de composición y presencia", () => {
 
   it("entrar e irse: solo entra quien no está y solo se va quien está; quien se fue no actúa hasta volver", () => {
     const plan = planTienda as PlanIlustrado;
-    const roto = { ...plan, frases: plan.frases.map((f) => (f.escena_id === "e3" ? { ...f, acciones: f.acciones.filter((a) => !a.accion.endsWith(".se_va")) } : f)) };
+    const roto = { ...plan, frases: plan.frases.map((f) => (({ ...f, acciones: f.acciones.filter((a) => !a.accion.endsWith(".se_va")) }))) };
     expect(validarPlanIlustrado(roto, tiemposTienda.escenas).join(" ")).toMatch(/"cliente" ya está/);
+    // Irse y volver enseguida (se va al final de e1, vuelve en la 1.ª palabra
+    // de e2): la salida no alcanza a verse.
+    const rapido = { ...plan, frases: plan.frases.map((f) => ({ ...f, acciones: f.acciones.map((a) => (f.escena_id === "e2" && a.accion === "cliente.entra" ? { ...a, palabra: 0 } : a)) })) };
+    expect(validarPlanIlustrado(rapido, tiemposTienda.escenas).join(" ")).toMatch(/vuelve a entrar 1 palabras después de irse/);
   });
 
   it("el que entra camina desde la puerta (antes no está); el que se va desaparece", () => {
@@ -106,7 +110,11 @@ describe("tanda 2: reglas de composición y presencia", () => {
     // Saliendo: camina (o se desvanece en la puerta) y ya no está del todo.
     const saliendo = presenciaDe(cliente, cu, d, salida + 10);
     expect(saliendo.camina).toBe(true);
-    expect(saliendo.alpha).toBeLessThan(1);
+    // Se aleja caminando de lado (bien visible), mirando hacia donde va.
+    expect(Math.abs(saliendo.dx)).toBeGreaterThan(50);
+    expect(saliendo.mira).toBeDefined();
+    // Y al final de la salida ya no está (sin volver a entrar).
+    expect(presenciaDe(cliente, cu, { "cliente.se_va": [100] }, 136).alpha).toBe(0);
   });
 
   it("la misma persona (mismo id) en dos lugares se ve igual", () => {
@@ -135,5 +143,77 @@ describe("tanda 2: reglas de composición y presencia", () => {
     const html = renderToStaticMarkup(EscenaKit({ cu, frame: 40, fps: 30, d: {}, imagenes: urlsSinRasterizar(piezas) }));
     expect(html).not.toMatch(/<svg/);
     for (const k of ["carro", "helado", "bolsa", "celular", "caja"]) expect(piezas.some((p) => p.clave === k), k).toBe(true);
+  });
+});
+
+describe("quien camina nunca se ve cortado por el borde", () => {
+  it("pasa de largo: cruza el cuadro; si su cabeza o su torso tocarían el borde de la vista, no se dibuja (se desvanece antes)", () => {
+    const c = ComposicionKitSchema.parse({
+      id: "k_c",
+      fondo: "calle",
+      personajes: [{ id: "peaton", tipo: "cliente", posicion: "centro", mira: "derecha" }],
+      objetos: [],
+    });
+    const cu = ubicarComposicion(c, "x");
+    const u = cu.personajes[0];
+    const imagenes = urlsSinRasterizar(piezasDeComposicion(cu));
+    const d = { "peaton.pasa_de_largo": [10] };
+    const cuerpo = rectCabezaTorso(u);
+    // Vista que corta justo por el medio del recorrido.
+    const vista = { x: u.cx - 200, y: cuerpo.y - 300, ancho: 500, alto: 1600 };
+    const dibuja = (f: number) => renderToStaticMarkup(EscenaKit({ cu, frame: f, fps: 30, d, imagenes, vista })).includes(imagenes[`cuerpo:${[u.aspecto.tipo, u.aspecto.piel, u.aspecto.pelo, u.aspecto.peinado, u.aspecto.ropa, u.aspecto.ropa2, u.aspecto.accesorio].join("-")}`].url);
+    for (let f = 10; f < 10 + CUADROS_PASAR; f += 2) {
+      const p = presenciaDe(u, cu, d, f);
+      const r = rectEnPresencia(u, cuerpo, p);
+      const entero = r.x >= vista.x && r.x + r.ancho <= vista.x + vista.ancho;
+      if (!entero) expect(dibuja(f), `cuadro ${f}`).toBe(false);
+    }
+    expect(presenciaDe(u, cu, d, 5).alpha).toBe(0); // antes no está
+    expect(presenciaDe(u, cu, d, 10 + CUADROS_PASAR + 2).alpha).toBe(0); // después, tampoco
+    expect(presenciaDe(u, cu, d, 10 + CUADROS_PASAR / 2).pasa).toBe(true);
+  });
+});
+
+describe("sin piso vacío en los 4 lugares (planos reales de los videos de muestra)", () => {
+  // Calle: plan armado a mano sobre los tiempos de la narración de la torta.
+  const planCalle: PlanIlustrado = {
+    composiciones: [
+      ComposicionKitSchema.parse({
+        id: "k_calle",
+        fondo: "calle",
+        personajes: [
+          { id: "papa", tipo: "papa", posicion: "centro_izquierda", mira: "derecha" },
+          { id: "cliente", tipo: "cliente", posicion: "centro", plano: "fondo", mira: "derecha" },
+        ],
+        objetos: [
+          { id: "celular", tipo: "celular", en_mano_de: "papa" },
+          { id: "moto", tipo: "moto", lugar: "piso_derecha", plano: "fondo" },
+        ],
+      }),
+    ],
+    frases: [
+      { escena_id: "e1", acciones: [{ escena: "k_calle", accion: "papa.mira_el_celular", palabra: 1 }, { escena: "k_calle", accion: "moto.llega", palabra: 4 }, { escena: "k_calle", accion: "cliente.pasa_de_largo", palabra: 6 }] },
+      { escena_id: "e2", acciones: [{ escena: "k_calle", accion: "papa.saluda", palabra: 0 }, { escena: "k_calle", accion: "papa.feliz", palabra: 3 }] },
+      { escena_id: "e3", acciones: [{ escena: "perfil", accion: "aparece", palabra: 0 }, { escena: "perfil", accion: "toque_seguir", palabra: 2 }] },
+    ],
+  };
+
+  it("el plan de calle es válido", () => {
+    expect(validarPlanIlustrado(planCalle, tiemposTorta.escenas)).toEqual([]);
+  });
+
+  it("salón, tienda, cocina y calle: debajo de la gente nunca queda más de 1/4 de pantalla; en la tienda, la gente ocupa al menos el 45 % de la altura", () => {
+    const planes = [
+      ["tienda", planTienda, tiemposTienda],
+      ["tienda + cocina (torta)", planTorta, tiemposTorta],
+      ["calle", planCalle, tiemposTorta],
+    ] as const;
+    for (const [nombre, plan, tiempos] of planes) {
+      const m = metricasKit(prepararReel(tiempos as TiemposIlustrado, plan as PlanIlustrado, 30, ""), 30);
+      expect(m.pisoVacioMaximo, nombre).toBeLessThanOrEqual(0.25);
+    }
+    // El salón ya lo exigen encuadre.test y calidadIA.test (planes a mano y de la IA).
+    const tienda = metricasKit(prepararReel(tiemposTienda as TiemposIlustrado, planTienda as PlanIlustrado, 30, ""), 30);
+    expect(tienda.alturaPersonaMinima).toBeGreaterThanOrEqual(0.45);
   });
 });

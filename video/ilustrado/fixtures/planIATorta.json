@@ -4,10 +4,29 @@
    "id": "k_tienda",
    "fondo": "tienda",
    "pared": "crema",
-   "personajes": [],
+   "personajes": [
+    {
+     "id": "cliente",
+     "tipo": "cliente",
+     "posicion": "izquierda",
+     "plano": "frente",
+     "mira": "derecha",
+     "pose": "parado",
+     "expresion": "normal"
+    },
+    {
+     "id": "abuela",
+     "tipo": "abuela",
+     "posicion": "derecha",
+     "plano": "frente",
+     "mira": "izquierda",
+     "pose": "parado",
+     "expresion": "normal"
+    }
+   ],
    "objetos": [
     {
-     "id": "vitrina",
+     "id": "vitrina_torta",
      "tipo": "vitrina",
      "lugar": "piso_centro",
      "plano": "frente",
@@ -16,16 +35,16 @@
     {
      "id": "torta_vitrina",
      "tipo": "torta",
-     "sobre": "vitrina",
+     "sobre": "vitrina_torta",
      "plano": "frente",
-     "visible": false
+     "visible": true
     }
    ]
   },
   {
    "id": "k_cocina",
    "fondo": "cocina",
-   "pared": "menta",
+   "pared": "durazno",
    "personajes": [
     {
      "id": "mama",
@@ -33,14 +52,8 @@
      "posicion": "centro",
      "plano": "frente",
      "mira": "izquierda",
-     "pose": "ofrecer",
-     "expresion": "feliz",
-     "ropa": "turquesa",
-     "ropa2": "amarillo",
-     "piel": "triguena",
-     "pelo": "castano",
-     "peinado": "mono",
-     "mira_a": "torta_mama"
+     "pose": "parado",
+     "expresion": "feliz"
     }
    ],
    "objetos": [
@@ -60,13 +73,18 @@
    "acciones": [
     {
      "escena": "k_tienda",
-     "accion": "torta_vitrina.aparece",
+     "accion": "torta_vitrina.destaca",
      "palabra": 1
     },
     {
      "escena": "k_tienda",
-     "accion": "vitrina.destaca",
-     "palabra": 4
+     "accion": "cliente.pasa_de_largo",
+     "palabra": 5
+    },
+    {
+     "escena": "k_tienda",
+     "accion": "abuela.pasa_de_largo",
+     "palabra": 8
     }
    ]
   },
@@ -95,13 +113,8 @@
    "acciones": [
     {
      "escena": "perfil",
-     "accion": "aparece",
-     "palabra": 0
-    },
-    {
-     "escena": "perfil",
      "accion": "toque_seguir",
-     "palabra": 1
+     "palabra": 0
     }
    ]
   }

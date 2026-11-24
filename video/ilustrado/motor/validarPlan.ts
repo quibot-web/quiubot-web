@@ -63,6 +63,8 @@ export const MIN_SEGUNDOS_ENTRE_ISLAS = 0.6;
 // dentro de esa permanencia, los cambios son acciones o micro-acciones
 // de la MISMA pantalla.
 export const MIN_PALABRAS_POR_PANTALLA = 4;
+// Entre que alguien se va y vuelve a entrar (la salida se ve completa).
+export const MIN_PALABRAS_IRSE_Y_VOLVER = 4;
 
 export const contarPalabras = (narracion: string) => narracion.trim().split(/\s+/).filter(Boolean).length;
 const islaEn = (registro: Registro) => (escena: string) => registro.escena(escena)?.isla ?? escena;
@@ -88,19 +90,34 @@ export function validarPlanIlustrado(plan: unknown, escenas: { id: string; narra
   // quien se fue no hace nada hasta que vuelve a entrar.
   if (problemas.length === 0) {
     const presente = new Map<string, boolean>();
+    const seFue = new Map<string, number>(); // palabra global en que se fue
+    const inicioDe: Record<string, number> = {};
+    let acum = 0;
+    for (const e of escenas) {
+      inicioDe[e.id] = acum;
+      acum += palabras[e.id];
+    }
     const enOrden = p.frases.flatMap((f) => f.acciones.map((a) => ({ ...a, frase: f.escena_id }))).filter((a) => registro.composicion(a.escena) && a.accion !== MICRO);
     for (const a of enOrden) {
       const [id, verbo] = a.accion.split(".");
       if (!registro.composicion(a.escena)!.personajes.some((u) => u.per.id === id)) continue;
       const clave = `${a.escena}|${id}`;
-      if (!presente.has(clave)) presente.set(clave, verbo !== "entra");
+      if (!presente.has(clave)) presente.set(clave, verbo !== "entra" && verbo !== "pasa_de_largo");
       const esta = presente.get(clave)!;
+      const pos = (inicioDe[a.frase] ?? 0) + a.palabra;
       if (verbo === "entra") {
         if (esta) problemas.push(`${a.frase}: "${id}" ya está en ${a.escena} cuando "${a.accion}"; para que vuelva, primero ${id}.se_va (o quita esta entrada)`);
+        // Irse y volver: la salida tiene que verse completa (~1,3 s caminando).
+        const fue = seFue.get(clave);
+        if (!esta && fue !== undefined && pos - fue < MIN_PALABRAS_IRSE_Y_VOLVER) problemas.push(`${a.frase}: "${id}" vuelve a entrar ${pos - fue} palabras después de irse; deja al menos ${MIN_PALABRAS_IRSE_Y_VOLVER} palabras entre ${id}.se_va y ${id}.entra (la salida tiene que verse completa)`);
         presente.set(clave, true);
+      } else if (verbo === "pasa_de_largo") {
+        if (esta) problemas.push(`${a.frase}: "${id}" ya está en ${a.escena}; quien pasa de largo no está antes (cruza y se va): usa otro personaje o quita sus otras acciones`);
+        presente.set(clave, false);
       } else if (verbo === "se_va") {
         if (!esta) problemas.push(`${a.frase}: "${id}" no está en ${a.escena} cuando "${a.accion}"`);
         presente.set(clave, false);
+        seFue.set(clave, pos);
       } else if (!esta) problemas.push(`${a.frase}: "${id}" se fue de ${a.escena} y no puede "${a.accion}" hasta que vuelva a entrar (${id}.entra)`);
     }
   }

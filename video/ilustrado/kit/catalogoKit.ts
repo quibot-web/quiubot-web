@@ -159,6 +159,9 @@ export const VERBOS_PERSONAJE = {
   // Caminan entre su lugar y la puerta del lugar (aparece o desaparece en ella).
   entra: { descripcion: "entra por la puerta y camina hasta su lugar" },
   se_va: { descripcion: "camina hasta la puerta y se va" },
+  // Cruza el cuadro de un lado al otro mirando al frente (no mira lo que hay):
+  // la metáfora de "nadie lo mira", "no se vende solo".
+  pasa_de_largo: { descripcion: "pasa de largo sin mirar: cruza de un lado al otro mirando al frente" },
 } as const satisfies Record<string, { pose?: Pose; expresion?: Expresion; descripcion: string }>;
 export type VerboPersonaje = keyof typeof VERBOS_PERSONAJE;
 

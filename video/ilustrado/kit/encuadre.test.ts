@@ -12,7 +12,7 @@ import { clave, piezasDeComposicion, urlsSinRasterizar } from "./piezas";
 import { PLAN_PROTOTIPO_KIT } from "./planPrototipoKit";
 import tiemposKit from "../fixtures/tiemposPrototipoKit.json";
 import { camaraDelCuadro, prepararReel } from "../motor/preparar";
-import { conCobertura, cuerposEnMundo, planDeCamara, tomasDeCamara } from "../motor/camara";
+import { conCobertura, cuerposEnCuadro, cuerposEnMundo, planDeCamara, tomasDeCamara } from "../motor/camara";
 import { carasCortadas, encuadreSeguro, ZOOM_MINIMO_KIT } from "../motor/encuadreKit";
 import { metricasKit } from "../motor/metricasKit";
 import { caminantesDePlan, crearRegistro } from "../motor/registro";
@@ -28,10 +28,9 @@ const total = reel.linea.duracionCuadros;
 
 describe("cámara del kit: reglas automáticas", () => {
   it("nunca una cara cortada: en todos los cuadros del prototipo, cada personaje está entero (cabeza y torso) o fuera", () => {
-    const cuerpos = cuerposEnMundo("k_salon", reel.recorrido, reel.registro);
     const malos: string[] = [];
     for (let f = 0; f < total; f++) {
-      const c = carasCortadas(camaraDelCuadro(reel, f), cuerpos);
+      const c = carasCortadas(camaraDelCuadro(reel, f), cuerposEnCuadro("k_salon", reel.recorrido, reel.registro, disparosDeEscena(reel.disparos, "k_salon"), f));
       if (c.length) malos.push(`${f}:${c.join("+")}`);
     }
     expect(malos).toEqual([]);
@@ -146,10 +145,11 @@ describe("propiedad: con cualquier composición, nadie con la cara cortada", () 
       for (let f = 20; f < 600; f += 14 + Math.floor(r() * 30)) disparos.push({ escena: "k_azar", accion: acciones[Math.floor(r() * acciones.length)], palabra: 0, cuadro: f, frase: "e1", inicioFrase: 0 });
       // Quien entra o se va: la cámara lo cuida en todo el recorrido.
       const registro = crearRegistro([comp], `azar-${n}`, { caminantes: caminantesDePlan({ frases: [{ acciones: disparos }] }) });
+      // (Con alguien que pasa de largo no hay relleno: fuera las acciones de extras.)
+      for (let k = disparos.length - 1; k >= 0; k--) if (!registro.foco("k_azar", disparos[k].accion)) disparos.splice(k, 1);
       const recorrido = construirRecorrido(disparos, registro);
       const tomas = conCobertura(tomasDeCamara(disparos, recorrido, registro), disparos, recorrido, registro, 640);
       const camara = planDeCamara(tomas, 640, 30, { esKit: (e) => !!e && !!registro.composicion(e), pantalla: null, encuadreKit: () => null }).puntos;
-      const cuerpos = cuerposEnMundo("k_azar", recorrido, registro);
       const cuAzar = registro.composicion("k_azar")!;
       const dAzar = disparosDeEscena(disparos, "k_azar");
       for (let f = 0; f < 640; f += 3) {
@@ -160,7 +160,7 @@ describe("propiedad: con cualquier composición, nadie con la cara cortada", () 
         }
       }
       for (let f = 0; f < 640; f++) {
-        const cortadas = carasCortadas(camaraDelCuadro({ camara, tomas, pulsos: [], registro }, f), cuerpos);
+        const cortadas = carasCortadas(camaraDelCuadro({ camara, tomas, pulsos: [], registro }, f), cuerposEnCuadro("k_azar", recorrido, registro, dAzar, f));
         if (cortadas.length) {
           fallas.push(`composición ${n}, cuadro ${f}: ${cortadas.join("+")}`);
           break;

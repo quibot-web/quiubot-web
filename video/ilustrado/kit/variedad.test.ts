@@ -1,13 +1,14 @@
 // Variedad entre reels de una cuenta (etapa A de visuales-v2): no repetir
 // lo de los últimos 3 reels (pared, paleta de ropa, movimiento de cámara,
 // escena de apertura), guardado dentro del guion (plan.variedad), sin SQL.
+import { disparosDeEscena } from "../motor/plan";
 import { describe, expect, it } from "vitest";
 import { elegirVariedad, huellaDePlan, huellasDePiezas, MOVIMIENTOS_CAMARA, PALETAS_ROPA, problemasVariedad, textoVariedadParaPrompt, type HuellaVisual } from "./variedad";
 import { NARRACION_PROTOTIPO_KIT, PLAN_PROTOTIPO_KIT } from "./planPrototipoKit";
 import { PAREDES } from "./catalogoKit";
 import tiemposKit from "../fixtures/tiemposPrototipoKit.json";
 import { camaraDelCuadro, prepararReel } from "../motor/preparar";
-import { cuerposEnMundo } from "../motor/camara";
+import { cuerposEnCuadro } from "../motor/camara";
 import { carasCortadas } from "../motor/encuadreKit";
 import { validarPlanIlustrado } from "../motor/validarPlan";
 import { construirPromptPlanIlustrado } from "../promptPlanIlustrado";
@@ -61,8 +62,7 @@ describe("variedad entre reels", () => {
   it("con cualquier movimiento de cámara, nadie queda con la cara cortada", () => {
     for (const camara of MOVIMIENTOS_CAMARA) {
       const reel = prepararReel(tiemposKit as TiemposIlustrado, { ...PLAN_PROTOTIPO_KIT, variedad: { pared: "crema", paleta: "calida", camara } }, 30, "x");
-      const cuerpos = cuerposEnMundo("k_salon", reel.recorrido, reel.registro);
-      const malos = Array.from({ length: reel.linea.duracionCuadros }, (_, f) => carasCortadas(camaraDelCuadro(reel, f), cuerpos)).filter((c) => c.length);
+      const malos = Array.from({ length: reel.linea.duracionCuadros }, (_, f) => carasCortadas(camaraDelCuadro(reel, f), cuerposEnCuadro("k_salon", reel.recorrido, reel.registro, disparosDeEscena(reel.disparos, "k_salon"), f))).filter((c) => c.length);
       expect(malos, camara).toEqual([]);
     }
   });

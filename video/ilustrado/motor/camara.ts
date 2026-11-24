@@ -13,10 +13,11 @@ import type { PuntoCamara } from "../tiempoIlustrado";
 import { MICRO, unionRects } from "./catalogo";
 import { REGISTRO_CATALOGO, type Registro } from "./registro";
 import { ALTO_PANTALLA, ANCHO_PANTALLA, acercar, desplazar, encuadre, ocupacion, vistaDelMundo, type Encuadre, type Rect } from "./geometria";
-import type { Disparo } from "./plan";
+import { disparosDeEscena, type Disparo, type DisparosEscena } from "./plan";
 import type { Recorrido } from "./recorrido";
 import { VERBOS_PERSONAJE } from "../kit/catalogoKit";
 import { ID_TODOS, aIsla, enCamino, rectCabezaTorso, rectPersonaje } from "../kit/composicion";
+import { CUADROS_CAMINAR, presenciaDe, rectEnPresencia } from "../kit/presencia";
 import type { MovimientoCamara } from "../kit/variedad";
 import { ZOOM_MAXIMO_KIT, cabeEnFranja, encuadrarKit, encuadreSeguro, ocupacionUtil, type Cuerpo, type ResultadoEncuadre } from "./encuadreKit";
 export { ZOOM_MAXIMO_KIT };
@@ -37,7 +38,7 @@ export function focoGlobal(d: Pick<Disparo, "escena" | "accion" | "objetivo">, r
 // pendiente: algo que la acción nombra pero no entró en la toma (el que
 // recibe lo que se ofrece): la primera cobertura lo muestra.
 // cobertura: plano agregado para que ninguno dure más de ~2 s.
-export type Toma = { desde: number; ultimaAccion: number; focos: Rect[]; encuadre: Encuadre; celular: boolean; escena?: string; grupo?: boolean; pendiente?: Rect; cobertura?: boolean };
+export type Toma = { desde: number; ultimaAccion: number; focos: Rect[]; encuadre: Encuadre; celular: boolean; escena?: string; grupo?: boolean; pendiente?: Rect; cobertura?: boolean; cuerpoEntero?: boolean; caminaHasta?: number };
 
 export const CALMA_KIT = 18;
 // 20 cuadros: un plano más corto entre dos parecidos se ve como un parpadeo (reel_1).
@@ -47,12 +48,46 @@ const encuadrar = (focos: Rect[], celular: boolean) => encuadre(unionRects(focos
 const igual = (a: Rect, b: Rect) => a.x === b.x && a.y === b.y && a.ancho === b.ancho && a.alto === b.alto;
 
 // Cabeza y torso de cada personaje de un lugar del kit, en el mundo.
-export function cuerposEnMundo(escena: string, recorrido: Recorrido, registro: Registro): Cuerpo[] {
+// tiempo (opcional): solo lo que se ve entre "desde" y "hasta" (quien entra,
+// se va o pasa de largo cuenta donde está en esa ventana, y si no está, no
+// cuenta). Sin tiempo: su recorrido completo (lo más prudente).
+export type VentanaCuerpos = { d: DisparosEscena; desde: number; hasta: number };
+export function cuerposEnMundo(escena: string, recorrido: Recorrido, registro: Registro, tiempo?: VentanaCuerpos): Cuerpo[] {
   const cu = registro.composicion(escena);
   const isla = recorrido[registro.escena(escena)?.isla ?? ""];
   if (!cu || !isla) return [];
-  // Si camina (entra o se va), su cuerpo es todo el recorrido: entero o fuera en cualquier punto.
-  return cu.personajes.map((u) => ({ id: u.per.id, rect: desplazar(enCamino(u, rectCabezaTorso(u)), isla.x, isla.y), cabezaY: aIsla(u, u.p.cx, u.p.cabeza.cy).y + isla.y, completo: desplazar(enCamino(u, rectPersonaje(u)), isla.x, isla.y) }));
+  const res: Cuerpo[] = [];
+  for (const u of cu.personajes) {
+    const cabeza = aIsla(u, u.p.cx, u.p.cabeza.cy).y;
+    const camina = tiempo && (tiempo.d[`${u.per.id}.entra`] || tiempo.d[`${u.per.id}.se_va`] || tiempo.d[`${u.per.id}.pasa_de_largo`]);
+    if (!camina) {
+      // Sin ventana, quien pasa de largo nunca está quieto: en movimiento.
+      res.push({ id: u.per.id, rect: desplazar(enCamino(u, rectCabezaTorso(u)), isla.x, isla.y), cabezaY: cabeza + isla.y, completo: desplazar(enCamino(u, rectPersonaje(u)), isla.x, isla.y), movil: !tiempo && !!u.pasaDeLargo && !u.caminoDx });
+      continue;
+    }
+    // Por separado, donde está quieto (se protege siempre) y donde camina
+    // (el dibujo lo oculta al tocar el borde: se puede ignorar).
+    const partes = { quieto: { rect: null as Rect | null, completo: null as Rect | null, cabezaY: -Infinity }, camina: { rect: null as Rect | null, completo: null as Rect | null, cabezaY: -Infinity } };
+    for (let f = tiempo.desde; f <= tiempo.hasta; f += 2) {
+      const p = presenciaDe(u, cu, tiempo.d, f);
+      if (p.alpha <= 0) continue;
+      const parte = p.camina ? partes.camina : partes.quieto;
+      const r = rectEnPresencia(u, rectCabezaTorso(u), p);
+      const c = rectEnPresencia(u, rectPersonaje(u), p);
+      parte.rect = parte.rect ? unionRects([parte.rect, r]) : r;
+      parte.completo = parte.completo ? unionRects([parte.completo, c]) : c;
+      parte.cabezaY = Math.max(parte.cabezaY, u.pies + (p.dy ?? 0) + (cabeza - u.pies) * (p.escala ?? 1));
+    }
+    for (const [nombre, parte] of Object.entries(partes)) {
+      if (!parte.rect || !parte.completo) continue;
+      res.push({ id: u.per.id, rect: desplazar(parte.rect, isla.x, isla.y), cabezaY: parte.cabezaY + isla.y, completo: desplazar(parte.completo, isla.x, isla.y), movil: nombre === "camina" });
+    }
+  }
+  return res;
+}
+// Los cuerpos en un cuadro exacto (para las pruebas y el control).
+export function cuerposEnCuadro(escena: string, recorrido: Recorrido, registro: Registro, d: DisparosEscena, cuadro: number): Cuerpo[] {
+  return cuerposEnMundo(escena, recorrido, registro, { d, desde: cuadro, hasta: cuadro });
 }
 
 // ¿Se puede mostrar esta acción con un plano limpio (zoom normal, nadie
@@ -88,32 +123,38 @@ export function planoLimpio(escena: string, accion: string, objetivo: string | u
 // cortar a nadie, un foco más chico (ver focoReducidoKit), primero ocupando
 // >= 50 % y si no entero con zoom normal; después más abierto; y como
 // último recurso, siempre seguro, el plano con más personajes enteros.
-export function encuadreDeAccionKit(escena: string, accion: string, objetivo: string | undefined, recorrido: Recorrido, registro: Registro): { r: ResultadoEncuadre; focos: Rect[]; pendiente?: Rect } | null {
+export function encuadreDeAccionKit(escena: string, accion: string, objetivo: string | undefined, recorrido: Recorrido, registro: Registro, tiempo?: VentanaCuerpos): { r: ResultadoEncuadre; focos: Rect[]; pendiente?: Rect } | null {
   const isla = recorrido[registro.escena(escena)?.isla ?? ""];
   const foco = registro.foco(escena, accion, objetivo);
   if (!isla || !foco) return null;
   const f = desplazar(foco, isla.x, isla.y);
-  const cuerpos = cuerposEnMundo(escena, recorrido, registro);
+  const cuerpos = cuerposEnMundo(escena, recorrido, registro, tiempo);
   // Acciones de personajes: la gente apoyada abajo (sin piso vacío).
   // (también un objeto en la mano de alguien: el plano es de esa persona).
   const cu = registro.composicion(escena);
   const idAccion = accion.split(".")[0];
-  const anclarAbajo = !!cu && (cu.personajes.some((u) => u.per.id === idAccion) || cu.objetos.some((o) => o.obj.id === idAccion && !!o.obj.en_mano_de));
-  let r = encuadrarKit({ obligatorios: [f], cuerpos, soloNormal: true, anclarAbajo });
+  // Lo apoyado en el piso (un vehículo, un mueble) se encuadra como alguien
+  // de cuerpo entero: apoyado abajo, sin franja de vereda vacía debajo.
+  const enPiso = !!cu?.objetos.some((o) => o.obj.id === idAccion && o.obj.lugar?.startsWith("piso_"));
+  const anclarAbajo = !!cu && (enPiso || cu.personajes.some((u) => u.per.id === idAccion) || cu.objetos.some((o) => o.obj.id === idAccion && !!o.obj.en_mano_de));
+  // Caminar (entra, se va, pasa de largo): de cuerpo entero, con los pies sobre la zona de Instagram.
+  const verbo = accion.split(".")[1];
+  const cuerpoEntero = enPiso || verbo === "entra" || verbo === "se_va" || verbo === "pasa_de_largo";
+  let r = encuadrarKit({ obligatorios: [f], cuerpos, soloNormal: true, anclarAbajo, cuerpoEntero });
   if (r) return { r, focos: [f] };
   const reducidos = registro.focoReducido(escena, accion, objetivo).map((x) => desplazar(x, isla.x, isla.y));
   for (const sinOcupacionMinima of [false, true]) {
     for (const fr of reducidos) {
-      r = encuadrarKit({ obligatorios: [fr], cuerpos, soloNormal: true, sinOcupacionMinima, anclarAbajo });
+      r = encuadrarKit({ obligatorios: [fr], cuerpos, soloNormal: true, sinOcupacionMinima, anclarAbajo, cuerpoEntero });
       if (!r) continue;
       // El objetivo (a quién se le da o se le señala) que no entró va en la cobertura.
       const o = objetivo ? (registro.foco(escena, `${objetivo}.quieto`) ?? registro.foco(escena, `${objetivo}.destaca`)) : null;
       return { r, focos: [fr], pendiente: o ? desplazar(o, isla.x, isla.y) : undefined };
     }
   }
-  r = encuadrarKit({ obligatorios: [f], cuerpos, anclarAbajo });
+  r = encuadrarKit({ obligatorios: [f], cuerpos, anclarAbajo, cuerpoEntero });
   if (r) return { r, focos: [f] };
-  const todos = encuadrarKit({ obligatorios: [], deseables: personajesEnMundo(escena, "quieto", recorrido, registro), cuerpos, anclarAbajo: true });
+  const todos = encuadrarKit({ obligatorios: [], deseables: personajesEnMundo(escena, "quieto", recorrido, registro), cuerpos, anclarAbajo: true, cuerpoEntero: true });
   return todos ? { r: todos, focos: todos.incluidos } : null;
 }
 
@@ -136,7 +177,7 @@ export function tomasDeCamara(disparos: Disparo[], recorrido: Recorrido, registr
     const esCelular = registro.escena(d.escena)?.celular === true;
     const ultima = tomas[tomas.length - 1];
     if (registro.composicion(d.escena)) {
-      tomaDelKit(tomas, d, f, recorrido, registro);
+      tomaDelKit(tomas, d, f, recorrido, registro, disparos);
       continue;
     }
     if (ultima) {
@@ -161,22 +202,32 @@ export function tomasDeCamara(disparos: Disparo[], recorrido: Recorrido, registr
 }
 
 // Una acción en un lugar del kit (ver encuadreKit.ts para las reglas).
-function tomaDelKit(tomas: Toma[], d: Disparo, f: Rect, recorrido: Recorrido, registro: Registro) {
-  const cuerpos = cuerposEnMundo(d.escena, recorrido, registro);
+// Ventana de una toma para cuidar a quien camina: de la acción a ~2,3 s después.
+const VENTANA_TOMA = 70;
+function tomaDelKit(tomas: Toma[], d: Disparo, f: Rect, recorrido: Recorrido, registro: Registro, disparos: Disparo[] = []) {
+  const tiempo: VentanaCuerpos = { d: disparosDeEscena(disparos, d.escena), desde: d.cuadro - 6, hasta: d.cuadro + VENTANA_TOMA };
+  const cuerpos = cuerposEnMundo(d.escena, recorrido, registro, tiempo);
   const [id, verbo] = d.accion.split(".");
   const grupo = id === ID_TODOS;
   const ultima = tomas[tomas.length - 1];
   const mismoLugar = ultima?.escena === d.escena;
+  // Quien entra o se va camina hasta este cuadro (la toma no se corta antes).
+  const caminaHasta = verbo === "entra" || verbo === "se_va" ? d.cuadro + CUADROS_CAMINAR : undefined;
+  const sigueCaminando = (t: Toma) => {
+    if (caminaHasta !== undefined) t.caminaHasta = Math.max(t.caminaHasta ?? 0, caminaHasta);
+  };
   if (ultima && mismoLugar) {
     // Lo mismo de antes (o el mismo grupo): la cámara se queda.
     if (ultima.focos.some((g) => igual(g, f)) || (grupo && ultima.grupo)) {
       ultima.ultimaAccion = d.cuadro;
+      sigueCaminando(ultima);
       return;
     }
     const dt = d.cuadro - ultima.desde;
     // Calma: llega muy pronto y ya se ve entero: sin corte.
     if (!grupo && dt < CALMA_KIT && cabeEnFranja(f, ultima.encuadre)) {
       ultima.ultimaAccion = d.cuadro;
+      sigueCaminando(ultima);
       return;
     }
     // Seguidas: una toma que muestre las dos, si cabe sin alejarse de más.
@@ -184,11 +235,15 @@ function tomaDelKit(tomas: Toma[], d: Disparo, f: Rect, recorrido: Recorrido, re
       const focos = [...ultima.focos, f];
       // Si son acciones de personajes, la gente apoyada abajo (sin piso vacío).
       const deGente = !!registro.composicion(d.escena)?.personajes.some((u) => u.per.id === id);
-      const r = encuadrarKit({ obligatorios: focos, cuerpos, soloNormal: true, anclarAbajo: deGente });
+      // Si alguna es caminar, la toma junta va de cuerpo entero.
+      const camina = verbo === "entra" || verbo === "se_va" || verbo === "pasa_de_largo" || ultima.cuerpoEntero === true;
+      const r = encuadrarKit({ obligatorios: focos, cuerpos, soloNormal: true, anclarAbajo: deGente, cuerpoEntero: camina });
       if (r && ocupacionUtil(unionRects(focos), r.encuadre) >= 0.5) {
         ultima.focos = focos;
         ultima.encuadre = r.encuadre;
         ultima.ultimaAccion = d.cuadro;
+        ultima.cuerpoEntero = camina;
+        sigueCaminando(ultima);
         return;
       }
     }
@@ -196,13 +251,16 @@ function tomaDelKit(tomas: Toma[], d: Disparo, f: Rect, recorrido: Recorrido, re
   let focos = [f];
   let r: ResultadoEncuadre | null = null;
   let pendiente: Rect | undefined;
-  if (grupo) r = encuadrarKit({ obligatorios: [], deseables: personajesEnMundo(d.escena, verbo, recorrido, registro), cuerpos, anclarAbajo: true });
+  if (grupo) r = encuadrarKit({ obligatorios: [], deseables: personajesEnMundo(d.escena, verbo, recorrido, registro), cuerpos, anclarAbajo: true, cuerpoEntero: true });
   else {
-    const e = encuadreDeAccionKit(d.escena, d.accion, d.objetivo, recorrido, registro);
+    const e = encuadreDeAccionKit(d.escena, d.accion, d.objetivo, recorrido, registro, tiempo);
     if (e) ({ r, focos, pendiente } = e);
   }
-  // Nunca dos cortes a menos de CORTE_MINIMO_KIT en el mismo lugar.
-  const desde = ultima && mismoLugar ? Math.max(d.cuadro, ultima.desde + CORTE_MINIMO_KIT) : d.cuadro;
+  // Nunca dos cortes a menos de CORTE_MINIMO_KIT en el mismo lugar; y si la
+  // toma anterior es de alguien que entra o se va, no se corta hasta que
+  // termina de caminar (la salida se ve completa).
+  const minimo = ultima?.caminaHasta ?? 0;
+  const desde = ultima && mismoLugar ? Math.max(d.cuadro, ultima.desde + CORTE_MINIMO_KIT, minimo) : d.cuadro;
   tomas.push({
     desde,
     ultimaAccion: d.cuadro,
@@ -213,6 +271,8 @@ function tomaDelKit(tomas: Toma[], d: Disparo, f: Rect, recorrido: Recorrido, re
     celular: false,
     escena: d.escena,
     grupo,
+    cuerpoEntero: grupo || verbo === "entra" || verbo === "se_va" || verbo === "pasa_de_largo",
+    caminaHasta,
   });
 }
 
@@ -242,11 +302,11 @@ function distintos(a: Encuadre, b: Encuadre): boolean {
 //   y reacciones de quienes miran; los detalles de la cartelera al final;
 // - si es sobre la cartelera: sus detalles (mitades, el hueco) intercalados
 //   con reacciones de quienes la miran.
-export function coberturasDeToma(t: Toma, recorrido: Recorrido, registro: Registro, accionesDeToma: Disparo[] = []): { encuadre: Encuadre; focos: Rect[] }[] {
+export function coberturasDeToma(t: Toma, recorrido: Recorrido, registro: Registro, accionesDeToma: Disparo[] = [], tiempo?: VentanaCuerpos): { encuadre: Encuadre; focos: Rect[] }[] {
   const cu = t.escena ? registro.composicion(t.escena) : null;
   const isla = t.escena ? recorrido[registro.escena(t.escena)?.isla ?? ""] : undefined;
   if (!cu || !isla) return [];
-  const cuerpos = cuerposEnMundo(t.escena!, recorrido, registro);
+  const cuerpos = cuerposEnMundo(t.escena!, recorrido, registro, tiempo);
   const enMundo = (r: Rect) => desplazar(r, isla.x, isla.y);
   const principal = unionRects(t.focos);
   const cart = cu.objetos.find((o) => o.obj.tipo === "cartelera" && o.rect);
@@ -287,12 +347,16 @@ export function coberturasDeToma(t: Toma, recorrido: Recorrido, registro: Regist
   const intercalar = (a: Rect[], b: Rect[]) => Array.from({ length: Math.max(a.length, b.length) }, (_, i) => [a[i], b[i]]).flat().filter((x): x is Rect => !!x);
   const orden: Rect[] = [...(t.pendiente ? [t.pendiente] : []), ...(temaCartelera ? intercalar(detalles, reacciones) : [...intercalar(primerosPlanos, reacciones), ...detalles])];
   const res: { encuadre: Encuadre; focos: Rect[] }[] = [];
+  // Siempre, al final: el plano general del lugar (todos de cuerpo entero).
+  const general = encuadrarKit({ obligatorios: [], deseables: cu.personajes.map((u) => enMundo(rectPersonaje(u))), cuerpos, anclarAbajo: true, cuerpoEntero: true });
   const esReaccion = new Set([...reacciones, ...(t.pendiente ? [t.pendiente] : [])]);
   for (const r of orden) {
     const anclarAbajo = esReaccion.has(r);
-    const e = encuadrarKit({ obligatorios: [r], cuerpos, soloNormal: true, anclarAbajo }) ?? encuadrarKit({ obligatorios: [r], cuerpos, soloNormal: true, sinOcupacionMinima: true, anclarAbajo });
+    // Reacciones: de cuerpo entero, con los pies sobre la zona de Instagram.
+    const e = encuadrarKit({ obligatorios: [r], cuerpos, soloNormal: true, anclarAbajo, cuerpoEntero: anclarAbajo }) ?? encuadrarKit({ obligatorios: [r], cuerpos, soloNormal: true, sinOcupacionMinima: true, anclarAbajo });
     if (e && distintos(e.encuadre, t.encuadre) && res.every((x) => distintos(x.encuadre, e.encuadre))) res.push({ encuadre: e.encuadre, focos: [r] });
   }
+  if (general && general.incluidos.length && distintos(general.encuadre, t.encuadre) && res.every((x) => distintos(x.encuadre, general.encuadre))) res.push({ encuadre: general.encuadre, focos: general.incluidos });
   return res;
 }
 function interseccion(a: Rect, b: Rect): Rect {
@@ -307,6 +371,12 @@ function seTocanMucho(a: Rect, b: Rect): boolean {
   return ix * iy > 0.5 * a.ancho * a.alto;
 }
 
+// Cuánto hay que seguir viendo una acción antes de cortar: quien entra o se
+// va, hasta que termina de caminar (la salida se ve completa).
+function verAccion(a: Disparo): number {
+  return /\.(entra|se_va)$/.test(a.accion) ? Math.max(VER_ACCION, CUADROS_CAMINAR) : VER_ACCION;
+}
+
 export function conCobertura(tomasOriginales: Toma[], disparos: Disparo[], recorrido: Recorrido, registro: Registro, total: number): Toma[] {
   // Tomas seguidas del mismo lugar con el mismo encuadre se ven como un solo
   // plano (no hay corte): se cuentan juntas.
@@ -315,6 +385,7 @@ export function conCobertura(tomasOriginales: Toma[], disparos: Disparo[], recor
     const ultima = tomas[tomas.length - 1];
     if (ultima && ultima.escena === t.escena && t.escena && registro.composicion(t.escena) && !distintos(ultima.encuadre, t.encuadre)) {
       ultima.ultimaAccion = Math.max(ultima.ultimaAccion, t.ultimaAccion);
+      if (t.caminaHasta !== undefined) ultima.caminaHasta = Math.max(ultima.caminaHasta ?? 0, t.caminaHasta);
       // Si la que se suma es de grupo, el plano (ya igual) muestra al grupo.
       if (t.grupo) {
         ultima.grupo = true;
@@ -326,7 +397,9 @@ export function conCobertura(tomasOriginales: Toma[], disparos: Disparo[], recor
   }
   const res: Toma[] = [];
   tomas.forEach((t, i) => {
-    const fin = tomas[i + 1]?.desde ?? total;
+    // Si sigue el celular, la puerta corta antes (sale del lugar ~22 cuadros antes).
+    const siguiente = tomas[i + 1];
+    const fin = siguiente ? (siguiente.celular && t.escena && registro.composicion(t.escena) ? siguiente.desde + LLEGAR_TRAS_PALABRA - 2 * CUADROS_PUERTA : siguiente.desde) : total;
     const visibleDesde = i === 0 ? 0 : tomas[i - 1].celular ? t.desde + LLEGAR_TRAS_PALABRA - CUADROS_PUERTA : t.desde;
     if (!t.escena || !registro.composicion(t.escena) || fin - visibleDesde <= MAX_PLANO_KIT) {
       res.push(t);
@@ -334,7 +407,7 @@ export function conCobertura(tomasOriginales: Toma[], disparos: Disparo[], recor
     }
     const deLaToma = disparos.filter((d) => d.escena === t.escena && d.accion !== MICRO && d.cuadro >= t.desde - CORTE_MINIMO_KIT && d.cuadro < fin);
     const acciones = deLaToma.filter((d) => d.cuadro >= t.desde);
-    const candidatos = coberturasDeToma(t, recorrido, registro, deLaToma);
+    const candidatos = coberturasDeToma(t, recorrido, registro, deLaToma, { d: disparosDeEscena(disparos, t.escena), desde: t.desde, hasta: fin });
     res.push(t);
     if (!candidatos.length) return;
     // ¿La cobertura ya muestra lo que nombra la acción? (un detalle de la
@@ -344,6 +417,8 @@ export function conCobertura(tomasOriginales: Toma[], disparos: Disparo[], recor
       const v = vistaDelMundo(c.encuadre);
       return area(interseccion(f, v)) >= 0.4 * area(f) || area(interseccion(c.focos[0], f)) >= 0.8 * area(c.focos[0]);
     };
+    // Nunca se corta mientras alguien entra o se va caminando.
+    const libre = (c: number) => !acciones.some((a) => c > a.cuadro && c < a.cuadro + verAccion(a));
     let k = 0;
     // Desde cuándo se ve de verdad: la primera toma, desde el cuadro 0; la
     // que sigue a la puerta del celular, desde el corte (unos cuadros antes).
@@ -351,16 +426,25 @@ export function conCobertura(tomasOriginales: Toma[], disparos: Disparo[], recor
     let enPrincipal = true;
     for (let vueltas = 0; fin - inicio > MAX_PLANO_KIT && vueltas < 50; vueltas++) {
       let corte = inicio + (enPrincipal ? Math.min(45, MAX_PLANO_KIT) : PLANO_COBERTURA);
+      let trasCaminar = false; // el corte es justo cuando termina de caminar
       if (enPrincipal) {
         let estorbo: Disparo | undefined;
-        for (const a of acciones) if (corte > a.cuadro - ANTES_ACCION && corte < a.cuadro + VER_ACCION) {
-          corte = a.cuadro + VER_ACCION;
+        for (const a of acciones) if (corte > a.cuadro - ANTES_ACCION && corte < a.cuadro + verAccion(a)) {
+          corte = a.cuadro + verAccion(a);
           estorbo ??= a;
         }
         // Correr el corte después de la acción dejaría el plano principal
         // demasiado largo: se corta antes, con una cobertura que vuelve en la acción.
         const antes = estorbo ? estorbo.cuadro - ANTES_ACCION - MIN_PLANO_KIT : 0;
-        if (estorbo && (corte - inicio > MAX_PLANO_KIT || fin - corte < MIN_PLANO_KIT) && antes - inicio >= CORTE_MINIMO_KIT) corte = antes;
+        if (estorbo && (corte - inicio > MAX_PLANO_KIT || fin - corte < MIN_PLANO_KIT)) {
+          // Si en "antes" alguien todavía camina, se corta apenas termina
+          // (la cobertura que sigue muestra la acción que viene).
+          const tras = libre(antes) ? antes : Math.max(...acciones.filter((a) => antes > a.cuadro && antes < a.cuadro + verAccion(a)).map((a) => a.cuadro + verAccion(a)));
+          if (tras - inicio >= CORTE_MINIMO_KIT && tras < estorbo.cuadro && fin - tras >= MIN_PLANO_KIT) {
+            corte = tras;
+            trasCaminar = tras !== antes;
+          }
+        }
       }
       if (fin - corte < MIN_PLANO_KIT) break;
       // Preferir una cobertura que ya muestre las acciones que vienen.
@@ -376,10 +460,14 @@ export function conCobertura(tomasOriginales: Toma[], disparos: Disparo[], recor
       let pendiente = ventana(corte).find((a) => !muestra(c, a));
       // Si esa acción llegaría antes de que la cobertura dure lo mínimo,
       // se corta antes (la cobertura entra entera antes de la acción).
-      if (pendiente && pendiente.cuadro - ANTES_ACCION - corte < MIN_PLANO_KIT && enPrincipal) {
+      // Cortando justo al terminar de caminar, la cobertura dura lo mínimo y se
+      // vuelve con la acción ya empezada (mejor que un plano de más de 2 s).
+      if (pendiente && pendiente.cuadro - ANTES_ACCION - corte < MIN_PLANO_KIT && enPrincipal && !trasCaminar) {
         const antes = pendiente.cuadro - ANTES_ACCION - MIN_PLANO_KIT;
-        if (antes - inicio >= CORTE_MINIMO_KIT) {
-          corte = antes;
+        // Si en "antes" alguien todavía camina, se corta apenas termina.
+        const tras = libre(antes) ? antes : Math.max(...acciones.filter((a) => antes > a.cuadro && antes < a.cuadro + verAccion(a)).map((a) => a.cuadro + verAccion(a)));
+        if (tras - inicio >= CORTE_MINIMO_KIT && tras < pendiente.cuadro) {
+          corte = tras;
           ({ c, n } = elegir(corte));
           pendiente = ventana(corte).find((a) => !muestra(c, a));
         } else {

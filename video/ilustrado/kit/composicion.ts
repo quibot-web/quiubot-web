@@ -112,6 +112,8 @@ export type PersonajeUbicado = { per: PersonajeKit; aspecto: AspectoPersonaje; p
   // Si en el plan entra o se va: cuánto camina hasta la puerta (la cámara
   // lo cuida en todo el recorrido).
   caminoDx?: number;
+  pasaDeLargo?: boolean;
+  centroPaso?: number;
 };
 export type ObjetoUbicado = { obj: ObjetoKit; rect: Rect | null }; // null: en la mano de alguien
 export type ComposicionUbicada = { c: ComposicionKit; pared: Pared; isla: { ancho: number; alto: number }; personajes: PersonajeUbicado[]; objetos: ObjetoUbicado[] };
@@ -239,16 +241,48 @@ export const VERBOS_TODOS = {
 // mucho CAMINO_MAXIMO (aparece o desaparece con un fundido al final): un
 // recorrido de todo el lugar no cabe en ningún plano sin cortarlo.
 export const CAMINO_MAXIMO = 420;
+export const CAMINO_LATERAL = 680;
 export function caminoDe(u: PersonajeUbicado, fondo: Fondo): number {
   const d = PUERTA_X[fondo] - u.cx;
-  // Ya está en la puerta: no camina de lado; sale (o entra) por ella, al fondo.
-  if (Math.abs(d) < 80) return 0;
+  // Ya está junto a la puerta: sale (o entra) caminando hacia el costado más
+  // cercano (dibujados de frente, salir "hacia el fondo" parecía quedarse
+  // quieto); al tocar el borde del cuadro se desvanece.
+  // Camina lo bastante para salir del cuadro (o entrar desde fuera): la
+  // salida se ve completa.
+  if (Math.abs(d) < 80) return u.cx < SALON.ancho / 2 ? -CAMINO_LATERAL : CAMINO_LATERAL;
   return Math.sign(d) * Math.min(Math.abs(d), CAMINO_MAXIMO);
+}
+
+// Lo que el plano muestra del recorrido: hasta CAMINO_MAXIMO; más allá,
+// sale (o entra) por el borde del cuadro.
+export const tramoVisible = (dx: number) => Math.sign(dx) * Math.min(Math.abs(dx), CAMINO_MAXIMO);
+
+// Plano medio: de lo más alto (cabeza o manos en alto) hasta medio muslo.
+export const PLANO_MEDIO = 0.62;
+export function planoMedio(u: PersonajeUbicado, r: Rect): Rect {
+  const alto = (u.pies - r.y) * PLANO_MEDIO;
+  return { ...r, alto: Math.min(r.alto, alto) };
+}
+
+// Cuánto camina el que pasa de largo, a cada lado del centro de su paso.
+export const PASO_LARGO = 420;
+// Quien pasa de largo cruza por delante del objeto principal más cercano (la
+// vitrina, el mostrador, la cartelera, un vehículo): así se ve que pasa al
+// lado de eso sin mirarlo. Sin objetos: alrededor de su lugar. Devuelve el
+// corrimiento (en x) del centro del paso respecto de su lugar.
+export function centroDePaso(u: PersonajeUbicado, cu: ComposicionUbicada): number {
+  const principales = cu.objetos.filter((o) => o.rect && !o.obj.en_mano_de && !o.obj.sobre && o.obj.tipo !== "pupitre");
+  if (!principales.length) return 0;
+  const centros = principales.map((o) => o.rect!.x + o.rect!.ancho / 2);
+  const mas = centros.reduce((a, b) => (Math.abs(b - u.cx) < Math.abs(a - u.cx) ? b : a));
+  return mas - u.cx;
 }
 
 // Un rectángulo del personaje extendido a todo su recorrido (si camina).
 export function enCamino(u: PersonajeUbicado, r: Rect): Rect {
-  return u.caminoDx ? union(r, { ...r, x: r.x + u.caminoDx }) : r;
+  let res = u.caminoDx ? union(r, { ...r, x: r.x + u.caminoDx }) : r;
+  if (u.pasaDeLargo) res = union(res, union({ ...r, x: r.x + (u.centroPaso ?? 0) - PASO_LARGO }, { ...r, x: r.x + (u.centroPaso ?? 0) + PASO_LARGO }));
+  return res;
 }
 
 export function rectElemento(cu: ComposicionUbicada, id: string, pose?: Pose): Rect | null {
@@ -289,11 +323,21 @@ export function accionesDeComposicion(cu: ComposicionUbicada): Record<string, De
   for (const u of cu.personajes) {
     for (const [verbo, def] of Object.entries(VERBOS_PERSONAJE)) {
       // Sentado no se entra ni se va caminando.
-      if ((verbo === "entra" || verbo === "se_va") && u.sentado) continue;
+      if ((verbo === "entra" || verbo === "se_va" || verbo === "pasa_de_largo") && u.sentado) continue;
       const pose = "pose" in def ? def.pose : undefined;
       const r = rectPersonaje(u, pose);
       // Entrar o irse: el foco es todo el recorrido, de la puerta a su lugar.
-      const foco = verbo === "entra" || verbo === "se_va" ? union(r, { ...r, x: r.x + caminoDe(u, cu.c.fondo) }) : r;
+      // Caminar se ve de cuerpo entero; las demás acciones de alguien de pie,
+      // en plano medio (de la cabeza a medio muslo): un adulto de cuerpo
+      // entero queda chico y con piso de sobra (revisión de la tanda 2).
+      const foco =
+        verbo === "entra" || verbo === "se_va"
+          ? union(r, { ...r, x: r.x + tramoVisible(caminoDe(u, cu.c.fondo)) })
+          : verbo === "pasa_de_largo"
+            ? union({ ...r, x: r.x + centroDePaso(u, cu) - PASO_LARGO }, { ...r, x: r.x + centroDePaso(u, cu) + PASO_LARGO })
+            : u.sentado
+              ? r
+              : planoMedio(u, r);
       res[`${u.per.id}.${verbo}`] = { descripcion: `${nombreElemento(cu, u.per.id)} ${def.descripcion}`, foco };
     }
   }
@@ -310,7 +354,10 @@ export function accionesDeComposicion(cu: ComposicionUbicada): Record<string, De
       if (verbo === "va_al_hueco" && !hueco) continue;
       const r = rectElemento(cu, o.obj.id);
       if (!r) continue;
-      res[`${o.obj.id}.${verbo}`] = { descripcion, foco: verbo === "va_al_hueco" && hueco ? union(r, hueco) : r };
+      // En la mano de alguien de pie: el plano medio de esa persona.
+      const duenio = o.obj.en_mano_de ? cu.personajes.find((u) => u.per.id === o.obj.en_mano_de) : undefined;
+      const base = duenio && !duenio.sentado ? planoMedio(duenio, r) : r;
+      res[`${o.obj.id}.${verbo}`] = { descripcion, foco: verbo === "va_al_hueco" && hueco ? union(base, hueco) : base };
     }
   }
   return res;

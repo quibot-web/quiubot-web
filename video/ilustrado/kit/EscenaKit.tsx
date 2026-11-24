@@ -9,11 +9,12 @@ import { rampa, latido, primero } from "../motor/animacion";
 import type { DisparosEscena } from "../motor/plan";
 import { seTocan, type Rect } from "../motor/geometria";
 import { PAREDES, VERBOS_PERSONAJE, type Expresion, type Pose } from "./catalogoKit";
-import { ID_TODOS, aIsla, caminoDe, casillaHuecoEnIsla, hashTexto, rectElemento, rectPersonaje, type ComposicionUbicada, type PersonajeUbicado } from "./composicion";
+import { ID_TODOS, aIsla, casillaHuecoEnIsla, centroDePaso, enCamino, rectCabezaTorso, hashTexto, rectElemento, rectPersonaje, type ComposicionUbicada, type PersonajeUbicado } from "./composicion";
 import { BOLSA, CAJA, CELULAR, HELADO, TORTA, VENTANA_COCINA_X, coloresEntorno } from "./dibujoLugares";
 import { CARTELERA, DIBUJO, DULCES, SALON, VENTANA_SALON, Y_LINEAS_PISO, casillaCartelera } from "./dibujoObjetos";
 import { oscurecer, aclarar, type Cara } from "./dibujoPersonaje";
 import { clave, motivoDe, motivosCartelera, type ImagenesKit, type ImagenPieza } from "./piezas";
+import { presenciaDe, rectEnPresencia } from "./presencia";
 import { apunteHacia, conVueltasAParado, estadoPose, poseEnCuadro, posicionMano, type AngulosBrazo, type CambioPose, type EstadoPose } from "./poses";
 
 // objetivos: a qué apunta cada acción que lo tiene ("profesora.senala" en
@@ -228,10 +229,24 @@ function mirada(u: PersonajeUbicado, cu: ComposicionUbicada, atenciones: Atencio
 }
 
 // ---------- Personaje ----------
-function Personaje({ u, cu, frame, fps, d, imagenes, objetivos, atenciones }: { u: PersonajeUbicado; cu: ComposicionUbicada; frame: number; fps: number; d: DisparosEscena; imagenes: ImagenesKit; objetivos?: ObjetivosKit; atenciones: Atencion[] }) {
+function zDetrasDelPaso(u: PersonajeUbicado, cu: ComposicionUbicada): number {
+  const x = u.cx + centroDePaso(u, cu);
+  const o = cu.objetos.find((o) => o.rect && !o.obj.en_mano_de && !o.obj.sobre && Math.abs(o.rect.x + o.rect.ancho / 2 - x) < 1);
+  return o?.rect ? Math.min(zDe(u), o.rect.y + o.rect.alto - 1) : zDe(u);
+}
+
+// 0 si r toca o sale de la vista; de 0 a 1 en las últimas 40 unidades adentro.
+export function margenDentro(r: Rect, v: Rect): number {
+  const m = Math.min(r.x - v.x, v.x + v.ancho - (r.x + r.ancho), r.y - v.y, v.y + v.alto - (r.y + r.alto));
+  return Math.max(0, Math.min(1, m / 40));
+}
+
+function Personaje({ u, cu, frame, fps, d, imagenes, objetivos, atenciones, vista }: { u: PersonajeUbicado; cu: ComposicionUbicada; frame: number; fps: number; d: DisparosEscena; imagenes: ImagenesKit; objetivos?: ObjetivosKit; atenciones: Atencion[]; vista?: Rect }) {
   const { p, aspecto: a } = u;
   const { expresiones } = cambiosDe(d, u, cu, objetivos);
   const { e } = estadoEnCuadro(u, cu, d, objetivos ?? [], frame, fps);
+  // Caminando (entra, se va, pasa de largo): corrido, mirando hacia donde va, con paso.
+  const pres = presenciaDe(u, cu, d, frame);
   const pasadas = expresiones.filter((x) => x.cuadro <= frame);
   const actual = pasadas.at(-1);
   const expresion = actual?.expresion ?? u.per.expresion;
@@ -253,14 +268,18 @@ function Personaje({ u, cu, frame, fps, d, imagenes, objetivos, atenciones }: { 
   const gMundo = gAtento + (gLejos - gAtento) * distraido;
   // Y bosteza cada ~3 s (cara de bostezo unos 0,7 s).
   const bosteza = distraido >= 1 && (frame + (h % 97)) % 96 < 22;
-  const g = gMundo * (u.espejo ? -1 : 1); // en coordenadas locales
+  // Caminando mira al frente (hacia donde va), nunca a lo que pasa en el
+  // lugar: así se lee "pasa de largo sin mirar".
+  const g = pres.camina ? 0.6 : gMundo * (u.espejo ? -1 : 1); // en coordenadas locales
   const giroCabeza = e.inclinacion + g * 5 + 7 * distraido + Math.sin((frame + h) / 47) * 1.2;
   const micro = latido(frame, d.micro, 18) * Math.abs(Math.sin(frame / 3)) * 10;
-  // Caminando (entra o se va): corrido, mirando hacia donde va, con paso.
-  const pres = presenciaDe(u, cu, d, frame);
   if (pres.alpha <= 0) return null;
+  // Quien camina nunca se ve cortado por el borde: se desvanece al acercarse
+  // (40 unidades) y no se dibuja si la cabeza o el torso lo tocarían.
+  const bordeAlpha = pres.camina && vista ? margenDentro(rectEnPresencia(u, rectCabezaTorso(u), pres), vista) : 1;
+  if (bordeAlpha <= 0) return null;
   const espejo = pres.mira ? pres.mira === "izquierda" : u.espejo;
-  const paso = pres.camina ? Math.abs(Math.sin(pres.t / 3.2)) * 0.025 * p.alto : 0;
+  const paso = pres.camina ? Math.abs(Math.sin(pres.t / 3.2)) * (pres.pasa ? 0.04 : 0.025) * p.alto : 0;
   const ep = pres.escala ?? 1;
   const sx = u.escala * ep * (espejo ? -1 : 1);
   const brazo = (lado: "mira" | "otro", ang: AngulosBrazo): ReactNode => {
@@ -288,7 +307,7 @@ function Personaje({ u, cu, frame, fps, d, imagenes, objetivos, atenciones }: { 
   const peloAtras = imagenes[clave.peloAtras(a)];
   const giro = (img: ImagenPieza): CSSProperties => ({ transformOrigin: `${img.ancla.x}px ${img.ancla.y}px`, transform: `rotate(${giroCabeza}deg) translateX(${g * 4}px)` });
   return (
-    <div style={{ position: "absolute", left: u.cx + pres.dx, top: u.pies, width: 0, height: 0, opacity: pres.alpha }}>
+    <div style={{ position: "absolute", left: u.cx + pres.dx, top: u.pies + (pres.dy ?? 0), width: 0, height: 0, opacity: pres.alpha * bordeAlpha }}>
       <div style={{ position: "absolute", left: -p.cx, top: -p.pies, width: p.ancho, height: p.alto, transformOrigin: `${p.cx}px ${p.pies}px`, transform: `scale(${sx}, ${u.escala * ep * (1 + respira)}) translateY(${e.saltoY - micro - paso}px) rotate(${pres.camina ? Math.sin(pres.t / 3.2) * 2 : 0}deg)` }}>
         {peloAtras && <Img img={peloAtras} estilo={giro(peloAtras)} />}
         <Img img={imagenes[clave.cuerpo(a)]} />
@@ -344,43 +363,9 @@ function estadoSinMemo(u: PersonajeUbicado, cu: ComposicionUbicada, d: DisparosE
   return { e, pose };
 }
 
-// ---------- Presencia: entrar y salir caminando ----------
-// "entra": aparece en la puerta del lugar y camina hasta su lugar; "se_va":
-// camina hasta la puerta y desaparece. Si lo primero que hace es entrar, no
-// está antes. dx: corrimiento desde su lugar; mira: hacia dónde camina.
-export const CUADROS_CAMINAR = 36;
-// escala: al entrar o salir por la puerta del fondo (sin caminar de lado), se
-// achica un poco, como si se alejara.
-export type Presencia = { dx: number; alpha: number; camina: boolean; mira?: "izquierda" | "derecha"; t: number; escala?: number };
-export function presenciaDe(u: PersonajeUbicado, cu: ComposicionUbicada, d: DisparosEscena, frame: number): Presencia {
-  const id = u.per.id;
-  const eventos = [...(d[`${id}.entra`] ?? []).map((c) => ({ c, tipo: "entra" as const })), ...(d[`${id}.se_va`] ?? []).map((c) => ({ c, tipo: "se_va" as const }))].sort((a, b) => a.c - b.c);
-  if (!eventos.length) return { dx: 0, alpha: 1, camina: false, t: 0 };
-  const hasta = caminoDe(u, cu.c.fondo);
-  const pasados = eventos.filter((e) => e.c <= frame);
-  const ultimo = pasados.at(-1);
-  if (!ultimo) return eventos[0].tipo === "entra" ? { dx: hasta, alpha: 0, camina: false, t: 0 } : { dx: 0, alpha: 1, camina: false, t: 0 };
-  const t = frame - ultimo.c;
-  const k = Math.min(1, t / CUADROS_CAMINAR);
-  const suave = k * k * (3 - 2 * k);
-  const hacia = (dx: number): "izquierda" | "derecha" => (dx < 0 ? "izquierda" : "derecha");
-  if (ultimo.tipo === "entra") {
-    if (k >= 1) return { dx: 0, alpha: 1, camina: false, t };
-    // Si todavía se estaba yendo, da media vuelta desde donde está (no salta a la puerta).
-    const previo = pasados.at(-2);
-    let [dx0, alpha0] = [hasta, 0];
-    if (previo?.tipo === "se_va" && ultimo.c - previo.c < CUADROS_CAMINAR) {
-      const kp = (ultimo.c - previo.c) / CUADROS_CAMINAR;
-      dx0 = hasta * kp * kp * (3 - 2 * kp);
-      alpha0 = 1 - Math.max(0, (ultimo.c - previo.c - (CUADROS_CAMINAR - 8)) / 8);
-    }
-    if (hasta === 0) return { dx: 0, alpha: suave, camina: true, t, escala: 0.9 + 0.1 * suave };
-    return { dx: dx0 * (1 - suave), alpha: alpha0 + (1 - alpha0) * Math.min(1, t / 8), camina: true, mira: hacia(-dx0 || -hasta), t };
-  }
-  if (k >= 1) return { dx: hasta, alpha: 0, camina: false, t };
-  if (hasta === 0) return { dx: 0, alpha: 1 - suave, camina: true, t, escala: 1 - 0.1 * suave };
-  return { dx: hasta * suave, alpha: 1 - Math.max(0, (t - (CUADROS_CAMINAR - 8)) / 8), camina: true, mira: hacia(hasta), t };
-}
+// La presencia (entrar, irse, pasar de largo) vive en presencia.ts: la
+// usan el dibujo y la cámara (quién está dónde en cada cuadro).
+export { presenciaDe, CUADROS_CAMINAR, CUADROS_PASAR, PROFUNDIDAD_PUERTA, type Presencia } from "./presencia";
 
 // Dónde está la mano del que sostiene un objeto en este cuadro. Al
 // señalar, el objeto pasa a la otra mano (si no, barre lo que señala).
@@ -602,9 +587,11 @@ export function EscenaKit({ cu, frame, fps, d: disparos, imagenes, objetivos, vi
   // Personajes (con su silla y pupitre si están sentados). Más atrás =
   // antes; en la misma fila, los adultos detrás de los niños.
   for (const u of cu.personajes) {
-    if (!seVe(rectPersonaje(u))) continue;
+    if (!seVe(enCamino(u, rectPersonaje(u)))) continue;
     const s = u.sentado;
-    const z = zDe(u);
+    // Quien pasa de largo va por detrás de lo que pasa (la vitrina): lo que
+    // no mira sigue a la vista.
+    const z = d[`${u.per.id}.pasa_de_largo`]?.length ? zDetrasDelPaso(u, cu) : zDe(u);
     const silla = imagenes[clave.silla()];
     const pupitre = s ? imagenes[clave.objeto(s.mueble)] : undefined;
     piso.push({
@@ -614,7 +601,7 @@ export function EscenaKit({ cu, frame, fps, d: disparos, imagenes, objetivos, vi
           {s && silla && <Img img={silla} estilo={{ left: s.silla.x, top: s.silla.y, width: s.silla.ancho, height: s.silla.alto }} />}
           {/* Aplaudiendo o celebrando, lo que tiene en la mano va detrás del cuerpo (si no, le tapa la cara). */}
           {manosArriba(u) && enMano.get(u.per.id)}
-          <Personaje u={u} cu={cu} frame={frame} fps={fps} d={d} imagenes={imagenes} objetivos={objetivos} atenciones={atenciones} />
+          <Personaje u={u} cu={cu} frame={frame} fps={fps} d={d} imagenes={imagenes} objetivos={objetivos} atenciones={atenciones} vista={vista} />
           {s && pupitre && <Img img={pupitre} estilo={{ left: s.pupitre.x, top: s.pupitre.y, width: s.pupitre.ancho, height: s.pupitre.alto }} />}
           {!manosArriba(u) && enMano.get(u.per.id)}
         </div>

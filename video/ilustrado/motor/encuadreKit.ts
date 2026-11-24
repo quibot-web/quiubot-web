@@ -29,7 +29,10 @@ const DERIVA = 10;
 
 // rect: cabeza y torso (lo que nunca se corta); cabezaY: centro de la cara;
 // completo: el personaje entero (hasta los pies, o el pupitre si está sentado).
-export type Cuerpo = { id: string; rect: Rect; cabezaY?: number; completo?: Rect };
+// movil: entra, se va o pasa de largo en ese momento. El dibujo nunca lo
+// muestra cortado (se desvanece al tocar el borde, ver EscenaKit), así que
+// la cámara lo ignora.
+export type Cuerpo = { id: string; rect: Rect; cabezaY?: number; completo?: Rect; movil?: boolean };
 
 // Reglas de primer plano limpio (revisión de la v6):
 // - el protagonista ocupa como máximo ALTO_MAXIMO_PROTAGONISTA de la altura
@@ -51,7 +54,8 @@ const conZoom = (c: Encuadre, f: number): Encuadre => ({ ...c, zoom: c.zoom * f 
 // y control de calidad: con la cámara exacta de un cuadro).
 export function carasCortadas(cam: Encuadre, cuerpos: Cuerpo[]): string[] {
   const v = vistaDelMundo(cam);
-  return cuerpos.filter((c) => seTocan(c.rect, v) && !dentro(c.rect, v, 0)).map((c) => c.id);
+  // Quien camina no se dibuja si toca el borde (no queda cortado).
+  return cuerpos.filter((c) => !c.movil && seTocan(c.rect, v) && !dentro(c.rect, v, 0)).map((c) => c.id);
 }
 
 // Seguro durante toda la toma: cada cuerpo entero (aun con el acercamiento
@@ -74,13 +78,19 @@ export function ocupacionUtil(r: Rect, cam: Encuadre): number {
 
 // Lo nombrado se ve entero: de ancho, en pantalla aun con el acercamiento;
 // de alto, dentro de la franja útil (la cabeza nunca bajo el subtítulo).
-export function cabeEnFranja(r: Rect, cam: Encuadre): boolean {
+// Cuerpo entero (gente caminando, grupos, reacciones): los pies pueden bajar
+// hasta PIES_CUERPO_ENTERO_Y (sobre la zona de Instagram solo queda el texto
+// del pie, no hay nada que tapar) y la persona puede ocupar casi toda la
+// pantalla; así no queda una franja de piso vacío debajo (revisión de la
+// tanda 2: los adultos de pie ocupaban 1/3 de la altura).
+export const PIES_CUERPO_ENTERO_Y = 1700;
+export function cabeEnFranja(r: Rect, cam: Encuadre, cuerpoEntero = false): boolean {
   const z = cam.zoom * ZOOM_TOMA_MAX;
   const sx = (x: number) => ANCHO_PANTALLA / 2 + (x - cam.x) * z;
   const sy = (y: number, zz: number) => ALTO_PANTALLA / 2 + (y - cam.y) * zz;
   if (sx(r.x) < 8 || sx(r.x + r.ancho) > ANCHO_PANTALLA - 8) return false;
   if (sy(r.y, z) < FONDO_SUBTITULO) return false;
-  return sy(r.y, cam.zoom) >= FRANJA_SEGURA.arriba - 30 && sy(r.y + r.alto, cam.zoom) <= FRANJA_SEGURA.abajo + 60;
+  return sy(r.y, cam.zoom) >= FRANJA_SEGURA.arriba - 30 && sy(r.y + r.alto, cam.zoom) <= (cuerpoEntero ? PIES_CUERPO_ENTERO_Y + 20 : FRANJA_SEGURA.abajo + 60);
 }
 
 export const ALTO_UTIL = FRANJA_SEGURA.abajo - FRANJA_SEGURA.arriba - 30;
@@ -104,6 +114,11 @@ export function encuadrarKit(o: OpcionesEncuadre & { soloNormal?: boolean }): Re
   return r;
 }
 function encuadrarSinMemoria(o: OpcionesEncuadre & { soloNormal?: boolean }): ResultadoEncuadre | null {
+  // Quien camina no limita el encuadre: el dibujo lo oculta antes de que
+  // toque el borde (lo que tiene que verse de su camino va en el foco).
+  return encuadrarTodos({ ...o, cuerpos: o.cuerpos.filter((c) => !c.movil) });
+}
+function encuadrarTodos(o: OpcionesEncuadre & { soloNormal?: boolean }): ResultadoEncuadre | null {
   if (!o.obligatorios.length || o.soloNormal) return buscar(o, ZOOM_MINIMO_KIT);
   // Antes que cortar una cara, abrir más (último recurso: 0,5).
   return buscar(o, ZOOM_MINIMO_KIT) ?? buscar(o, ZOOM_MINIMO_KIT_EXCEPCIONAL, false) ?? buscar(o, 0.5, false);
@@ -164,7 +179,7 @@ function intersecar(as: Intervalo[], bs: Intervalo[]): Intervalo[] {
 // anclarAbajo: lo encuadrado es gente (con sus pies): si no llena la altura
 // útil, se apoya abajo (los pies sobre la interfaz de Instagram) y lo que
 // sobra queda arriba, no como piso vacío (revisión de la v7).
-type OpcionesEncuadre = { obligatorios: Rect[]; deseables?: Rect[]; cuerpos: Cuerpo[]; zoomMaximo?: number; sinOcupacionMinima?: boolean; anclarAbajo?: boolean };
+type OpcionesEncuadre = { obligatorios: Rect[]; deseables?: Rect[]; cuerpos: Cuerpo[]; zoomMaximo?: number; sinOcupacionMinima?: boolean; anclarAbajo?: boolean; cuerpoEntero?: boolean };
 
 function buscar(o: OpcionesEncuadre, zMin: number, exigirMinimo = true): ResultadoEncuadre | null {
   const zMax = o.zoomMaximo ?? ZOOM_MAXIMO_KIT;
@@ -172,14 +187,18 @@ function buscar(o: OpcionesEncuadre, zMin: number, exigirMinimo = true): Resulta
   const u = o.obligatorios.length ? unionRects(o.obligatorios) : null;
   const referencia = u ?? (deseables.length ? unionRects(deseables) : null);
   if (!referencia) return null;
-  const zIdeal = u ? Math.min(1000 / u.ancho, (ALTO_UTIL * ALTO_MAXIMO_PROTAGONISTA) / u.alto, zMax) : Math.min(1.1, zMax);
+  // Cuerpo entero: de debajo del subtítulo hasta los pies sobre la zona de
+  // Instagram; si no, el protagonista ocupa como mucho el 70 % de la franja.
+  const altoDisponible = o.cuerpoEntero ? PIES_CUERPO_ENTERO_Y - FRANJA_SEGURA.arriba - 40 : ALTO_UTIL * ALTO_MAXIMO_PROTAGONISTA;
+  const zIdeal = u ? Math.min(1000 / u.ancho, altoDisponible / u.alto, zMax) : Math.min(o.cuerpoEntero ? 1.3 : 1.1, zMax);
   if (exigirMinimo && zIdeal < zMin - 1e-9) return null;
 
   let mejor: (ResultadoEncuadre & { puntaje: number }) | null = null;
   for (let z = Math.max(zIdeal, zMin); z >= zMin - 1e-9; z -= 0.02) {
     // Cota: con menos zoom el puntaje solo baja (si no hay deseables).
     if (mejor && !deseables.length && z * 4 <= mejor.puntaje) break;
-    const pref = o.anclarAbajo && referencia.alto * z < ALTO_UTIL ? { x: referencia.x + referencia.ancho / 2, y: referencia.y + referencia.alto - (FRANJA_SEGURA.abajo - 10 - ALTO_PANTALLA / 2) / z } : centrado(referencia, z);
+    const yPies = o.cuerpoEntero ? PIES_CUERPO_ENTERO_Y - 10 : FRANJA_SEGURA.abajo - 10;
+    const pref = (o.anclarAbajo || o.cuerpoEntero) && referencia.alto * z < yPies - FRANJA_SEGURA.arriba ? { x: referencia.x + referencia.ancho / 2, y: referencia.y + referencia.alto - (yPies - ALTO_PANTALLA / 2) / z } : centrado(referencia, z);
     // Sin deseables, basta lo más cercano a lo ideal; con deseables, se
     // recorre todo el lugar buscando el grupo más grande.
     const rangoX = deseables.length ? referencia.ancho / 2 + 200 : 600 / z;
@@ -191,7 +210,7 @@ function buscar(o: OpcionesEncuadre, zMin: number, exigirMinimo = true): Resulta
       const zc = z * ZOOM_TOMA_MAX;
       x0 = Math.max(x0, u.x + u.ancho - (ANCHO_PANTALLA / 2 - 8) / zc);
       x1 = Math.min(x1, u.x + (ANCHO_PANTALLA / 2 - 8) / zc);
-      y0 = Math.max(y0, u.y + u.alto - (FRANJA_SEGURA.abajo + 60 - ALTO_PANTALLA / 2) / z);
+      y0 = Math.max(y0, u.y + u.alto - ((o.cuerpoEntero ? PIES_CUERPO_ENTERO_Y + 20 : FRANJA_SEGURA.abajo + 60) - ALTO_PANTALLA / 2) / z);
       y1 = Math.min(y1, u.y + (ALTO_PANTALLA / 2 - FONDO_SUBTITULO) / zc, u.y + (ALTO_PANTALLA / 2 - FRANJA_SEGURA.arriba + 30) / z);
       if (x0 > x1 || y0 > y1) continue;
     }
@@ -221,9 +240,9 @@ function buscar(o: OpcionesEncuadre, zMin: number, exigirMinimo = true): Resulta
       }
       for (const x of xs) {
         const cam = { x, y, zoom: z };
-        if (u && !cabeEnFranja(u, cam)) continue;
+        if (u && !cabeEnFranja(u, cam, o.cuerpoEntero)) continue;
         if (!encuadreSeguro(cam, o.cuerpos)) continue; // verificación (bordes numéricos)
-        const incluidos = deseables.filter((r) => cabeEnFranja(r, cam));
+        const incluidos = deseables.filter((r) => cabeEnFranja(r, cam, o.cuerpoEntero));
         if (!u && incluidos.length === 0) continue;
         const puntaje = incluidos.length * 10 + z * 4 - Math.hypot(x - pref.x, dy) / 600;
         if (!mejor || puntaje > mejor.puntaje) mejor = { encuadre: cam, incluidos: u ? o.obligatorios : incluidos, puntaje };

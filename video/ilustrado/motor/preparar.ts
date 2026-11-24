@@ -63,7 +63,7 @@ export function prepararReel(tiempos: TiemposIlustrado, plan: PlanIlustrado, fps
       if (cartelera) return encuadreDeAccionKit(e, `${cartelera.obj.id}.destaca`, undefined, recorrido, registro)?.r.encuadre ?? null;
       const isla = recorrido[e];
       if (!isla) return null;
-      return encuadrarKit({ obligatorios: [], deseables: cu.personajes.map((u) => desplazar(rectPersonaje(u), isla.x, isla.y)), cuerpos: cuerposEnMundo(e, recorrido, registro), anclarAbajo: true })?.encuadre ?? null;
+      return encuadrarKit({ obligatorios: [], deseables: cu.personajes.map((u) => desplazar(rectPersonaje(u), isla.x, isla.y)), cuerpos: cuerposEnMundo(e, recorrido, registro), anclarAbajo: true, cuerpoEntero: true })?.encuadre ?? null;
     },
   });
   const camara = plan_.puntos;

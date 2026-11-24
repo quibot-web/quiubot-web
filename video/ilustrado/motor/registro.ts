@@ -10,7 +10,7 @@ import { ComposicionKitSchema, type ComposicionKitEntrada } from "../kit/catalog
 import { completarAmbiente } from "../kit/ambiente";
 import type { Variedad } from "../kit/variedad";
 import { planoLimpio } from "./camara";
-import { caminoDe, accionesDeComposicion, descripcionVisible, focoDeAccionKit, focoReducidoKit, rectPersonaje, ubicarComposicion, type ComposicionUbicada } from "../kit/composicion";
+import { caminoDe, centroDePaso, accionesDeComposicion, descripcionVisible, focoDeAccionKit, focoReducidoKit, rectPersonaje, ubicarComposicion, type ComposicionUbicada } from "../kit/composicion";
 
 export type DefAccion = { descripcion: string; foco: Rect };
 export type DefEscena = { isla: string; celular: boolean; acciones: Record<string, DefAccion>; visible: string };
@@ -40,7 +40,10 @@ export function crearRegistro(composiciones: ComposicionKitEntrada[] = [], semil
     // Un extra nunca le quita a la cartelera su plano limpio.
     const cartelera = parseada.data.objetos.find((o) => o.tipo === "cartelera");
     const limpia = (x: typeof parseada.data) => !cartelera || planoLimpio(x.id, `${cartelera.id}.destaca`, undefined, crearRegistro([x], semilla, { ambiente: false })).ok;
-    const c = opciones.ambiente === false ? parseada.data : completarAmbiente(parseada.data, semilla, limpia(parseada.data) ? limpia : () => true);
+    // Si en el lugar alguien pasa de largo, la escena es "nadie se queda":
+    // sin relleno de ambiente (gente quieta mirando lo contradiría).
+    const conPasantes = !!opciones.caminantes?.[parseada.data.id]?.some((x) => x.endsWith(":pasa"));
+    const c = opciones.ambiente === false || conPasantes ? parseada.data : completarAmbiente(parseada.data, semilla, limpia(parseada.data) ? limpia : () => true);
     const cu = ubicarComposicion(c, semilla, opciones.variedad);
     // La misma persona (mismo id) en otra composición se ve igual.
     for (const u of cu.personajes) {
@@ -49,6 +52,10 @@ export function crearRegistro(composiciones: ComposicionKitEntrada[] = [], semil
       else aspectos.set(u.per.id, u.aspecto);
     }
     for (const u of cu.personajes) if (opciones.caminantes?.[c.id]?.includes(u.per.id)) u.caminoDx = caminoDe(u, c.fondo);
+    for (const u of cu.personajes) if (opciones.caminantes?.[c.id]?.includes(`${u.per.id}:pasa`)) {
+      u.pasaDeLargo = true;
+      u.centroPaso = centroDePaso(u, cu);
+    }
     const acciones = accionesDeComposicion(cu);
     // Micro-acción neutra: la gente respira y la cámara se acerca un poco.
     const todos = cu.personajes.map((u) => rectPersonaje(u));
@@ -89,9 +96,10 @@ export function caminantesDePlan(plan: { frases: { acciones: { escena: string; a
   const res: Record<string, string[]> = {};
   for (const a of plan.frases.flatMap((f) => f.acciones)) {
     const [id, verbo] = a.accion.split(".");
-    if (verbo !== "entra" && verbo !== "se_va") continue;
+    if (verbo !== "entra" && verbo !== "se_va" && verbo !== "pasa_de_largo") continue;
     const lista = (res[a.escena] ??= []);
-    if (!lista.includes(id)) lista.push(id);
+    const clave = verbo === "pasa_de_largo" ? `${id}:pasa` : id;
+    if (!lista.includes(clave)) lista.push(clave);
   }
   return res;
 }

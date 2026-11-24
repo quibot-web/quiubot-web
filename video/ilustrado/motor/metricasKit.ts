@@ -15,6 +15,10 @@ export type MetricasKit = {
   // Lo peor de un cuadro: parte de la pantalla debajo de los pies del
   // personaje visible más bajo (piso vacío + interfaz de Instagram).
   pisoVacioMaximo: number;
+  // Lo peor de un plano con gente: qué parte de la altura de la pantalla
+  // ocupa la persona más grande que se ve entera (revisión de la tanda 2: en
+  // la tienda, los adultos ocupaban 1/3).
+  alturaPersonaMinima: number;
 };
 
 function esCorte(a: Encuadre, b: Encuadre): boolean {
@@ -37,6 +41,7 @@ export function metricasKit(reel: ReelPreparado, fps: number): MetricasKit {
   let planoMax = 0;
   let anterior: Encuadre | null = null;
   let pisoVacio = 0;
+  let alturaMin = 1;
   let planos: { enc: Encuadre; largo: number }[] = [];
   for (let f = 0; f < total; f++) {
     const cam = camaraDelCuadro(reel, f);
@@ -69,11 +74,13 @@ export function metricasKit(reel: ReelPreparado, fps: number): MetricasKit {
     anterior = cam;
     let area = 0;
     let piesMasBajos = -Infinity;
+    let alturaMayor = 0;
     for (const c of cuerpos) {
       if (!dentro(c.rect, v)) continue;
       visibles++;
       const r = c.completo ?? c.rect;
       piesMasBajos = Math.max(piesMasBajos, ALTO_PANTALLA / 2 + (r.y + r.alto - cam.y) * cam.zoom);
+      alturaMayor = Math.max(alturaMayor, Math.min(ALTO_PANTALLA, ALTO_PANTALLA / 2 + (r.y + r.alto - cam.y) * cam.zoom) / ALTO_PANTALLA - Math.max(0, ALTO_PANTALLA / 2 + (r.y - cam.y) * cam.zoom) / ALTO_PANTALLA);
       const x0 = Math.max(0, ANCHO_PANTALLA / 2 + (r.x - cam.x) * cam.zoom);
       const x1 = Math.min(ANCHO_PANTALLA, ANCHO_PANTALLA / 2 + (r.x + r.ancho - cam.x) * cam.zoom);
       const y0 = Math.max(0, ALTO_PANTALLA / 2 + (r.y - cam.y) * cam.zoom);
@@ -91,6 +98,7 @@ export function metricasKit(reel: ReelPreparado, fps: number): MetricasKit {
       area += Math.max(0, x1 - x0) * Math.max(0, y1 - y0);
     }
     ocupacion += Math.min(1, area / (ANCHO_PANTALLA * ALTO_UTIL));
+    if (alturaMayor > 0) alturaMin = Math.min(alturaMin, alturaMayor);
     if (piesMasBajos > -Infinity) pisoVacio = Math.max(pisoVacio, Math.max(0, ALTO_PANTALLA - piesMasBajos) / ALTO_PANTALLA);
   }
   const s = cuadros / fps;
@@ -101,5 +109,6 @@ export function metricasKit(reel: ReelPreparado, fps: number): MetricasKit {
     ocupacionUtil: cuadros ? ocupacion / cuadros : 0,
     planoMasLargo: planoMax / fps,
     pisoVacioMaximo: pisoVacio,
+    alturaPersonaMinima: alturaMin,
   };
 }
