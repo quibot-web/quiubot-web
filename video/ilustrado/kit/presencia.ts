@@ -69,6 +69,18 @@ export function presenciaDe(u: PersonajeUbicado, cu: ComposicionUbicada, d: Disp
 }
 
 
+// Ciclo de paso (ángulos en grados; paso: rebote, en fracción del alto). fase = t / 3.2: un paso
+// cada ~10 cuadros. Las piernas abren en tijera; el cuerpo sube cuando
+// están juntas y baja cuando están abiertas; el brazo cercano va al revés
+// que su pierna. Inclinado hacia adelante. Quien pasa de largo, a paso
+// más largo.
+export const ANGOSTO_CAMINANDO = 0.88;
+export type Caminata = { pierna: number; brazo: number; paso: number; inclinacion: number };
+export function caminataEn(fase: number, largo: boolean): Caminata {
+  const sn = Math.sin(fase);
+  return { pierna: (largo ? 26 : 22) * sn, brazo: 16 * sn, paso: Math.abs(Math.cos(fase)) * (largo ? 0.018 : 0.014), inclinacion: 4 };
+}
+
 // Un rectángulo del personaje (en la isla) llevado a donde está según su presencia.
 export function rectEnPresencia(u: PersonajeUbicado, r: Rect, p: Presencia): Rect {
   const k = p.escala ?? 1;

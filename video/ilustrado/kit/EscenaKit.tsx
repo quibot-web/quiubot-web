@@ -14,7 +14,7 @@ import { BOLSA, CAJA, CELULAR, HELADO, TORTA, VENTANA_COCINA_X, coloresEntorno }
 import { CARTELERA, DIBUJO, DULCES, SALON, VENTANA_SALON, Y_LINEAS_PISO, casillaCartelera } from "./dibujoObjetos";
 import { oscurecer, aclarar, type Cara } from "./dibujoPersonaje";
 import { clave, motivoDe, motivosCartelera, type ImagenesKit, type ImagenPieza } from "./piezas";
-import { presenciaDe, rectEnPresencia } from "./presencia";
+import { ANGOSTO_CAMINANDO, caminataEn, presenciaDe, rectEnPresencia } from "./presencia";
 import { apunteHacia, conVueltasAParado, estadoPose, poseEnCuadro, posicionMano, type AngulosBrazo, type CambioPose, type EstadoPose } from "./poses";
 
 // objetivos: a qué apunta cada acción que lo tiene ("profesora.senala" en
@@ -270,7 +270,7 @@ function Personaje({ u, cu, frame, fps, d, imagenes, objetivos, atenciones, vist
   const bosteza = distraido >= 1 && (frame + (h % 97)) % 96 < 22;
   // Caminando mira al frente (hacia donde va), nunca a lo que pasa en el
   // lugar: así se lee "pasa de largo sin mirar".
-  const g = pres.camina ? 0.6 : gMundo * (u.espejo ? -1 : 1); // en coordenadas locales
+  const g = pres.camina ? 1 : gMundo * (u.espejo ? -1 : 1); // en coordenadas locales
   const giroCabeza = e.inclinacion + g * 5 + 7 * distraido + Math.sin((frame + h) / 47) * 1.2;
   const micro = latido(frame, d.micro, 18) * Math.abs(Math.sin(frame / 3)) * 10;
   if (pres.alpha <= 0) return null;
@@ -279,16 +279,28 @@ function Personaje({ u, cu, frame, fps, d, imagenes, objetivos, atenciones, vist
   const bordeAlpha = pres.camina && vista ? margenDentro(rectEnPresencia(u, rectCabezaTorso(u), pres), vista) : 1;
   if (bordeAlpha <= 0) return null;
   const espejo = pres.mira ? pres.mira === "izquierda" : u.espejo;
-  const paso = pres.camina ? Math.abs(Math.sin(pres.t / 3.2)) * (pres.pasa ? 0.04 : 0.025) * p.alto : 0;
+  // Caminar (dibujo plano, siempre de frente): las piernas se alternan en
+  // tijera desde la cadera, el brazo de adelante va contra su pierna, el
+  // cuerpo se inclina hacia donde va y se angosta un poco (como girado), y
+  // el brazo y la pierna del lado lejano quedan detrás del cuerpo. En
+  // coordenadas locales "adelante" es la derecha (el espejo da la vuelta).
+  const fase = pres.t / 3.2;
+  const caminata = pres.camina ? caminataEn(fase, !!pres.pasa) : null;
+  const paso = (caminata?.paso ?? 0) * p.alto;
+  const angosto = caminata ? ANGOSTO_CAMINANDO : 1;
   const ep = pres.escala ?? 1;
   const sx = u.escala * ep * (espejo ? -1 : 1);
+  const llevaAlgo = cu.objetos.some((o) => o.obj.en_mano_de === u.per.id);
+  const brazoBalanceo = caminata && !llevaAlgo ? caminata.brazo : 0;
   const brazo = (lado: "mira" | "otro", ang: AngulosBrazo): ReactNode => {
     const s = lado === "mira" ? -1 : 1;
     const br = imagenes[clave.brazo(a)];
     const ab = imagenes[clave.antebrazo(a, ang.mano)];
     if (!br || !ab) return null;
+    // Balanceo: el de adelante ("otro", el cercano) y el lejano, en contrafase.
+    const hombro = ang.hombro - brazoBalanceo;
     return (
-      <div key={lado} style={{ position: "absolute", left: p.cx - s * p.hombroDx, top: p.hombroY, transformOrigin: "0 0", transform: `rotate(${s * ang.hombro}deg)` }}>
+      <div key={lado} style={{ position: "absolute", left: p.cx - s * p.hombroDx * angosto, top: p.hombroY, transformOrigin: "0 0", transform: `rotate(${s * hombro}deg)` }}>
         <Img img={br} estilo={{ left: -br.ancla.x, top: -br.ancla.y }} />
         <div style={{ position: "absolute", left: 0, top: p.brazo.largo, transformOrigin: "0 0", transform: `rotate(${s * ang.codo}deg)` }}>
           <Img img={ab} estilo={{ left: -ab.ancla.x, top: -ab.ancla.y }} />
@@ -308,11 +320,28 @@ function Personaje({ u, cu, frame, fps, d, imagenes, objetivos, atenciones, vist
   const giro = (img: ImagenPieza): CSSProperties => ({ transformOrigin: `${img.ancla.x}px ${img.ancla.y}px`, transform: `rotate(${giroCabeza}deg) translateX(${g * 4}px)` });
   return (
     <div style={{ position: "absolute", left: u.cx + pres.dx, top: u.pies + (pres.dy ?? 0), width: 0, height: 0, opacity: pres.alpha * bordeAlpha }}>
-      <div style={{ position: "absolute", left: -p.cx, top: -p.pies, width: p.ancho, height: p.alto, transformOrigin: `${p.cx}px ${p.pies}px`, transform: `scale(${sx}, ${u.escala * ep * (1 + respira)}) translateY(${e.saltoY - micro - paso}px) rotate(${pres.camina ? Math.sin(pres.t / 3.2) * 2 : 0}deg)` }}>
+      <div style={{ position: "absolute", left: -p.cx, top: -p.pies, width: p.ancho, height: p.alto, transformOrigin: `${p.cx}px ${p.pies}px`, transform: `scale(${sx}, ${u.escala * ep * (1 + respira)}) translateY(${e.saltoY - micro - paso}px) rotate(${caminata?.inclinacion ?? 0}deg)` }}>
         {peloAtras && <Img img={peloAtras} estilo={giro(peloAtras)} />}
-        <Img img={imagenes[clave.cuerpo(a)]} />
-        {brazo("otro", e.otro)}
-        {brazo("mira", e.mira)}
+        {caminata ? (
+          <>
+            <div style={{ position: "absolute", left: p.cx - p.cuerpoAncho * 0.56, top: p.pies - p.alto * 0.016, width: p.cuerpoAncho * 1.12, height: p.alto * 0.032, borderRadius: "50%", background: "rgba(20,16,30,0.28)", transform: `translateY(${paso}px)` }} />
+            {brazo("mira", e.mira)}
+            {([true, false] as const).map((oscura) => {
+              const img = imagenes[clave.pierna(a, oscura)];
+              if (!img) return null;
+              const x = p.cx + (oscura ? 1 : -1) * (p.piernas.separacion / 2) * angosto;
+              return <Img key={String(oscura)} img={img} estilo={{ left: x - img.ancla.x, top: p.piernas.y0 - img.ancla.y, transformOrigin: `${img.ancla.x}px ${img.ancla.y}px`, transform: `rotate(${oscura ? -caminata.pierna : caminata.pierna}deg)` }} />;
+            })}
+            <Img img={imagenes[clave.cuerpoCamina(a)]} estilo={{ transformOrigin: `${p.cx}px ${p.pies}px`, transform: `scaleX(${angosto})` }} />
+            {brazo("otro", e.otro)}
+          </>
+        ) : (
+          <>
+            <Img img={imagenes[clave.cuerpo(a)]} />
+            {brazo("otro", e.otro)}
+            {brazo("mira", e.mira)}
+          </>
+        )}
         {cabeza && (
           <div style={{ position: "absolute", left: 0, top: 0, width: cabeza.ancho, height: cabeza.alto, ...giro(cabeza) }}>
             <Img img={cabeza} />

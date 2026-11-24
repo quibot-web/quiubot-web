@@ -21,8 +21,38 @@ export function aclarar(hex: string, k: number): string {
 }
 const svg = (ancho: number, alto: number, cuerpo: string) => `<svg xmlns="http://www.w3.org/2000/svg" width="${ancho}" height="${alto}" viewBox="0 0 ${ancho} ${alto}">${cuerpo}</svg>`;
 
+// Una pierna con su zapato (la punta hacia la derecha), desde la cadera
+// (x = borde izquierdo de la pierna, y0 = cadera). oscura: la de atrás.
+function pierna(a: AspectoPersonaje, p: Proporciones, x: number, y0: number, oscura: boolean): string {
+  const pi = p.piernas;
+  const adulto = esAdulto(a.tipo);
+  const zapato = adulto ? (esMayor(a.tipo) ? "#5A4636" : "#3A2B2B") : "#F4F2EE";
+  const suela = adulto ? "#241A1A" : oscurecer(COLORES_ROPA[a.ropa2], 0.15);
+  // Con pantalón, las piernas son del color del pantalón.
+  const base = ROPA_DE_TIPO[a.tipo] === "pantalon" ? COLORES_ROPA[a.ropa2] : PIELES[a.piel];
+  const color = oscura ? oscurecer(base, 0.1) : base;
+  const y1 = y0 + (pi.y1 - pi.y0);
+  return (
+    `<rect x="${x}" y="${y0}" width="${pi.ancho}" height="${pi.y1 - pi.y0}" rx="${pi.ancho / 2}" fill="${color}"/>` +
+    `<path d="M${x - 8} ${y1 - 6} q0 -22 ${pi.ancho / 2 + 8} -22 q${pi.ancho / 2 + 18} 0 ${pi.ancho / 2 + 26} 26 v10 h-${pi.ancho + 26} z" fill="${zapato}"/>` +
+    `<rect x="${x - 8}" y="${y1 + 2}" width="${pi.ancho + 26}" height="9" rx="4" fill="${suela}"/>`
+  );
+}
+
+// La pierna de quien camina, como pieza aparte que gira en la cadera
+// (ancla: el centro de la cadera). Misma forma que en svgCuerpo.
+export function svgPierna(a: AspectoPersonaje, oscura: boolean): ParteSvg {
+  const p = proporciones(a.tipo);
+  const pi = p.piernas;
+  const ancho = pi.ancho + 40;
+  const alto = pi.y1 - pi.y0 + 16;
+  return { svg: svg(ancho, alto, pierna(a, p, 10, 0, oscura)), ancho, alto, ancla: { x: 10 + pi.ancho / 2, y: 0 } };
+}
+
 // ---------- Cuerpo (piernas, torso, cuello, sombra) ----------
-export function svgCuerpo(a: AspectoPersonaje): ParteSvg {
+// conPiernas = false: el cuerpo de quien camina (sin sombra ni piernas, que
+// van aparte en svgPierna y se mueven en cada paso).
+export function svgCuerpo(a: AspectoPersonaje, conPiernas = true): ParteSvg {
   const p = proporciones(a.tipo);
   const piel = PIELES[a.piel];
   const ropa = COLORES_ROPA[a.ropa];
@@ -31,21 +61,12 @@ export function svgCuerpo(a: AspectoPersonaje): ParteSvg {
   const t = p.torso;
   const pi = p.piernas;
   const partes: string[] = [];
-  // Sombra en el piso.
-  partes.push(`<ellipse cx="${cx}" cy="${p.pies}" rx="${p.cuerpoAncho * 0.62}" ry="${p.alto * 0.016}" fill="rgba(20,16,30,0.28)"/>`);
-  // Piernas y zapatos.
   const estilo = ROPA_DE_TIPO[a.tipo];
-  const adulto = esAdulto(a.tipo);
-  const zapato = adulto ? (esMayor(a.tipo) ? "#5A4636" : "#3A2B2B") : "#F4F2EE";
-  const suela = adulto ? "#241A1A" : oscurecer(ropa2, 0.15);
-  for (const lado of [-1, 1]) {
-    const x = cx + lado * (pi.separacion / 2) - pi.ancho / 2;
-    // Con pantalón, las piernas son del color del pantalón.
-    const base = estilo === "pantalon" ? ropa2 : piel;
-    const color = lado > 0 ? oscurecer(base, 0.1) : base;
-    partes.push(`<rect x="${x}" y="${pi.y0}" width="${pi.ancho}" height="${pi.y1 - pi.y0}" rx="${pi.ancho / 2}" fill="${color}"/>`);
-    partes.push(`<path d="M${x - 8} ${pi.y1 - 6} q0 -22 ${pi.ancho / 2 + 8} -22 q${pi.ancho / 2 + 18} 0 ${pi.ancho / 2 + 26} 26 v10 h-${pi.ancho + 26} z" fill="${zapato}"/>`);
-    partes.push(`<rect x="${x - 8}" y="${pi.y1 + 2}" width="${pi.ancho + 26}" height="9" rx="4" fill="${suela}"/>`);
+  if (conPiernas) {
+    // Sombra en el piso.
+    partes.push(`<ellipse cx="${cx}" cy="${p.pies}" rx="${p.cuerpoAncho * 0.62}" ry="${p.alto * 0.016}" fill="rgba(20,16,30,0.28)"/>`);
+    // Piernas y zapatos.
+    for (const lado of [-1, 1] as const) partes.push(pierna(a, p, cx + lado * (pi.separacion / 2) - pi.ancho / 2, pi.y0, lado > 0));
   }
   // Cuello.
   partes.push(`<rect x="${cx - p.cuello.ancho / 2}" y="${p.cuello.y0}" width="${p.cuello.ancho}" height="${p.cuello.y1 - p.cuello.y0 + 10}" rx="12" fill="${oscurecer(piel, 0.12)}"/>`);

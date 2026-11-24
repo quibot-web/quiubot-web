@@ -19,7 +19,8 @@ import { crearRegistro } from "../motor/registro";
 import { ComposicionKitSchema, TIPOS_PERSONAJE } from "./catalogoKit";
 import { problemasComposicion, rectCabezaTorso, ubicarComposicion } from "./composicion";
 import { CUADROS_PASAR, EscenaKit, presenciaDe, tapanCaras } from "./EscenaKit";
-import { rectEnPresencia } from "./presencia";
+import { caminataEn, rectEnPresencia } from "./presencia";
+import { svgCuerpo, svgPierna, type AspectoPersonaje } from "./dibujoPersonaje";
 import { piezasDeComposicion, urlsSinRasterizar } from "./piezas";
 import type { TiemposIlustrado } from "../tiempoIlustrado";
 
@@ -215,5 +216,32 @@ describe("sin piso vacío en los 4 lugares (planos reales de los videos de muest
     // El salón ya lo exigen encuadre.test y calidadIA.test (planes a mano y de la IA).
     const tienda = metricasKit(prepararReel(tiemposTienda as TiemposIlustrado, planTienda as PlanIlustrado, 30, ""), 30);
     expect(tienda.alturaPersonaMinima).toBeGreaterThanOrEqual(0.45);
+  });
+});
+
+describe("caminar se lee como caminar (piernas, brazos, cuerpo)", () => {
+  it("las piernas abren en tijera y el brazo cercano va al revés que su pierna", () => {
+    for (const fase of [0.4, 1.2, 2.5, 4, 5.3]) {
+      const c = caminataEn(fase, false);
+      // Pierna cercana: + = hacia atrás; brazo cercano: + = hacia adelante.
+      if (Math.abs(Math.sin(fase)) > 0.2) expect(Math.sign(c.pierna)).toBe(Math.sign(c.brazo));
+      expect(c.inclinacion).toBeGreaterThan(0);
+    }
+    // El cuerpo sube con las piernas juntas y baja con las piernas abiertas.
+    expect(caminataEn(0, false).paso).toBeGreaterThan(caminataEn(Math.PI / 2, false).paso);
+    // Quien pasa de largo da pasos más largos.
+    expect(Math.abs(caminataEn(1.5, true).pierna)).toBeGreaterThan(Math.abs(caminataEn(1.5, false).pierna));
+  });
+
+  it("el cuerpo de pie no cambia (las piernas sueltas son solo para caminar)", () => {
+    const a: AspectoPersonaje = { tipo: "cliente", piel: "media", pelo: "castano", peinado: "corto", ropa: "azul", ropa2: "rojo", accesorio: "gafas" };
+    const quieto = svgCuerpo(a).svg;
+    const camina = svgCuerpo(a, false).svg;
+    const pierna = svgPierna(a, false).svg;
+    expect(quieto.length).toBeGreaterThan(camina.length);
+    expect(camina).not.toContain("<ellipse");
+    // La pierna suelta es la misma forma (mismo rectángulo) que la del cuerpo de pie.
+    const rect = pierna.match(/<rect x="[^"]+" y="0" width="([^"]+)" height="([^"]+)"/)!;
+    expect(quieto).toContain(`width="${rect[1]}" height="${rect[2]}"`);
   });
 });

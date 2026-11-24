@@ -4,7 +4,7 @@
 // cuadro (meta <= 5 s de render por segundo de video).
 import { EXPRESIONES, MOTIVOS_DIBUJO, type MotivoDibujo, type TipoObjeto } from "./catalogoKit";
 import { svgBolsa, svgCaja, svgCarro, svgCelular, svgFondo, svgHelado, svgMesa, svgMostrador, svgMoto, svgTorta, svgVitrina } from "./dibujoLugares";
-import { svgAntebrazo, svgBrazo, svgCabeza, svgCuerpo, svgPeloAtras, svgRasgos, type AspectoPersonaje, type Cara, type Ojos, type ParteSvg } from "./dibujoPersonaje";
+import { svgAntebrazo, svgBrazo, svgCabeza, svgCuerpo, svgPeloAtras, svgPierna, svgRasgos, type AspectoPersonaje, type Cara, type Ojos, type ParteSvg } from "./dibujoPersonaje";
 import { svgCartelera, svgDibujo, svgDulces, svgPupitre, svgSalon, svgSilla } from "./dibujoObjetos";
 import type { ComposicionUbicada } from "./composicion";
 import type { FormaMano } from "./poses";
@@ -13,6 +13,9 @@ export const claveAspecto = (a: AspectoPersonaje) => [a.tipo, a.piel, a.pelo, a.
 export const clave = {
   fondo: (cu: ComposicionUbicada) => `fondo:${cu.c.fondo}:${cu.pared}`,
   cuerpo: (a: AspectoPersonaje) => `cuerpo:${claveAspecto(a)}`,
+  // Quien camina: el cuerpo sin piernas y cada pierna aparte (la de atrás, más oscura).
+  cuerpoCamina: (a: AspectoPersonaje) => `cuerpocamina:${claveAspecto(a)}`,
+  pierna: (a: AspectoPersonaje, oscura: boolean) => `pierna:${claveAspecto(a)}:${oscura ? "atras" : "adelante"}`,
   peloAtras: (a: AspectoPersonaje) => `peloatras:${claveAspecto(a)}`,
   cabeza: (a: AspectoPersonaje) => `cabeza:${claveAspecto(a)}`,
   rasgos: (a: AspectoPersonaje, e: Cara, ojos: Ojos) => `rasgos:${claveAspecto(a)}:${e}:${ojos}`,
@@ -69,6 +72,8 @@ export function piezasDeComposicion(cu: ComposicionUbicada): Pieza[] {
   for (const u of cu.personajes) {
     const a = u.aspecto;
     poner(clave.cuerpo(a), () => svgCuerpo(a));
+    poner(clave.cuerpoCamina(a), () => svgCuerpo(a, false));
+    for (const oscura of [false, true]) poner(clave.pierna(a, oscura), () => svgPierna(a, oscura));
     poner(clave.peloAtras(a), () => svgPeloAtras(a));
     poner(clave.brazo(a), () => svgBrazo(a));
     for (const m of ["abierta", "senala"] as const) poner(clave.antebrazo(a, m), () => svgAntebrazo(a, m));
