@@ -109,6 +109,57 @@ function encuadrarSinMemoria(o: OpcionesEncuadre & { soloNormal?: boolean }): Re
   return buscar(o, ZOOM_MINIMO_KIT) ?? buscar(o, ZOOM_MINIMO_KIT_EXCEPCIONAL, false) ?? buscar(o, 0.5, false);
 }
 
+// ---------- Posiciones horizontales seguras (exacto, por intervalos) ----------
+// Con el zoom z y la cámara a la altura y, las x del centro de cámara donde
+// el cuerpo c cumple encuadreSeguro: entero adentro (con margen, y con la
+// cara arriba o de cuerpo entero) o del todo afuera, a la izquierda o a la
+// derecha. Misma cuenta que encuadreSeguro, despejada para x.
+type Intervalo = [number, number];
+function xPermitidas(c: Cuerpo, z: number, y: number): Intervalo[] {
+  const zc = z * ZOOM_TOMA_MAX;
+  const zl = z * ZOOM_TOMA_MIN;
+  const [mx, my] = [DERIVA + MARGEN_BORDE_PX / zc, DERIVA + 16 / zc];
+  const [aC, hC, aL, hL] = [ANCHO_PANTALLA / 2 / zc, ALTO_PANTALLA / 2 / zc, ANCHO_PANTALLA / 2 / zl, ALTO_PANTALLA / 2 / zl];
+  const r = c.rect;
+  const res: Intervalo[] = [];
+  // Del todo afuera: separado en vertical (cualquier x) o en horizontal.
+  const separadoY = !(r.y - DERIVA < y + hL && y - hL - DERIVA < r.y + r.alto);
+  if (separadoY) return [[-Infinity, Infinity]];
+  res.push([-Infinity, r.x - DERIVA - aL], [r.x + r.ancho + aL + DERIVA, Infinity]);
+  // Entero adentro.
+  const dentroY = r.y >= y - hC + my && r.y + r.alto <= y + hC - my;
+  if (dentroY) {
+    let adentro: Intervalo[] = [[r.x + r.ancho - aC + mx, r.x + aC - mx]];
+    const caraArriba = c.cabezaY === undefined || c.cabezaY <= y + DERIVA;
+    if (!caraArriba) {
+      const k = c.completo;
+      const enteroY = !!k && k.y >= y - hC + DERIVA && k.y + k.alto <= y + hC;
+      adentro = enteroY && k ? intersecar(adentro, [[k.x + k.ancho - aC + DERIVA, k.x + aC - DERIVA]]) : [];
+    }
+    res.push(...adentro.filter(([a, b]) => a <= b));
+  }
+  return unir(res);
+}
+function unir(xs: Intervalo[]): Intervalo[] {
+  const o = xs.filter(([a, b]) => a <= b).sort((p, q) => p[0] - q[0]);
+  const res: Intervalo[] = [];
+  for (const [a, b] of o) {
+    const u = res[res.length - 1];
+    if (u && a <= u[1]) u[1] = Math.max(u[1], b);
+    else res.push([a, b]);
+  }
+  return res;
+}
+function intersecar(as: Intervalo[], bs: Intervalo[]): Intervalo[] {
+  const res: Intervalo[] = [];
+  for (const [a0, a1] of as) for (const [b0, b1] of bs) {
+    const lo = Math.max(a0, b0);
+    const hi = Math.min(a1, b1);
+    if (lo <= hi) res.push([lo, hi]);
+  }
+  return unir(res);
+}
+
 // sinOcupacionMinima: lo obligatorio se ve entero pero puede ocupar menos del 50 %.
 type OpcionesEncuadre = { obligatorios: Rect[]; deseables?: Rect[]; cuerpos: Cuerpo[]; zoomMaximo?: number; sinOcupacionMinima?: boolean };
 
@@ -130,19 +181,50 @@ function buscar(o: OpcionesEncuadre, zMin: number, exigirMinimo = true): Resulta
     // recorre todo el lugar buscando el grupo más grande.
     const rangoX = deseables.length ? referencia.ancho / 2 + 200 : 600 / z;
     const rangoY = 420 / z;
-    const candidatos: { x: number; y: number; dist: number }[] = [];
-    for (let dx = -rangoX; dx <= rangoX; dx += 16) for (let dy = -rangoY; dy <= rangoY; dy += 20) candidatos.push({ x: pref.x + dx, y: pref.y + dy, dist: Math.hypot(dx, dy * 1.5) });
-    candidatos.sort((a, b) => a.dist - b.dist);
-    for (const c of candidatos) {
-      const cam = { x: c.x, y: c.y, zoom: z };
-      if (u && !cabeEnFranja(u, cam)) continue;
-      if (u && exigirMinimo && !o.sinOcupacionMinima && ocupacionUtil(u, cam) < OCUPACION_MINIMA_UTIL - 1e-9) continue;
-      if (!encuadreSeguro(cam, o.cuerpos)) continue;
-      const incluidos = deseables.filter((r) => cabeEnFranja(r, cam));
-      if (!u && incluidos.length === 0) continue;
-      const puntaje = incluidos.length * 10 + z * 4 - c.dist / 600;
-      if (!mejor || puntaje > mejor.puntaje) mejor = { encuadre: cam, incluidos: u ? o.obligatorios : incluidos, puntaje };
-      if (!deseables.length) break; // el más cercano de este zoom
+    // Solo donde lo obligatorio cabe (cabeEnFranja son restricciones
+    // lineales: se calculan los intervalos en vez de probar y descartar).
+    let [x0, x1, y0, y1] = [pref.x - rangoX, pref.x + rangoX, pref.y - rangoY, pref.y + rangoY];
+    if (u) {
+      const zc = z * ZOOM_TOMA_MAX;
+      x0 = Math.max(x0, u.x + u.ancho - (ANCHO_PANTALLA / 2 - 8) / zc);
+      x1 = Math.min(x1, u.x + (ANCHO_PANTALLA / 2 - 8) / zc);
+      y0 = Math.max(y0, u.y + u.alto - (FRANJA_SEGURA.abajo + 60 - ALTO_PANTALLA / 2) / z);
+      y1 = Math.min(y1, u.y + (ALTO_PANTALLA / 2 - FONDO_SUBTITULO) / zc, u.y + (ALTO_PANTALLA / 2 - FRANJA_SEGURA.arriba + 30) / z);
+      if (x0 > x1 || y0 > y1) continue;
+    }
+    if (u && exigirMinimo && !o.sinOcupacionMinima && ocupacionUtil(u, { x: 0, y: 0, zoom: z }) < OCUPACION_MINIMA_UTIL - 1e-9) continue;
+    // Para cada altura de cámara, las posiciones horizontales seguras son
+    // la intersección de lo que permite cada personaje (ver xPermitidas):
+    // exacto y sin probar posición por posición.
+    for (let y = y0; y <= y1 + 1e-6; y += 20) {
+      let permitidas: Intervalo[] = [[x0, x1]];
+      for (const c of o.cuerpos) {
+        permitidas = intersecar(permitidas, xPermitidas(c, z, y));
+        if (!permitidas.length) break;
+      }
+      if (!permitidas.length) continue;
+      const dy = (y - pref.y) * 1.5;
+      // Candidatos: lo más cerca posible del centro preferido; con
+      // deseables, también los bordes donde entra o sale alguien.
+      const xs = new Set<number>(permitidas.map(([a, b]) => Math.max(a, Math.min(b, pref.x))));
+      if (deseables.length) {
+        const zc = z * ZOOM_TOMA_MAX;
+        const bordes = deseables.flatMap((r) => [r.x + r.ancho - (ANCHO_PANTALLA / 2 - 8) / zc, r.x + (ANCHO_PANTALLA / 2 - 8) / zc]);
+        for (const [a, b] of permitidas) {
+          xs.add(a);
+          xs.add(b);
+          for (const x of bordes) if (x >= a && x <= b) xs.add(x);
+        }
+      }
+      for (const x of xs) {
+        const cam = { x, y, zoom: z };
+        if (u && !cabeEnFranja(u, cam)) continue;
+        if (!encuadreSeguro(cam, o.cuerpos)) continue; // verificación (bordes numéricos)
+        const incluidos = deseables.filter((r) => cabeEnFranja(r, cam));
+        if (!u && incluidos.length === 0) continue;
+        const puntaje = incluidos.length * 10 + z * 4 - Math.hypot(x - pref.x, dy) / 600;
+        if (!mejor || puntaje > mejor.puntaje) mejor = { encuadre: cam, incluidos: u ? o.obligatorios : incluidos, puntaje };
+      }
     }
   }
   return mejor ? { encuadre: mejor.encuadre, incluidos: mejor.incluidos } : null;
