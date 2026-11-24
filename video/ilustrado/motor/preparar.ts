@@ -6,6 +6,7 @@ import { BOCA_BILLETERA_LOCAL, MICRO, type IdEscena } from "./catalogo";
 import { crearRegistro, REGISTRO_CATALOGO, type Registro } from "./registro";
 import { conCobertura, cuerposEnMundo, encuadreDeAccionKit, planDeCamara, pulsoDeCamara, tomasDeCamara, type Puerta, type Toma } from "./camara";
 import { encuadrarKit } from "./encuadreKit";
+import type { MovimientoCamara } from "../kit/variedad";
 import { acercar, desplazar, type Encuadre } from "./geometria";
 import { rectPersonaje } from "../kit/composicion";
 import { CELULAR_ISLA } from "./catalogo";
@@ -29,6 +30,7 @@ export type ReelPreparado = {
   registro: Registro;
   // Cortes de coincidencia celular <-> lugar del kit.
   puertas: Puerta[];
+  movimiento?: MovimientoCamara;
 };
 
 export const DURACION_VIAJE = 20;
@@ -36,7 +38,7 @@ export const DURACION_VIAJE = 20;
 // semilla: varía lo que la IA no fija en el kit (ropa, piel, peinado,
 // pared), así dos reels no se ven iguales.
 export function prepararReel(tiempos: TiemposIlustrado, plan: PlanIlustrado, fps: number, semilla = ""): ReelPreparado {
-  const registro = crearRegistro(plan.composiciones ?? [], semilla);
+  const registro = crearRegistro(plan.composiciones ?? [], semilla, { variedad: plan.variedad });
   const linea = construirLineaDeTiempo(tiempos, fps);
   const disparos = resolverDisparos(plan, linea);
   const recorrido = construirRecorrido(disparos, registro);
@@ -46,6 +48,7 @@ export function prepararReel(tiempos: TiemposIlustrado, plan: PlanIlustrado, fps
   const cel = recorrido.celular;
   const plan_ = planDeCamara(tomas, linea.duracionCuadros, fps, {
     esKit: (e) => !!e && !!registro.composicion(e),
+    movimiento: plan.variedad?.camara,
     pantalla: cel ? { x: cel.x + CELULAR_ISLA.borde, y: cel.y + CELULAR_ISLA.borde, ancho: CELULAR_ISLA.ancho - 2 * CELULAR_ISLA.borde, alto: CELULAR_ISLA.alto - 2 * CELULAR_ISLA.borde } : null,
     // Encuadre del lugar al cruzar la puerta: la cartelera (lo que el feed
     // "se vuelve") o, sin cartelera, todo lo que quepa del lugar; con las
@@ -60,7 +63,7 @@ export function prepararReel(tiempos: TiemposIlustrado, plan: PlanIlustrado, fps
       if (cartelera) return encuadreDeAccionKit(e, `${cartelera.obj.id}.destaca`, undefined, recorrido, registro)?.r.encuadre ?? null;
       const isla = recorrido[e];
       if (!isla) return null;
-      return encuadrarKit({ obligatorios: [], deseables: cu.personajes.map((u) => desplazar(rectPersonaje(u), isla.x, isla.y)), cuerpos: cuerposEnMundo(e, recorrido, registro) })?.encuadre ?? null;
+      return encuadrarKit({ obligatorios: [], deseables: cu.personajes.map((u) => desplazar(rectPersonaje(u), isla.x, isla.y)), cuerpos: cuerposEnMundo(e, recorrido, registro), anclarAbajo: true })?.encuadre ?? null;
     },
   });
   const camara = plan_.puntos;
@@ -97,7 +100,7 @@ export function prepararReel(tiempos: TiemposIlustrado, plan: PlanIlustrado, fps
     }
   }
   const pulsos = disparos.filter((d) => d.accion === MICRO).map((d) => d.cuadro);
-  return { linea, disparos, recorrido, tomas, camara, pantallas, viajes, pulsos, registro, puertas };
+  return { linea, disparos, recorrido, tomas, camara, pantallas, viajes, pulsos, registro, puertas, movimiento: plan.variedad?.camara };
 }
 
 // Lo que el reel muestra en un cuadro (lo usan el render, el control de
@@ -124,12 +127,14 @@ export function escenaEnCamara(reel: Pick<ReelPreparado, "pantallas" | "tomas" |
 // nunca se mete bajo el subtítulo). La usan el render y las pruebas.
 // En los lugares del kit no hay pulso: la vida la dan los personajes, y el
 // encuadre ya garantiza que nadie quede con la cara cortada.
-export function camaraDelCuadro(reel: Pick<ReelPreparado, "camara" | "tomas" | "pulsos"> & { registro?: Registro }, frame: number): Encuadre {
+export function camaraDelCuadro(reel: Pick<ReelPreparado, "camara" | "tomas" | "pulsos"> & { registro?: Registro; movimiento?: MovimientoCamara }, frame: number): Encuadre {
   const base = camaraEnCuadro(reel.camara, frame);
   const toma = [...reel.tomas].reverse().find((t) => frame >= t.desde);
   const enCelular = toma?.celular === true;
   const enKit = !!toma?.escena && !!reel.registro?.composicion(toma.escena);
   const pulso = enKit ? 1 : pulsoDeCamara(frame, reel.pulsos ?? []);
   const conPulso = acercar(base, (1 + Math.sin(frame / 70) * 0.01) * pulso, enCelular ? "arriba" : "centro");
-  return { x: conPulso.x + Math.sin(frame / 40) * 8, y: conPulso.y + (enCelular ? 0 : Math.cos(frame / 52) * 8), zoom: conPulso.zoom };
+  // En el kit con barrido, la deriva baja (barrido + deriva <= margen de encuadreSeguro).
+  const deriva = enKit && (reel.movimiento === "barrer_derecha" || reel.movimiento === "barrer_izquierda") ? 3 : 8;
+  return { x: conPulso.x + Math.sin(frame / 40) * deriva, y: conPulso.y + (enCelular ? 0 : Math.cos(frame / 52) * deriva), zoom: conPulso.zoom };
 }

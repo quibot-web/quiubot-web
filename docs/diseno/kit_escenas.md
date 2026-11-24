@@ -174,6 +174,41 @@ reintento) y otras el código.
    - la composición de la IA (fixture `planIAKit.json`) queda en un rango
      parecido a la v5 hecha a mano.
 
+## Pulido de la v7 y variedad entre reels (24 nov 2026)
+
+**Pulido:**
+
+1. **Nada tapa una cara:** `tapanCaras` revisa cada cuadro y lo verifican
+   las pruebas.
+   - Si el brazo de alguien que está adelante pasaría por delante de una
+     cara de atrás, el hombro se corre lo mínimo necesario.
+   - Al señalar o apoyar la cabeza, lo que se tiene en la mano pasa a la
+     otra mano.
+   - Un objeto en la mano se baja lo justo para no tocar ninguna cara.
+   - La cobertura no elige como reacción a alguien que está al alcance del
+     brazo de quien actúa.
+2. **Emociones legibles en un celular:**
+   - **`se_distrae`:** cabeza apoyada en la mano, hombros caídos, cabeza
+     ladeada, mirada a la ventana y un bostezo cada ~3 s.
+   - **`presta_atencion`:** derecho, manos juntas frente al pecho, rebote
+     leve, ojos grandes con brillo y cejas arriba.
+   - Levantar la mano también pone cara de atento.
+3. **Sin piso de sobra:** los planos de gente se apoyan abajo (los pies
+   sobre la interfaz de Instagram) en lugar de centrarse; lo que sobra
+   queda arriba. Así el piso vacío baja a ≤0,22 de la pantalla.
+
+**Variedad entre reels** (`kit/variedad.ts`, guardada en
+`guion.ilustrado.variedad`, sin SQL). La ruta del guion lee
+`guion->ilustrado` de las piezas anteriores.
+
+- **Regla dura** (la elige el código): pared (4 opciones), paleta de ropa
+  (5) y movimiento de cámara (acercar, alejar, barrer a la derecha o a la
+  izquierda, quieta) nunca repiten los de los últimos 3 reels.
+- **Apertura:** el validador rechaza abrir con la misma escena o lugar que
+  uno de los últimos 3, y la IA corrige.
+- **Lugares:** se le muestran a la IA y se le pide rotar cuando la
+  narración lo permite; no se fuerza.
+
 ## Pendiente (después de aprobar el estilo)
 
 1. **La IA compone con el kit:** prompt con las listas cerradas, elección literal por frase y metáforas completas. Si el concepto no existe, la composición más cercana; nunca texto.

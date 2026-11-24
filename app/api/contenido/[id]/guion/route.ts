@@ -29,6 +29,7 @@ import { reelIlustradoActivo } from "@/app/lib/reelIlustrado";
 import { clasificarIdea, proponerSerie, serieDesdeIdea, type ContextoSerie } from "@/app/lib/ideaUsuario";
 import { erroresDatosDelGuion } from "@/app/lib/videoOrganico/datosReales";
 import { VENTANA_ROTACION } from "@/video/estilos/estilos";
+import { huellasDePiezas } from "@/video/ilustrado/kit/variedad";
 
 // Receta que ya pasó al pipeline nuevo (narración + voz real, ver
 // app/lib/videoOrganico/generarGuionConVoz.ts -- el mismo código que
@@ -344,13 +345,16 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
     // Si la consulta falla, se genera igual (sin historial).
     const { data: piezasAnteriores } = await supabaseAdmin
       .from("publicaciones_organicas")
-      .select("estilo:guion->estilo->>id")
+      .select("estilo:guion->estilo->>id, ilustrado:guion->ilustrado")
       .eq("user_id", usuario.id)
       .neq("id", id)
       .neq("estado", "cancelada")
       .order("creado_en", { ascending: false })
       .limit(VENTANA_ROTACION);
     const historialEstilos = (piezasAnteriores ?? []).map((p) => ((p as { estilo?: string | null }).estilo ?? null));
+    // Variedad entre reels ilustrados (visuales-v2): la huella de cada plan
+    // guardado en el guion (sin columnas nuevas).
+    const historialVisual = huellasDePiezas(piezasAnteriores ?? []);
     const recetaConAudio = recetaParaPromptConAudio(entrada);
 
     try {
@@ -378,6 +382,7 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
         maxReintentos: MAX_REINTENTOS,
         historialEstilos,
         conPlanIlustrado: reelIlustradoActivo(emailBusqueda),
+        historialVisual,
       });
 
       if (!resultado.ok) {

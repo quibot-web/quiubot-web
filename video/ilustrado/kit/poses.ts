@@ -78,6 +78,24 @@ function totalParaManoEn(p: Proporciones, hombro: number, distancia: number): nu
   return -180 - (Math.asin(s) * 180) / Math.PI;
 }
 
+// Ángulos del brazo para que la mano llegue a un punto (coordenadas locales):
+// cinemática inversa de dos tramos, con el codo abajo y hacia adentro.
+export function brazoHacia(p: Proporciones, lado: "mira" | "otro", destino: { x: number; y: number }): { hombro: number; codo: number } {
+  const signo = lado === "mira" ? 1 : -1;
+  const [L1, L2] = [p.brazo.largo, p.antebrazo.largo];
+  const dx = signo * (destino.x - (p.cx + signo * p.hombroDx));
+  const dy = destino.y - p.hombroY;
+  const dist = Math.max(Math.abs(L1 - L2) + 1, Math.min(L1 + L2 - 1, Math.hypot(dx, dy)));
+  const phi = Math.atan2(dx, dy);
+  const b = Math.acos((L1 * L1 + dist * dist - L2 * L2) / (2 * L1 * dist));
+  const a1 = phi + b;
+  const ex = L1 * Math.sin(a1);
+  const ey = L1 * Math.cos(a1);
+  const a2 = Math.atan2(dx - ex, dy - ey);
+  const g = (r: number) => (r * 180) / Math.PI;
+  return { hombro: g(a1), codo: g(a2) - g(a1) };
+}
+
 // Pose en un cuadro, contando desde que empezó (t en cuadros). apunte:
 // ángulo del hombro hacia lo que señala (si la acción tiene objetivo).
 export function estadoPose(pose: Pose, t: number, fps: number, p: Proporciones, apunte?: number): EstadoPose {
@@ -113,6 +131,21 @@ export function estadoPose(pose: Pose, t: number, fps: number, p: Proporciones, 
     }
     case "ofrecer":
       return { ...base, mira: { hombro: 48, codo: 38, mano: "abierta" }, otro: { hombro: 10, codo: -6, mano: "abierta" }, inclinacion: 3 };
+    case "apoyar_cabeza": {
+      // Aburrido: el codo abajo, la mano bajo el mentón; hombros caídos, la
+      // cabeza ladeada sobre la mano y el cuerpo un poco hundido.
+      const ik = brazoHacia(p, "mira", { x: p.cx + 18, y: p.cabeza.cy + p.cabeza.ry * 0.95 + p.antebrazo.mano * 0.6 });
+      return { mira: { ...ik, mano: "abierta" }, otro: { hombro: 3, codo: -2, mano: "abierta" }, saltoY: 0.03 * p.alto, inclinacion: 9 + Math.sin(t / 50) * 1.5 };
+    }
+    case "inclinarse": {
+      // Atento: derecho, las manos juntas frente al pecho (interés), un
+      // rebotecito de entusiasmo y la cabeza hacia lo que mira.
+      const hombro = -8;
+      const total = totalParaManoEn(p, hombro, 10);
+      const brazo = { hombro, codo: total - hombro, mano: "abierta" as const };
+      const rebote = Math.abs(Math.sin(t / 9)) * 0.012 * p.alto;
+      return { mira: brazo, otro: brazo, saltoY: -0.015 * p.alto - rebote, inclinacion: -6 + Math.sin(t / 14) * 0.8 };
+    }
     case "levantar_mano": {
       // Brazo arriba en diagonal (lejos de la cabeza: vertical quedaba detrás
       // de ella y parecía que se rascaba, v7), con un vaivén de "¡yo, yo!".

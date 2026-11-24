@@ -101,3 +101,20 @@ describe("generarPlanIlustrado con el kit (visuales-v2)", () => {
     expect(prompts[1]).toMatch(/reservado/);
   });
 });
+
+describe("generarPlanIlustrado con variedad entre reels", () => {
+  it("el prompt trae los últimos reels y el plan aceptado lleva una variedad que no repite la de ellos", async () => {
+    const { PLAN_PROTOTIPO_KIT, NARRACION_PROTOTIPO_KIT } = await import("@/video/ilustrado/kit/planPrototipoKit");
+    const historial = [{ apertura: "chat", pared: "crema" as const, paleta: "calida" as const, camara: "acercar" as const }];
+    const prompts: string[] = [];
+    const r = await generarPlanIlustrado(NARRACION_PROTOTIPO_KIT, async (p) => (prompts.push(p), JSON.stringify(PLAN_PROTOTIPO_KIT)), 3, { conKit: true, historial });
+    expect(prompts[0]).toMatch(/Abrieron con: chat/);
+    expect(r.ok).toBe(true);
+    if (r.ok) {
+      expect(r.plan.variedad).toBeDefined();
+      expect(r.plan.variedad!.pared).not.toBe("crema");
+      expect(r.plan.variedad!.paleta).not.toBe("calida");
+      expect(r.plan.variedad!.camara).not.toBe("acercar");
+    }
+  });
+});

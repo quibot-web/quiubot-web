@@ -15,10 +15,12 @@ export const NOMBRE_PERSONAJE: Record<TipoPersonaje, string> = { profesora: "una
 // "parado" es la pose base (sin acción). "ofrecer" (tender algo con la
 // mano) no estaba en la lista de la tanda 1: la pide el prototipo (el
 // niño que le trae dulces a la profesora).
-export const POSES = ["parado", "senalar", "celebrar", "aplaudir", "ofrecer", "levantar_mano"] as const;
+// "apoyar_cabeza" (aburrido: la cabeza apoyada en la mano) e "inclinarse"
+// (atento: el cuerpo hacia lo que pasa) son estados, no gestos: se quedan.
+export const POSES = ["parado", "senalar", "celebrar", "aplaudir", "ofrecer", "levantar_mano", "apoyar_cabeza", "inclinarse"] as const;
 export type Pose = (typeof POSES)[number];
 // "normal" es la expresión base.
-export const EXPRESIONES = ["normal", "feliz", "triste", "sorprendido", "aburrido"] as const;
+export const EXPRESIONES = ["normal", "feliz", "triste", "sorprendido", "aburrido", "atento"] as const;
 export type Expresion = (typeof EXPRESIONES)[number];
 
 export const PIELES = { clara: "#F5D0B5", triguena: "#E2AF86", media: "#C98E62", morena: "#9A6440", oscura: "#6B4128" } as const;
@@ -78,7 +80,9 @@ export const VERBOS_PERSONAJE = {
   triste: { expresion: "triste", descripcion: "se pone triste" },
   sorprendido: { expresion: "sorprendido", descripcion: "se sorprende" },
   // Aburrido y mirando para otro lado (no a lo que pasa).
-  se_distrae: { expresion: "aburrido", descripcion: "se aburre y se distrae (mira para otro lado)" },
+  se_distrae: { pose: "apoyar_cabeza", expresion: "aburrido", descripcion: "se aburre y se distrae: apoya la cabeza en la mano, bosteza y mira por la ventana" },
+  // Atento: se inclina hacia lo que pasa, con los ojos bien abiertos.
+  presta_atencion: { pose: "inclinarse", expresion: "atento", descripcion: "presta atención: se inclina hacia adelante con los ojos bien abiertos" },
 } as const satisfies Record<string, { pose?: Pose; expresion?: Expresion; descripcion: string }>;
 export type VerboPersonaje = keyof typeof VERBOS_PERSONAJE;
 

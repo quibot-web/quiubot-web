@@ -161,7 +161,10 @@ function intersecar(as: Intervalo[], bs: Intervalo[]): Intervalo[] {
 }
 
 // sinOcupacionMinima: lo obligatorio se ve entero pero puede ocupar menos del 50 %.
-type OpcionesEncuadre = { obligatorios: Rect[]; deseables?: Rect[]; cuerpos: Cuerpo[]; zoomMaximo?: number; sinOcupacionMinima?: boolean };
+// anclarAbajo: lo encuadrado es gente (con sus pies): si no llena la altura
+// útil, se apoya abajo (los pies sobre la interfaz de Instagram) y lo que
+// sobra queda arriba, no como piso vacío (revisión de la v7).
+type OpcionesEncuadre = { obligatorios: Rect[]; deseables?: Rect[]; cuerpos: Cuerpo[]; zoomMaximo?: number; sinOcupacionMinima?: boolean; anclarAbajo?: boolean };
 
 function buscar(o: OpcionesEncuadre, zMin: number, exigirMinimo = true): ResultadoEncuadre | null {
   const zMax = o.zoomMaximo ?? ZOOM_MAXIMO_KIT;
@@ -176,7 +179,7 @@ function buscar(o: OpcionesEncuadre, zMin: number, exigirMinimo = true): Resulta
   for (let z = Math.max(zIdeal, zMin); z >= zMin - 1e-9; z -= 0.02) {
     // Cota: con menos zoom el puntaje solo baja (si no hay deseables).
     if (mejor && !deseables.length && z * 4 <= mejor.puntaje) break;
-    const pref = centrado(referencia, z);
+    const pref = o.anclarAbajo && referencia.alto * z < ALTO_UTIL ? { x: referencia.x + referencia.ancho / 2, y: referencia.y + referencia.alto - (FRANJA_SEGURA.abajo - 10 - ALTO_PANTALLA / 2) / z } : centrado(referencia, z);
     // Sin deseables, basta lo más cercano a lo ideal; con deseables, se
     // recorre todo el lugar buscando el grupo más grande.
     const rangoX = deseables.length ? referencia.ancho / 2 + 200 : 600 / z;

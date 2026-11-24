@@ -3,6 +3,7 @@ import { LIMITE_IDEA, MAX_PARTES_SERIE, MAX_PUNTOS_POR_REEL, clasificarIdea, pro
 import { erroresDatosDelGuion } from "./datosReales";
 import { ajustarConVozReal, generarPlanIlustrado } from "./generarPlanIlustrado";
 import type { PlanIlustrado } from "@/video/ilustrado/motor/plan";
+import type { HuellaVisual } from "@/video/ilustrado/kit/variedad";
 import { asignarEstilo, elegirEstilo, estilosDisponibles, idsFotosSinTexto } from "@/video/estilos/estilos";
 import { GuionSchema, idsDeMediaUsados, type Guion, type RecetaOrganicaId } from "@/video/guion.schema";
 import type { TemaGuion } from "@/video/tema";
@@ -79,6 +80,9 @@ export type ParametrosGenerarGuionConVoz = {
   historialEstilos?: (string | null)[];
   // Reel ilustrado (fase 2): solo cuentas de REELS_ILUSTRADOS_EMAILS.
   conPlanIlustrado?: boolean;
+  // Huellas visuales de los últimos reels ilustrados de la cuenta (la más
+  // reciente primero): variedad entre reels (visuales-v2).
+  historialVisual?: HuellaVisual[];
   // Inyectable para pruebas; por defecto la misma IA del guion.
   llamarIAPlan?: (prompt: string) => Promise<string>;
 };
@@ -318,7 +322,7 @@ export async function generarGuionConVoz(params: ParametrosGenerarGuionConVoz): 
     const llamar = params.llamarIAPlan ?? ((prompt: string) => llamarOpenAI(params.apiKeyUsuario, prompt));
     // Con el kit de escenas (visuales-v2): conPlanIlustrado ya es solo
     // para las cuentas de REELS_ILUSTRADOS_EMAILS.
-    const r = await generarPlanIlustrado(narraciones, llamar, 3, { conKit: true });
+    const r = await generarPlanIlustrado(narraciones, llamar, 3, { conKit: true, historial: params.historialVisual ?? [] });
     if (r.ok) {
       plan = r.plan;
       estadoPlan = { estado: "generado", intentos: r.intentos, ajustes: r.ajustes, historial: r.historial };

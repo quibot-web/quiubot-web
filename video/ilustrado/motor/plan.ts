@@ -2,6 +2,7 @@
 // qué acciones de qué escenas del catálogo dispara cada palabra. Puro.
 // En la fase 2 lo escribe la IA (con validación); en la fase 1 lo usa el
 // prototipo como dato fijo.
+import type { Variedad } from "../kit/variedad";
 import type { LineaDeTiempo } from "../tiempoIlustrado";
 import type { ComposicionKit } from "../kit/catalogoKit";
 import { crearRegistro, type Registro } from "./registro";
@@ -11,7 +12,9 @@ import { crearRegistro, type Registro } from "./registro";
 // objetivo (opcional) = otro elemento al que apunta (ej. lo que señala).
 export type AccionPlan = { escena: string; accion: string; palabra: number; objetivo?: string };
 export type FrasePlan = { escena_id: string; acciones: AccionPlan[]; metafora?: string };
-export type PlanIlustrado = { frases: FrasePlan[]; composiciones?: ComposicionKit[] };
+// variedad: pared, paleta de ropa y movimiento de cámara que eligió el
+// código para este reel (lo leen los reels siguientes de la cuenta).
+export type PlanIlustrado = { frases: FrasePlan[]; composiciones?: ComposicionKit[]; variedad?: Variedad };
 
 // Una acción ya con su cuadro global.
 export type Disparo = AccionPlan & { cuadro: number; frase: string; inicioFrase: number };

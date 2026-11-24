@@ -10,10 +10,10 @@ import type { DisparosEscena } from "../motor/plan";
 import { seTocan, type Rect } from "../motor/geometria";
 import { PAREDES, VERBOS_PERSONAJE, type Expresion, type Pose } from "./catalogoKit";
 import { ID_TODOS, aIsla, casillaHuecoEnIsla, hashTexto, rectElemento, rectPersonaje, type ComposicionUbicada, type PersonajeUbicado } from "./composicion";
-import { CARTELERA, COLOR_LINEA_PISO, COLOR_PISO, SALON, Y_LINEAS_PISO, casillaCartelera } from "./dibujoObjetos";
-import { oscurecer, aclarar } from "./dibujoPersonaje";
+import { CARTELERA, COLOR_LINEA_PISO, COLOR_PISO, DIBUJO, DULCES, SALON, VENTANA_SALON, Y_LINEAS_PISO, casillaCartelera } from "./dibujoObjetos";
+import { oscurecer, aclarar, type Cara } from "./dibujoPersonaje";
 import { clave, motivoDe, motivosCartelera, type ImagenesKit, type ImagenPieza } from "./piezas";
-import { apunteHacia, conVueltasAParado, poseEnCuadro, posicionMano, type AngulosBrazo, type CambioPose } from "./poses";
+import { apunteHacia, conVueltasAParado, estadoPose, poseEnCuadro, posicionMano, type AngulosBrazo, type CambioPose, type EstadoPose } from "./poses";
 
 // objetivos: a qué apunta cada acción que lo tiene ("profesora.senala" en
 // el cuadro c -> "dibujo_nina").
@@ -41,6 +41,9 @@ function Img({ img, estilo }: { img: ImagenPieza | undefined; estilo?: CSSProper
 
 // Punto (en coordenadas locales de u) al que apunta: el centro del
 // objetivo, un poco arriba si es una persona (su cara o lo que sostiene).
+// Nunca por delante de una cara (revisión de la v7): si el brazo que
+// señala cruzaría la cara de alguien que está detrás, se prueba un ángulo
+// más alto o más bajo (lo más cerca posible del objetivo).
 function apunteDe(u: PersonajeUbicado, cu: ComposicionUbicada | undefined, objetivo: string | undefined): number | undefined {
   if (!cu || !objetivo) return undefined;
   const r = rectElemento(cu, objetivo);
@@ -48,10 +51,111 @@ function apunteDe(u: PersonajeUbicado, cu: ComposicionUbicada | undefined, objet
   const destino = { x: r.x + r.ancho / 2, y: r.y + r.alto * 0.55 };
   const lx = u.p.cx + (destino.x - u.cx) / (u.escala * (u.espejo ? -1 : 1));
   const ly = u.p.pies + (destino.y - u.pies) / u.escala;
-  return apunteHacia(u.p, lx, ly);
+  const ideal = apunteHacia(u.p, lx, ly);
+  const detras = cu.personajes.filter((o) => o !== u && zDe(o) < zDe(u)).map(caraEnIsla);
+  for (const delta of [0, -12, 12, -24, 24, -36, 36, -48, 48]) {
+    const ang = Math.max(35, Math.min(125, ideal + delta));
+    const brazo = segmentosBrazo(u, estadoPose("senalar", 30, 30, u.p, ang), "mira");
+    if (!detras.some((c) => brazo.some((sg) => tocaCara(sg, c)))) return ang;
+  }
+  return ideal;
 }
 
+// ---------- Caras y lo que pasa por delante (pura, también la usan las pruebas) ----------
+export type CaraEnIsla = { id: string; x: number; y: number; r: number };
+// Orden de dibujo en el piso (más atrás = antes); el mismo que usa EscenaKit.
+export function zDe(u: PersonajeUbicado): number {
+  const s = u.sentado;
+  return (s ? s.pupitre.y + s.pupitre.alto : u.pies) - (u.per.tipo === "profesora" ? 3 : 0);
+}
+export function caraEnIsla(u: PersonajeUbicado): CaraEnIsla {
+  const c = aIsla(u, u.p.cabeza.cx, u.p.cabeza.cy + u.p.cabeza.ry * 0.1);
+  return { id: u.per.id, x: c.x, y: c.y, r: Math.min(u.p.cabeza.rx, u.p.cabeza.ry) * 0.8 * u.escala };
+}
+type Segmento = { a: { x: number; y: number }; b: { x: number; y: number }; w: number };
+function segmentosBrazo(u: PersonajeUbicado, e: EstadoPose, lado: "mira" | "otro"): Segmento[] {
+  const ang = lado === "mira" ? e.mira : e.otro;
+  const signo = lado === "mira" ? 1 : -1;
+  const rad = (g: number) => (g * Math.PI) / 180;
+  const hombro = { x: u.p.cx + signo * u.p.hombroDx, y: u.p.hombroY };
+  const codo = { x: hombro.x + signo * u.p.brazo.largo * Math.sin(rad(ang.hombro)), y: hombro.y + u.p.brazo.largo * Math.cos(rad(ang.hombro)) };
+  const mano = posicionMano(u.p, ang, lado);
+  const enIsla = (q: { x: number; y: number }) => {
+    const r = aIsla(u, q.x, q.y);
+    return { x: r.x, y: r.y + e.saltoY * u.escala };
+  };
+  const w = (u.p.brazo.ancho / 2) * u.escala;
+  return [
+    { a: enIsla(hombro), b: enIsla(codo), w },
+    { a: enIsla(codo), b: enIsla(mano), w: w + u.p.antebrazo.mano * 0.3 * u.escala },
+  ];
+}
+function tocaCara(sg: Segmento, c: CaraEnIsla): boolean {
+  const [dx, dy] = [sg.b.x - sg.a.x, sg.b.y - sg.a.y];
+  const largo2 = dx * dx + dy * dy || 1;
+  const t = Math.max(0, Math.min(1, ((c.x - sg.a.x) * dx + (c.y - sg.a.y) * dy) / largo2));
+  return Math.hypot(sg.a.x + t * dx - c.x, sg.a.y + t * dy - c.y) < c.r + sg.w;
+}
+function rectTocaCara(r: Rect, c: CaraEnIsla): boolean {
+  const x = Math.max(r.x, Math.min(c.x, r.x + r.ancho));
+  const y = Math.max(r.y, Math.min(c.y, r.y + r.alto));
+  return Math.hypot(x - c.x, y - c.y) < c.r;
+}
+
+// Brazos u objetos en la mano que, en este cuadro, quedan dibujados por
+// delante de una cara (la de otro que está detrás, o la propia si el
+// objeto va delante del cuerpo). Regla: nunca.
+export function tapanCaras(cu: ComposicionUbicada, disparos: DisparosEscena, objetivos: ObjetivosKit, frame: number, fps: number): string[] {
+  const d = conAccionesDeGrupo(cu, disparos);
+  const res: string[] = [];
+  const estados = new Map(cu.personajes.map((u) => [u, estadoEnCuadro(u, cu, d, objetivos, frame, fps).e]));
+  for (const u of cu.personajes) {
+    const e = estados.get(u)!;
+    const brazos = [...segmentosBrazo(u, e, "mira"), ...segmentosBrazo(u, e, "otro")];
+    const enMano = cu.objetos.filter((o) => o.obj.en_mano_de === u.per.id && o.obj.tipo !== "cartelera" && !d[`${o.obj.id}.va_al_hueco`]?.some((c) => c <= frame));
+    const rects = enMano
+      .filter((o) => o.obj.tipo === "dibujo" || o.obj.tipo === "dulces")
+      .map((o) => {
+        const tipo = o.obj.tipo as "dibujo" | "dulces";
+        const extra = (1 + 0.22 * destacaDe(d, o.obj.id, frame)) * pop(aparicion(frame, o.obj.visible, primero(d[`${o.obj.id}.aparece`])));
+        const om = objetoEnMano(u, tipo, cu, d, objetivos, frame, fps, extra);
+        // Un poco más chico que la imagen (el papel y la bolsa tienen bordes transparentes).
+        const r = rectEnMano(tipo, om.c, om.escala);
+        return { id: o.obj.id, r: { x: r.x + r.ancho * 0.06, y: r.y + r.alto * 0.06, ancho: r.ancho * 0.88, alto: r.alto * 0.88 } };
+      });
+    const atras = esManosArriba(d, u, cu, objetivos, frame);
+    for (const otro of cu.personajes) {
+      const c = caraEnIsla(otro);
+      if (otro === u) {
+        if (!atras) for (const o of rects) if (rectTocaCara(o.r, c)) res.push(`${o.id} tapa la cara de ${u.per.id}`);
+        continue;
+      }
+      if (zDe(otro) >= zDe(u)) continue; // el otro está delante: lo tapa él a u, no al revés
+      if (brazos.some((sg) => tocaCara(sg, c))) res.push(`el brazo de ${u.per.id} tapa la cara de ${otro.per.id}`);
+      if (!atras) for (const o of rects) if (rectTocaCara(o.r, c)) res.push(`${o.id} (de ${u.per.id}) tapa la cara de ${otro.per.id}`);
+    }
+  }
+  return res;
+}
+function esManosArriba(d: DisparosEscena, u: PersonajeUbicado, cu: ComposicionUbicada, objetivos: ObjetivosKit, frame: number): boolean {
+  const actual = conVueltasAParado(cambiosDe(d, u, cu, objetivos).poses).filter((c) => c.cuadro <= frame).at(-1)?.pose ?? u.per.pose;
+  return actual === "aplaudir" || actual === "celebrar" || actual === "levantar_mano";
+}
+
+// Memoria por cuadro: los disparos de una escena son un objeto nuevo en
+// cada cuadro, así que se usa como llave (WeakMap): dentro de un cuadro,
+// cada cálculo por personaje se hace una sola vez.
+const memoCambios = new WeakMap<DisparosEscena, Map<PersonajeUbicado, ReturnType<typeof cambiosSinMemo>>>();
 function cambiosDe(d: DisparosEscena, u: PersonajeUbicado, cu?: ComposicionUbicada, objetivos: ObjetivosKit = []) {
+  let m = memoCambios.get(d);
+  if (!m) memoCambios.set(d, (m = new Map()));
+  const clave = cu ? u : undefined;
+  if (clave && m.has(clave)) return m.get(clave)!;
+  const r = cambiosSinMemo(d, u, cu, objetivos);
+  if (clave) m.set(clave, r);
+  return r;
+}
+function cambiosSinMemo(d: DisparosEscena, u: PersonajeUbicado, cu?: ComposicionUbicada, objetivos: ObjetivosKit = []) {
   const id = u.per.id;
   const poses: CambioPose[] = [];
   const expresiones: { cuadro: number; expresion: Expresion }[] = [];
@@ -70,7 +174,7 @@ function cambiosDe(d: DisparosEscena, u: PersonajeUbicado, cu?: ComposicionUbica
       const cuadro = c - ANTICIPO_EXPRESION;
       const antes = [...expresiones].reverse().find((x) => x.cuadro <= cuadro)?.expresion ?? u.per.expresion;
       const mismaVez = expresiones.some((x) => x.cuadro === cuadro);
-      if (!mismaVez && (antes === "aburrido" || antes === "triste")) expresiones.push({ cuadro, expresion: "feliz" });
+      if (!mismaVez && (antes === "aburrido" || antes === "triste")) expresiones.push({ cuadro, expresion: verbo === "levanta_la_mano" ? "atento" : "feliz" });
     }
   }
   return { poses, expresiones: expresiones.sort((a, b) => a.cuadro - b.cuadro) };
@@ -125,8 +229,8 @@ function mirada(u: PersonajeUbicado, cu: ComposicionUbicada, atenciones: Atencio
 // ---------- Personaje ----------
 function Personaje({ u, cu, frame, fps, d, imagenes, objetivos, atenciones }: { u: PersonajeUbicado; cu: ComposicionUbicada; frame: number; fps: number; d: DisparosEscena; imagenes: ImagenesKit; objetivos?: ObjetivosKit; atenciones: Atencion[] }) {
   const { p, aspecto: a } = u;
-  const { poses, expresiones } = cambiosDe(d, u, cu, objetivos);
-  const e = poseEnCuadro(poses, u.per.pose, frame, fps, p);
+  const { expresiones } = cambiosDe(d, u, cu, objetivos);
+  const { e } = estadoEnCuadro(u, cu, d, objetivos ?? [], frame, fps);
   const pasadas = expresiones.filter((x) => x.cuadro <= frame);
   const actual = pasadas.at(-1);
   const expresion = actual?.expresion ?? u.per.expresion;
@@ -141,7 +245,13 @@ function Personaje({ u, cu, frame, fps, d, imagenes, objetivos, atenciones }: { 
   // Distraído (aburrido): mira para el lado contrario a lo que pasa y baja la cabeza.
   const gAtento = mirada(u, cu, atenciones, frame);
   const distraido = expresion === "aburrido" ? (previa === "aburrido" ? 1 : mezcla) : previa === "aburrido" ? 1 - mezcla : 0;
-  const gMundo = gAtento + (-(Math.sign(gAtento) || (u.espejo ? 1 : -1)) * 0.9 - gAtento) * distraido;
+  // El distraído mira por la ventana (si el lugar tiene) o para el otro lado.
+  const cabezaX = aIsla(u, u.p.cabeza.cx, u.p.cabeza.cy).x;
+  const ventanaX = cu.c.fondo === "salon" ? VENTANA_SALON.x + VENTANA_SALON.w / 2 : null;
+  const gLejos = ventanaX !== null && Math.abs(ventanaX - cabezaX) > 60 ? Math.max(-1, Math.min(1, (ventanaX - cabezaX) / 200)) : -(Math.sign(gAtento) || (u.espejo ? 1 : -1)) * 0.9;
+  const gMundo = gAtento + (gLejos - gAtento) * distraido;
+  // Y bosteza cada ~3 s (cara de bostezo unos 0,7 s).
+  const bosteza = distraido >= 1 && (frame + (h % 97)) % 96 < 22;
   const g = gMundo * (u.espejo ? -1 : 1); // en coordenadas locales
   const giroCabeza = e.inclinacion + g * 5 + 7 * distraido + Math.sin((frame + h) / 47) * 1.2;
   const micro = latido(frame, d.micro, 18) * Math.abs(Math.sin(frame / 3)) * 10;
@@ -161,8 +271,9 @@ function Personaje({ u, cu, frame, fps, d, imagenes, objetivos, atenciones }: { 
     );
   };
   const cabeza = imagenes[clave.cabeza(a)];
-  const rasgos = (ex: Expresion, opacidad: number) => {
-    const img = imagenes[clave.rasgos(a, ex, ojos)] ?? imagenes[clave.rasgos(a, ex, "abiertos")];
+  const rasgos = (exPedida: Expresion, opacidad: number) => {
+    const ex: Cara = bosteza && exPedida === "aburrido" ? "bostezo" : exPedida;
+    const img = imagenes[clave.rasgos(a, ex, ex === "bostezo" ? "abiertos" : ojos)] ?? imagenes[clave.rasgos(a, ex, "abiertos")];
     if (!img || opacidad <= 0) return null;
     // Los rasgos se corren hacia donde mira (giro de 3/4 sin redibujar).
     return <Img key={ex} img={img} estilo={{ opacity: opacidad, transform: `translateX(${g * 16}px)` }} />;
@@ -190,13 +301,74 @@ function Personaje({ u, cu, frame, fps, d, imagenes, objetivos, atenciones }: { 
   );
 }
 
-// Dónde está la mano del que sostiene un objeto en este cuadro.
-function manoEnIsla(u: PersonajeUbicado, frame: number, fps: number, d: DisparosEscena) {
-  const { poses } = cambiosDe(d, u);
-  const e = poseEnCuadro(poses, u.per.pose, frame, fps, u.p);
-  const m = posicionMano(u.p, e.mira, "mira");
+// Pose de un personaje en este cuadro, ya ajustada para que sus brazos no
+// pasen por delante de la cara de nadie que esté detrás (la usan el
+// render, la mano que sostiene objetos y las pruebas: nunca se separan).
+const memoEstados = new WeakMap<DisparosEscena, Map<string, { e: EstadoPose; pose: Pose }>>();
+function estadoEnCuadro(u: PersonajeUbicado, cu: ComposicionUbicada, d: DisparosEscena, objetivos: ObjetivosKit, frame: number, fps: number): { e: EstadoPose; pose: Pose } {
+  let m = memoEstados.get(d);
+  if (!m) memoEstados.set(d, (m = new Map()));
+  const clave = `${u.per.id}@${frame}`;
+  const hecho = m.get(clave);
+  if (hecho) return hecho;
+  const r = estadoSinMemo(u, cu, d, objetivos, frame, fps);
+  m.set(clave, r);
+  return r;
+}
+function estadoSinMemo(u: PersonajeUbicado, cu: ComposicionUbicada, d: DisparosEscena, objetivos: ObjetivosKit, frame: number, fps: number): { e: EstadoPose; pose: Pose } {
+  const { poses } = cambiosDe(d, u, cu, objetivos);
+  const crudo = poseEnCuadro(poses, u.per.pose, frame, fps, u.p);
+  const pose = conVueltasAParado(poses).filter((c) => c.cuadro <= frame).at(-1)?.pose ?? u.per.pose;
+  const detras = cu.personajes.filter((o) => o !== u && zDe(o) < zDe(u)).map(caraEnIsla);
+  if (!detras.length) return { e: crudo, pose };
+  const e = { ...crudo };
+  for (const lado of ["mira", "otro"] as const) {
+    const libre = (ang: AngulosBrazo) => !segmentosBrazo(u, { ...e, [lado]: ang }, lado).some((sg) => detras.some((c) => tocaCara(sg, c)));
+    if (libre(e[lado])) continue;
+    // Se corre el hombro lo mínimo necesario (primero hacia abajo: un gesto más chico).
+    for (const delta of [-15, 15, -30, 30, -45, 45, -60, 60, -80]) {
+      const ang = { ...e[lado], hombro: e[lado].hombro + delta };
+      if (libre(ang)) {
+        e[lado] = ang;
+        break;
+      }
+    }
+  }
+  return { e, pose };
+}
+
+// Dónde está la mano del que sostiene un objeto en este cuadro. Al
+// señalar, el objeto pasa a la otra mano (si no, barre lo que señala).
+function manoEnIsla(u: PersonajeUbicado, cu: ComposicionUbicada, d: DisparosEscena, objetivos: ObjetivosKit, frame: number, fps: number) {
+  const { e, pose } = estadoEnCuadro(u, cu, d, objetivos, frame, fps);
+  const lado = pose === "senalar" || pose === "apoyar_cabeza" ? "otro" : "mira";
+  const m = posicionMano(u.p, e[lado], lado);
   const enIsla = aIsla(u, m.x, m.y);
   return { x: enIsla.x, y: enIsla.y + e.saltoY * u.escala };
+}
+
+// Objeto en la mano: donde está la mano, pero bajado lo justo para no
+// tocar ninguna cara (la propia, si va delante del cuerpo, ni la de quien
+// está detrás). Lo usan el render y la verificación (tapanCaras).
+const FORMA_EN_MANO = { dibujo: { ...DIBUJO, ax: 0.5, ay: 0.5, k: 1.4 }, dulces: { ...DULCES, ax: 0.5, ay: 0.6, k: 1.2 } } as const;
+function rectEnMano(tipo: "dibujo" | "dulces", c: { x: number; y: number }, escala: number): Rect {
+  const f = FORMA_EN_MANO[tipo];
+  return { x: c.x - f.ancho * f.ax * escala, y: c.y - f.alto * f.ay * escala, ancho: f.ancho * escala, alto: f.alto * escala };
+}
+function destacaDe(d: DisparosEscena, id: string, frame: number): number {
+  return (d[`${id}.destaca`] ?? []).reduce((acc, c) => Math.max(acc, frame >= c && frame < c + 24 ? Math.sin(((frame - c) / 24) * Math.PI) : 0), 0);
+}
+function objetoEnMano(u: PersonajeUbicado, tipo: "dibujo" | "dulces", cu: ComposicionUbicada, d: DisparosEscena, objetivos: ObjetivosKit, frame: number, fps: number, extra: number) {
+  const c0 = manoEnIsla(u, cu, d, objetivos, frame, fps);
+  const escala = u.escala * FORMA_EN_MANO[tipo].k * extra;
+  const atras = esManosArriba(d, u, cu, objetivos, frame);
+  const caras = [...(atras ? [] : [caraEnIsla(u)]), ...cu.personajes.filter((o) => o !== u && zDe(o) < zDe(u)).map(caraEnIsla)];
+  const alto = FORMA_EN_MANO[tipo].alto * escala;
+  for (let dy = 0; dy <= alto * 2; dy += alto * 0.1) {
+    const c = { x: c0.x, y: c0.y + dy };
+    if (!caras.some((cara) => rectTocaCara(rectEnMano(tipo, c, escala), cara))) return { c, escala, atras };
+  }
+  return { c: c0, escala, atras };
 }
 
 const aparicion = (frame: number, visible: boolean, aparece: number | undefined) => (visible && aparece === undefined ? 1 : rampa(frame, aparece, 10));
@@ -308,7 +480,7 @@ export function EscenaKit({ cu, frame, fps, d: disparos, imagenes, objetivos, vi
     if (o.obj.tipo === "pupitre") continue; // van con quien se sienta (silla atrás, pupitre adelante)
     const visible = aparicion(frame, o.obj.visible, primero(d[`${id}.aparece`]));
     if (visible <= 0) continue;
-    const destaca = (d[`${id}.destaca`] ?? []).reduce((acc, c) => Math.max(acc, frame >= c && frame < c + 24 ? Math.sin(((frame - c) / 24) * Math.PI) : 0), 0);
+    const destaca = destacaDe(d, id, frame);
     if (o.obj.tipo === "cartelera" && o.rect) {
       const r = o.rect;
       if (!seVe(r)) continue;
@@ -326,10 +498,13 @@ export function EscenaKit({ cu, frame, fps, d: disparos, imagenes, objetivos, vi
     const duenio = o.obj.en_mano_de ? cu.personajes.find((u) => u.per.id === o.obj.en_mano_de) : undefined;
     const escalaObjeto = (duenio?.escala ?? 1) * (o.obj.tipo === "dibujo" ? 1.4 : 1.2);
     let c: { x: number; y: number };
-    if (duenio) c = manoEnIsla(duenio, frame, fps, d);
-    else if (o.rect) c = { x: o.rect.x + o.rect.ancho / 2, y: o.rect.y + o.rect.alto / 2 };
-    else continue;
     let escala = escalaObjeto * (1 + 0.22 * destaca) * pop(visible);
+    if (duenio && (o.obj.tipo === "dibujo" || o.obj.tipo === "dulces")) {
+      const om = objetoEnMano(duenio, o.obj.tipo, cu, d, objetivos ?? [], frame, fps, (1 + 0.22 * destaca) * pop(visible));
+      c = om.c;
+      escala = om.escala;
+    } else if (o.rect) c = { x: o.rect.x + o.rect.ancho / 2, y: o.rect.y + o.rect.alto / 2 };
+    else continue;
     let rot = 0;
     const volando = vuelo?.obj.id === id && hueco !== null && tVuelo > 0;
     if (volando && hueco) {
@@ -350,16 +525,13 @@ export function EscenaKit({ cu, frame, fps, d: disparos, imagenes, objetivos, vi
     else if (o.rect) piso.push({ z: o.rect.y + o.rect.alto, nodo: capa });
   }
 
-  const manosArriba = (u: PersonajeUbicado) => {
-    const actual = conVueltasAParado(cambiosDe(d, u, cu, objetivos).poses).filter((c) => c.cuadro <= frame).at(-1)?.pose ?? u.per.pose;
-    return actual === "aplaudir" || actual === "celebrar";
-  };
+  const manosArriba = (u: PersonajeUbicado) => esManosArriba(d, u, cu, objetivos ?? [], frame);
   // Personajes (con su silla y pupitre si están sentados). Más atrás =
   // antes; en la misma fila, los adultos detrás de los niños.
   for (const u of cu.personajes) {
     if (!seVe(rectPersonaje(u))) continue;
     const s = u.sentado;
-    const z = (s ? s.pupitre.y + s.pupitre.alto : u.pies) - (u.per.tipo === "profesora" ? 3 : 0);
+    const z = zDe(u);
     const silla = imagenes[clave.silla()];
     const pupitre = imagenes[clave.pupitre()];
     piso.push({

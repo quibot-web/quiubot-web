@@ -136,12 +136,14 @@ export function svgPeloAtras(a: AspectoPersonaje): ParteSvg | null {
 // cabeza. Exagerados para que se lean en un celular (23 nov 2026).
 // ojos "cerrados": parpadeo.
 export type Ojos = "abiertos" | "cerrados";
-export function svgRasgos(a: AspectoPersonaje, e: Expresion, ojos: Ojos): ParteSvg {
+// "bostezo": cara interna (no la elige la IA): el aburrido bosteza cada tanto.
+export type Cara = Expresion | "bostezo";
+export function svgRasgos(a: AspectoPersonaje, e: Cara, ojos: Ojos): ParteSvg {
   const p = proporciones(a.tipo);
   return { svg: svg(p.ancho, p.alturaCabeza, rasgos(a, p, e, ojos)), ancho: p.ancho, alto: p.alturaCabeza, ancla: { x: p.cabeza.cx, y: p.cuello.y0 + 10 } };
 }
 
-function rasgos(a: AspectoPersonaje, p: Proporciones, e: Expresion, ojos: Ojos): string {
+function rasgos(a: AspectoPersonaje, p: Proporciones, e: Cara, ojos: Ojos): string {
   const { cx, cy, rx } = p.cabeza;
   const nino = a.tipo !== "profesora";
   const ojo = nino ? 14 : 12;
@@ -151,7 +153,7 @@ function rasgos(a: AspectoPersonaje, p: Proporciones, e: Expresion, ojos: Ojos):
   const linea = (d: string, w = 8) => `<path d="${d}" fill="none" stroke="${tinta}" stroke-width="${w}" stroke-linecap="round" stroke-linejoin="round"/>`;
   const s: string[] = [];
   // Mejillas.
-  const rubor = e === "feliz" ? 0.75 : e === "triste" ? 0.2 : 0.35;
+  const rubor = e === "feliz" || e === "atento" ? 0.7 : e === "triste" || e === "aburrido" || e === "bostezo" ? 0.15 : 0.35;
   s.push(...[-1, 1].map((l) => `<ellipse cx="${cx + l * rx * 0.62}" cy="${oy + 36}" rx="${rx * 0.19}" ry="${rx * 0.11}" fill="#F07C7C" opacity="${rubor}"/>`));
   const cerrados = () => [-1, 1].forEach((l) => s.push(linea(`M${cx + l * sep - ojo} ${oy + 2} Q${cx + l * sep} ${oy + 8} ${cx + l * sep + ojo} ${oy + 2}`, 7)));
   if (e === "feliz") {
@@ -171,6 +173,22 @@ function rasgos(a: AspectoPersonaje, p: Proporciones, e: Expresion, ojos: Ojos):
     // Boca hacia abajo, bien marcada.
     s.push(linea(`M${cx - 32} ${oy + 70} Q${cx - 14} ${oy + 44} ${cx} ${oy + 50} Q${cx + 14} ${oy + 44} ${cx + 32} ${oy + 70}`, 8));
     s.push(`<path d="M${cx + sep + 12} ${oy + 22} q-11 22 0 30 q11 -8 0 -30 z" fill="#6FBDEF"/>`);
+  } else if (e === "bostezo") {
+    // Bostezo: ojos cerrados apretados, cejas arriba y boca grande y ovalada.
+    for (const l of [-1, 1]) {
+      s.push(linea(`M${cx + l * sep - ojo} ${oy + 2} Q${cx + l * sep} ${oy - 6} ${cx + l * sep + ojo} ${oy + 2}`, 7));
+      s.push(linea(`M${cx + l * sep - 18} ${oy - 44} Q${cx + l * sep} ${oy - 54} ${cx + l * sep + 18} ${oy - 44}`, 7));
+    }
+    s.push(`<ellipse cx="${cx}" cy="${oy + 66}" rx="${rx * 0.24}" ry="${rx * 0.36}" fill="#6E2330"/>`);
+    s.push(`<ellipse cx="${cx}" cy="${oy + 84}" rx="${rx * 0.15}" ry="${rx * 0.12}" fill="#E8737E"/>`);
+  } else if (e === "atento") {
+    // Atento: ojos MUY abiertos con brillo grande, cejas arriba, sonrisa leve.
+    for (const l of [-1, 1]) {
+      if (ojos === "cerrados") s.push(linea(`M${cx + l * sep - ojo} ${oy + 2} Q${cx + l * sep} ${oy + 8} ${cx + l * sep + ojo} ${oy + 2}`, 7));
+      else s.push(`<ellipse cx="${cx + l * sep}" cy="${oy - 2}" rx="${ojo * 1.15}" ry="${ojo * 1.4}" fill="${tinta}"/><circle cx="${cx + l * sep + 4}" cy="${oy - 9}" r="${ojo * 0.5}" fill="#FFFFFF"/><circle cx="${cx + l * sep - 4}" cy="${oy + 6}" r="${ojo * 0.2}" fill="#FFFFFF"/>`);
+      s.push(linea(`M${cx + l * sep - 20} ${oy - 52} Q${cx + l * sep} ${oy - 70} ${cx + l * sep + 20} ${oy - 54}`, 8));
+    }
+    s.push(`<path d="M${cx - 28} ${oy + 44} Q${cx} ${oy + 80} ${cx + 28} ${oy + 44} Q${cx} ${oy + 54} ${cx - 28} ${oy + 44} Z" fill="#6E2330"/>`);
   } else if (e === "aburrido") {
     // Párpados a media asta (mirada caída), cejas planas y boca torcida de lado.
     for (const l of [-1, 1]) {

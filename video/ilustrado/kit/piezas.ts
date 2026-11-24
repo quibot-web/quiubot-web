@@ -2,8 +2,8 @@
 // convierten a PNG una sola vez al precargar (en el navegador). El render
 // solo dibuja <img> con transformaciones: barato y sin serializar SVG por
 // cuadro (meta <= 5 s de render por segundo de video).
-import { EXPRESIONES, MOTIVOS_DIBUJO, type Expresion, type MotivoDibujo } from "./catalogoKit";
-import { svgAntebrazo, svgBrazo, svgCabeza, svgCuerpo, svgPeloAtras, svgRasgos, type AspectoPersonaje, type Ojos, type ParteSvg } from "./dibujoPersonaje";
+import { EXPRESIONES, MOTIVOS_DIBUJO, type MotivoDibujo } from "./catalogoKit";
+import { svgAntebrazo, svgBrazo, svgCabeza, svgCuerpo, svgPeloAtras, svgRasgos, type AspectoPersonaje, type Cara, type Ojos, type ParteSvg } from "./dibujoPersonaje";
 import { svgCartelera, svgDibujo, svgDulces, svgPupitre, svgSalon, svgSilla } from "./dibujoObjetos";
 import type { ComposicionUbicada } from "./composicion";
 import type { FormaMano } from "./poses";
@@ -14,7 +14,7 @@ export const clave = {
   cuerpo: (a: AspectoPersonaje) => `cuerpo:${claveAspecto(a)}`,
   peloAtras: (a: AspectoPersonaje) => `peloatras:${claveAspecto(a)}`,
   cabeza: (a: AspectoPersonaje) => `cabeza:${claveAspecto(a)}`,
-  rasgos: (a: AspectoPersonaje, e: Expresion, ojos: Ojos) => `rasgos:${claveAspecto(a)}:${e}:${ojos}`,
+  rasgos: (a: AspectoPersonaje, e: Cara, ojos: Ojos) => `rasgos:${claveAspecto(a)}:${e}:${ojos}`,
   brazo: (a: AspectoPersonaje) => `brazo:${claveAspecto(a)}`,
   antebrazo: (a: AspectoPersonaje, m: FormaMano) => `antebrazo:${claveAspecto(a)}:${m}`,
   cartelera: () => "cartelera",
@@ -57,6 +57,7 @@ export function piezasDeComposicion(cu: ComposicionUbicada): Pieza[] {
     for (const m of ["abierta", "senala"] as const) poner(clave.antebrazo(a, m), () => svgAntebrazo(a, m));
     poner(clave.cabeza(a), () => svgCabeza(a));
     for (const e of EXPRESIONES) for (const ojos of ["abiertos", "cerrados"] as const) poner(clave.rasgos(a, e, ojos), () => svgRasgos(a, e, ojos));
+    poner(clave.rasgos(a, "bostezo", "abiertos"), () => svgRasgos(a, "bostezo", "abiertos"));
   }
   for (const o of cu.objetos) {
     if (o.obj.tipo === "cartelera") {

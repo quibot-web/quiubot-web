@@ -8,6 +8,7 @@ import { CATALOGO, ESCENA_VISIBLE, ISLAS, MICRO, unionRects, type IdEscena } fro
 import type { Rect } from "./geometria";
 import { ComposicionKitSchema, type ComposicionKitEntrada } from "../kit/catalogoKit";
 import { completarAmbiente } from "../kit/ambiente";
+import type { Variedad } from "../kit/variedad";
 import { planoLimpio } from "./camara";
 import { accionesDeComposicion, descripcionVisible, focoDeAccionKit, focoReducidoKit, rectPersonaje, ubicarComposicion, type ComposicionUbicada } from "../kit/composicion";
 
@@ -25,7 +26,8 @@ export type Registro = {
   ids(): string[];
 };
 
-export function crearRegistro(composiciones: ComposicionKitEntrada[] = [], semilla = "", opciones: { ambiente?: boolean } = {}): Registro {
+// variedad: pared y paleta de ropa del reel (variedad entre reels).
+export function crearRegistro(composiciones: ComposicionKitEntrada[] = [], semilla = "", opciones: { ambiente?: boolean; variedad?: Partial<Variedad> } = {}): Registro {
   const kit = new Map<string, { cu: ComposicionUbicada; def: DefEscena }>();
   for (const entrada of composiciones) {
     // Normaliza con el esquema (valores por defecto: plano, mira, pose...).
@@ -36,7 +38,7 @@ export function crearRegistro(composiciones: ComposicionKitEntrada[] = [], semil
     const cartelera = parseada.data.objetos.find((o) => o.tipo === "cartelera");
     const limpia = (x: typeof parseada.data) => !cartelera || planoLimpio(x.id, `${cartelera.id}.destaca`, undefined, crearRegistro([x], semilla, { ambiente: false })).ok;
     const c = opciones.ambiente === false ? parseada.data : completarAmbiente(parseada.data, semilla, limpia(parseada.data) ? limpia : () => true);
-    const cu = ubicarComposicion(c, semilla);
+    const cu = ubicarComposicion(c, semilla, opciones.variedad);
     const acciones = accionesDeComposicion(cu);
     // Micro-acción neutra: la gente respira y la cámara se acerca un poco.
     const todos = cu.personajes.map((u) => rectPersonaje(u));

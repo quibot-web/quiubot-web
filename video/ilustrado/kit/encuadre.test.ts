@@ -6,7 +6,8 @@ import { renderToStaticMarkup } from "react-dom/server";
 import { ComposicionKitSchema, LUGARES_PISO, POSICIONES, TIPOS_PERSONAJE, type ComposicionKitEntrada } from "./catalogoKit";
 import { problemasComposicion } from "./composicion";
 import { completarAmbiente, esExtra, MIN_PERSONAJES_SALON } from "./ambiente";
-import { conAccionesDeGrupo, EscenaKit, PuertaEnPantalla } from "./EscenaKit";
+import { conAccionesDeGrupo, EscenaKit, PuertaEnPantalla, tapanCaras } from "./EscenaKit";
+import { disparosDeEscena } from "../motor/plan";
 import { clave, piezasDeComposicion, urlsSinRasterizar } from "./piezas";
 import { PLAN_PROTOTIPO_KIT } from "./planPrototipoKit";
 import tiemposKit from "../fixtures/tiemposPrototipoKit.json";
@@ -19,6 +20,7 @@ import { construirRecorrido } from "../motor/recorrido";
 import { MICRO, unionRects } from "../motor/catalogo";
 import { ALTO_PANTALLA, FRANJA_SEGURA, rectEnPantalla } from "../motor/geometria";
 import type { Disparo } from "../motor/plan";
+import { brazoHacia, estadoPose, posicionMano, proporciones } from "./poses";
 import type { TiemposIlustrado } from "../tiempoIlustrado";
 
 const reel = prepararReel(tiemposKit as TiemposIlustrado, PLAN_PROTOTIPO_KIT, 30, "prototipo-kit");
@@ -46,7 +48,7 @@ describe("cámara del kit: reglas automáticas", () => {
       expect(Math.abs(p.y + p.alto / 2 - franja) / ALTO_PANTALLA, `toma ${t.desde}`).toBeLessThan(0.12);
     }
     const m = metricasKit(reel, 30);
-    expect(m.pisoVacioMaximo).toBeLessThanOrEqual(0.35); // incluye el 20 % de la interfaz de Instagram
+    expect(m.pisoVacioMaximo).toBeLessThanOrEqual(0.25); // incluye el 20 % de la interfaz de Instagram
     expect(m.planoMasLargo).toBeLessThanOrEqual(2.2);
   });
 
@@ -142,6 +144,15 @@ describe("propiedad: con cualquier composición, nadie con la cara cortada", () 
       const tomas = conCobertura(tomasDeCamara(disparos, recorrido, registro), disparos, recorrido, registro, 640);
       const camara = planDeCamara(tomas, 640, 30, { esKit: (e) => !!e && !!registro.composicion(e), pantalla: null, encuadreKit: () => null }).puntos;
       const cuerpos = cuerposEnMundo("k_azar", recorrido, registro);
+      const cuAzar = registro.composicion("k_azar")!;
+      const dAzar = disparosDeEscena(disparos, "k_azar");
+      for (let f = 0; f < 640; f += 3) {
+        const tapadas = tapanCaras(cuAzar, dAzar, [], f, 30);
+        if (tapadas.length) {
+          fallas.push(`composición ${n}, cuadro ${f}: ${tapadas.join("; ")}`);
+          break;
+        }
+      }
       for (let f = 0; f < 640; f++) {
         const cortadas = carasCortadas(camaraDelCuadro({ camara, tomas, pulsos: [], registro }, f), cuerpos);
         if (cortadas.length) {
@@ -242,12 +253,53 @@ describe("reglas de director (revisión de la v6)", () => {
 });
 
 describe("gestos que contradicen la cara", () => {
-  it("el que estaba aburrido y levanta la mano pasa a feliz (nadie participa con cara de aburrido)", () => {
+  it("el que estaba aburrido y levanta la mano pasa a atento (nadie participa con cara de aburrido)", () => {
     const cu = reel.registro.composicion("k_salon")!;
     const imagenes = urlsSinRasterizar(piezasDeComposicion(cu));
     const nino = cu.personajes.find((u) => u.per.id === "nino")!;
     const html = renderToStaticMarkup(EscenaKit({ cu, frame: 200, fps: 30, d: { "nino.se_distrae": [100], "nino.levanta_la_mano": [180] }, imagenes }));
-    expect(html).toContain(imagenes[clave.rasgos(nino.aspecto, "feliz", "abiertos")].url);
+    expect(html).toContain(imagenes[clave.rasgos(nino.aspecto, "atento", "abiertos")].url);
     expect(html).not.toContain(imagenes[clave.rasgos(nino.aspecto, "aburrido", "abiertos")].url);
+  });
+});
+
+describe("emociones legibles en un celular y nada tapa una cara (revisión de la v7)", () => {
+  it("aburrido: la mano bajo el mentón (no sobre la cara), el cuerpo hundido y la cabeza ladeada", () => {
+    for (const tipo of ["nino", "nina", "profesora"] as const) {
+      const p = proporciones(tipo);
+      const e = estadoPose("apoyar_cabeza", 10, 30, p);
+      const mano = posicionMano(p, e.mira, "mira");
+      expect(mano.y, tipo).toBeGreaterThan(p.cabeza.cy + p.cabeza.ry * 0.7); // debajo de la boca
+      expect(Math.abs(mano.x - p.cx), tipo).toBeLessThan(p.cabeza.rx); // bajo el mentón
+      expect(e.saltoY, tipo).toBeGreaterThan(0); // hundido
+      expect(Math.abs(e.inclinacion), tipo).toBeGreaterThan(6); // cabeza ladeada
+    }
+    const p = proporciones("nino");
+    const destino = { x: p.cx + 18, y: 260 };
+    const m = posicionMano(p, { ...brazoHacia(p, "mira", destino), mano: "abierta" }, "mira");
+    expect(Math.hypot(m.x - destino.x, m.y - destino.y)).toBeLessThan(2);
+  });
+
+  it("el distraído bosteza cada tanto y mira hacia la ventana; el atento se ve distinto (cara y cuerpo)", () => {
+    const cu = reel.registro.composicion("k_salon")!;
+    const imagenes = urlsSinRasterizar(piezasDeComposicion(cu));
+    const nino = cu.personajes.find((u) => u.per.id === "nino")!;
+    const bostezo = imagenes[clave.rasgos(nino.aspecto, "bostezo", "abiertos")].url;
+    const cuadros = Array.from({ length: 120 }, (_, i) => renderToStaticMarkup(EscenaKit({ cu, frame: 130 + i, fps: 30, d: { "nino.se_distrae": [100] }, imagenes })));
+    expect(cuadros.some((h) => h.includes(bostezo))).toBe(true);
+    expect(cuadros.filter((h) => h.includes(bostezo)).length).toBeLessThan(cuadros.length / 2);
+    const atento = estadoPose("inclinarse", 10, 30, nino.p);
+    const aburrido = estadoPose("apoyar_cabeza", 10, 30, nino.p);
+    expect(atento.saltoY).toBeLessThan(0); // derecho, hacia arriba
+    expect(aburrido.saltoY).toBeGreaterThan(0); // hundido
+    expect(reel.registro.escena("k_salon")!.acciones["todos.presta_atencion"].descripcion).toBe("todos prestan atención");
+  });
+
+  it("ningún brazo ni objeto pasa por delante de una cara, en ningún cuadro de los planes de prueba", () => {
+    const cu = reel.registro.composicion("k_salon")!;
+    const d = disparosDeEscena(reel.disparos, "k_salon");
+    const objetivos = reel.disparos.filter((x) => x.escena === "k_salon" && x.objetivo).map((x) => ({ accion: x.accion, cuadro: x.cuadro, objetivo: x.objetivo! }));
+    const malos = Array.from({ length: total }, (_, f) => tapanCaras(cu, d, objetivos, f, 30).map((m) => `${f}: ${m}`)).flat();
+    expect(malos).toEqual([]);
   });
 });

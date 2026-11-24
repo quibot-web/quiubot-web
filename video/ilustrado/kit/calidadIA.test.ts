@@ -13,6 +13,8 @@ import { metricasKit } from "../motor/metricasKit";
 import { cuerposEnMundo } from "../motor/camara";
 import { carasCortadas } from "../motor/encuadreKit";
 import { validarPlanIlustrado } from "../motor/validarPlan";
+import { disparosDeEscena } from "../motor/plan";
+import { tapanCaras } from "./EscenaKit";
 import type { PlanIlustrado } from "../motor/plan";
 import type { TiemposIlustrado } from "../tiempoIlustrado";
 
@@ -38,7 +40,12 @@ describe("calidad de la composición de la IA comparada con la hecha a mano (mis
     for (const [nombre, reel] of [["cartelera", reelIA], ["alumnos", reelAlumnos]] as const) {
       const m = metricasKit(reel, 30);
       expect(m.planoMasLargo, nombre).toBeLessThanOrEqual(2.2);
-      expect(m.pisoVacioMaximo, nombre).toBeLessThanOrEqual(0.35);
+      expect(m.pisoVacioMaximo, nombre).toBeLessThanOrEqual(0.25);
+      const cu = reel.registro.composicion("k_salon")!;
+      const d = disparosDeEscena(reel.disparos, "k_salon");
+      const objetivos = reel.disparos.filter((x) => x.escena === "k_salon" && x.objetivo).map((x) => ({ accion: x.accion, cuadro: x.cuadro, objetivo: x.objetivo! }));
+      const tapadas = Array.from({ length: reel.linea.duracionCuadros }, (_, f) => tapanCaras(cu, d, objetivos, f, 30)).filter((x) => x.length);
+      expect(tapadas, nombre).toEqual([]);
       const cuerpos = cuerposEnMundo("k_salon", reel.recorrido, reel.registro);
       const cortadas = Array.from({ length: reel.linea.duracionCuadros }, (_, f) => carasCortadas(camaraDelCuadro(reel, f), cuerpos)).filter((c) => c.length);
       expect(cortadas, nombre).toEqual([]);

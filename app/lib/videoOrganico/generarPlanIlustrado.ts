@@ -5,6 +5,7 @@
 import type { PlanIlustrado } from "@/video/ilustrado/motor/plan";
 import { ajustarPlanConTiempos, rellenarRitmoPorTiempo, repararRitmoPorPalabras, validarPlanIlustrado } from "@/video/ilustrado/motor/validarPlan";
 import { construirPromptPlanIlustrado } from "@/video/ilustrado/promptPlanIlustrado";
+import { elegirVariedad, type HuellaVisual } from "@/video/ilustrado/kit/variedad";
 
 // "historial": los problemas de CADA intento (se registran todos, no solo el último).
 export type ResultadoPlanIlustrado =
@@ -15,12 +16,13 @@ export async function generarPlanIlustrado(
   escenas: { id: string; narracion: string }[],
   llamarIA: (prompt: string) => Promise<string>,
   maxIntentos = 3,
-  opciones: { conKit?: boolean } = {}
+  opciones: { conKit?: boolean; historial?: HuellaVisual[] } = {}
 ): Promise<ResultadoPlanIlustrado> {
+  const historialVisual = opciones.historial ?? [];
   let errores: string[] | undefined;
   const historial: string[][] = [];
   for (let intento = 1; intento <= maxIntentos; intento++) {
-    const respuesta = await llamarIA(construirPromptPlanIlustrado(escenas, errores, opciones));
+    const respuesta = await llamarIA(construirPromptPlanIlustrado(escenas, errores, { conKit: opciones.conKit, historial: historialVisual }));
     let crudo: unknown;
     try {
       crudo = JSON.parse(respuesta);
@@ -34,13 +36,18 @@ export async function generarPlanIlustrado(
     let candidato = crudo;
     let ajustes: string[] = [];
     // Problemas de ritmo (huecos entre acciones o al final del reel): se arreglan solos.
-    if (validarPlanIlustrado(crudo, escenas).every((p) => /ningún cambio/.test(p))) {
+    if (validarPlanIlustrado(crudo, escenas, { historial: historialVisual }).every((p) => /ningún cambio/.test(p))) {
       const reparado = repararRitmoPorPalabras(crudo as PlanIlustrado, escenas);
       candidato = reparado.plan;
       ajustes = reparado.ajustes;
     }
-    const problemas = validarPlanIlustrado(candidato, escenas);
-    if (problemas.length === 0) return { ok: true, plan: candidato as PlanIlustrado, intentos: intento, ajustes, historial };
+    const problemas = validarPlanIlustrado(candidato, escenas, { historial: historialVisual });
+    if (problemas.length === 0) {
+      // Variedad entre reels: pared, paleta de ropa y movimiento de cámara
+      // que no repiten los de los últimos reels de la cuenta.
+      const plan = { ...(candidato as PlanIlustrado), variedad: elegirVariedad(historialVisual, escenas.map((e) => e.narracion).join(" ")) };
+      return { ok: true, plan, intentos: intento, ajustes, historial };
+    }
     errores = problemas;
     historial.push(problemas);
   }
@@ -62,7 +69,8 @@ export async function planTrasRegenerarVoz<G extends { escenas: { id: string; na
   if (guion.ilustrado && validarPlanIlustrado(guion.ilustrado, narraciones).length === 0) return { guion: { ...guion, ilustrado: ajustar(guion.ilustrado) }, estado: "se_mantiene" };
   if (opciones.activo) {
     const r = await generarPlanIlustrado(narraciones, opciones.llamarIA, 3, { conKit: true });
-    if (r.ok) return { guion: { ...guion, ilustrado: ajustar(r.plan) }, estado: "replanificado" };
+    // Se conserva la variedad que ya tenía la pieza (pared, paleta, cámara).
+    if (r.ok) return { guion: { ...guion, ilustrado: ajustar({ ...r.plan, ...(guion.ilustrado?.variedad ? { variedad: guion.ilustrado.variedad } : {}) }) }, estado: "replanificado" };
   }
   const sinPlan = { ...guion };
   delete sinPlan.ilustrado;

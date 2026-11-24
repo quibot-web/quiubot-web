@@ -12,6 +12,7 @@ import { CATALOGO, ID_ESCENAS, MICRO, definicionAccion } from "./catalogo";
 import { problemasDelPlan, type PlanIlustrado } from "./plan";
 import { crearRegistro, type Registro } from "./registro";
 import { ComposicionKitSchema } from "../kit/catalogoKit";
+import { problemasVariedad, VariedadSchema, type HuellaVisual } from "../kit/variedad";
 import { problemasComposicion } from "../kit/composicion";
 import { esExtra } from "../kit/ambiente";
 import { planoLimpio } from "./camara";
@@ -43,6 +44,8 @@ export const PlanIlustradoSchema = z
       .min(1),
     // Kit de escenas (visuales-v2): lugares con personajes y objetos.
     composiciones: z.array(ComposicionKitSchema).max(4).optional(),
+    // Variedad entre reels (la pone el código, no la IA).
+    variedad: VariedadSchema.optional(),
   })
   .strict();
 
@@ -66,14 +69,16 @@ const islaEn = (registro: Registro) => (escena: string) => registro.escena(escen
 
 // Escenas del guion (id + narración) -> problemas del plan, en español,
 // listos para devolverle a la IA en el reintento.
-export function validarPlanIlustrado(plan: unknown, escenas: { id: string; narracion: string }[]): string[] {
+// historial: huellas de los últimos reels de la cuenta (variedad: la
+// apertura no se repite).
+export function validarPlanIlustrado(plan: unknown, escenas: { id: string; narracion: string }[], opciones: { historial?: HuellaVisual[] } = {}): string[] {
   const parseado = PlanIlustradoSchema.safeParse(plan);
   if (!parseado.success) return parseado.error.issues.map((i) => `${i.path.join(".") || "plan"}: ${i.message}`);
   const p = parseado.data as PlanIlustrado;
   const registro = crearRegistro(p.composiciones);
   const islaDe = islaEn(registro);
   const palabras = Object.fromEntries(escenas.map((e) => [e.id, contarPalabras(e.narracion)]));
-  const problemas = [...(parseado.data.composiciones ?? []).flatMap((c) => problemasComposicion(c)), ...problemasDelPlan(p, palabras, registro)];
+  const problemas = [...(parseado.data.composiciones ?? []).flatMap((c) => problemasComposicion(c)), ...problemasDelPlan(p, palabras, registro), ...problemasVariedad(p, opciones.historial ?? [])];
 
   const ids = p.frases.map((f) => f.escena_id);
   const esperados = escenas.map((e) => e.id);

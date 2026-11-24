@@ -24,6 +24,7 @@ import {
 } from "./catalogoKit";
 import { CARTELERA, DIBUJO, DULCES, PUPITRE, SALON, SILLA, casillaCartelera } from "./dibujoObjetos";
 import type { AspectoPersonaje } from "./dibujoPersonaje";
+import { ropasDePaleta, type Variedad } from "./variedad";
 import { estadoPose, posicionMano, proporciones, topeDePose, type Proporciones } from "./poses";
 
 export const ISLA_KIT = { salon: { ancho: SALON.ancho, alto: SALON.alto } } as const;
@@ -51,10 +52,12 @@ const elegir = <T>(xs: readonly T[], h: number, salto = 0): T => xs[(h + salto) 
 const PEINADOS_POR_TIPO: Record<TipoPersonaje, Peinado[]> = { profesora: ["mono", "largo", "corto", "rizado"], nino: ["corto", "rizado"], nina: ["colitas", "largo", "rizado", "mono"] };
 const ROPAS = Object.keys(COLORES_ROPA).filter((c) => c !== "blanco") as ColorRopa[];
 
-export function aspectoDe(per: PersonajeKit, semilla: string, indice: number): AspectoPersonaje {
+// ropas: la paleta del reel (variedad entre reels); sin paleta, todas.
+export function aspectoDe(per: PersonajeKit, semilla: string, indice: number, ropas: readonly ColorRopa[] = ROPAS): AspectoPersonaje {
   const h = hashTexto(`${semilla}:${per.id}`);
   // Ropa distinta para cada personaje de la escena (índice como salto).
-  const ropa = per.ropa ?? elegir(ROPAS, h, indice * 3);
+  const ropa = per.ropa ?? elegir(ropas, h, indice * 3);
+  // El segundo color, de fuera de la paleta si hace falta (pantalón/falda).
   const ropa2 = per.ropa2 ?? elegir(ROPAS.filter((c) => c !== ropa), h >>> 5, indice);
   return {
     tipo: per.tipo,
@@ -80,7 +83,8 @@ function tamObjeto(o: ObjetoKit): { ancho: number; alto: number } {
   return { ancho: DULCES.ancho * 1.2, alto: DULCES.alto * 1.2 };
 }
 
-export function ubicarComposicion(c: ComposicionKit, semilla: string): ComposicionUbicada {
+export function ubicarComposicion(c: ComposicionKit, semilla: string, variedad?: Partial<Variedad>): ComposicionUbicada {
+  const ropas = ropasDePaleta(variedad?.paleta);
   const objetos = ubicarObjetos(c);
   const personajes = c.personajes.map((per, i): PersonajeUbicado => {
     const p = proporciones(per.tipo);
@@ -94,12 +98,12 @@ export function ubicarComposicion(c: ComposicionKit, semilla: string): Composici
       const ws = SILLA.ancho * ESCALA[plano];
       const hs = SILLA.alto * ESCALA[plano];
       const silla = { x: cx - ws / 2, y: pupitre.y + pupitre.alto - hs - 20 * ESCALA[plano], ancho: ws, alto: hs };
-      return { per, aspecto: aspectoDe(per, semilla, i), p, cx, pies, escala, espejo: per.mira === "izquierda", sentado: { pupitre, silla } };
+      return { per, aspecto: aspectoDe(per, semilla, i, ropas), p, cx, pies, escala, espejo: per.mira === "izquierda", sentado: { pupitre, silla } };
     }
     const escala = ESCALA[per.plano] * ESCALA_TIPO[per.tipo];
-    return { per, aspecto: aspectoDe(per, semilla, i), p, cx: POS_X[per.posicion], pies: PIES[per.plano], escala, espejo: per.mira === "izquierda" };
+    return { per, aspecto: aspectoDe(per, semilla, i, ropas), p, cx: POS_X[per.posicion], pies: PIES[per.plano], escala, espejo: per.mira === "izquierda" };
   });
-  const pared = c.pared ?? elegir(["crema", "menta", "celeste", "durazno"] as const, hashTexto(`${semilla}:${c.id}`));
+  const pared = c.pared ?? variedad?.pared ?? elegir(["crema", "menta", "celeste", "durazno"] as const, hashTexto(`${semilla}:${c.id}`));
   return { c, pared, isla: ISLA_KIT[c.fondo], personajes, objetos };
 }
 
@@ -155,6 +159,7 @@ export const VERBOS_TODOS = {
   sorprendido: "todos se sorprenden",
   levanta_la_mano: "todos levantan la mano",
   se_distrae: "todos se aburren y se distraen",
+  presta_atencion: "todos prestan atención",
 } as const satisfies Partial<Record<keyof typeof VERBOS_PERSONAJE, string>>;
 
 export function rectElemento(cu: ComposicionUbicada, id: string, pose?: Pose): Rect | null {

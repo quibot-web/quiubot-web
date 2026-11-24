@@ -2,6 +2,7 @@
 // validada, la IA elige por cada frase qué escena del catálogo se ve y
 // qué palabra dispara cada acción. Puro (lo prueba promptPlanIlustrado.test.ts).
 import { catalogoKitTexto } from "./kit/promptKit";
+import { textoVariedadParaPrompt, type HuellaVisual } from "./kit/variedad";
 import { accionesDisponiblesTexto, MAX_PALABRAS_SIN_ACCION, MIN_PALABRAS_ENTRE_ISLAS, MIN_PALABRAS_POR_PANTALLA } from "./motor/validarPlan";
 
 // Conceptos frecuentes de un negocio -> la metáfora más cercana del
@@ -20,7 +21,9 @@ const METAFORAS = [
 
 // conKit (visuales-v2, solo cuentas de REELS_ILUSTRADOS_EMAILS): la IA
 // también puede armar lugares con el kit de escenas.
-export function construirPromptPlanIlustrado(escenas: { id: string; narracion: string }[], erroresPrevios?: string[], opciones: { conKit?: boolean } = {}): string {
+// historial: huellas de los últimos reels de la cuenta (variedad).
+export function construirPromptPlanIlustrado(escenas: { id: string; narracion: string }[], erroresPrevios?: string[], opciones: { conKit?: boolean; historial?: HuellaVisual[] } = {}): string {
+  const variedad = textoVariedadParaPrompt(opciones.historial ?? []);
   const frases = escenas
     .map((e) => {
       const palabras = e.narracion.trim().split(/\s+/).filter(Boolean);
@@ -33,6 +36,8 @@ CATÁLOGO (escena: acciones)
 ${accionesDisponiblesTexto()}
 
 ${opciones.conKit ? `${catalogoKitTexto()}
+
+` : ""}${variedad ? `${variedad}
 
 ` : ""}METÁFORAS: si la frase habla de un concepto que no está literal en el catálogo, elige la metáfora más cercana y explícala en "metafora" (una línea, no se muestra):
 ${METAFORAS.map((m) => `- ${m}`).join("\n")}

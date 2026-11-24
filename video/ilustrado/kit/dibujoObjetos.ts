@@ -50,7 +50,7 @@ export function svgSalon(pared: Pared): ParteSvg {
   s.push(`<path d="M${pz.x + 230} ${pz.y + 240} q40 -60 80 0 t80 0 t80 0" fill="none" stroke="#F2D57A" stroke-width="7" stroke-linecap="round" opacity="0.9"/>`);
   s.push(`<path d="M${pz.x + 260} ${pz.y + 90} l60 -40 l60 40 v70 h-120 z" fill="none" stroke="#E8EFE8" stroke-width="6" opacity="0.8"/>`);
   // Ventana con cielo.
-  const v = { x: 1720, y: 190, w: 260, h: 380 };
+  const v = VENTANA_SALON;
   s.push(`<rect x="${v.x - 16}" y="${v.y - 16}" width="${v.w + 32}" height="${v.h + 32}" rx="8" fill="#FFFFFF"/><rect x="${v.x}" y="${v.y}" width="${v.w}" height="${v.h}" fill="#9FD3F2"/><ellipse cx="${v.x + 90}" cy="${v.y + 110}" rx="60" ry="26" fill="#FFFFFF" opacity="0.9"/><ellipse cx="${v.x + 170}" cy="${v.y + 230}" rx="50" ry="20" fill="#FFFFFF" opacity="0.85"/><rect x="${v.x + v.w / 2 - 6}" y="${v.y}" width="12" height="${v.h}" fill="#FFFFFF"/><rect x="${v.x}" y="${v.y + v.h / 2 - 6}" width="${v.w}" height="12" fill="#FFFFFF"/><rect x="${v.x - 30}" y="${v.y + v.h + 14}" width="${v.w + 60}" height="18" rx="6" fill="${oscurecer(color, 0.25)}"/>`);
   // Guirnalda de banderines.
   const colores = ["#E85D5D", "#F2C230", "#3FA66B", "#3F6FD8", "#E86A9A", "#EE8A35"];
@@ -162,6 +162,8 @@ export function svgDulces(): ParteSvg {
 }
 
 // ---------- Pupitre (vista de frente, tapa en perspectiva) y silla ----------
+// Ventana del salón (a donde mira el que se distrae).
+export const VENTANA_SALON = { x: 1720, y: 190, w: 260, h: 380 } as const;
 export const PUPITRE = { ancho: 400, alto: 320, tapa: 56 } as const;
 export function svgPupitre(): ParteSvg {
   const { ancho: W, alto: H, tapa } = PUPITRE;
