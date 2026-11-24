@@ -239,10 +239,14 @@ export function compactarConSilenciosReales(
     puntos.add(r.inicioOriginal);
     puntos.add(r.finOriginal);
   }
+  // Límite de cada cambio de escena (en la voz original): desde ahí, los
+  // tramos son de la escena siguiente.
+  const limites: { pos: number; escena: number }[] = [];
   for (let i = 0; i < palabras.length - 1; i++) {
     if (escenaIndicePorPalabra[i] !== escenaIndicePorPalabra[i + 1]) {
-      const yaCubierto = remociones.some((r) => r.despuesDePalabra === i);
-      if (!yaCubierto) {
+      const cubierto = remociones.find((r) => r.despuesDePalabra === i);
+      if (cubierto) limites.push({ pos: cubierto.finOriginal, escena: escenaIndicePorPalabra[i + 1] });
+      if (!cubierto) {
         // Dentro del silencio medido entre las dos (nunca en el punto medio
         // de Whisper, que puede caer en el ataque de la palabra).
         const hueco = { desde: palabras[i].fin_s, hasta: palabras[i + 1].inicio_s };
@@ -250,7 +254,9 @@ export function compactarConSilenciosReales(
           .map((s) => ({ s, solape: Math.min(hueco.hasta, s.fin_s) - Math.max(hueco.desde, s.inicio_s) }))
           .filter((x) => x.solape > -0.3)
           .sort((a, b) => b.solape - a.solape)[0]?.s;
-        puntos.add(silencio ? (silencio.inicio_s + silencio.fin_s) / 2 : (hueco.desde + hueco.hasta) / 2);
+        const division = silencio ? (silencio.inicio_s + silencio.fin_s) / 2 : (hueco.desde + hueco.hasta) / 2;
+        puntos.add(division);
+        limites.push({ pos: division, escena: escenaIndicePorPalabra[i + 1] });
       }
     }
   }
@@ -272,22 +278,18 @@ export function compactarConSilenciosReales(
     });
   }
 
-  // Cada tramo global pertenece exactamente a UNA escena: la de la
-  // primera palabra cuyo CENTRO (según Whisper) cae dentro del tramo; un
-  // tramo sin palabras (solo silencio) va con el anterior. Antes se
-  // miraba el inicio de Whisper contra el punto medio del tramo, y con
-  // Whisper atrasado (23 nov 2026: "Escribe" marcada 385 ms tarde) el
-  // tramo de la escena nueva quedaba en la anterior.
+  // Cada tramo pertenece a la escena que empieza en el último límite de
+  // escena que quedó antes de él (ningún tramo cruza un límite: siempre hay
+  // un punto de corte ahí). Exacto por construcción, sin depender de dónde
+  // Whisper ubica las palabras (23 nov 2026: con Whisper atrasado, o con
+  // las palabras de la última frase amontonadas en un mismo instante, la
+  // escena quedaba sin audio).
+  limites.sort((a, b) => a.pos - b.pos);
   const tramosPorEscena: TramoAudio[][] = Array.from({ length: Math.max(...escenaIndicePorPalabra) + 1 }, () => []);
-  let escenaAnterior = escenaIndicePorPalabra[0];
   for (const tramo of tramosGlobales) {
-    const k = palabras.findIndex((p) => {
-      const centro = (p.inicio_s + p.fin_s) / 2;
-      return centro >= tramo.original.inicio_s - 1e-9 && centro < tramo.original.fin_s;
-    });
-    const indiceEscena = k >= 0 ? escenaIndicePorPalabra[k] : escenaAnterior;
+    let indiceEscena = escenaIndicePorPalabra[0];
+    for (const l of limites) if (tramo.original.inicio_s >= l.pos - 1e-6) indiceEscena = l.escena;
     tramosPorEscena[indiceEscena].push(tramo);
-    escenaAnterior = indiceEscena;
   }
 
   return { palabras: palabrasCompactadas, tramosPorEscena };
