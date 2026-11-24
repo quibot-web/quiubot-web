@@ -21,10 +21,12 @@
 --   4. Avísale por correo que terminó (plazo: 30 días desde que se confirmó
 --      su identidad).
 --
--- ÓRDENES DE PAGO: el paso 2 las borra (variable borrar_ordenes_pago). Antes
--- de correrlo, confirma si por obligación contable o tributaria tienes que
--- conservar el soporte de los pagos; si es así, ponla en false y quedan
--- solo esas filas (ligadas al correo, sin el resto de la cuenta).
+-- ÓRDENES DE PAGO: por defecto se CONSERVAN (en Colombia hay que guardar los
+-- soportes contables), pero DESVINCULADAS de la persona: el correo (el único
+-- dato personal de la tabla) se reemplaza por un seudónimo aleatorio. Quedan
+-- referencia, monto, plan, ciclo, estado, id del pago en Bold y fechas, que
+-- son el soporte contable. Para borrarlas del todo, pon
+-- borrar_ordenes_pago en true en el paso 2.
 --
 -- Si se agrega una tabla nueva con datos de usuario, súmala aquí: el test
 -- docs/sql/eliminar_datos_usuario.test.ts falla si una tabla del código no
@@ -85,8 +87,9 @@ do $$
 declare
   v_id uuid := 'ID_A_ELIMINAR';
   v_email text := lower('CORREO_A_ELIMINAR');
-  -- Ver la nota de ÓRDENES DE PAGO arriba antes de correr.
-  borrar_ordenes_pago boolean := true;
+  -- Ver la nota de ÓRDENES DE PAGO arriba (por defecto se conservan desvinculadas).
+  borrar_ordenes_pago boolean := false;
+  v_seudonimo text := 'eliminado-' || substr(md5(random()::text || clock_timestamp()::text), 1, 12) || '@eliminado.invalid';
   v_rol text;
   n integer;
 begin
@@ -140,6 +143,10 @@ begin
   delete from "User_Config" where lower("User_Email") = v_email;
   if borrar_ordenes_pago then
     delete from ordenes_pago where lower(email) = v_email;
+  else
+    update ordenes_pago set email = v_seudonimo, actualizado_en = now() where lower(email) = v_email;
+    get diagnostics n = row_count;
+    raise notice 'Órdenes de pago conservadas y desvinculadas: % (correo reemplazado por %).', n, v_seudonimo;
   end if;
   delete from usuarios where id = v_id;
   get diagnostics n = row_count;

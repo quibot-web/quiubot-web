@@ -53,6 +53,12 @@ describe("script de eliminación de datos de un usuario", () => {
     expect(borradas).toContain("publicaciones_organicas");
   });
 
+  it("órdenes de pago: por defecto se conservan (soporte contable) con el correo reemplazado por un seudónimo; borrarlas es opcional", () => {
+    expect(sinComentarios).toMatch(/borrar_ordenes_pago boolean := false;/);
+    expect(sinComentarios).toMatch(/update ordenes_pago set email = v_seudonimo/);
+    expect(sinComentarios).toMatch(/if borrar_ordenes_pago then\s+delete from ordenes_pago/);
+  });
+
   it("es seguro de correr: todo en un bloque (una transacción), y se niega si el id no corresponde al correo o si la cuenta es admin", () => {
     expect(sinComentarios).toMatch(/do \$\$[\s\S]*end \$\$;/);
     expect(sinComentarios).toMatch(/if not found then\s+raise exception/);
