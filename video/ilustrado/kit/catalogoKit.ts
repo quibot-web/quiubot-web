@@ -18,7 +18,7 @@ export const NOMBRE_PERSONAJE: Record<TipoPersonaje, string> = { profesora: "una
 export const POSES = ["parado", "senalar", "celebrar", "aplaudir", "ofrecer", "levantar_mano"] as const;
 export type Pose = (typeof POSES)[number];
 // "normal" es la expresión base.
-export const EXPRESIONES = ["normal", "feliz", "triste", "sorprendido"] as const;
+export const EXPRESIONES = ["normal", "feliz", "triste", "sorprendido", "aburrido"] as const;
 export type Expresion = (typeof EXPRESIONES)[number];
 
 export const PIELES = { clara: "#F5D0B5", triguena: "#E2AF86", media: "#C98E62", morena: "#9A6440", oscura: "#6B4128" } as const;
@@ -77,6 +77,8 @@ export const VERBOS_PERSONAJE = {
   feliz: { expresion: "feliz", descripcion: "sonríe feliz" },
   triste: { expresion: "triste", descripcion: "se pone triste" },
   sorprendido: { expresion: "sorprendido", descripcion: "se sorprende" },
+  // Aburrido y mirando para otro lado (no a lo que pasa).
+  se_distrae: { expresion: "aburrido", descripcion: "se aburre y se distrae (mira para otro lado)" },
 } as const satisfies Record<string, { pose?: Pose; expresion?: Expresion; descripcion: string }>;
 export type VerboPersonaje = keyof typeof VERBOS_PERSONAJE;
 

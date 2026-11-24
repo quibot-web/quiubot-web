@@ -4,7 +4,7 @@
 import { camaraEnCuadro, construirLineaDeTiempo, type LineaDeTiempo, type PuntoCamara, type TiemposIlustrado } from "../tiempoIlustrado";
 import { BOCA_BILLETERA_LOCAL, MICRO, type IdEscena } from "./catalogo";
 import { crearRegistro, REGISTRO_CATALOGO, type Registro } from "./registro";
-import { ZOOM_PUERTA_MAXIMO, cuerposEnMundo, planDeCamara, pulsoDeCamara, tomasDeCamara, type Puerta, type Toma } from "./camara";
+import { conCobertura, cuerposEnMundo, encuadreDeAccionKit, planDeCamara, pulsoDeCamara, tomasDeCamara, type Puerta, type Toma } from "./camara";
 import { encuadrarKit } from "./encuadreKit";
 import { acercar, desplazar, type Encuadre } from "./geometria";
 import { rectPersonaje } from "../kit/composicion";
@@ -40,7 +40,8 @@ export function prepararReel(tiempos: TiemposIlustrado, plan: PlanIlustrado, fps
   const linea = construirLineaDeTiempo(tiempos, fps);
   const disparos = resolverDisparos(plan, linea);
   const recorrido = construirRecorrido(disparos, registro);
-  const tomas = tomasDeCamara(disparos, recorrido, registro);
+  // En el kit, ningún plano igual más de ~2 s (planos de cobertura).
+  const tomas = conCobertura(tomasDeCamara(disparos, recorrido, registro), disparos, recorrido, registro, linea.duracionCuadros);
   // Puertas celular <-> lugar del kit (sin viajar por el mundo oscuro).
   const cel = recorrido.celular;
   const plan_ = planDeCamara(tomas, linea.duracionCuadros, fps, {
@@ -49,16 +50,17 @@ export function prepararReel(tiempos: TiemposIlustrado, plan: PlanIlustrado, fps
     // Encuadre del lugar al cruzar la puerta: la cartelera (lo que el feed
     // "se vuelve") o, sin cartelera, todo lo que quepa del lugar; con las
     // mismas reglas del kit (nadie con la cara cortada).
+    // Encuadre del lugar al cruzar la puerta: la cartelera (lo que el feed
+    // "se vuelve"), con la misma cadena que cualquier acción del kit (nadie
+    // cortado, zoom normal); sin cartelera, el plano con más personajes.
     encuadreKit: (e) => {
       const cu = registro.composicion(e);
+      if (!cu) return null;
+      const cartelera = cu.objetos.find((o) => o.obj.tipo === "cartelera" && o.rect);
+      if (cartelera) return encuadreDeAccionKit(e, `${cartelera.obj.id}.destaca`, undefined, recorrido, registro)?.r.encuadre ?? null;
       const isla = recorrido[e];
-      if (!cu || !isla) return null;
-      const cuerpos = cuerposEnMundo(e, recorrido, registro);
-      const cartelera = cu.objetos.find((o) => o.obj.tipo === "cartelera" && o.rect)?.rect;
-      const r = cartelera
-        ? encuadrarKit({ obligatorios: [desplazar(cartelera, isla.x, isla.y)], cuerpos, zoomMaximo: ZOOM_PUERTA_MAXIMO })
-        : encuadrarKit({ obligatorios: [], deseables: cu.personajes.map((u) => desplazar(rectPersonaje(u), isla.x, isla.y)), cuerpos });
-      return r?.encuadre ?? null;
+      if (!isla) return null;
+      return encuadrarKit({ obligatorios: [], deseables: cu.personajes.map((u) => desplazar(rectPersonaje(u), isla.x, isla.y)), cuerpos: cuerposEnMundo(e, recorrido, registro) })?.encuadre ?? null;
     },
   });
   const camara = plan_.puntos;

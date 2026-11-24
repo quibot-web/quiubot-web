@@ -1,0 +1,276 @@
+{
+ "escenas": [
+  {
+   "id": "e1",
+   "narracion": "Tus clientes son como alumnos:"
+  },
+  {
+   "id": "e2",
+   "narracion": "si la clase es aburrida, se distraen;"
+  },
+  {
+   "id": "e3",
+   "narracion": "si les muestras algo que les sirve, levantan la mano."
+  },
+  {
+   "id": "e4",
+   "narracion": "Síguenos para más ideas como esta."
+  }
+ ],
+ "tiemposRender": [
+  {
+   "escena_id": "e1",
+   "inicio_s": 0,
+   "fin_s": 2.1012085000000003
+  },
+  {
+   "escena_id": "e2",
+   "inicio_s": 2.1012085000000003,
+   "fin_s": 4.7544375
+  },
+  {
+   "escena_id": "e3",
+   "inicio_s": 4.7544375,
+   "fin_s": 7.874459
+  },
+  {
+   "escena_id": "e4",
+   "inicio_s": 7.874459,
+   "fin_s": 9.906376343322753
+  }
+ ],
+ "palabrasPorEscena": [
+  {
+   "escena_id": "e1",
+   "palabras": [
+    {
+     "texto": "Tus",
+     "inicio_s": 0,
+     "fin_s": 0.25999999046325684
+    },
+    {
+     "texto": "clientes",
+     "inicio_s": 0.25999999046325684,
+     "fin_s": 0.8199999928474426
+    },
+    {
+     "texto": "son",
+     "inicio_s": 0.8199999928474426,
+     "fin_s": 1.2200000286102295
+    },
+    {
+     "texto": "como",
+     "inicio_s": 1.2200000286102295,
+     "fin_s": 1.4600000381469727
+    },
+    {
+     "texto": "alumnos:",
+     "inicio_s": 1.4600000381469727,
+     "fin_s": 1.8799999952316284
+    }
+   ]
+  },
+  {
+   "escena_id": "e2",
+   "palabras": [
+    {
+     "texto": "si",
+     "inicio_s": 2.4600000381469727,
+     "fin_s": 2.4600000381469727
+    },
+    {
+     "texto": "la",
+     "inicio_s": 2.4600000381469727,
+     "fin_s": 2.6600000858306885
+    },
+    {
+     "texto": "clase",
+     "inicio_s": 2.6600000858306885,
+     "fin_s": 2.880000114440918
+    },
+    {
+     "texto": "es",
+     "inicio_s": 2.880000114440918,
+     "fin_s": 3.2200000286102295
+    },
+    {
+     "texto": "aburrida,",
+     "inicio_s": 3.2200000286102295,
+     "fin_s": 3.5399999618530273
+    },
+    {
+     "texto": "se",
+     "inicio_s": 3.880000114440918,
+     "fin_s": 4.039999961853027
+    },
+    {
+     "texto": "distraen;",
+     "inicio_s": 4.039999961853027,
+     "fin_s": 4.5
+    }
+   ]
+  },
+  {
+   "escena_id": "e3",
+   "palabras": [
+    {
+     "texto": "si",
+     "inicio_s": 5.059999942779541,
+     "fin_s": 5.119999885559082
+    },
+    {
+     "texto": "les",
+     "inicio_s": 5.119999885559082,
+     "fin_s": 5.320000171661377
+    },
+    {
+     "texto": "muestras",
+     "inicio_s": 5.320000171661377,
+     "fin_s": 5.639999866485596
+    },
+    {
+     "texto": "algo",
+     "inicio_s": 5.639999866485596,
+     "fin_s": 5.900000095367432
+    },
+    {
+     "texto": "que",
+     "inicio_s": 5.900000095367432,
+     "fin_s": 6.019999980926514
+    },
+    {
+     "texto": "les",
+     "inicio_s": 6.019999980926514,
+     "fin_s": 6.260000228881836
+    },
+    {
+     "texto": "sirve,",
+     "inicio_s": 6.260000228881836,
+     "fin_s": 6.480000019073486
+    },
+    {
+     "texto": "levantan",
+     "inicio_s": 6.961916923706054,
+     "fin_s": 7.281917095367431
+    },
+    {
+     "texto": "la",
+     "inicio_s": 7.281917095367431,
+     "fin_s": 7.821917057220459
+    },
+    {
+     "texto": "mano.",
+     "inicio_s": 7.821917057220459,
+     "fin_s": 7.926375847412109
+    }
+   ]
+  },
+  {
+   "escena_id": "e4",
+   "palabras": [
+    {
+     "texto": "Síguenos",
+     "inicio_s": 8.386375885559081,
+     "fin_s": 8.566376190734863
+    },
+    {
+     "texto": "para",
+     "inicio_s": 8.566376190734863,
+     "fin_s": 8.906376343322753
+    },
+    {
+     "texto": "más",
+     "inicio_s": 8.906376343322753,
+     "fin_s": 9.166375618530273
+    },
+    {
+     "texto": "ideas",
+     "inicio_s": 9.166375618530273,
+     "fin_s": 9.406376343322753
+    },
+    {
+     "texto": "como",
+     "inicio_s": 9.406376343322753,
+     "fin_s": 9.666375618530273
+    },
+    {
+     "texto": "esta.",
+     "inicio_s": 9.666375618530273,
+     "fin_s": 9.906376343322753
+    }
+   ]
+  }
+ ],
+ "segmentosAudio": [
+  {
+   "escena_id": "e1",
+   "tramos": [
+    {
+     "original": {
+      "inicio_s": 0,
+      "fin_s": 2.1012085000000003
+     },
+     "compactado": {
+      "inicio_s": 0,
+      "fin_s": 2.1012085000000003
+     }
+    }
+   ]
+  },
+  {
+   "escena_id": "e2",
+   "tramos": [
+    {
+     "original": {
+      "inicio_s": 2.1012085000000003,
+      "fin_s": 4.7544375
+     },
+     "compactado": {
+      "inicio_s": 2.1012085000000003,
+      "fin_s": 4.7544375
+     }
+    }
+   ]
+  },
+  {
+   "escena_id": "e3",
+   "tramos": [
+    {
+     "original": {
+      "inicio_s": 4.7544375,
+      "fin_s": 6.630417
+     },
+     "compactado": {
+      "inicio_s": 4.7544375,
+      "fin_s": 6.630417
+     }
+    },
+    {
+     "original": {
+      "inicio_s": 6.7485,
+      "fin_s": 7.992542
+     },
+     "compactado": {
+      "inicio_s": 6.630417,
+      "fin_s": 7.874459
+     }
+    }
+   ]
+  },
+  {
+   "escena_id": "e4",
+   "tramos": [
+    {
+     "original": {
+      "inicio_s": 8.108083,
+      "fin_s": 10.140000343322754
+     },
+     "compactado": {
+      "inicio_s": 7.874459,
+      "fin_s": 9.906376343322753
+     }
+    }
+   ]
+  }
+ ]
+}

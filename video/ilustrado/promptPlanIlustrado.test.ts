@@ -39,5 +39,8 @@ describe("prompt del plan ilustrado con el kit de escenas (visuales-v2)", () => 
     expect(conKit).toMatch(/Si no, usa solo el catálogo: no fuerces el kit/);
     expect(conKit).toMatch(/no contradice la frase/);
     expect(conKit).toMatch(/La cámara es automática/);
+    expect(conKit).toMatch(/Pon solo a los protagonistas/);
+    expect(conKit).toMatch(/Nunca en fila/);
+    expect(conKit).toContain("se_distrae");
   });
 });

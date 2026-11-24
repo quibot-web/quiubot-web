@@ -131,6 +131,49 @@ que incluye 30 composiciones al azar.
   `~/Desktop/videos_quiubot/prototipo_kit/prototipo_kit_v6_ia.mp4`,
   ~3 s/s.
 
+## Reglas de director (revisión de la v6, 24 nov 2026)
+
+Son automáticas: unas las aplica el validador (la IA corrige en el
+reintento) y otras el código.
+
+1. **Escena poblada** (`kit/ambiente.ts`): el salón tiene al menos 5
+   personajes, con 2 o más niños sentados al fondo. Si la IA pone pocos, el
+   código agrega extras (`extra1`, `extra2`, ...):
+   - varían con la semilla;
+   - respiran, parpadean y miran la cartelera o al protagonista;
+   - nunca tapan nada ni le quitan a la cartelera su plano limpio.
+2. **Nunca en fila:** con 3 o más personajes, el validador pide al menos
+   dos profundidades (de pie adelante, de pie atrás, sentado).
+3. **Plano limpio para cada acción:** si la cámara no puede mostrar una
+   acción sin cortar a nadie, el validador le dice a la IA quién estorba.
+4. **Ritmo de planos** (`conCobertura`, `MAX_PLANO_KIT` = 2 s): si una toma
+   dura más, se intercalan coberturas según el tema:
+   - **sobre personas:** primer plano de quien actúa, de a quién se
+     dirige y reacciones de quienes miran;
+   - **sobre la cartelera:** sus mitades y el hueco, con reacciones.
+
+   En cada acción la cámara vuelve al plano principal. Entre un lugar del
+   kit y otra isla, la cámara corta en vez de viajar.
+5. **Encuadre** (`encuadreKit.ts`):
+   - zoom ≥0,75 siempre;
+   - si lo que pide la acción no cabe, un foco más chico
+     (`focoReducidoKit`) antes de abrir el plano;
+   - lo nombrado ocupa entre 50 % y 70 % de la altura útil;
+   - nadie recortado con la cara en la mitad inferior;
+   - margen de 40 px al borde para todo personaje visible.
+6. **Gestos coherentes:**
+   - levantar la mano, aplaudir o celebrar quitan la cara de aburrido o
+     de triste;
+   - lo que alguien tiene en la mano va detrás del cuerpo al aplaudir;
+   - nuevo verbo `se_distrae` (y `todos.se_distrae`): cara de aburrido y
+     mirada hacia otro lado.
+7. **Calidad comparable a mano** (`motor/metricasKit.ts`,
+   `kit/calidadIA.test.ts`):
+   - se mide en personajes visibles, cortes por segundo, pantalla útil
+     ocupada, plano más largo y piso vacío;
+   - la composición de la IA (fixture `planIAKit.json`) queda en un rango
+     parecido a la v5 hecha a mano.
+
 ## Pendiente (después de aprobar el estilo)
 
 1. **La IA compone con el kit:** prompt con las listas cerradas, elección literal por frase y metáforas completas. Si el concepto no existe, la composición más cercana; nunca texto.

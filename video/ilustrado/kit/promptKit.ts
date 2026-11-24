@@ -25,6 +25,7 @@ import {
   VERBOS_PERSONAJE,
 } from "./catalogoKit";
 import { ID_TODOS, VERBOS_TODOS } from "./composicion";
+import { PREFIJO_EXTRA } from "./ambiente";
 import { COMPOSICION_SALON } from "./planPrototipoKit";
 
 export const MAX_COMPOSICIONES = 2;
@@ -64,8 +65,12 @@ ${verbosObjeto}
   2. Ids: la composición empieza con "k_" (por ejemplo "k_salon"); los elementos, en minúsculas y cortos ("profesora", "nino", "dibujo_nina"). "${ID_TODOS}" está reservado.
   3. Pon en la composición todo lo que la narración nombra en ese lugar (quién hace qué y con qué), y nada más. Si alguien da o señala algo, ese algo existe en la composición.
      Nadie de pie justo delante de lo que está en la pared: si la cartelera va en pared_centro, nadie en posicion "centro" (ponlos a los lados o sentados).
+     Deja aire: la cámara necesita mostrar cada cosa sin cortar a nadie en el borde, así que no rodees la cartelera de gente por los dos lados; agrupa a los personajes de un lado o ponlos atrás.
   4. Lo que se ve no contradice la frase: si la voz dice "todos aplauden", usa ${ID_TODOS}.aplaude; nadie triste mientras la voz celebra.
-  5. La cámara es automática (encuadra lo nombrado, nunca corta caras): no la describas. Solo cuida que cada acción nombre a quien la hace.
+  5. La cámara es automática (encuadra lo nombrado, nunca corta caras, cambia de plano cada ~2 s con detalles y reacciones): no la describas. Solo cuida que cada acción nombre a quien la hace.
+  8. Pon solo a los protagonistas (los que la narración nombra o que hacen algo): el código completa el lugar con niños sentados al fondo, variados y mirando lo que pasa (sus ids empiezan con "${PREFIJO_EXTRA}"; no los uses).
+  9. Nunca en fila: con 3 o más personajes usa profundidades distintas (alguien "plano": "fondo" o sentado en un pupitre).
+  10. Si la narración dice que alguien se aburre o se distrae, usa <id>.se_distrae (o ${ID_TODOS}.se_distrae): pone cara de aburrido y mira para otro lado.
   6. En el mismo lugar del kit, deja al menos 1 palabra entre acciones de elementos distintos (la cámara corta a cada uno).
   7. Entre el celular (feed, chat, perfil) y un lugar del kit vale la regla de lugares distintos: la cámara entra por la pantalla del celular.
 - Ejemplo de composición (no la copies: compón la que pida TU narración):

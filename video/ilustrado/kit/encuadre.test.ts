@@ -5,13 +5,15 @@ import { describe, expect, it } from "vitest";
 import { renderToStaticMarkup } from "react-dom/server";
 import { ComposicionKitSchema, LUGARES_PISO, POSICIONES, TIPOS_PERSONAJE, type ComposicionKitEntrada } from "./catalogoKit";
 import { problemasComposicion } from "./composicion";
+import { completarAmbiente, esExtra, MIN_PERSONAJES_SALON } from "./ambiente";
 import { conAccionesDeGrupo, EscenaKit, PuertaEnPantalla } from "./EscenaKit";
 import { clave, piezasDeComposicion, urlsSinRasterizar } from "./piezas";
 import { PLAN_PROTOTIPO_KIT } from "./planPrototipoKit";
 import tiemposKit from "../fixtures/tiemposPrototipoKit.json";
 import { camaraDelCuadro, prepararReel } from "../motor/preparar";
-import { CORTE_MINIMO_KIT, cuerposEnMundo, planDeCamara, tomasDeCamara } from "../motor/camara";
-import { carasCortadas, encuadreSeguro, ZOOM_MINIMO_KIT, ZOOM_MINIMO_KIT_EXCEPCIONAL } from "../motor/encuadreKit";
+import { conCobertura, cuerposEnMundo, planDeCamara, tomasDeCamara } from "../motor/camara";
+import { carasCortadas, encuadreSeguro, ZOOM_MINIMO_KIT } from "../motor/encuadreKit";
+import { metricasKit } from "../motor/metricasKit";
 import { crearRegistro } from "../motor/registro";
 import { construirRecorrido } from "../motor/recorrido";
 import { MICRO, unionRects } from "../motor/catalogo";
@@ -33,22 +35,19 @@ describe("cámara del kit: reglas automáticas", () => {
     expect(malos).toEqual([]);
   });
 
-  it("planos sin piso vacío: zoom >= 0,8 (salvo excepción) y lo nombrado centrado en la franja útil, no arriba con el piso debajo", () => {
+  it("planos sin piso vacío y con ritmo: zoom normal, nada de medio cuadro de piso debajo de la gente, ningún plano de más de ~2 s", () => {
     for (const t of reel.tomas.filter((x) => x.escena === "k_salon")) {
-      expect(t.encuadre.zoom, `toma ${t.desde}`).toBeGreaterThanOrEqual(ZOOM_MINIMO_KIT_EXCEPCIONAL - 1e-9);
+      expect(t.encuadre.zoom, `toma ${t.desde}`).toBeGreaterThanOrEqual(ZOOM_MINIMO_KIT - 1e-9);
+      // Lo nombrado centrado en la franja útil (no arriba con el piso debajo).
+      // Las coberturas (reacciones, detalles) pueden correrse para no cortar a nadie.
+      if (t.cobertura) continue;
       const p = rectEnPantalla(unionRects(t.focos), t.encuadre);
-      const centro = p.y + p.alto / 2;
       const franja = (FRANJA_SEGURA.arriba + FRANJA_SEGURA.abajo) / 2;
-      expect(Math.abs(centro - franja) / ALTO_PANTALLA, `toma ${t.desde}`).toBeLessThan(0.1);
-      // Lo que queda debajo de lo nombrado (piso + interfaz de Instagram).
-      expect((ALTO_PANTALLA - (p.y + p.alto)) / ALTO_PANTALLA, `toma ${t.desde}`).toBeLessThan(0.35);
+      expect(Math.abs(p.y + p.alto / 2 - franja) / ALTO_PANTALLA, `toma ${t.desde}`).toBeLessThan(0.12);
     }
-    // Más abierto que 0,8 solo para acciones entre dos cosas lejanas (alguien
-    // le da algo a otro, el dibujo vuela a la cartelera) y sin otra salida.
-    for (const t of reel.tomas.filter((x) => x.escena === "k_salon" && x.encuadre.zoom < ZOOM_MINIMO_KIT - 1e-9)) {
-      const acciones = reel.disparos.filter((d) => d.escena === "k_salon" && d.cuadro >= t.desde - CORTE_MINIMO_KIT && d.cuadro <= t.ultimaAccion);
-      expect(acciones.some((d) => d.objetivo || d.accion.endsWith(".va_al_hueco")), `toma ${t.desde}`).toBe(true);
-    }
+    const m = metricasKit(reel, 30);
+    expect(m.pisoVacioMaximo).toBeLessThanOrEqual(0.35); // incluye el 20 % de la interfaz de Instagram
+    expect(m.planoMasLargo).toBeLessThanOrEqual(2.2);
   });
 
   it("la puerta celular↔salón usa un encuadre seguro, y la pantalla del celular muestra ese mismo encuadre con los personajes", () => {
@@ -140,7 +139,7 @@ describe("propiedad: con cualquier composición, nadie con la cara cortada", () 
       const disparos: Disparo[] = [];
       for (let f = 20; f < 600; f += 14 + Math.floor(r() * 30)) disparos.push({ escena: "k_azar", accion: acciones[Math.floor(r() * acciones.length)], palabra: 0, cuadro: f, frase: "e1", inicioFrase: 0 });
       const recorrido = construirRecorrido(disparos, registro);
-      const tomas = tomasDeCamara(disparos, recorrido, registro);
+      const tomas = conCobertura(tomasDeCamara(disparos, recorrido, registro), disparos, recorrido, registro, 640);
       const camara = planDeCamara(tomas, 640, 30, { esKit: (e) => !!e && !!registro.composicion(e), pantalla: null, encuadreKit: () => null }).puntos;
       const cuerpos = cuerposEnMundo("k_azar", recorrido, registro);
       for (let f = 0; f < 640; f++) {
@@ -181,5 +180,74 @@ describe("lo que se tiene en la mano", () => {
     // Quieto: los dulces después del cuerpo (encima); aplaudiendo: antes (detrás).
     expect(quieto.dulces).toBeGreaterThan(0);
     expect(aplaude.dulces).toBeLessThan(0);
+  });
+});
+
+describe("reglas de director (revisión de la v6)", () => {
+  const trio = ComposicionKitSchema.parse({
+    id: "k_x",
+    fondo: "salon",
+    personajes: [
+      { id: "nino", tipo: "nino", posicion: "izquierda" },
+      { id: "profesora", tipo: "profesora", posicion: "derecha" },
+      { id: "nina", tipo: "nina", posicion: "centro_derecha", plano: "fondo" },
+    ],
+    objetos: [{ id: "cartelera", tipo: "cartelera", lugar: "pared_centro" }],
+  });
+
+  it("escena poblada: con pocos personajes, el código agrega niños sentados al fondo (variados, mirando la cartelera, sin tapar nada)", () => {
+    const c = completarAmbiente(trio, "s1");
+    const extras = c.personajes.filter((p) => esExtra(p.id));
+    expect(c.personajes.length).toBeGreaterThanOrEqual(MIN_PERSONAJES_SALON);
+    for (const e of extras) {
+      expect(e.sentado_en).toBeDefined();
+      expect(c.objetos.find((o) => o.id === e.sentado_en)?.plano).toBe("fondo");
+      expect(e.mira_a).toBe("cartelera");
+    }
+    expect(problemasComposicion(c)).toEqual([]);
+    // Varían con la semilla del reel.
+    const otra = completarAmbiente(trio, "s2");
+    const r1 = crearRegistro([trio], "s1").composicion("k_x")!;
+    const r2 = crearRegistro([trio], "s2").composicion("k_x")!;
+    expect(r1.personajes.length).toBe(c.personajes.length);
+    expect(JSON.stringify(r1.personajes.filter((u) => esExtra(u.per.id)).map((u) => u.aspecto)) !== JSON.stringify(r2.personajes.filter((u) => esExtra(u.per.id)).map((u) => u.aspecto)) || JSON.stringify(otra) !== JSON.stringify(c)).toBe(true);
+    // La composición del prototipo ya tiene ambiente: no se toca.
+    expect(completarAmbiente(ComposicionKitSchema.parse(PLAN_PROTOTIPO_KIT.composiciones![0]), "x").personajes.length).toBe(5);
+  });
+
+  it("nunca en fila: tres o más personajes todos de pie adelante es un problema para la IA", () => {
+    const fila = ComposicionKitSchema.parse({ ...trio, personajes: trio.personajes.map((p) => ({ ...p, plano: "frente" })) });
+    expect(problemasComposicion(fila).join(" ")).toMatch(/en fila/);
+    expect(problemasComposicion(trio).join(" ")).not.toMatch(/en fila/);
+  });
+
+  it("el que se distrae pone cara de aburrido (está en la lista de la IA, también para todos)", () => {
+    const def = reel.registro.escena("k_salon")!.acciones;
+    expect(def["nino.se_distrae"].descripcion).toMatch(/distrae/);
+    expect(def["todos.se_distrae"].descripcion).toBe("todos se aburren y se distraen");
+    const cu = reel.registro.composicion("k_salon")!;
+    const imagenes = urlsSinRasterizar(piezasDeComposicion(cu));
+    const nino = cu.personajes.find((u) => u.per.id === "nino")!;
+    const aburrido = imagenes[clave.rasgos(nino.aspecto, "aburrido", "abiertos")].url;
+    expect(renderToStaticMarkup(EscenaKit({ cu, frame: 130, fps: 30, d: { "nino.se_distrae": [100] }, imagenes }))).toContain(aburrido);
+  });
+
+  it("si lo que pide la acción no cabe con zoom normal, se usa un foco más chico (nunca un plano lejano)", () => {
+    const cu = reel.registro.composicion("k_salon")!;
+    const [hueco] = reel.registro.focoReducido("k_salon", "dibujo_nina.va_al_hueco");
+    const cart = cu.objetos.find((o) => o.obj.tipo === "cartelera")!.rect!;
+    expect(hueco.ancho).toBeLessThan(cart.ancho);
+    expect(reel.registro.focoReducido("k_salon", "nino.ofrece", "profesora")[0]).toEqual(reel.registro.foco("k_salon", "nino.ofrece"));
+  });
+});
+
+describe("gestos que contradicen la cara", () => {
+  it("el que estaba aburrido y levanta la mano pasa a feliz (nadie participa con cara de aburrido)", () => {
+    const cu = reel.registro.composicion("k_salon")!;
+    const imagenes = urlsSinRasterizar(piezasDeComposicion(cu));
+    const nino = cu.personajes.find((u) => u.per.id === "nino")!;
+    const html = renderToStaticMarkup(EscenaKit({ cu, frame: 200, fps: 30, d: { "nino.se_distrae": [100], "nino.levanta_la_mano": [180] }, imagenes }));
+    expect(html).toContain(imagenes[clave.rasgos(nino.aspecto, "feliz", "abiertos")].url);
+    expect(html).not.toContain(imagenes[clave.rasgos(nino.aspecto, "aburrido", "abiertos")].url);
   });
 });

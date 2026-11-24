@@ -12,6 +12,7 @@ import { crearRegistro } from "../motor/registro";
 import { ocupacion } from "../motor/geometria";
 import { unionRects } from "../motor/catalogo";
 import { validarPlanIlustrado } from "../motor/validarPlan";
+import { ocupacionUtil, ZOOM_MINIMO_KIT } from "../motor/encuadreKit";
 import { camaraEnCuadro, type TiemposIlustrado } from "../tiempoIlustrado";
 
 describe("kit de escenas: la IA solo compone con listas cerradas", () => {
@@ -87,10 +88,17 @@ describe("el kit en el motor (registro, cámara, validación)", () => {
   it("cada composición es una isla: lo nombrado ocupa >= 50 % (o el grupo, cuando la cámara encuadra a todos juntos)", () => {
     const reel = prepararReel(tiempos, PLAN_PROTOTIPO_KIT, 30, "prototipo");
     expect(Object.keys(reel.recorrido)).toEqual(expect.arrayContaining(["celular", "k_salon"]));
-    for (const t of reel.tomas) {
+    // Catálogo (celular): lo nombrado >= 50 % de la pantalla. Kit: zoom
+    // normal siempre, y lo nombrado >= 50 % de la parte útil en casi todas
+    // (un objeto grande junto a gente puede verse entero y un poco menor).
+    const delKit = reel.tomas.filter((t) => t.escena === "k_salon" && !t.cobertura);
+    for (const t of reel.tomas.filter((x) => x.escena !== "k_salon")) {
       const individual = Math.min(...t.focos.map((f) => ocupacion(f, t.encuadre)));
       expect(Math.max(individual, ocupacion(unionRects(t.focos), t.encuadre)), `toma ${t.desde}`).toBeGreaterThanOrEqual(0.5);
     }
+    for (const t of reel.tomas.filter((x) => x.escena === "k_salon")) expect(t.encuadre.zoom, `toma ${t.desde}`).toBeGreaterThanOrEqual(ZOOM_MINIMO_KIT - 1e-9);
+    const llenas = delKit.filter((t) => ocupacionUtil(unionRects(t.focos), t.encuadre) >= 0.5 - 1e-9);
+    expect(llenas.length / delKit.length).toBeGreaterThanOrEqual(0.8);
     // Sin saltar de un niño a otro cada pocos cuadros.
     const delSalon = reel.tomas.filter((t) => t.escena === "k_salon");
     for (let i = 1; i < delSalon.length; i++) expect(delSalon[i].desde - delSalon[i - 1].desde, `tomas ${delSalon[i - 1].desde}->${delSalon[i].desde}`).toBeGreaterThanOrEqual(8);

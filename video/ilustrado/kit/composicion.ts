@@ -154,6 +154,7 @@ export const VERBOS_TODOS = {
   triste: "todos se ponen tristes",
   sorprendido: "todos se sorprenden",
   levanta_la_mano: "todos levantan la mano",
+  se_distrae: "todos se aburren y se distraen",
 } as const satisfies Partial<Record<keyof typeof VERBOS_PERSONAJE, string>>;
 
 export function rectElemento(cu: ComposicionUbicada, id: string, pose?: Pose): Rect | null {
@@ -224,6 +225,34 @@ export function focoDeAccionKit(cu: ComposicionUbicada, accion: string, objetivo
   return otro ? union(def.foco, otro) : def.foco;
 }
 
+// Foco más chico para cuando el de la acción no cabe con zoom >= mínimo sin
+// cortar a nadie (revisión de la v6: "le trae dulces" se abría muchísimo):
+// - con objetivo: solo quien hace la acción (al otro lo muestra después
+//   un plano de reacción, ver coberturas en camara.ts);
+// - el dibujo que vuela al hueco o el hueco que late: la zona del hueco;
+// - la cartelera: su parte central (primer plano de los dibujos).
+// Devuelve las alternativas en orden de preferencia.
+export function focoReducidoKit(cu: ComposicionUbicada, accion: string, objetivo?: string): Rect[] {
+  const [id, verbo] = accion.split(".");
+  const cart = cu.objetos.find((o) => o.obj.tipo === "cartelera" && o.rect)?.rect ?? null;
+  const hueco = casillaHuecoEnIsla(cu);
+  const centro = cart ? zonaAlrededor({ x: cart.x + cart.ancho * 0.2, y: cart.y + cart.alto * 0.1, ancho: cart.ancho * 0.6, alto: cart.alto * 0.8 }, cart, 1, 1) : null;
+  if ((verbo === "va_al_hueco" || verbo === "destaca_hueco") && hueco && cart) return [zonaAlrededor(hueco, cart, 2.4, 1.9), centro!];
+  if (centro && cu.objetos.some((o) => o.obj.id === id && o.obj.tipo === "cartelera")) return [centro];
+  if (objetivo) {
+    const propio = accionesDeComposicion(cu)[accion]?.foco;
+    return propio ? [propio] : [];
+  }
+  return [];
+}
+function zonaAlrededor(r: Rect, limite: Rect, fx: number, fy: number): Rect {
+  const ancho = Math.min(limite.ancho, r.ancho * fx);
+  const alto = Math.min(limite.alto, r.alto * fy);
+  const x = Math.max(limite.x, Math.min(limite.x + limite.ancho - ancho, r.x + r.ancho / 2 - ancho / 2));
+  const y = Math.max(limite.y, Math.min(limite.y + limite.alto - alto, r.y + r.alto / 2 - alto / 2));
+  return { x, y, ancho, alto };
+}
+
 // ---------- Validación y descripción ----------
 // Cuánto de la cartelera puede quedar detrás de la cabeza y el torso de
 // alguien (un poco es natural en un salón; la mitad del centro, no).
@@ -253,6 +282,10 @@ export function problemasComposicion(c: ComposicionKit): string[] {
   for (const id of new Set(sentados)) if (sentados.filter((x) => x === id).length > 1) p.push(`${c.id}: dos personajes sentados en el mismo pupitre "${id}"`);
   const posiciones = c.personajes.filter((x) => x.plano === "frente" && !x.sentado_en).map((x) => x.posicion);
   for (const pos of new Set(posiciones)) if (posiciones.filter((x) => x === pos).length > 1) p.push(`${c.id}: dos personajes en el frente en la misma posición "${pos}"`);
+  // Nunca en fila (revisión de la v6): con 3 o más personajes, al menos dos
+  // profundidades distintas (de pie adelante, de pie atrás, sentado).
+  const profundidades = new Set(c.personajes.map((x) => (x.sentado_en ? `sentado-${c.objetos.find((o) => o.id === x.sentado_en)?.plano}` : x.plano)));
+  if (c.personajes.length >= 3 && profundidades.size < 2) p.push(`${c.id}: todos los personajes están en la misma línea (en fila); pon a alguno "plano": "fondo" o sentado en un pupitre, para que haya profundidad`);
   // Nadie tapa lo que está en la pared (primera corrida real de la IA, 24 nov
   // 2026: la profesora de pie delante de la cartelera tapaba los dibujos y
   // el espacio libre). Se mide con las piezas ya ubicadas.

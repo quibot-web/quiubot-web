@@ -7,7 +7,9 @@
 import { CATALOGO, ESCENA_VISIBLE, ISLAS, MICRO, unionRects, type IdEscena } from "./catalogo";
 import type { Rect } from "./geometria";
 import { ComposicionKitSchema, type ComposicionKitEntrada } from "../kit/catalogoKit";
-import { accionesDeComposicion, descripcionVisible, focoDeAccionKit, rectPersonaje, ubicarComposicion, type ComposicionUbicada } from "../kit/composicion";
+import { completarAmbiente } from "../kit/ambiente";
+import { planoLimpio } from "./camara";
+import { accionesDeComposicion, descripcionVisible, focoDeAccionKit, focoReducidoKit, rectPersonaje, ubicarComposicion, type ComposicionUbicada } from "../kit/composicion";
 
 export type DefAccion = { descripcion: string; foco: Rect };
 export type DefEscena = { isla: string; celular: boolean; acciones: Record<string, DefAccion>; visible: string };
@@ -18,16 +20,22 @@ export type Registro = {
   // Foco de una acción en coordenadas de SU isla (con objetivo, si lo hay).
   foco(escena: string, accion: string, objetivo?: string): Rect | null;
   composicion(id: string): ComposicionUbicada | null;
+  // Kit: foco más chico si el de la acción no cabe (ver focoReducidoKit).
+  focoReducido(escena: string, accion: string, objetivo?: string): Rect[];
   ids(): string[];
 };
 
-export function crearRegistro(composiciones: ComposicionKitEntrada[] = [], semilla = ""): Registro {
+export function crearRegistro(composiciones: ComposicionKitEntrada[] = [], semilla = "", opciones: { ambiente?: boolean } = {}): Registro {
   const kit = new Map<string, { cu: ComposicionUbicada; def: DefEscena }>();
   for (const entrada of composiciones) {
     // Normaliza con el esquema (valores por defecto: plano, mira, pose...).
     const parseada = ComposicionKitSchema.safeParse(entrada);
     if (!parseada.success) continue; // el validador del plan ya lo reporta
-    const c = parseada.data;
+    // Relleno mínimo de ambiente (extras al fondo) si la IA puso pocos.
+    // Un extra nunca le quita a la cartelera su plano limpio.
+    const cartelera = parseada.data.objetos.find((o) => o.tipo === "cartelera");
+    const limpia = (x: typeof parseada.data) => !cartelera || planoLimpio(x.id, `${cartelera.id}.destaca`, undefined, crearRegistro([x], semilla, { ambiente: false })).ok;
+    const c = opciones.ambiente === false ? parseada.data : completarAmbiente(parseada.data, semilla, limpia(parseada.data) ? limpia : () => true);
     const cu = ubicarComposicion(c, semilla);
     const acciones = accionesDeComposicion(cu);
     // Micro-acción neutra: la gente respira y la cámara se acerca un poco.
@@ -53,6 +61,10 @@ export function crearRegistro(composiciones: ComposicionKitEntrada[] = [], semil
       return escena(id)?.acciones[accion]?.foco ?? null;
     },
     composicion: (id) => kit.get(id)?.cu ?? null,
+    focoReducido: (id, accion, objetivo) => {
+      const k = kit.get(id);
+      return k ? focoReducidoKit(k.cu, accion, objetivo) : [];
+    },
     ids: () => [...Object.keys(CATALOGO), ...kit.keys()],
   };
 }

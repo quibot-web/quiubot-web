@@ -62,8 +62,20 @@ function cambiosDe(d: DisparosEscena, u: PersonajeUbicado, cu?: ComposicionUbica
       if ("expresion" in def) expresiones.push({ cuadro: c - ANTICIPO_EXPRESION, expresion: def.expresion });
     }
   }
+  // Participar (levantar la mano, aplaudir, celebrar) quita el aburrimiento
+  // y la tristeza: nadie levanta la mano con cara de aburrido (v7).
+  expresiones.sort((a, b) => a.cuadro - b.cuadro);
+  for (const verbo of VERBOS_QUE_ANIMAN) {
+    for (const c of d[`${id}.${verbo}`] ?? []) {
+      const cuadro = c - ANTICIPO_EXPRESION;
+      const antes = [...expresiones].reverse().find((x) => x.cuadro <= cuadro)?.expresion ?? u.per.expresion;
+      const mismaVez = expresiones.some((x) => x.cuadro === cuadro);
+      if (!mismaVez && (antes === "aburrido" || antes === "triste")) expresiones.push({ cuadro, expresion: "feliz" });
+    }
+  }
   return { poses, expresiones: expresiones.sort((a, b) => a.cuadro - b.cuadro) };
 }
+const VERBOS_QUE_ANIMAN = ["levanta_la_mano", "aplaude", "celebra"] as const;
 
 // ---------- Atención: hacia dónde mira cada uno ----------
 type Atencion = { desde: number; hasta: number; punto: { x: number; y: number }; actor?: string };
@@ -126,8 +138,12 @@ function Personaje({ u, cu, frame, fps, d, imagenes, objetivos, atenciones }: { 
   const parpadea = (frame + (h % periodo)) % periodo < 4;
   const ojos = parpadea ? "cerrados" : "abiertos";
   const respira = Math.sin((frame + h) / 18) * 0.012;
-  const g = mirada(u, cu, atenciones, frame) * (u.espejo ? -1 : 1); // en coordenadas locales
-  const giroCabeza = e.inclinacion + g * 5 + Math.sin((frame + h) / 47) * 1.2;
+  // Distraído (aburrido): mira para el lado contrario a lo que pasa y baja la cabeza.
+  const gAtento = mirada(u, cu, atenciones, frame);
+  const distraido = expresion === "aburrido" ? (previa === "aburrido" ? 1 : mezcla) : previa === "aburrido" ? 1 - mezcla : 0;
+  const gMundo = gAtento + (-(Math.sign(gAtento) || (u.espejo ? 1 : -1)) * 0.9 - gAtento) * distraido;
+  const g = gMundo * (u.espejo ? -1 : 1); // en coordenadas locales
+  const giroCabeza = e.inclinacion + g * 5 + 7 * distraido + Math.sin((frame + h) / 47) * 1.2;
   const micro = latido(frame, d.micro, 18) * Math.abs(Math.sin(frame / 3)) * 10;
   const sx = u.escala * (u.espejo ? -1 : 1);
   const brazo = (lado: "mira" | "otro", ang: AngulosBrazo): ReactNode => {

@@ -13,6 +13,8 @@ import { problemasDelPlan, type PlanIlustrado } from "./plan";
 import { crearRegistro, type Registro } from "./registro";
 import { ComposicionKitSchema } from "../kit/catalogoKit";
 import { problemasComposicion } from "../kit/composicion";
+import { esExtra } from "../kit/ambiente";
+import { planoLimpio } from "./camara";
 
 // escena: del catálogo o una composición del kit ("k_..."); que exista y
 // tenga la acción lo revisa problemasDelPlan con el registro del plan.
@@ -76,6 +78,21 @@ export function validarPlanIlustrado(plan: unknown, escenas: { id: string; narra
   const ids = p.frases.map((f) => f.escena_id);
   const esperados = escenas.map((e) => e.id);
   if (ids.join("|") !== esperados.join("|")) problemas.push(`el plan debe tener una entrada por frase, en orden: ${esperados.join(", ")} (llegó: ${ids.join(", ")})`);
+  // Reglas de director (revisión de la v6): cada acción del kit se puede
+  // mostrar con un plano limpio; si no, se le dice a la IA quién estorba.
+  if (problemas.length === 0) {
+    const vistas = new Set<string>();
+    for (const f of p.frases)
+      for (const a of f.acciones) {
+        if (!registro.composicion(a.escena) || a.accion === MICRO) continue;
+        const clave = `${a.escena}|${a.accion}|${a.objetivo ?? ""}`;
+        if (vistas.has(clave)) continue;
+        vistas.add(clave);
+        const r = planoLimpio(a.escena, a.accion, a.objetivo, registro);
+        const estorban = r.estorban.filter((id) => !esExtra(id));
+        if (!r.ok) problemas.push(`${f.escena_id}: la cámara no puede mostrar "${a.accion}" sin cortar a alguien en el borde${estorban.length ? ` (estorban: ${estorban.join(", ")})` : ""}; deja espacio alrededor: mueve a esos personajes a otra posicion, al "plano": "fondo" o a un pupitre`);
+      }
+  }
   if (problemas.length > 0) return problemas;
 
   // Posición global de cada acción en palabras habladas desde el inicio

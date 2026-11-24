@@ -1,0 +1,241 @@
+{
+ "composiciones": [
+  {
+   "id": "k_salon",
+   "fondo": "salon",
+   "pared": "crema",
+   "personajes": [
+    {
+     "id": "profesora",
+     "tipo": "profesora",
+     "posicion": "centro_derecha",
+     "plano": "frente",
+     "mira": "derecha",
+     "pose": "parado",
+     "expresion": "normal",
+     "ropa": "turquesa",
+     "ropa2": "morado",
+     "piel": "triguena",
+     "pelo": "castano",
+     "peinado": "mono",
+     "accesorio": "gafas",
+     "mira_a": "dibujo_nina"
+    },
+    {
+     "id": "nino",
+     "tipo": "nino",
+     "posicion": "derecha",
+     "plano": "frente",
+     "mira": "izquierda",
+     "pose": "parado",
+     "expresion": "normal",
+     "ropa": "amarillo",
+     "ropa2": "azul",
+     "piel": "morena",
+     "pelo": "negro",
+     "peinado": "rizado",
+     "mira_a": "profesora"
+    },
+    {
+     "id": "nina",
+     "tipo": "nina",
+     "posicion": "derecha",
+     "plano": "fondo",
+     "mira": "izquierda",
+     "pose": "parado",
+     "expresion": "feliz",
+     "ropa": "rosado",
+     "ropa2": "verde",
+     "piel": "clara",
+     "pelo": "pelirrojo",
+     "peinado": "colitas",
+     "sentado_en": "pupitre_nina",
+     "mira_a": "cartelera"
+    },
+    {
+     "id": "nino2",
+     "tipo": "nino",
+     "posicion": "centro_derecha",
+     "plano": "fondo",
+     "mira": "izquierda",
+     "pose": "parado",
+     "expresion": "normal",
+     "ropa": "naranja",
+     "ropa2": "gris",
+     "piel": "media",
+     "pelo": "castano_claro",
+     "peinado": "corto",
+     "sentado_en": "pupitre_nino2",
+     "mira_a": "dibujo_nina"
+    }
+   ],
+   "objetos": [
+    {
+     "id": "cartelera",
+     "tipo": "cartelera",
+     "lugar": "pared_izquierda",
+     "plano": "frente",
+     "visible": true
+    },
+    {
+     "id": "dibujo_nino",
+     "tipo": "dibujo",
+     "en_mano_de": "profesora",
+     "motivo": "cohete",
+     "plano": "frente",
+     "visible": true
+    },
+    {
+     "id": "dulces",
+     "tipo": "dulces",
+     "en_mano_de": "nino",
+     "plano": "frente",
+     "visible": true
+    },
+    {
+     "id": "dibujo_nina",
+     "tipo": "dibujo",
+     "en_mano_de": "nina",
+     "motivo": "arcoiris",
+     "plano": "frente",
+     "visible": true
+    },
+    {
+     "id": "pupitre_nina",
+     "tipo": "pupitre",
+     "lugar": "piso_derecha",
+     "plano": "fondo",
+     "visible": true
+    },
+    {
+     "id": "pupitre_nino2",
+     "tipo": "pupitre",
+     "lugar": "piso_centro_derecha",
+     "plano": "fondo",
+     "visible": true
+    }
+   ]
+  }
+ ],
+ "frases": [
+  {
+   "escena_id": "e1",
+   "acciones": [
+    {
+     "escena": "feed",
+     "accion": "aparece_anuncio",
+     "palabra": 1
+    },
+    {
+     "escena": "k_salon",
+     "accion": "cartelera.destaca",
+     "palabra": 7
+    }
+   ],
+   "metafora": "El anuncio dentro del feed se compara con un dibujo que busca un lugar en la cartelera."
+  },
+  {
+   "escena_id": "e2",
+   "acciones": [
+    {
+     "escena": "k_salon",
+     "accion": "cartelera.destaca",
+     "palabra": 2
+    },
+    {
+     "escena": "k_salon",
+     "accion": "cartelera.destaca_hueco",
+     "palabra": 6
+    }
+   ]
+  },
+  {
+   "escena_id": "e3",
+   "acciones": [
+    {
+     "escena": "k_salon",
+     "accion": "profesora.quieto",
+     "palabra": 3
+    },
+    {
+     "escena": "k_salon",
+     "accion": "dibujo_nino.destaca",
+     "palabra": 5
+    },
+    {
+     "escena": "k_salon",
+     "accion": "nino.ofrece",
+     "palabra": 10,
+     "objetivo": "profesora"
+    }
+   ]
+  },
+  {
+   "escena_id": "e4",
+   "acciones": [
+    {
+     "escena": "k_salon",
+     "accion": "profesora.senala",
+     "palabra": 0,
+     "objetivo": "dibujo_nina"
+    },
+    {
+     "escena": "k_salon",
+     "accion": "dibujo_nina.destaca",
+     "palabra": 3
+    },
+    {
+     "escena": "k_salon",
+     "accion": "todos.feliz",
+     "palabra": 7
+    }
+   ]
+  },
+  {
+   "escena_id": "e5",
+   "acciones": [
+    {
+     "escena": "k_salon",
+     "accion": "dibujo_nina.va_al_hueco",
+     "palabra": 3
+    },
+    {
+     "escena": "k_salon",
+     "accion": "todos.aplaude",
+     "palabra": 5
+    }
+   ]
+  },
+  {
+   "escena_id": "e6",
+   "acciones": [
+    {
+     "escena": "feed",
+     "accion": "aparece_anuncio",
+     "palabra": 3
+    },
+    {
+     "escena": "feed",
+     "accion": "foto_se_aclara",
+     "palabra": 6
+    }
+   ],
+   "metafora": "La foto que se vuelve luminosa representa mostrar el producto de forma clara y atractiva mientras se usa."
+  },
+  {
+   "escena_id": "e7",
+   "acciones": [
+    {
+     "escena": "perfil",
+     "accion": "aparece",
+     "palabra": 0
+    },
+    {
+     "escena": "perfil",
+     "accion": "toque_seguir",
+     "palabra": 1
+    }
+   ]
+  }
+ ]
+}

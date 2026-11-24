@@ -171,6 +171,17 @@ function rasgos(a: AspectoPersonaje, p: Proporciones, e: Expresion, ojos: Ojos):
     // Boca hacia abajo, bien marcada.
     s.push(linea(`M${cx - 32} ${oy + 70} Q${cx - 14} ${oy + 44} ${cx} ${oy + 50} Q${cx + 14} ${oy + 44} ${cx + 32} ${oy + 70}`, 8));
     s.push(`<path d="M${cx + sep + 12} ${oy + 22} q-11 22 0 30 q11 -8 0 -30 z" fill="#6FBDEF"/>`);
+  } else if (e === "aburrido") {
+    // Párpados a media asta (mirada caída), cejas planas y boca torcida de lado.
+    for (const l of [-1, 1]) {
+      if (ojos === "cerrados") s.push(linea(`M${cx + l * sep - ojo} ${oy + 4} L${cx + l * sep + ojo} ${oy + 4}`, 7));
+      else {
+        s.push(`<ellipse cx="${cx + l * sep}" cy="${oy + 6}" rx="${ojo * 0.85}" ry="${ojo * 0.7}" fill="${tinta}"/>`);
+        s.push(linea(`M${cx + l * sep - ojo * 1.25} ${oy + 1} L${cx + l * sep + ojo * 1.25} ${oy + 1}`, 8));
+      }
+      s.push(linea(`M${cx + l * sep - 18} ${oy - 26} L${cx + l * sep + 18} ${oy - 28}`, 7));
+    }
+    s.push(linea(`M${cx - 24} ${oy + 56} Q${cx + 2} ${oy + 52} ${cx + 26} ${oy + 46}`, 8));
   } else if (e === "sorprendido") {
     if (ojos === "cerrados") cerrados();
     else for (const l of [-1, 1]) s.push(`<circle cx="${cx + l * sep}" cy="${oy}" r="${ojo * 1.55}" fill="#FFFFFF" stroke="${tinta}" stroke-width="4"/><circle cx="${cx + l * sep}" cy="${oy + 2}" r="${ojo * 0.7}" fill="${tinta}"/>`);
