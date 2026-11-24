@@ -2,15 +2,13 @@
 // para el cuadro: lo recibe por props, así se puede probar con
 // renderToStaticMarkup). Dibuja solo lo que la cámara ve (rendimiento).
 import type { ComponentType } from "react";
-import { camaraEnCuadro } from "../tiempoIlustrado";
 import { Celular, Fondo, Moneda, SombraPiso } from "../Objetos";
 import { rampa } from "./animacion";
-import { pulsoDeCamara } from "./camara";
 import { CATALOGO, PANTALLA, type IdEscena, type IdIsla } from "./catalogo";
-import { ALTO_PANTALLA, ANCHO_PANTALLA, acercar, seTocan, vistaDelMundo } from "./geometria";
+import { ALTO_PANTALLA, ANCHO_PANTALLA, seTocan, vistaDelMundo } from "./geometria";
 import { disparosDeEscena } from "./plan";
 import { PISO_Y } from "./recorrido";
-import type { ReelPreparado } from "./preparar";
+import { camaraDelCuadro, type ReelPreparado } from "./preparar";
 import { IslaBilletera, IslaGrafica, IslaMultitud, IslaRelojCliente, TAM_MONEDA } from "./escenas/Islas";
 import { PantallaChat, PantallaFeed, PantallaPerfil } from "./escenas/Pantallas";
 import type { MarcaIlustrada, PaletaIlustrada, PropsEscena } from "./escenas/tipos";
@@ -63,13 +61,8 @@ export type PropsMundo = {
 };
 
 export function MundoIlustrado({ frame, fps, reel, paleta, tema, marca, fotoUrl, recursos = recursosSinGenerar(fotoUrl), imagenesKit = {} }: PropsMundo) {
-  // Cámara + una deriva leve para que nunca esté quieta.
-  const base = camaraEnCuadro(reel.camara, frame);
-  // Deriva y pulso de las micro-acciones; con el celular en toma, anclados
-  // debajo del subtítulo (el celular nunca se mete bajo el subtítulo).
-  const enCelular = reel.tomas.length > 0 && [...reel.tomas].reverse().find((t) => frame >= t.desde)?.celular === true;
-  const conPulso = acercar(base, (1 + Math.sin(frame / 70) * 0.01) * pulsoDeCamara(frame, reel.pulsos ?? []), enCelular ? "arriba" : "centro");
-  const cam = { x: conPulso.x + Math.sin(frame / 40) * 8, y: conPulso.y + (enCelular ? 0 : Math.cos(frame / 52) * 8), zoom: conPulso.zoom };
+  const cam = camaraDelCuadro(reel, frame);
+  const objetivosKit = (escena: string) => reel.disparos.filter((x) => x.escena === escena && x.objetivo).map((x) => ({ accion: x.accion, cuadro: x.cuadro, objetivo: x.objetivo! }));
   const vista = vistaDelMundo(cam);
   const pisoEnPantalla = ALTO_PANTALLA / 2 + (PISO_Y - cam.y) * cam.zoom;
   const props = (escena: string): PropsEscena => ({ frame, fps, d: disparosDeEscena(reel.disparos, escena), paleta, tema, marca, fotoUrl, recursos });
@@ -101,7 +94,23 @@ export function MundoIlustrado({ frame, fps, reel, paleta, tema, marca, fotoUrl,
                     const cu = reel.registro.composicion(pu.kit);
                     if (!cu) return null;
                     const opacidad = pu.desde === "celular" ? rampa(frame, pu.cuadro - 16, 12) * (frame < pu.cuadro ? 1 : 0) : frame >= pu.cuadro ? 1 - rampa(frame, pu.cuadro + 4, 12) : 0;
-                    return <PuertaEnPantalla key={pu.cuadro} cu={cu} frame={frame} d={disparosDeEscena(reel.disparos, pu.kit)} imagenes={imagenesKit} ancho={PANTALLA.ancho} alto={PANTALLA.alto} opacidad={opacidad} />;
+                    const isla = reel.recorrido[pu.kit]!;
+                    return (
+                      <PuertaEnPantalla
+                        key={pu.cuadro}
+                        cu={cu}
+                        frame={frame}
+                        fps={fps}
+                        d={disparosDeEscena(reel.disparos, pu.kit)}
+                        imagenes={imagenesKit}
+                        objetivos={objetivosKit(pu.kit)}
+                        ancho={PANTALLA.ancho}
+                        alto={PANTALLA.alto}
+                        opacidad={opacidad}
+                        centro={{ x: pu.enLugar.x - isla.x, y: pu.enLugar.y - isla.y }}
+                        escala={pu.enLugar.zoom / pu.zoomPantalla}
+                      />
+                    );
                   })}
                 </Celular>
               </div>
@@ -117,7 +126,7 @@ export function MundoIlustrado({ frame, fps, reel, paleta, tema, marca, fotoUrl,
                   fps={fps}
                   d={disparosDeEscena(reel.disparos, id)}
                   imagenes={imagenesKit}
-                  objetivos={reel.disparos.filter((x) => x.escena === id && x.objetivo).map((x) => ({ accion: x.accion, cuadro: x.cuadro, objetivo: x.objetivo! }))}
+                  objetivos={objetivosKit(id)}
                   vista={{ x: vista.x - r.x, y: vista.y - r.y, ancho: vista.ancho, alto: vista.alto }}
                 />
               </div>

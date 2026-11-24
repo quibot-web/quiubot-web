@@ -1,10 +1,13 @@
 // Todo lo que el reel ilustrado necesita saber antes de dibujar un
 // cuadro (puro, se calcula una vez): línea de tiempo, disparos, dónde va
 // cada isla, cámara, qué pantalla muestra el celular y monedas que viajan.
-import { construirLineaDeTiempo, type LineaDeTiempo, type PuntoCamara, type TiemposIlustrado } from "../tiempoIlustrado";
+import { camaraEnCuadro, construirLineaDeTiempo, type LineaDeTiempo, type PuntoCamara, type TiemposIlustrado } from "../tiempoIlustrado";
 import { BOCA_BILLETERA_LOCAL, MICRO, type IdEscena } from "./catalogo";
 import { crearRegistro, REGISTRO_CATALOGO, type Registro } from "./registro";
-import { planDeCamara, tomasDeCamara, type Puerta, type Toma } from "./camara";
+import { ZOOM_PUERTA_MAXIMO, cuerposEnMundo, planDeCamara, pulsoDeCamara, tomasDeCamara, type Puerta, type Toma } from "./camara";
+import { encuadrarKit } from "./encuadreKit";
+import { acercar, desplazar, type Encuadre } from "./geometria";
+import { rectPersonaje } from "../kit/composicion";
 import { CELULAR_ISLA } from "./catalogo";
 import { resolverDisparos, type Disparo, type PlanIlustrado } from "./plan";
 import { construirRecorrido, type Recorrido } from "./recorrido";
@@ -43,13 +46,19 @@ export function prepararReel(tiempos: TiemposIlustrado, plan: PlanIlustrado, fps
   const plan_ = planDeCamara(tomas, linea.duracionCuadros, fps, {
     esKit: (e) => !!e && !!registro.composicion(e),
     pantalla: cel ? { x: cel.x + CELULAR_ISLA.borde, y: cel.y + CELULAR_ISLA.borde, ancho: CELULAR_ISLA.ancho - 2 * CELULAR_ISLA.borde, alto: CELULAR_ISLA.alto - 2 * CELULAR_ISLA.borde } : null,
-    cubrirKit: (e) => {
+    // Encuadre del lugar al cruzar la puerta: la cartelera (lo que el feed
+    // "se vuelve") o, sin cartelera, todo lo que quepa del lugar; con las
+    // mismas reglas del kit (nadie con la cara cortada).
+    encuadreKit: (e) => {
       const cu = registro.composicion(e);
       const isla = recorrido[e];
       if (!cu || !isla) return null;
+      const cuerpos = cuerposEnMundo(e, recorrido, registro);
       const cartelera = cu.objetos.find((o) => o.obj.tipo === "cartelera" && o.rect)?.rect;
-      const r = cartelera ?? { x: 0, y: 0, ...cu.isla };
-      return { x: isla.x + r.x, y: isla.y + r.y, ancho: r.ancho, alto: r.alto };
+      const r = cartelera
+        ? encuadrarKit({ obligatorios: [desplazar(cartelera, isla.x, isla.y)], cuerpos, zoomMaximo: ZOOM_PUERTA_MAXIMO })
+        : encuadrarKit({ obligatorios: [], deseables: cu.personajes.map((u) => desplazar(rectPersonaje(u), isla.x, isla.y)), cuerpos });
+      return r?.encuadre ?? null;
     },
   });
   const camara = plan_.puntos;
@@ -106,3 +115,19 @@ export function escenaEnCamara(reel: Pick<ReelPreparado, "pantallas" | "tomas" |
   return accion?.escena ?? null;
 }
 
+
+// La cámara exacta de un cuadro: los puntos del plan, más la respiración,
+// el pulso de las micro-acciones y una deriva leve para que nunca esté
+// quieta. Con el celular en toma, anclada debajo del subtítulo (el celular
+// nunca se mete bajo el subtítulo). La usan el render y las pruebas.
+// En los lugares del kit no hay pulso: la vida la dan los personajes, y el
+// encuadre ya garantiza que nadie quede con la cara cortada.
+export function camaraDelCuadro(reel: Pick<ReelPreparado, "camara" | "tomas" | "pulsos"> & { registro?: Registro }, frame: number): Encuadre {
+  const base = camaraEnCuadro(reel.camara, frame);
+  const toma = [...reel.tomas].reverse().find((t) => frame >= t.desde);
+  const enCelular = toma?.celular === true;
+  const enKit = !!toma?.escena && !!reel.registro?.composicion(toma.escena);
+  const pulso = enKit ? 1 : pulsoDeCamara(frame, reel.pulsos ?? []);
+  const conPulso = acercar(base, (1 + Math.sin(frame / 70) * 0.01) * pulso, enCelular ? "arriba" : "centro");
+  return { x: conPulso.x + Math.sin(frame / 40) * 8, y: conPulso.y + (enCelular ? 0 : Math.cos(frame / 52) * 8), zoom: conPulso.zoom };
+}

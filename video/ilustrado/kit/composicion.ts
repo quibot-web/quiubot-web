@@ -133,6 +133,29 @@ export function rectPersonaje(u: PersonajeUbicado, pose: Pose = u.per.pose): Rec
   return { x: x0, y: tope, ancho: x1 - x0, alto: piso - tope };
 }
 
+// Cabeza (con pelo) y torso: lo que nunca puede quedar cortado en el borde
+// del cuadro (regla de cámara del kit: entero o fuera).
+export function rectCabezaTorso(u: PersonajeUbicado): Rect {
+  // El torso con la parte de arriba de los brazos (un hombro cortado en el
+  // borde también se ve como un recorte).
+  const medio = Math.max(u.p.cabeza.rx * 1.35, u.p.torso.hombros / 2 + u.p.brazo.ancho * 0.5);
+  const a = aIsla(u, u.p.cx - medio, u.p.cabeza.cy - u.p.cabeza.ry * 1.3);
+  const b = aIsla(u, u.p.cx + medio, u.p.torso.y1);
+  return { x: Math.min(a.x, b.x), y: a.y, ancho: Math.abs(b.x - a.x), alto: b.y - a.y };
+}
+
+// Acción de grupo: "todos.<verbo>" dispara el verbo en todos los personajes
+// de la composición en la misma palabra ("todos aplauden").
+export const ID_TODOS = "todos";
+export const VERBOS_TODOS = {
+  aplaude: "todos aplauden",
+  celebra: "todos celebran con los brazos arriba",
+  feliz: "todos sonríen felices",
+  triste: "todos se ponen tristes",
+  sorprendido: "todos se sorprenden",
+  levanta_la_mano: "todos levantan la mano",
+} as const satisfies Partial<Record<keyof typeof VERBOS_PERSONAJE, string>>;
+
 export function rectElemento(cu: ComposicionUbicada, id: string, pose?: Pose): Rect | null {
   const per = cu.personajes.find((x) => x.per.id === id);
   if (per) return rectPersonaje(per, pose);
@@ -174,6 +197,13 @@ export function accionesDeComposicion(cu: ComposicionUbicada): Record<string, De
       res[`${u.per.id}.${verbo}`] = { descripcion: `${nombreElemento(cu, u.per.id)} ${def.descripcion}`, foco: rectPersonaje(u, pose) };
     }
   }
+  if (cu.personajes.length >= 2) {
+    for (const [verbo, descripcion] of Object.entries(VERBOS_TODOS)) {
+      const def = VERBOS_PERSONAJE[verbo as keyof typeof VERBOS_TODOS];
+      const pose = "pose" in def ? def.pose : undefined;
+      res[`${ID_TODOS}.${verbo}`] = { descripcion, foco: cu.personajes.map((u) => rectPersonaje(u, pose)).reduce(union) };
+    }
+  }
   const hueco = casillaHuecoEnIsla(cu);
   for (const o of cu.objetos) {
     for (const [verbo, descripcion] of Object.entries(VERBOS_OBJETO[o.obj.tipo])) {
@@ -199,6 +229,7 @@ export function problemasComposicion(c: ComposicionKit): string[] {
   const p: string[] = [];
   const ids = [...c.personajes.map((x) => x.id), ...c.objetos.map((x) => x.id)];
   for (const id of new Set(ids)) if (ids.filter((x) => x === id).length > 1) p.push(`${c.id}: el id "${id}" se repite`);
+  if (ids.includes(ID_TODOS)) p.push(`${c.id}: "${ID_TODOS}" está reservado para las acciones de grupo ("todos.aplaude"); usa otro id`);
   for (const o of c.objetos) {
     if (o.en_mano_de && !c.personajes.some((x) => x.id === o.en_mano_de)) p.push(`${c.id}: "${o.id}" está en la mano de "${o.en_mano_de}", que no existe en la composición`);
     if (o.tipo === "cartelera" && o.en_mano_de) p.push(`${c.id}: una cartelera no va en la mano`);

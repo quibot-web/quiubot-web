@@ -65,9 +65,9 @@ export const PLAN_PROTOTIPO_KIT: PlanIlustrado = {
       escena_id: "e4",
       acciones: [
         { escena: "k_salon", accion: "profesora.senala", palabra: 0, objetivo: "dibujo_nina" },
-        { escena: "k_salon", accion: "nino.triste", palabra: 1 },
-        { escena: "k_salon", accion: "dibujo_nina.va_al_hueco", palabra: 5 },
-        { escena: "k_salon", accion: "nina.feliz", palabra: 6 },
+        { escena: "k_salon", accion: "nino.triste", palabra: 3 },
+        { escena: "k_salon", accion: "dibujo_nina.va_al_hueco", palabra: 6 },
+        { escena: "k_salon", accion: "nina.feliz", palabra: 7 },
         { escena: "k_salon", accion: "profesora.feliz", palabra: 8 },
       ],
     },
@@ -75,11 +75,9 @@ export const PLAN_PROTOTIPO_KIT: PlanIlustrado = {
       escena_id: "e5",
       acciones: [
         { escena: "k_salon", accion: "nina.celebra", palabra: 0 },
-        { escena: "k_salon", accion: "nino2.feliz", palabra: 1 },
-        { escena: "k_salon", accion: "nina2.feliz", palabra: 2 },
-        { escena: "k_salon", accion: "nino.feliz", palabra: 3 },
-        { escena: "k_salon", accion: "nino2.aplaude", palabra: 4 },
-        { escena: "k_salon", accion: "nina2.aplaude", palabra: 5 },
+        // Acción de grupo: todos los personajes en la misma palabra.
+        { escena: "k_salon", accion: "todos.feliz", palabra: 3 },
+        { escena: "k_salon", accion: "todos.aplaude", palabra: 4 },
       ],
     },
     { escena_id: "e6", acciones: [{ escena: "feed", accion: "aparece_anuncio", palabra: 2 }, { escena: "feed", accion: "se_detiene", palabra: 6 }] },

@@ -74,6 +74,34 @@
   dulces se pone triste cuando la profesora elige otro dibujo, y en
   "todos aplauden" ya sonríe.
 
+## Reglas automáticas de cámara en el kit (v5, 24 nov 2026)
+
+Valen para cualquier composición, también las que arme la IA. Están en
+`video/ilustrado/motor/encuadreKit.ts` y las prueba `kit/encuadre.test.ts`,
+que incluye 30 composiciones al azar.
+
+1. **Sin piso vacío:**
+   - el encuadre se calcula sobre lo nombrado, no sobre el lugar completo;
+   - va centrado en la franja útil, entre el subtítulo y la interfaz de
+     Instagram;
+   - el zoom es ≥0,8 y lo nombrado ocupa ≥50 %.
+2. **Nunca una cara cortada:** la cabeza y el torso de cada personaje
+   (con el hombro) quedan enteros o del todo fuera. Se verifica con el
+   acercamiento lento (+2 % en el kit), la respiración y la deriva de la
+   cámara. Para lograrlo se abre más solo si no queda otra salida: primero
+   0,65 y en último recurso 0,5.
+3. **Un protagonista por toma:** entre los encuadres válidos se elige el
+   más cercano al ideal. Los demás quedan enteros al fondo o fuera.
+4. **Acción de grupo `todos.<verbo>`** (aplaude, celebra, feliz, triste,
+   sorprendido, levanta_la_mano): todos los personajes lo hacen en la
+   misma palabra. La cámara busca el encuadre con más personajes enteros.
+   El id "todos" está reservado.
+5. **Acciones seguidas:** se juntan en una toma solo si caben con zoom
+   ≥0,8; si no, son dos tomas con al menos 12 cuadros entre cortes.
+6. **Puerta celular↔lugar:** el encuadre del lugar sigue las mismas reglas,
+   y la pantalla del celular muestra ese mismo encuadre con los
+   personajes, así el corte no se nota.
+
 ## Pendiente (después de aprobar el estilo)
 
 1. **La IA compone con el kit:** prompt con las listas cerradas, elección literal por frase y metáforas completas. Si el concepto no existe, la composición más cercana; nunca texto.

@@ -9,7 +9,7 @@ import { rampa, latido, primero } from "../motor/animacion";
 import type { DisparosEscena } from "../motor/plan";
 import { seTocan, type Rect } from "../motor/geometria";
 import { PAREDES, VERBOS_PERSONAJE, type Expresion, type Pose } from "./catalogoKit";
-import { aIsla, casillaHuecoEnIsla, hashTexto, rectElemento, rectPersonaje, type ComposicionUbicada, type PersonajeUbicado } from "./composicion";
+import { ID_TODOS, aIsla, casillaHuecoEnIsla, hashTexto, rectElemento, rectPersonaje, type ComposicionUbicada, type PersonajeUbicado } from "./composicion";
 import { CARTELERA, COLOR_LINEA_PISO, COLOR_PISO, SALON, Y_LINEAS_PISO, casillaCartelera } from "./dibujoObjetos";
 import { oscurecer, aclarar } from "./dibujoPersonaje";
 import { clave, motivoDe, motivosCartelera, type ImagenesKit, type ImagenPieza } from "./piezas";
@@ -209,18 +209,35 @@ export function CarteleraKit({ cu, frame, d, imagenes, conDibujoVolado = false }
   );
 }
 
-// Lo que muestra la pantalla del celular en la puerta: la pared del lugar
-// con la cartelera al mismo tamaño y lugar que tendrá al cortar.
-export function PuertaEnPantalla({ cu, frame, d, imagenes, ancho, alto, opacidad }: { cu: ComposicionUbicada; frame: number; d: DisparosEscena; imagenes: ImagenesKit; ancho: number; alto: number; opacidad: number }) {
+// Lo que muestra la pantalla del celular en la puerta: el lugar con el
+// mismo encuadre que tendrá la cámara al cortar (centro en coordenadas de
+// la isla; escala = zoom del lugar / zoom con que la cámara llena la
+// pantalla). Así el corte de la pantalla al lugar no se nota.
+export function PuertaEnPantalla({ cu, frame, fps, d, imagenes, objetivos, ancho, alto, opacidad, centro, escala }: PropsEscenaKit & { ancho: number; alto: number; opacidad: number; centro: { x: number; y: number }; escala: number }) {
   if (opacidad <= 0) return null;
-  const k = ancho / CARTELERA.ancho;
+  const vista = { x: centro.x - ancho / 2 / escala, y: centro.y - alto / 2 / escala, ancho: ancho / escala, alto: alto / escala };
   return (
     <div style={{ position: "absolute", left: 0, top: 0, width: ancho, height: alto, opacity: opacidad, background: PAREDES[cu.pared], overflow: "hidden" }}>
-      <div style={{ position: "absolute", left: 0, top: (alto - CARTELERA.alto * k) / 2, width: CARTELERA.ancho, height: CARTELERA.alto, transformOrigin: "0 0", transform: `scale(${k})` }}>
-        <CarteleraKit cu={cu} frame={frame} d={d} imagenes={imagenes} conDibujoVolado />
+      <div style={{ position: "absolute", left: ancho / 2, top: alto / 2, width: 0, height: 0, transformOrigin: "0 0", transform: `scale(${escala}) translate(${-centro.x}px, ${-centro.y}px)` }}>
+        <EscenaKit cu={cu} frame={frame} fps={fps} d={d} imagenes={imagenes} objetivos={objetivos} vista={vista} />
       </div>
     </div>
   );
+}
+
+// Acción de grupo: "todos.aplaude" es "<id>.aplaude" para cada personaje.
+export function conAccionesDeGrupo(cu: ComposicionUbicada, d: DisparosEscena): DisparosEscena {
+  const grupo = Object.entries(d).filter(([k]) => k.startsWith(`${ID_TODOS}.`));
+  if (!grupo.length) return d;
+  const res: DisparosEscena = { ...d };
+  for (const [k, cuadros] of grupo) {
+    const verbo = k.slice(ID_TODOS.length + 1);
+    for (const u of cu.personajes) {
+      const clave = `${u.per.id}.${verbo}`;
+      res[clave] = [...(res[clave] ?? []), ...cuadros].sort((a, b) => a - b);
+    }
+  }
+  return res;
 }
 
 // ---------- Entorno: el lugar continúa más allá de la isla ----------
@@ -251,11 +268,14 @@ function EntornoSalon({ cu }: { cu: ComposicionUbicada }) {
 }
 
 // ---------- Escena ----------
-export function EscenaKit({ cu, frame, fps, d, imagenes, objetivos, vista }: PropsEscenaKit) {
+export function EscenaKit({ cu, frame, fps, d: disparos, imagenes, objetivos, vista }: PropsEscenaKit) {
   const seVe = (r: Rect | null | undefined) => !vista || !r || seTocan(r, vista, MARGEN_VISTA);
   const fondo = imagenes[clave.fondo(cu)];
   const hueco = casillaHuecoEnIsla(cu);
-  const atenciones = atencionesDe(cu, d, objetivos);
+  // La atención sigue lo que hace alguien en particular; en una acción de
+  // grupo cada uno hace lo suyo (nadie se queda mirando a otro).
+  const atenciones = atencionesDe(cu, disparos, objetivos);
+  const d = conAccionesDeGrupo(cu, disparos);
   // Dibujo que vuela al hueco (si lo hay) y su progreso.
   const vuelo = cu.objetos.find((o) => o.obj.tipo === "dibujo" && d[`${o.obj.id}.va_al_hueco`]?.length);
   const inicioVuelo = vuelo ? primero(d[`${vuelo.obj.id}.va_al_hueco`]) : undefined;

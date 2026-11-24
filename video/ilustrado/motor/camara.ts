@@ -12,9 +12,13 @@
 import type { PuntoCamara } from "../tiempoIlustrado";
 import { MICRO, unionRects } from "./catalogo";
 import { REGISTRO_CATALOGO, type Registro } from "./registro";
-import { ALTO_PANTALLA, ANCHO_PANTALLA, acercar, desplazar, encuadre, ocupacion, vistaDelMundo, type Encuadre, type Rect } from "./geometria";
+import { ALTO_PANTALLA, ANCHO_PANTALLA, acercar, desplazar, encuadre, ocupacion, type Encuadre, type Rect } from "./geometria";
 import type { Disparo } from "./plan";
 import type { Recorrido } from "./recorrido";
+import { VERBOS_PERSONAJE } from "../kit/catalogoKit";
+import { ID_TODOS, rectCabezaTorso, rectPersonaje } from "../kit/composicion";
+import { ZOOM_MAXIMO_KIT, cabeEnFranja, encuadrarKit, type Cuerpo } from "./encuadreKit";
+export { ZOOM_MAXIMO_KIT };
 
 export const JUNTAR_SI_MENOS_DE = 30; // cuadros (1 s)
 export const PAUSA_MINIMA = 15; // cuadros (0,5 s)
@@ -29,21 +33,31 @@ export function focoGlobal(d: Pick<Disparo, "escena" | "accion" | "objetivo">, r
   return desplazar(foco, isla.x, isla.y);
 }
 
-export type Toma = { desde: number; ultimaAccion: number; focos: Rect[]; encuadre: Encuadre; celular: boolean; escena?: string };
+export type Toma = { desde: number; ultimaAccion: number; focos: Rect[]; encuadre: Encuadre; celular: boolean; escena?: string; grupo?: boolean };
 
-// Pantallas del celular: ancladas debajo del subtítulo. En el kit, zoom
-// hasta 1,6 (sus piezas se convierten a PNG a 1,6x: siguen nítidas).
-export const ZOOM_MAXIMO_KIT = 1.6;
-// Una toma de grupo en el kit no se abre más que esto (cada cosa se ve).
-export const ZOOM_MINIMO_GRUPO_KIT = 0.8;
 export const CALMA_KIT = 18;
 export const CORTE_MINIMO_KIT = 12;
-// Plano abierto para dos acciones seguidas (p. ej. la profesora señala y el
-// niño de los dulces se pone triste): no más lejos que esto.
-export const ZOOM_MINIMO_UNION_KIT = 0.55;
-const encuadrar = (focos: Rect[], celular: boolean, kit = false) => encuadre(unionRects(focos), kit ? ZOOM_MAXIMO_KIT : undefined, celular ? "arriba" : "centro");
+const encuadrar = (focos: Rect[], celular: boolean) => encuadre(unionRects(focos), undefined, celular ? "arriba" : "centro");
 
 const igual = (a: Rect, b: Rect) => a.x === b.x && a.y === b.y && a.ancho === b.ancho && a.alto === b.alto;
+
+// Cabeza y torso de cada personaje de un lugar del kit, en el mundo.
+export function cuerposEnMundo(escena: string, recorrido: Recorrido, registro: Registro): Cuerpo[] {
+  const cu = registro.composicion(escena);
+  const isla = recorrido[registro.escena(escena)?.isla ?? ""];
+  if (!cu || !isla) return [];
+  return cu.personajes.map((u) => ({ id: u.per.id, rect: desplazar(rectCabezaTorso(u), isla.x, isla.y) }));
+}
+
+// Cada personaje de pie (o sentado) en la pose de una acción de grupo, en el mundo.
+function personajesEnMundo(escena: string, verbo: string, recorrido: Recorrido, registro: Registro): Rect[] {
+  const cu = registro.composicion(escena);
+  const isla = recorrido[registro.escena(escena)?.isla ?? ""];
+  if (!cu || !isla) return [];
+  const def = VERBOS_PERSONAJE[verbo as keyof typeof VERBOS_PERSONAJE];
+  const pose = def && "pose" in def ? def.pose : undefined;
+  return cu.personajes.map((u) => desplazar(rectPersonaje(u, pose), isla.x, isla.y));
+}
 
 export function tomasDeCamara(disparos: Disparo[], recorrido: Recorrido, registro: Registro = REGISTRO_CATALOGO): Toma[] {
   const tomas: Toma[] = [];
@@ -53,43 +67,19 @@ export function tomasDeCamara(disparos: Disparo[], recorrido: Recorrido, registr
     const f = focoGlobal(d, recorrido, registro);
     const esCelular = registro.escena(d.escena)?.celular === true;
     const ultima = tomas[tomas.length - 1];
+    if (registro.composicion(d.escena)) {
+      tomaDelKit(tomas, d, f, recorrido, registro);
+      continue;
+    }
     if (ultima) {
       if (ultima.focos.some((g) => igual(g, f))) {
         ultima.ultimaAccion = d.cuadro;
         continue;
       }
-      // Calma en el kit: si la acción llega muy pronto (< 0,6 s de la toma
-      // anterior) y lo nombrado ya se ve en el encuadre, la cámara se queda
-      // (cuatro cortes en un segundo marean).
-      if (registro.composicion(d.escena) && ultima.escena === d.escena && d.cuadro - ultima.desde < CALMA_KIT) {
-        const v = vistaDelMundo(ultima.encuadre);
-        const cx = f.x + f.ancho / 2;
-        const cy = f.y + f.alto / 2;
-        if (cx > v.x && cx < v.x + v.ancho && cy > v.y && cy < v.y + v.alto) {
-          ultima.ultimaAccion = d.cuadro;
-          continue;
-        }
-        // Menos de 12 cuadros: mejor una toma más abierta que otro corte.
-        if (d.cuadro - ultima.desde < CORTE_MINIMO_KIT) {
-          const focos = [...ultima.focos, f];
-          const enc = encuadrar(focos, false, true);
-          if (enc.zoom >= ZOOM_MINIMO_UNION_KIT) {
-            ultima.focos = focos;
-            ultima.encuadre = enc;
-            ultima.ultimaAccion = d.cuadro;
-            continue;
-          }
-        }
-      }
-      if (d.cuadro - ultima.desde < JUNTAR_SI_MENOS_DE && ultima.celular === esCelular) {
+      if (d.cuadro - ultima.desde < JUNTAR_SI_MENOS_DE && ultima.celular === esCelular && !registro.composicion(ultima.escena ?? "")) {
         const focos = [...ultima.focos, f];
-        const enc = encuadrar(focos, esCelular, !!registro.composicion(d.escena));
-        // Composición del kit (visuales-v2): acciones seguidas en el mismo
-        // lugar se ven como grupo ("todos aplauden"): basta con que el grupo
-        // ocupe >= 50 %. Saltar de un niño a otro cada 10 cuadros marea.
-        const mismaComposicion = !!registro.composicion(d.escena) && ultima.escena === d.escena;
-        const cabe = mismaComposicion ? ocupacion(unionRects(focos), enc) >= 0.5 && enc.zoom >= ZOOM_MINIMO_GRUPO_KIT : focos.every((g) => ocupacion(g, enc) >= 0.5);
-        if (cabe) {
+        const enc = encuadrar(focos, esCelular);
+        if (focos.every((g) => ocupacion(g, enc) >= 0.5)) {
           ultima.focos = focos;
           ultima.encuadre = enc;
           ultima.ultimaAccion = d.cuadro;
@@ -97,9 +87,54 @@ export function tomasDeCamara(disparos: Disparo[], recorrido: Recorrido, registr
         }
       }
     }
-    tomas.push({ desde: d.cuadro, ultimaAccion: d.cuadro, focos: [f], encuadre: encuadrar([f], esCelular, !!registro.composicion(d.escena)), celular: esCelular, escena: d.escena });
+    tomas.push({ desde: d.cuadro, ultimaAccion: d.cuadro, focos: [f], encuadre: encuadrar([f], esCelular), celular: esCelular, escena: d.escena });
   }
   return tomas;
+}
+
+// Una acción en un lugar del kit (ver encuadreKit.ts para las reglas).
+function tomaDelKit(tomas: Toma[], d: Disparo, f: Rect, recorrido: Recorrido, registro: Registro) {
+  const cuerpos = cuerposEnMundo(d.escena, recorrido, registro);
+  const [id, verbo] = d.accion.split(".");
+  const grupo = id === ID_TODOS;
+  const ultima = tomas[tomas.length - 1];
+  const mismoLugar = ultima?.escena === d.escena;
+  if (ultima && mismoLugar) {
+    // Lo mismo de antes (o el mismo grupo): la cámara se queda.
+    if (ultima.focos.some((g) => igual(g, f)) || (grupo && ultima.grupo)) {
+      ultima.ultimaAccion = d.cuadro;
+      return;
+    }
+    const dt = d.cuadro - ultima.desde;
+    // Calma: llega muy pronto y ya se ve entero: sin corte.
+    if (!grupo && dt < CALMA_KIT && cabeEnFranja(f, ultima.encuadre)) {
+      ultima.ultimaAccion = d.cuadro;
+      return;
+    }
+    // Seguidas: una toma que muestre las dos, si cabe sin alejarse de más.
+    if (!grupo && !ultima.grupo && dt < JUNTAR_SI_MENOS_DE) {
+      const focos = [...ultima.focos, f];
+      const r = encuadrarKit({ obligatorios: focos, cuerpos, soloNormal: true });
+      if (r && ocupacion(unionRects(focos), r.encuadre) >= 0.5) {
+        ultima.focos = focos;
+        ultima.encuadre = r.encuadre;
+        ultima.ultimaAccion = d.cuadro;
+        return;
+      }
+    }
+  }
+  const r = grupo ? encuadrarKit({ obligatorios: [], deseables: personajesEnMundo(d.escena, verbo, recorrido, registro), cuerpos }) : encuadrarKit({ obligatorios: [f], cuerpos });
+  // Nunca dos cortes a menos de CORTE_MINIMO_KIT en el mismo lugar.
+  const desde = ultima && mismoLugar ? Math.max(d.cuadro, ultima.desde + CORTE_MINIMO_KIT) : d.cuadro;
+  tomas.push({
+    desde,
+    ultimaAccion: d.cuadro,
+    focos: r ? r.incluidos : [f],
+    encuadre: r?.encuadre ?? encuadre(f, ZOOM_MAXIMO_KIT),
+    celular: false,
+    escena: d.escena,
+    grupo,
+  });
 }
 
 export function duracionViaje(a: Encuadre, b: Encuadre, fps: number): number {
@@ -109,18 +144,25 @@ export function duracionViaje(a: Encuadre, b: Encuadre, fps: number): number {
   return Math.round(segundos * fps);
 }
 
+const mismoEncuadre = (a: Encuadre, b: Encuadre) => Math.abs(a.x - b.x) < 1 && Math.abs(a.y - b.y) < 1 && Math.abs(a.zoom - b.zoom) < 0.005;
 const empuje = (cuadros: number) => 1 + Math.min(0.05, 0.0012 * cuadros);
+// En los lugares del kit, acercamiento más corto (+2 %): los personajes ya
+// dan vida, y el encuadre que garantiza que nadie quede con la cara cortada
+// tiene que valer hasta el máximo acercamiento (ver ZOOM_TOMA_MAX).
+export const EMPUJE_MAXIMO_KIT = 0.02;
+const empujeKit = (cuadros: number) => 1 + Math.min(EMPUJE_MAXIMO_KIT, 0.0008 * cuadros);
 
-// Puerta celular <-> lugar del kit (visuales-v2, 23 nov 2026): en vez de
-// viajar por el mundo oscuro entre islas, la cámara entra a la pantalla del
-// celular hasta llenarla, corta al lugar encuadrado en lo mismo que la
-// pantalla mostraba (la cartelera) y se abre. Al volver, al revés.
-export type Puerta = { cuadro: number; desde: "celular" | "kit"; kit: string };
+// Puerta celular <-> lugar del kit (visuales-v2): en vez de viajar por el
+// mundo oscuro entre islas, la cámara entra a la pantalla del celular hasta
+// llenarla; la pantalla ya muestra el lugar con el mismo encuadre (enLugar)
+// que tendrá la cámara al cortar, así el corte no se nota. Al volver, al
+// revés. enLugar sigue las reglas del kit (nadie con la cara cortada).
+export type Puerta = { cuadro: number; desde: "celular" | "kit"; kit: string; enLugar: Encuadre; zoomPantalla: number };
 export type OpcionesPuerta = {
   esKit: (escena: string | undefined) => boolean;
-  // Pantalla del celular (mundo) y lo que se encuadra del lugar al cortar.
+  // Pantalla del celular (mundo) y el encuadre del lugar al cortar.
   pantalla: Rect | null;
-  cubrirKit: (escena: string) => Rect | null;
+  encuadreKit: (escena: string) => Encuadre | null;
 };
 export const CUADROS_PUERTA = 14;
 export const ZOOM_PUERTA_MAXIMO = 1.6;
@@ -148,24 +190,36 @@ export function planDeCamara(tomas: Toma[], total: number, fps: number, opciones
     const desdeKit = tb.celular && opciones?.esKit(ta.escena);
     if (opciones?.pantalla && (haciaKit || desdeKit)) {
       const kit = (haciaKit ? tb.escena : ta.escena)!;
-      const lugar = opciones.cubrirKit(kit);
-      if (lugar) {
-        // Entra (CUADROS_PUERTA), corta en T, se abre (CUADROS_PUERTA).
+      const enLugar = opciones.encuadreKit(kit);
+      if (enLugar) {
         let T = tb.desde + LLEGAR_TRAS_PALABRA - CUADROS_PUERTA;
-        const salidaMinima = Math.max(llegadaAnterior + PAUSA_MINIMA, ta.ultimaAccion + VER_ULTIMA_ACCION) + CUADROS_PUERTA;
+        const salidaMinima = Math.max(llegadaAnterior + PAUSA_MINIMA, ta.ultimaAccion + VER_ULTIMA_ACCION) + CUADROS_PUERTA + 1;
         if (T < salidaMinima) T = salidaMinima;
         const pantalla = cubrir(opciones.pantalla, true);
-        const enLugar = cubrir(lugar);
-        puntos.push({ cuadro: T - CUADROS_PUERTA, ...acercar(a, empuje(T - CUADROS_PUERTA - llegadaAnterior), ta.celular ? "arriba" : "centro") });
-        // Saliendo del lugar: corte a la cartelera un poco más abierta y se
-        // cierra hasta llenarla (viajar desde un primer plano cruza el salón
-        // con encuadres sin sentido).
-        if (desdeKit) puntos.push({ cuadro: T - CUADROS_PUERTA + 1, ...enLugar, zoom: enLugar.zoom * 0.82 });
-        puntos.push({ cuadro: T - 1, ...(haciaKit ? pantalla : enLugar) });
-        puntos.push({ cuadro: T, ...(haciaKit ? enLugar : pantalla) });
-        puntos.push({ cuadro: T + CUADROS_PUERTA, ...b });
-        puertas.push({ cuadro: T, desde: haciaKit ? "celular" : "kit", kit });
-        llegadaAnterior = T + CUADROS_PUERTA;
+        puertas.push({ cuadro: T, desde: haciaKit ? "celular" : "kit", kit, enLugar, zoomPantalla: pantalla.zoom });
+        if (haciaKit) {
+          // Entra a la pantalla, corta al lugar y se queda (acercándose
+          // lento) hasta la acción; si esa acción pide otro encuadre, corta.
+          puntos.push({ cuadro: T - CUADROS_PUERTA, ...acercar(a, empuje(T - CUADROS_PUERTA - llegadaAnterior), "arriba") });
+          puntos.push({ cuadro: T - 1, ...pantalla });
+          puntos.push({ cuadro: T, ...enLugar });
+          if (mismoEncuadre(enLugar, b)) llegadaAnterior = T; // la toma ya empezó
+          else {
+            const Tb = Math.max(T + CUADROS_PUERTA, tb.desde);
+            puntos.push({ cuadro: Tb - 1, ...acercar(enLugar, empujeKit(Tb - 1 - T)) });
+            puntos.push({ cuadro: Tb, ...b });
+            llegadaAnterior = Tb;
+          }
+        } else {
+          // Sale: corta al encuadre de la puerta, se acerca lento y pasa a
+          // la pantalla del celular, que se abre hasta la toma siguiente.
+          puntos.push({ cuadro: T - CUADROS_PUERTA - 1, ...acercar(a, empujeKit(T - CUADROS_PUERTA - 1 - llegadaAnterior)) });
+          puntos.push({ cuadro: T - CUADROS_PUERTA, ...enLugar });
+          puntos.push({ cuadro: T - 1, ...acercar(enLugar, empujeKit(CUADROS_PUERTA)) });
+          puntos.push({ cuadro: T, ...pantalla });
+          puntos.push({ cuadro: T + CUADROS_PUERTA, ...b });
+          llegadaAnterior = T + CUADROS_PUERTA;
+        }
         continue;
       }
     }
@@ -174,7 +228,7 @@ export function planDeCamara(tomas: Toma[], total: number, fps: number, opciones
     // respecto a la voz y el atraso se acumula (v4: ~3 s al final).
     if (opciones?.esKit(ta.escena) && ta.escena === tb.escena) {
       const T = Math.max(tb.desde, llegadaAnterior + CORTE_MINIMO_KIT);
-      puntos.push({ cuadro: T - 1, ...acercar(a, empuje(T - 1 - llegadaAnterior), "centro") });
+      puntos.push({ cuadro: T - 1, ...acercar(a, empujeKit(T - 1 - llegadaAnterior), "centro") });
       puntos.push({ cuadro: T, ...b });
       llegadaAnterior = T;
       continue;
@@ -193,7 +247,8 @@ export function planDeCamara(tomas: Toma[], total: number, fps: number, opciones
   }
   const ultima = tomas[tomas.length - 1].encuadre;
   const fin = Math.max(total, llegadaAnterior + 1);
-  puntos.push({ cuadro: fin, ...acercar(ultima, empuje(fin - llegadaAnterior), tomas[tomas.length - 1].celular ? "arriba" : "centro") });
+  const empujeFinal = opciones?.esKit(tomas[tomas.length - 1].escena) ? empujeKit : empuje;
+  puntos.push({ cuadro: fin, ...acercar(ultima, empujeFinal(fin - llegadaAnterior), tomas[tomas.length - 1].celular ? "arriba" : "centro") });
   return { puntos, puertas };
 }
 
