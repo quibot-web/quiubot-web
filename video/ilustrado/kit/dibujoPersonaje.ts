@@ -86,7 +86,10 @@ export function estrella(cx: number, cy: number, R: number, r: number): string {
 }
 
 // ---------- Cabeza (pelo, cara y expresión) ----------
-export function svgCabeza(a: AspectoPersonaje, expresion: Expresion): ParteSvg {
+// Cabeza SIN rasgos (pelo, orejas, cara). Los ojos, cejas y boca van en su
+// propia capa (svgRasgos) para que parpadeen y miren hacia los lados sin
+// redibujar la cabeza.
+export function svgCabeza(a: AspectoPersonaje): ParteSvg {
   const p = proporciones(a.tipo);
   const { cx, cy, rx, ry } = p.cabeza;
   const piel = PIELES[a.piel];
@@ -113,7 +116,7 @@ export function svgCabeza(a: AspectoPersonaje, expresion: Expresion): ParteSvg {
       ? Array.from({ length: 7 }, (_, i) => `<circle cx="${cx - rx * 0.8 + i * rx * 0.27}" cy="${cy - ry * 0.78 + Math.abs(i - 3) * 6}" r="${rx * 0.26}" fill="${i % 2 ? pelo : peloOscuro}"/>`).join("")
       : `<path d="M${cx - rx - 6} ${cy - 6} Q${cx - rx - 6} ${cy - ry - 12} ${cx} ${cy - ry - 14} Q${cx + rx + 6} ${cy - ry - 12} ${cx + rx + 6} ${cy - 6} Q${cx + rx * 0.55} ${cy - ry * 0.5} ${cx + rx * 0.1} ${cy - ry * 0.62} Q${cx - rx * 0.5} ${cy - ry * 0.45} ${cx - rx - 6} ${cy - 6} Z" fill="${pelo}"/><path d="M${cx + rx * 0.2} ${cy - ry - 12} Q${cx + rx + 6} ${cy - ry - 10} ${cx + rx + 6} ${cy - 6} Q${cx + rx * 0.6} ${cy - ry * 0.5} ${cx + rx * 0.2} ${cy - ry * 0.6} Z" fill="${peloOscuro}"/>`;
   delante.push(tapa);
-  const cuerpo = [...detras, orejas, cara, delante.join(""), rasgos(a, p, expresion)].join("");
+  const cuerpo = [...detras, orejas, cara, delante.join("")].join("");
   return { svg: svg(p.ancho, p.alturaCabeza, cuerpo), ancho: p.ancho, alto: p.alturaCabeza, ancla: { x: cx, y: p.cuello.y0 + 10 } };
 }
 
@@ -129,33 +132,59 @@ export function svgPeloAtras(a: AspectoPersonaje): ParteSvg | null {
   return { svg: svg(p.ancho, p.alturaCabeza, c), ancho: p.ancho, alto: p.alturaCabeza, ancla: { x: cx, y: p.cuello.y0 + 10 } };
 }
 
-function rasgos(a: AspectoPersonaje, p: Proporciones, e: Expresion): string {
+// Rasgos (ojos, cejas, boca, mejillas, gafas): misma tela y ancla que la
+// cabeza. Exagerados para que se lean en un celular (23 nov 2026).
+// ojos "cerrados": parpadeo.
+export type Ojos = "abiertos" | "cerrados";
+export function svgRasgos(a: AspectoPersonaje, e: Expresion, ojos: Ojos): ParteSvg {
+  const p = proporciones(a.tipo);
+  return { svg: svg(p.ancho, p.alturaCabeza, rasgos(a, p, e, ojos)), ancho: p.ancho, alto: p.alturaCabeza, ancla: { x: p.cabeza.cx, y: p.cuello.y0 + 10 } };
+}
+
+function rasgos(a: AspectoPersonaje, p: Proporciones, e: Expresion, ojos: Ojos): string {
   const { cx, cy, rx } = p.cabeza;
-  const ojo = a.tipo === "profesora" ? 10 : 12;
-  const sep = rx * 0.38;
-  const oy = cy + 8;
+  const nino = a.tipo !== "profesora";
+  const ojo = nino ? 14 : 12;
+  const sep = rx * 0.4;
+  const oy = cy + 6;
   const tinta = "#2B2233";
+  const linea = (d: string, w = 8) => `<path d="${d}" fill="none" stroke="${tinta}" stroke-width="${w}" stroke-linecap="round" stroke-linejoin="round"/>`;
   const s: string[] = [];
   // Mejillas.
-  s.push(...[-1, 1].map((l) => `<ellipse cx="${cx + l * rx * 0.62}" cy="${oy + 34}" rx="${rx * 0.17}" ry="${rx * 0.1}" fill="#F08A8A" opacity="${e === "feliz" ? 0.6 : 0.32}"/>`));
+  const rubor = e === "feliz" ? 0.75 : e === "triste" ? 0.2 : 0.35;
+  s.push(...[-1, 1].map((l) => `<ellipse cx="${cx + l * rx * 0.62}" cy="${oy + 36}" rx="${rx * 0.19}" ry="${rx * 0.11}" fill="#F07C7C" opacity="${rubor}"/>`));
+  const cerrados = () => [-1, 1].forEach((l) => s.push(linea(`M${cx + l * sep - ojo} ${oy + 2} Q${cx + l * sep} ${oy + 8} ${cx + l * sep + ojo} ${oy + 2}`, 7)));
   if (e === "feliz") {
-    for (const l of [-1, 1]) s.push(`<path d="M${cx + l * sep - ojo} ${oy + 4} Q${cx + l * sep} ${oy - ojo * 1.4} ${cx + l * sep + ojo} ${oy + 4}" fill="none" stroke="${tinta}" stroke-width="7" stroke-linecap="round"/>`);
-    for (const l of [-1, 1]) s.push(`<path d="M${cx + l * sep - 18} ${oy - 34} Q${cx + l * sep} ${oy - 46} ${cx + l * sep + 18} ${oy - 34}" fill="none" stroke="${tinta}" stroke-width="6" stroke-linecap="round"/>`);
-    s.push(`<path d="M${cx - 34} ${oy + 36} Q${cx} ${oy + 40} ${cx + 34} ${oy + 36} Q${cx + 30} ${oy + 82} ${cx} ${oy + 84} Q${cx - 30} ${oy + 82} ${cx - 34} ${oy + 36} Z" fill="#7A2E35"/><path d="M${cx - 18} ${oy + 70} Q${cx} ${oy + 58} ${cx + 18} ${oy + 70} Q${cx} ${oy + 84} ${cx - 18} ${oy + 70} Z" fill="#E8737E"/><path d="M${cx - 30} ${oy + 38} Q${cx} ${oy + 42} ${cx + 30} ${oy + 38} L${cx + 28} ${oy + 48} Q${cx} ${oy + 52} ${cx - 28} ${oy + 48} Z" fill="#FFFFFF"/>`);
+    // Ojos felices (arcos) y boca MUY abierta.
+    for (const l of [-1, 1]) s.push(linea(`M${cx + l * sep - ojo * 1.1} ${oy + 6} Q${cx + l * sep} ${oy - ojo * 1.6} ${cx + l * sep + ojo * 1.1} ${oy + 6}`, 9));
+    for (const l of [-1, 1]) s.push(linea(`M${cx + l * sep - 20} ${oy - 40} Q${cx + l * sep} ${oy - 56} ${cx + l * sep + 20} ${oy - 40}`, 7));
+    const w = rx * 0.5;
+    const h = rx * 0.52;
+    s.push(`<path d="M${cx - w} ${oy + 32} Q${cx} ${oy + 38} ${cx + w} ${oy + 32} Q${cx + w * 0.9} ${oy + 32 + h} ${cx} ${oy + 34 + h} Q${cx - w * 0.9} ${oy + 32 + h} ${cx - w} ${oy + 32} Z" fill="#6E2330"/>`);
+    s.push(`<path d="M${cx - w * 0.55} ${oy + 30 + h * 0.8} Q${cx} ${oy + 16 + h * 0.6} ${cx + w * 0.55} ${oy + 30 + h * 0.8} Q${cx} ${oy + 36 + h} ${cx - w * 0.55} ${oy + 30 + h * 0.8} Z" fill="#E8737E"/>`);
+    s.push(`<path d="M${cx - w * 0.86} ${oy + 34} Q${cx} ${oy + 40} ${cx + w * 0.86} ${oy + 34} L${cx + w * 0.8} ${oy + 46} Q${cx} ${oy + 52} ${cx - w * 0.8} ${oy + 46} Z" fill="#FFFFFF"/>`);
   } else if (e === "triste") {
-    for (const l of [-1, 1]) s.push(`<ellipse cx="${cx + l * sep}" cy="${oy + 4}" rx="${ojo * 0.85}" ry="${ojo}" fill="${tinta}"/><circle cx="${cx + l * sep + 3}" cy="${oy}" r="${ojo * 0.3}" fill="#FFFFFF"/>`);
-    // Cejas con la punta de adentro arriba.
-    for (const l of [-1, 1]) s.push(`<path d="M${cx + l * (sep + 20)} ${oy - 24} L${cx + l * (sep - 16)} ${oy - 38}" stroke="${tinta}" stroke-width="6" stroke-linecap="round"/>`);
-    s.push(`<path d="M${cx - 24} ${oy + 64} Q${cx} ${oy + 44} ${cx + 24} ${oy + 64}" fill="none" stroke="${tinta}" stroke-width="7" stroke-linecap="round"/>`);
-    s.push(`<path d="M${cx + sep + 10} ${oy + 18} q-8 16 0 22 q8 -6 0 -22 z" fill="#7FC4F0"/>`);
+    if (ojos === "cerrados") cerrados();
+    else for (const l of [-1, 1]) s.push(`<ellipse cx="${cx + l * sep}" cy="${oy + 6}" rx="${ojo * 0.9}" ry="${ojo * 1.05}" fill="${tinta}"/><circle cx="${cx + l * sep + 3}" cy="${oy + 1}" r="${ojo * 0.32}" fill="#FFFFFF"/>`);
+    // Cejas MUY inclinadas (la punta de adentro bien arriba).
+    for (const l of [-1, 1]) s.push(linea(`M${cx + l * (sep + 26)} ${oy - 18} L${cx + l * (sep - 18)} ${oy - 46}`, 9));
+    // Boca hacia abajo, bien marcada.
+    s.push(linea(`M${cx - 32} ${oy + 70} Q${cx - 14} ${oy + 44} ${cx} ${oy + 50} Q${cx + 14} ${oy + 44} ${cx + 32} ${oy + 70}`, 8));
+    s.push(`<path d="M${cx + sep + 12} ${oy + 22} q-11 22 0 30 q11 -8 0 -30 z" fill="#6FBDEF"/>`);
+  } else if (e === "sorprendido") {
+    if (ojos === "cerrados") cerrados();
+    else for (const l of [-1, 1]) s.push(`<circle cx="${cx + l * sep}" cy="${oy}" r="${ojo * 1.55}" fill="#FFFFFF" stroke="${tinta}" stroke-width="4"/><circle cx="${cx + l * sep}" cy="${oy + 2}" r="${ojo * 0.7}" fill="${tinta}"/>`);
+    for (const l of [-1, 1]) s.push(linea(`M${cx + l * sep - 20} ${oy - 52} Q${cx + l * sep} ${oy - 70} ${cx + l * sep + 20} ${oy - 52}`, 7));
+    s.push(`<ellipse cx="${cx}" cy="${oy + 58}" rx="${rx * 0.16}" ry="${rx * 0.22}" fill="#6E2330"/>`);
   } else {
-    for (const l of [-1, 1]) s.push(`<ellipse cx="${cx + l * sep}" cy="${oy}" rx="${ojo * 0.85}" ry="${ojo}" fill="${tinta}"/><circle cx="${cx + l * sep + 3}" cy="${oy - 4}" r="${ojo * 0.3}" fill="#FFFFFF"/>`);
-    for (const l of [-1, 1]) s.push(`<path d="M${cx + l * sep - 16} ${oy - 32} Q${cx + l * sep} ${oy - 38} ${cx + l * sep + 16} ${oy - 32}" fill="none" stroke="${tinta}" stroke-width="6" stroke-linecap="round"/>`);
-    s.push(`<path d="M${cx - 22} ${oy + 46} Q${cx} ${oy + 62} ${cx + 22} ${oy + 46}" fill="none" stroke="${tinta}" stroke-width="7" stroke-linecap="round"/>`);
+    if (ojos === "cerrados") cerrados();
+    else for (const l of [-1, 1]) s.push(`<ellipse cx="${cx + l * sep}" cy="${oy}" rx="${ojo * 0.85}" ry="${ojo}" fill="${tinta}"/><circle cx="${cx + l * sep + 3}" cy="${oy - 4}" r="${ojo * 0.32}" fill="#FFFFFF"/>`);
+    for (const l of [-1, 1]) s.push(linea(`M${cx + l * sep - 17} ${oy - 34} Q${cx + l * sep} ${oy - 41} ${cx + l * sep + 17} ${oy - 34}`, 7));
+    s.push(linea(`M${cx - 26} ${oy + 44} Q${cx} ${oy + 64} ${cx + 26} ${oy + 44}`, 8));
   }
   if (a.accesorio === "gafas") {
-    for (const l of [-1, 1]) s.push(`<circle cx="${cx + l * sep}" cy="${oy + 2}" r="${ojo + 16}" fill="rgba(255,255,255,0.12)" stroke="#2F2A3A" stroke-width="6"/>`);
-    s.push(`<path d="M${cx - sep + ojo + 16} ${oy} Q${cx} ${oy - 10} ${cx + sep - ojo - 16} ${oy}" fill="none" stroke="#2F2A3A" stroke-width="6"/>`);
+    for (const l of [-1, 1]) s.push(`<circle cx="${cx + l * sep}" cy="${oy + 2}" r="${ojo + 18}" fill="rgba(255,255,255,0.12)" stroke="#2F2A3A" stroke-width="6"/>`);
+    s.push(`<path d="M${cx - sep + ojo + 18} ${oy} Q${cx} ${oy - 10} ${cx + sep - ojo - 18} ${oy}" fill="none" stroke="#2F2A3A" stroke-width="6"/>`);
   }
   return s.join("");
 }

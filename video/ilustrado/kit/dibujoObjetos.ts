@@ -2,40 +2,43 @@
 // precargar. Sin texto: los dibujos de la cartelera y el pizarrón son solo
 // formas.
 import { PAREDES, type MotivoDibujo, type Pared } from "./catalogoKit";
-import { aclarar, estrella, oscurecer, type ParteSvg } from "./dibujoPersonaje";
+import { estrella, oscurecer, type ParteSvg } from "./dibujoPersonaje";
 
 const svg = (ancho: number, alto: number, cuerpo: string) => `<svg xmlns="http://www.w3.org/2000/svg" width="${ancho}" height="${alto}" viewBox="0 0 ${ancho} ${alto}">${cuerpo}</svg>`;
 
 // ---------- Salón de clases (diorama 2.5D) ----------
+// Sin paredes laterales de "caja" (ronda del 23 nov 2026): la pared del
+// fondo y el piso ocupan todo el ancho, con colores planos, y el entorno
+// (EscenaKit) los continúa más allá de la isla: la cámara nunca ve el vacío.
 export const SALON = {
   ancho: 2200,
   alto: 1500,
-  // Pared del fondo y piso en perspectiva.
-  pared: { x0: 150, x1: 2050, y0: 70, y1: 1040 },
+  pared: { x0: 0, x1: 2200, y0: 0, y1: 1040 },
 } as const;
+export const COLOR_PISO = "#C99460";
+export const COLOR_LINEA_PISO = "#AE7A45";
+export const Y_LINEAS_PISO = [1110, 1210, 1340, 1500] as const;
 
 export function svgSalon(pared: Pared): ParteSvg {
   const { ancho, alto } = SALON;
   const { x0, x1, y0, y1 } = SALON.pared;
   const color = PAREDES[pared];
   const s: string[] = [];
-  s.push(`<defs><linearGradient id="pared" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="${aclarar(color, 0.15)}"/><stop offset="1" stop-color="${oscurecer(color, 0.04)}"/></linearGradient><linearGradient id="piso" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#B9844F"/><stop offset="1" stop-color="#D19C63"/></linearGradient></defs>`);
-  // Paredes laterales (más oscuras) y pared del fondo.
-  s.push(`<path d="M0 0 L${x0} ${y0} L${x0} ${y1} L0 ${alto} Z" fill="${oscurecer(color, 0.16)}"/>`);
-  s.push(`<path d="M${ancho} 0 L${x1} ${y0} L${x1} ${y1} L${ancho} ${alto} Z" fill="${oscurecer(color, 0.2)}"/>`);
-  s.push(`<rect x="${x0}" y="${y0}" width="${x1 - x0}" height="${y1 - y0}" fill="url(#pared)"/>`);
-  // Zócalo.
-  s.push(`<rect x="${x0}" y="${y1 - 120}" width="${x1 - x0}" height="120" fill="${oscurecer(color, 0.12)}"/><rect x="${x0}" y="${y1 - 124}" width="${x1 - x0}" height="10" fill="${oscurecer(color, 0.22)}"/>`);
-  // Piso de tablas en perspectiva (fuga al centro).
-  s.push(`<path d="M${x0} ${y1} L${x1} ${y1} L${ancho} ${alto} L0 ${alto} Z" fill="url(#piso)"/>`);
-  const fugaX = ancho / 2;
-  for (let i = 1; i < 14; i++) {
-    const xb = (ancho / 14) * i;
-    const xt = x0 + ((x1 - x0) / 14) * i;
-    s.push(`<line x1="${xt}" y1="${y1}" x2="${xb}" y2="${alto}" stroke="#A8743F" stroke-width="5" opacity="0.6"/>`);
+  // Pared (color plano: continúa sin costura en el entorno), zócalo y piso.
+  s.push(`<rect x="0" y="0" width="${ancho}" height="${y1}" fill="${color}"/>`);
+  s.push(`<rect x="0" y="${y1 - 120}" width="${ancho}" height="120" fill="${oscurecer(color, 0.12)}"/><rect x="0" y="${y1 - 124}" width="${ancho}" height="10" fill="${oscurecer(color, 0.22)}"/>`);
+  s.push(`<rect x="0" y="${y1}" width="${ancho}" height="${alto - y1}" fill="${COLOR_PISO}"/>`);
+  for (const y of Y_LINEAS_PISO) s.push(`<rect x="0" y="${y}" width="${ancho}" height="5" fill="${COLOR_LINEA_PISO}"/>`);
+  // Tablas: juntas cortas, en perspectiva (más juntas arriba).
+  for (let fila = 0; fila < Y_LINEAS_PISO.length - 1; fila++) {
+    const ya = fila === 0 ? y1 : Y_LINEAS_PISO[fila - 1];
+    const yb = Y_LINEAS_PISO[fila];
+    const paso = 260 + fila * 90;
+    for (let x = (fila % 2) * paso * 0.5; x < ancho; x += paso) s.push(`<rect x="${x}" y="${ya}" width="5" height="${yb - ya}" fill="${COLOR_LINEA_PISO}" opacity="0.7"/>`);
   }
-  for (const [k, y] of [y1 + 70, y1 + 170, y1 + 300].entries()) s.push(`<line x1="${0 + (k + 1) * 30}" y1="${y}" x2="${ancho - (k + 1) * 30}" y2="${y}" stroke="#A8743F" stroke-width="4" opacity="${0.35 + k * 0.1}"/>`);
-  void fugaX;
+  void x0;
+  void y0;
+  void x1;
   // Pizarrón con dibujos de tiza (sin letras ni números).
   const pz = { x: 230, y: 200, w: 520, h: 360 };
   s.push(`<rect x="${pz.x - 18}" y="${pz.y - 18}" width="${pz.w + 36}" height="${pz.h + 36}" rx="10" fill="#8A5A36"/><rect x="${pz.x}" y="${pz.y}" width="${pz.w}" height="${pz.h}" rx="4" fill="#2F4A3F"/><rect x="${pz.x + 20}" y="${pz.y + pz.h + 18}" width="${pz.w - 40}" height="14" rx="5" fill="#6E4628"/>`);
@@ -59,7 +62,7 @@ export function svgSalon(pared: Pared): ParteSvg {
     s.push(`<path d="M${x - 26} ${y} L${x + 26} ${y} L${x} ${y + 52} Z" fill="${colores[i % colores.length]}"/>`);
   }
   // Sombra donde la pared toca el piso.
-  s.push(`<rect x="${x0}" y="${y1}" width="${x1 - x0}" height="22" fill="rgba(60,40,20,0.18)"/>`);
+  s.push(`<rect x="0" y="${y1}" width="${ancho}" height="22" fill="rgba(60,40,20,0.18)"/>`);
   return { svg: svg(ancho, alto, s.join("")), ancho, alto, ancla: { x: 0, y: 0 } };
 }
 
@@ -156,4 +159,27 @@ export function svgDulces(): ParteSvg {
   for (let i = 0; i < 9; i++) s.push(`<circle cx="${30 + ((i * 37) % (W - 60))}" cy="${110 + ((i * 23) % 70)}" r="13" fill="${colores[i % colores.length]}"/>`);
   s.push(`<path d="M${W / 2 - 30} 82 q30 -24 60 0 q-30 20 -60 0 z" fill="#E85D5D"/>`);
   return { svg: svg(W, H, s.join("")), ancho: W, alto: H, ancla: { x: W / 2, y: H * 0.6 } };
+}
+
+// ---------- Pupitre (vista de frente, tapa en perspectiva) y silla ----------
+export const PUPITRE = { ancho: 400, alto: 320, tapa: 56 } as const;
+export function svgPupitre(): ParteSvg {
+  const { ancho: W, alto: H, tapa } = PUPITRE;
+  const s: string[] = [];
+  s.push(`<ellipse cx="${W / 2}" cy="${H - 6}" rx="${W * 0.5}" ry="12" fill="rgba(20,16,30,0.22)"/>`);
+  // Patas metálicas.
+  for (const x of [34, W - 50]) s.push(`<rect x="${x}" y="${tapa + 100}" width="16" height="${H - tapa - 108}" rx="6" fill="#6C7384"/>`);
+  // Panel del frente y la tapa (más clara, vista desde arriba).
+  s.push(`<rect x="12" y="${tapa}" width="${W - 24}" height="130" rx="10" fill="#4F86C6"/><rect x="${W * 0.62}" y="${tapa}" width="${W * 0.38 - 12}" height="130" rx="10" fill="#4174B0"/>`);
+  s.push(`<path d="M28 4 L${W - 28} 4 L${W} ${tapa} L0 ${tapa} Z" fill="#D9A867"/><rect x="0" y="${tapa - 4}" width="${W}" height="16" rx="6" fill="#B9864C"/>`);
+  return { svg: svg(W, H, s.join("")), ancho: W, alto: H, ancla: { x: W / 2, y: 0 } };
+}
+export const SILLA = { ancho: 300, alto: 520 } as const;
+export function svgSilla(): ParteSvg {
+  const { ancho: W, alto: H } = SILLA;
+  const s: string[] = [];
+  for (const x of [40, W - 56]) s.push(`<rect x="${x}" y="60" width="16" height="${H - 60}" rx="6" fill="#6C7384"/>`);
+  s.push(`<rect x="10" y="0" width="${W - 20}" height="150" rx="22" fill="#E07B4C"/><rect x="${W * 0.6}" y="0" width="${W * 0.4 - 10}" height="150" rx="22" fill="#C9673C"/>`);
+  s.push(`<rect x="0" y="${H * 0.58}" width="${W}" height="30" rx="10" fill="#C9673C"/>`);
+  return { svg: svg(W, H, s.join("")), ancho: W, alto: H, ancla: { x: W / 2, y: 0 } };
 }

@@ -42,6 +42,38 @@
   - dibujos infantiles (12 motivos, sin texto);
   - bolsa de dulces.
 
+## Ronda v4 del prototipo (24 nov 2026)
+
+- **Lugar a pantalla completa:** la pared y el piso cubren todo el ancho y
+  se extienden más allá del cuadro (`ENTORNO`). No hay bandas oscuras ni
+  bordes de caja.
+- **Puesta en escena con profundidad:** `pupitre` (con silla) y dos campos
+  nuevos para la IA: `sentado_en` (un pupitre) y `mira_a` (un id). Lo que
+  está más atrás se dibuja antes; la silla va detrás de quien se sienta y
+  el pupitre delante.
+- **Vida:**
+  - parpadeo con período propio de cada personaje;
+  - respiración;
+  - cabeza y ojos que giran hacia lo que pasa (`atencionesDe`: señalar,
+    ofrecer, levantar la mano, el dibujo que vuela);
+  - giro suavizado en 8 cuadros.
+- **Puerta celular↔lugar:** la cámara entra a la pantalla del celular y la
+  cartelera aparece dentro de ella. Al volver, corta a la cartelera
+  abierta, se cierra hasta llenarla y pasa al celular. Nunca se ve el
+  mundo oscuro.
+- **Expresiones más marcadas:** feliz con la boca abierta, triste con
+  lágrima y sorprendido con boca en O.
+- **Cámara dentro de un lugar:** corta, no viaja. Con tomas cada ~1 s, los
+  viajes de 0,5–1,5 s atrasaban la imagen respecto a la voz, hasta ~3 s al
+  final. Otras reglas:
+  - mínimo 12 cuadros entre cortes;
+  - dos acciones muy seguidas van en un plano abierto (zoom ≥0,55).
+- **Rendimiento:** no se dibuja lo que la cámara no ve (personajes,
+  cartelera). Medido en Chrome: 3,5–4,3 s por segundo de video.
+- **Regla de guion:** un visual no contradice la frase. El niño de los
+  dulces se pone triste cuando la profesora elige otro dibujo, y en
+  "todos aplauden" ya sonríe.
+
 ## Pendiente (después de aprobar el estilo)
 
 1. **La IA compone con el kit:** prompt con las listas cerradas, elección literal por frase y metáforas completas. Si el concepto no existe, la composición más cercana; nunca texto.

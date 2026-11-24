@@ -2,7 +2,7 @@ import { describe, expect, it } from "vitest";
 import { renderToStaticMarkup } from "react-dom/server";
 import { ComposicionKitSchema } from "./catalogoKit";
 import { aspectoDe, problemasComposicion, rectPersonaje, ubicarComposicion } from "./composicion";
-import { EscenaKit } from "./EscenaKit";
+import { EscenaKit, atencionesDe } from "./EscenaKit";
 import { piezasDeComposicion, urlsSinRasterizar } from "./piezas";
 import { apunteHacia, conVueltasAParado, estadoPose, posicionMano, proporciones } from "./poses";
 import { COMPOSICION_SALON, NARRACION_PROTOTIPO_KIT, PLAN_PROTOTIPO_KIT } from "./planPrototipoKit";
@@ -12,7 +12,7 @@ import { crearRegistro } from "../motor/registro";
 import { ocupacion } from "../motor/geometria";
 import { unionRects } from "../motor/catalogo";
 import { validarPlanIlustrado } from "../motor/validarPlan";
-import type { TiemposIlustrado } from "../tiempoIlustrado";
+import { camaraEnCuadro, type TiemposIlustrado } from "../tiempoIlustrado";
 
 describe("kit de escenas: la IA solo compone con listas cerradas", () => {
   it("acepta la composición del prototipo y rechaza valores fuera de las listas o campos de más (nunca código ni SVG)", () => {
@@ -122,5 +122,82 @@ describe("dibujo y rendimiento", () => {
   it("los niños se ven a >= 50 % con el zoom máximo (no quedan chicos)", () => {
     const nino = cu.personajes.find((u) => u.per.tipo === "nino")!;
     expect(rectPersonaje(nino).alto * 1.3).toBeGreaterThanOrEqual(1920 * 0.5);
+  });
+});
+
+describe("v4: lugar a pantalla completa, sentados, mirada y puerta celular↔salón", () => {
+  const tiempos = tiemposKit as TiemposIlustrado;
+  const cu = ubicarComposicion(COMPOSICION_SALON, "prototipo");
+
+  it("los niños sentados quedan detrás de su pupitre (los pies no pasan del borde de abajo del pupitre)", () => {
+    const sentados = cu.personajes.filter((u) => u.per.sentado_en);
+    expect(sentados.length).toBe(3);
+    for (const u of sentados) {
+      const pupitre = u.sentado!.pupitre;
+      const r = rectPersonaje(u);
+      expect(r.x + r.ancho / 2, u.per.id).toBeGreaterThan(pupitre.x);
+      expect(r.x + r.ancho / 2, u.per.id).toBeLessThan(pupitre.x + pupitre.ancho);
+      expect(r.y + r.alto, u.per.id).toBeLessThanOrEqual(pupitre.y + pupitre.alto + 1);
+    }
+  });
+
+  it("dos niños en el mismo pupitre o sentado en algo que no es pupitre: problema para la IA", () => {
+    const c = ComposicionKitSchema.parse({
+      id: "k_x",
+      fondo: "salon",
+      personajes: [
+        { id: "a", tipo: "nino", posicion: "centro", sentado_en: "p" },
+        { id: "b", tipo: "nina", posicion: "derecha", sentado_en: "p" },
+        { id: "c", tipo: "nina", posicion: "izquierda", sentado_en: "d", mira_a: "nadie" },
+      ],
+      objetos: [{ id: "p", tipo: "pupitre", lugar: "piso_centro" }, { id: "d", tipo: "dulces", en_mano_de: "a" }],
+    });
+    const p = problemasComposicion(c).join(" ");
+    expect(p).toMatch(/pupitre/);
+    expect(p).toMatch(/nadie/);
+  });
+
+  it("la mirada va hacia lo que pasa: cuando la profesora señala el dibujo, hay un punto de atención en el dibujo", () => {
+    const at = atencionesDe(cu, { "profesora.senala": [100] }, [{ accion: "profesora.senala", cuadro: 100, objetivo: "dibujo_nina" }]);
+    expect(at.length).toBe(1);
+    expect(at[0].desde).toBeLessThanOrEqual(100);
+    expect(at[0].hasta).toBeGreaterThan(130);
+  });
+
+  it("parpadeo y respiración: dos cuadros distintos del mismo personaje quieto cambian algo (no es una foto)", () => {
+    const imagenes = urlsSinRasterizar(piezasDeComposicion(cu));
+    const cuadros = Array.from({ length: 160 }, (_, i) => renderToStaticMarkup(EscenaKit({ cu, frame: i, fps: 30, d: {}, imagenes })));
+    expect(new Set(cuadros).size).toBeGreaterThan(20);
+    const ojosCerrados = Object.entries(imagenes).filter(([k]) => k.startsWith("rasgos:") && k.endsWith(":cerrados")).map(([, v]) => v.url);
+    expect(cuadros.some((h) => ojosCerrados.some((url) => h.includes(url)))).toBe(true);
+  });
+
+  it("del celular al salón (y de vuelta) se entra por la pantalla del celular: nunca se ve el mundo oscuro", () => {
+    const reel = prepararReel(tiempos, PLAN_PROTOTIPO_KIT, 30, "prototipo");
+    expect(reel.puertas.map((p) => p.desde)).toEqual(["celular", "kit"]);
+    expect(reel.viajes.length).toBe(0);
+    // Al salir, la cámara no viaja por el salón: ya está sobre la cartelera
+    // (solo se cierra) los cuadros antes de pasar al celular.
+    const salida = reel.puertas.find((p) => p.desde === "kit")!.cuadro;
+    const xs = Array.from({ length: 12 }, (_, k) => Math.round(camaraEnCuadro(reel.camara, salida - 12 + k).x));
+    expect(new Set(xs).size).toBe(1);
+  });
+
+  it("en el salón no hay cortes más seguidos que cada 12 cuadros", () => {
+    const reel = prepararReel(tiempos, PLAN_PROTOTIPO_KIT, 30, "prototipo");
+    const delSalon = reel.tomas.filter((t) => t.escena === "k_salon");
+    for (let i = 1; i < delSalon.length; i++) expect(delSalon[i].desde - delSalon[i - 1].desde).toBeGreaterThanOrEqual(12);
+  });
+});
+
+describe("v4: rendimiento", () => {
+  it("con la cámara cerca de un niño, no se dibuja lo que queda fuera de cuadro", () => {
+    const cu = ubicarComposicion(COMPOSICION_SALON, "prototipo");
+    const imagenes = urlsSinRasterizar(piezasDeComposicion(cu));
+    const todo = (renderToStaticMarkup(EscenaKit({ cu, frame: 200, fps: 30, d: {}, imagenes })).match(/<img/g) ?? []).length;
+    const nino = rectPersonaje(cu.personajes.find((u) => u.per.id === "nino")!);
+    const vista = { x: nino.x - 100, y: nino.y, ancho: 1080 / 1.6, alto: 1920 / 1.6 };
+    const cerca = (renderToStaticMarkup(EscenaKit({ cu, frame: 200, fps: 30, d: {}, imagenes, vista })).match(/<img/g) ?? []).length;
+    expect(cerca).toBeLessThan(todo * 0.7);
   });
 });

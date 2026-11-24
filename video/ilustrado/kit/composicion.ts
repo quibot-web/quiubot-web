@@ -22,7 +22,7 @@ import {
   type Pose,
   type TipoPersonaje,
 } from "./catalogoKit";
-import { CARTELERA, DIBUJO, DULCES, SALON, casillaCartelera } from "./dibujoObjetos";
+import { CARTELERA, DIBUJO, DULCES, PUPITRE, SALON, SILLA, casillaCartelera } from "./dibujoObjetos";
 import type { AspectoPersonaje } from "./dibujoPersonaje";
 import { estadoPose, posicionMano, proporciones, topeDePose, type Proporciones } from "./poses";
 
@@ -68,22 +68,43 @@ export function aspectoDe(per: PersonajeKit, semilla: string, indice: number): A
 }
 
 // ---------- Ubicación ----------
-export type PersonajeUbicado = { per: PersonajeKit; aspecto: AspectoPersonaje; p: Proporciones; cx: number; pies: number; escala: number; espejo: boolean };
+// sentado: detrás de un pupitre (la silla atrás, el pupitre adelante tapa las piernas).
+export type PersonajeUbicado = { per: PersonajeKit; aspecto: AspectoPersonaje; p: Proporciones; cx: number; pies: number; escala: number; espejo: boolean; sentado?: { pupitre: Rect; silla: Rect } };
 export type ObjetoUbicado = { obj: ObjetoKit; rect: Rect | null }; // null: en la mano de alguien
 export type ComposicionUbicada = { c: ComposicionKit; pared: Pared; isla: { ancho: number; alto: number }; personajes: PersonajeUbicado[]; objetos: ObjetoUbicado[] };
 
 function tamObjeto(o: ObjetoKit): { ancho: number; alto: number } {
   if (o.tipo === "cartelera") return { ancho: CARTELERA.ancho, alto: CARTELERA.alto };
+  if (o.tipo === "pupitre") return { ancho: PUPITRE.ancho * ESCALA[o.plano], alto: PUPITRE.alto * ESCALA[o.plano] };
   if (o.tipo === "dibujo") return { ancho: DIBUJO.ancho * 1.4, alto: DIBUJO.alto * 1.4 };
   return { ancho: DULCES.ancho * 1.2, alto: DULCES.alto * 1.2 };
 }
 
 export function ubicarComposicion(c: ComposicionKit, semilla: string): ComposicionUbicada {
-  const personajes = c.personajes.map((per, i) => {
+  const objetos = ubicarObjetos(c);
+  const personajes = c.personajes.map((per, i): PersonajeUbicado => {
+    const p = proporciones(per.tipo);
+    const pupitre = per.sentado_en ? objetos.find((o) => o.obj.id === per.sentado_en && o.obj.tipo === "pupitre")?.rect : null;
+    if (pupitre) {
+      // Sentado: la cintura queda un poco debajo de la tapa del pupitre.
+      const plano = c.objetos.find((o) => o.id === per.sentado_en)!.plano;
+      const escala = ESCALA[plano] * ESCALA_TIPO[per.tipo];
+      const pies = pupitre.y + 36 * ESCALA[plano] + (p.pies - p.torso.y1) * escala;
+      const cx = pupitre.x + pupitre.ancho / 2;
+      const ws = SILLA.ancho * ESCALA[plano];
+      const hs = SILLA.alto * ESCALA[plano];
+      const silla = { x: cx - ws / 2, y: pupitre.y + pupitre.alto - hs - 20 * ESCALA[plano], ancho: ws, alto: hs };
+      return { per, aspecto: aspectoDe(per, semilla, i), p, cx, pies, escala, espejo: per.mira === "izquierda", sentado: { pupitre, silla } };
+    }
     const escala = ESCALA[per.plano] * ESCALA_TIPO[per.tipo];
-    return { per, aspecto: aspectoDe(per, semilla, i), p: proporciones(per.tipo), cx: POS_X[per.posicion], pies: PIES[per.plano], escala, espejo: per.mira === "izquierda" };
+    return { per, aspecto: aspectoDe(per, semilla, i), p, cx: POS_X[per.posicion], pies: PIES[per.plano], escala, espejo: per.mira === "izquierda" };
   });
-  const objetos = c.objetos.map((obj) => {
+  const pared = c.pared ?? elegir(["crema", "menta", "celeste", "durazno"] as const, hashTexto(`${semilla}:${c.id}`));
+  return { c, pared, isla: ISLA_KIT[c.fondo], personajes, objetos };
+}
+
+function ubicarObjetos(c: ComposicionKit): ObjetoUbicado[] {
+  return c.objetos.map((obj) => {
     if (obj.en_mano_de || !obj.lugar) return { obj, rect: null };
     const t = tamObjeto(obj);
     if (obj.lugar.startsWith("pared_")) {
@@ -91,10 +112,8 @@ export function ubicarComposicion(c: ComposicionKit, semilla: string): Composici
       return { obj, rect: { x: x - t.ancho / 2, y: PARED_Y - t.alto / 2, ancho: t.ancho, alto: t.alto } };
     }
     const x = POS_X[obj.lugar.replace("piso_", "") as keyof typeof POS_X];
-    return { obj, rect: { x: x - t.ancho / 2, y: PIES.frente - t.alto, ancho: t.ancho, alto: t.alto } };
+    return { obj, rect: { x: x - t.ancho / 2, y: PIES[obj.plano] - t.alto, ancho: t.ancho, alto: t.alto } };
   });
-  const pared = c.pared ?? elegir(["crema", "menta", "celeste", "durazno"] as const, hashTexto(`${semilla}:${c.id}`));
-  return { c, pared, isla: ISLA_KIT[c.fondo], personajes, objetos };
 }
 
 // Punto local del personaje (lienzo) -> coordenadas de la isla.
@@ -110,7 +129,8 @@ export function rectPersonaje(u: PersonajeUbicado, pose: Pose = u.per.pose): Rec
   const medio = (u.p.cuerpoAncho / 2) * u.escala;
   const x0 = Math.min(u.cx - medio, ...manos.map((m) => m.x - 40));
   const x1 = Math.max(u.cx + medio, ...manos.map((m) => m.x + 40));
-  return { x: x0, y: tope, ancho: x1 - x0, alto: u.pies + 10 - tope };
+  const piso = u.sentado ? u.sentado.pupitre.y + u.sentado.pupitre.alto : u.pies + 10;
+  return { x: x0, y: tope, ancho: x1 - x0, alto: piso - tope };
 }
 
 export function rectElemento(cu: ComposicionUbicada, id: string, pose?: Pose): Rect | null {
@@ -184,7 +204,14 @@ export function problemasComposicion(c: ComposicionKit): string[] {
     if (o.tipo === "cartelera" && o.en_mano_de) p.push(`${c.id}: una cartelera no va en la mano`);
   }
   if (c.objetos.filter((o) => o.tipo === "cartelera").length > 1) p.push(`${c.id}: solo una cartelera por composición`);
-  const posiciones = c.personajes.filter((x) => x.plano === "frente").map((x) => x.posicion);
+  for (const o of c.objetos) if (o.tipo === "pupitre" && (o.en_mano_de || !o.lugar?.startsWith("piso_"))) p.push(`${c.id}: el pupitre "${o.id}" va en el piso`);
+  for (const x of c.personajes) {
+    if (x.sentado_en && !c.objetos.some((o) => o.id === x.sentado_en && o.tipo === "pupitre")) p.push(`${c.id}: "${x.id}" está sentado en "${x.sentado_en}", que no es un pupitre de la composición`);
+    if (x.mira_a && !ids.includes(x.mira_a)) p.push(`${c.id}: "${x.id}" mira a "${x.mira_a}", que no existe en la composición`);
+  }
+  const sentados = c.personajes.flatMap((x) => (x.sentado_en ? [x.sentado_en] : []));
+  for (const id of new Set(sentados)) if (sentados.filter((x) => x === id).length > 1) p.push(`${c.id}: dos personajes sentados en el mismo pupitre "${id}"`);
+  const posiciones = c.personajes.filter((x) => x.plano === "frente" && !x.sentado_en).map((x) => x.posicion);
   for (const pos of new Set(posiciones)) if (posiciones.filter((x) => x === pos).length > 1) p.push(`${c.id}: dos personajes en el frente en la misma posición "${pos}"`);
   return p;
 }

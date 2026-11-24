@@ -7,6 +7,7 @@ import { REGISTRO_CATALOGO, type Registro } from "./registro";
 
 export const PISO_Y = 2000;
 const SEPARACION = 180;
+const SEPARACION_KIT = 1600;
 
 // Isla -> dónde queda (las del catálogo y las composiciones del kit).
 export type Recorrido = Record<string, Rect>;
@@ -28,11 +29,14 @@ export function construirRecorrido(disparos: Disparo[], registro: Registro = REG
   const ubicar = (orden: string[]) => {
     const r: Recorrido = {};
     let x = 0;
-    for (const id of orden) {
+    orden.forEach((id, i) => {
       const t = registro.tamIsla(id)!;
       r[id] = { x, y: PISO_Y - t.alto, ancho: t.ancho, alto: t.alto };
-      x += t.ancho + SEPARACION;
-    }
+      // Junto a una composición del kit, más espacio: su lugar continúa
+      // más allá de la isla (ENTORNO) y no debe verse detrás de otra isla.
+      const kit = !!registro.composicion(id) || (orden[i + 1] !== undefined && !!registro.composicion(orden[i + 1]));
+      x += t.ancho + (kit ? SEPARACION_KIT : SEPARACION);
+    });
     return r;
   };
   const centro = (r: Rect) => r.x + r.ancho / 2;

@@ -6,7 +6,7 @@ import { camaraEnCuadro } from "../tiempoIlustrado";
 import { Celular, Fondo, Moneda, SombraPiso } from "../Objetos";
 import { rampa } from "./animacion";
 import { pulsoDeCamara } from "./camara";
-import { CATALOGO, type IdEscena, type IdIsla } from "./catalogo";
+import { CATALOGO, PANTALLA, type IdEscena, type IdIsla } from "./catalogo";
 import { ALTO_PANTALLA, ANCHO_PANTALLA, acercar, seTocan, vistaDelMundo } from "./geometria";
 import { disparosDeEscena } from "./plan";
 import { PISO_Y } from "./recorrido";
@@ -16,7 +16,7 @@ import { PantallaChat, PantallaFeed, PantallaPerfil } from "./escenas/Pantallas"
 import type { MarcaIlustrada, PaletaIlustrada, PropsEscena } from "./escenas/tipos";
 import type { TemaGuion } from "../../tema";
 import { recursosSinGenerar, type RecursosGenerados } from "../imagenesGeneradas";
-import { EscenaKit } from "../kit/EscenaKit";
+import { ENTORNO, EscenaKit, PuertaEnPantalla } from "../kit/EscenaKit";
 import type { ImagenesKit } from "../kit/piezas";
 
 const ISLAS_DEL_MUNDO: Partial<Record<IdIsla, ComponentType<PropsEscena>>> = {
@@ -39,8 +39,8 @@ const SE_SALE: Partial<Record<IdIsla, { izquierda: number; derecha: number; arri
   billetera: { izquierda: 200, derecha: 400, arriba: 600, abajo: 900 },
   multitud: { izquierda: 0, derecha: 0, arriba: 200, abajo: 0 },
 };
-// Composiciones del kit: los brazos en alto y los saltos se salen por arriba.
-const SE_SALE_KIT = { izquierda: 0, derecha: 0, arriba: 250, abajo: 0 };
+// Composiciones del kit: el lugar continúa más allá de la isla (ENTORNO).
+const SE_SALE_KIT = { izquierda: ENTORNO.izquierda, derecha: ENTORNO.derecha, arriba: ENTORNO.arriba, abajo: ENTORNO.abajo };
 function rectVisible(id: string, r: { x: number; y: number; ancho: number; alto: number }, esKit = false) {
   const e = esKit ? SE_SALE_KIT : SE_SALE[id as IdIsla];
   if (!e) return r;
@@ -96,6 +96,13 @@ export function MundoIlustrado({ frame, fps, reel, paleta, tema, marca, fotoUrl,
                 <Celular>
                   {anterior && <CapaPantalla Componente={PANTALLAS[anterior.pantalla]} props={{ ...props(anterior.pantalla), desdePantalla: anterior.cuadro }} opacidad={1} />}
                   {actual && <CapaPantalla Componente={PANTALLAS[actual.pantalla]} props={{ ...props(actual.pantalla), desdePantalla: actual.cuadro }} opacidad={mezcla} />}
+                  {/* Puerta al lugar del kit: el feed se transforma en la cartelera (y al revés al volver). */}
+                  {(reel.puertas ?? []).map((pu) => {
+                    const cu = reel.registro.composicion(pu.kit);
+                    if (!cu) return null;
+                    const opacidad = pu.desde === "celular" ? rampa(frame, pu.cuadro - 16, 12) * (frame < pu.cuadro ? 1 : 0) : frame >= pu.cuadro ? 1 - rampa(frame, pu.cuadro + 4, 12) : 0;
+                    return <PuertaEnPantalla key={pu.cuadro} cu={cu} frame={frame} d={disparosDeEscena(reel.disparos, pu.kit)} imagenes={imagenesKit} ancho={PANTALLA.ancho} alto={PANTALLA.alto} opacidad={opacidad} />;
+                  })}
                 </Celular>
               </div>
             );
@@ -111,6 +118,7 @@ export function MundoIlustrado({ frame, fps, reel, paleta, tema, marca, fotoUrl,
                   d={disparosDeEscena(reel.disparos, id)}
                   imagenes={imagenesKit}
                   objetivos={reel.disparos.filter((x) => x.escena === id && x.objetivo).map((x) => ({ accion: x.accion, cuadro: x.cuadro, objetivo: x.objetivo! }))}
+                  vista={{ x: vista.x - r.x, y: vista.y - r.y, ancho: vista.ancho, alto: vista.alto }}
                 />
               </div>
             );

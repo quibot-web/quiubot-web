@@ -4,7 +4,8 @@
 import { construirLineaDeTiempo, type LineaDeTiempo, type PuntoCamara, type TiemposIlustrado } from "../tiempoIlustrado";
 import { BOCA_BILLETERA_LOCAL, MICRO, type IdEscena } from "./catalogo";
 import { crearRegistro, REGISTRO_CATALOGO, type Registro } from "./registro";
-import { puntosCamaraAutomatica, tomasDeCamara, type Toma } from "./camara";
+import { planDeCamara, tomasDeCamara, type Puerta, type Toma } from "./camara";
+import { CELULAR_ISLA } from "./catalogo";
 import { resolverDisparos, type Disparo, type PlanIlustrado } from "./plan";
 import { construirRecorrido, type Recorrido } from "./recorrido";
 
@@ -23,6 +24,8 @@ export type ReelPreparado = {
   pulsos: number[];
   // Escenas del catálogo + composiciones del kit de este plan.
   registro: Registro;
+  // Cortes de coincidencia celular <-> lugar del kit.
+  puertas: Puerta[];
 };
 
 export const DURACION_VIAJE = 20;
@@ -35,7 +38,22 @@ export function prepararReel(tiempos: TiemposIlustrado, plan: PlanIlustrado, fps
   const disparos = resolverDisparos(plan, linea);
   const recorrido = construirRecorrido(disparos, registro);
   const tomas = tomasDeCamara(disparos, recorrido, registro);
-  const camara = puntosCamaraAutomatica(tomas, linea.duracionCuadros, fps);
+  // Puertas celular <-> lugar del kit (sin viajar por el mundo oscuro).
+  const cel = recorrido.celular;
+  const plan_ = planDeCamara(tomas, linea.duracionCuadros, fps, {
+    esKit: (e) => !!e && !!registro.composicion(e),
+    pantalla: cel ? { x: cel.x + CELULAR_ISLA.borde, y: cel.y + CELULAR_ISLA.borde, ancho: CELULAR_ISLA.ancho - 2 * CELULAR_ISLA.borde, alto: CELULAR_ISLA.alto - 2 * CELULAR_ISLA.borde } : null,
+    cubrirKit: (e) => {
+      const cu = registro.composicion(e);
+      const isla = recorrido[e];
+      if (!cu || !isla) return null;
+      const cartelera = cu.objetos.find((o) => o.obj.tipo === "cartelera" && o.rect)?.rect;
+      const r = cartelera ?? { x: 0, y: 0, ...cu.isla };
+      return { x: isla.x + r.x, y: isla.y + r.y, ancho: r.ancho, alto: r.alto };
+    },
+  });
+  const camara = plan_.puntos;
+  const puertas = plan_.puertas;
 
   // El celular cambia de pantalla amarrado a la acción que la pide:
   // ~0,33 s antes de ella y nunca antes de que termine la acción
@@ -68,7 +86,7 @@ export function prepararReel(tiempos: TiemposIlustrado, plan: PlanIlustrado, fps
     }
   }
   const pulsos = disparos.filter((d) => d.accion === MICRO).map((d) => d.cuadro);
-  return { linea, disparos, recorrido, tomas, camara, pantallas, viajes, pulsos, registro };
+  return { linea, disparos, recorrido, tomas, camara, pantallas, viajes, pulsos, registro, puertas };
 }
 
 // Lo que el reel muestra en un cuadro (lo usan el render, el control de

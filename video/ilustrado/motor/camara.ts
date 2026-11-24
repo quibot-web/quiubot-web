@@ -12,7 +12,7 @@
 import type { PuntoCamara } from "../tiempoIlustrado";
 import { MICRO, unionRects } from "./catalogo";
 import { REGISTRO_CATALOGO, type Registro } from "./registro";
-import { ALTO_PANTALLA, ANCHO_PANTALLA, acercar, desplazar, encuadre, ocupacion, type Encuadre, type Rect } from "./geometria";
+import { ALTO_PANTALLA, ANCHO_PANTALLA, acercar, desplazar, encuadre, ocupacion, vistaDelMundo, type Encuadre, type Rect } from "./geometria";
 import type { Disparo } from "./plan";
 import type { Recorrido } from "./recorrido";
 
@@ -31,8 +31,17 @@ export function focoGlobal(d: Pick<Disparo, "escena" | "accion" | "objetivo">, r
 
 export type Toma = { desde: number; ultimaAccion: number; focos: Rect[]; encuadre: Encuadre; celular: boolean; escena?: string };
 
-// Pantallas del celular: ancladas debajo del subtítulo.
-const encuadrar = (focos: Rect[], celular: boolean) => encuadre(unionRects(focos), undefined, celular ? "arriba" : "centro");
+// Pantallas del celular: ancladas debajo del subtítulo. En el kit, zoom
+// hasta 1,6 (sus piezas se convierten a PNG a 1,6x: siguen nítidas).
+export const ZOOM_MAXIMO_KIT = 1.6;
+// Una toma de grupo en el kit no se abre más que esto (cada cosa se ve).
+export const ZOOM_MINIMO_GRUPO_KIT = 0.8;
+export const CALMA_KIT = 18;
+export const CORTE_MINIMO_KIT = 12;
+// Plano abierto para dos acciones seguidas (p. ej. la profesora señala y el
+// niño de los dulces se pone triste): no más lejos que esto.
+export const ZOOM_MINIMO_UNION_KIT = 0.55;
+const encuadrar = (focos: Rect[], celular: boolean, kit = false) => encuadre(unionRects(focos), kit ? ZOOM_MAXIMO_KIT : undefined, celular ? "arriba" : "centro");
 
 const igual = (a: Rect, b: Rect) => a.x === b.x && a.y === b.y && a.ancho === b.ancho && a.alto === b.alto;
 
@@ -49,14 +58,37 @@ export function tomasDeCamara(disparos: Disparo[], recorrido: Recorrido, registr
         ultima.ultimaAccion = d.cuadro;
         continue;
       }
+      // Calma en el kit: si la acción llega muy pronto (< 0,6 s de la toma
+      // anterior) y lo nombrado ya se ve en el encuadre, la cámara se queda
+      // (cuatro cortes en un segundo marean).
+      if (registro.composicion(d.escena) && ultima.escena === d.escena && d.cuadro - ultima.desde < CALMA_KIT) {
+        const v = vistaDelMundo(ultima.encuadre);
+        const cx = f.x + f.ancho / 2;
+        const cy = f.y + f.alto / 2;
+        if (cx > v.x && cx < v.x + v.ancho && cy > v.y && cy < v.y + v.alto) {
+          ultima.ultimaAccion = d.cuadro;
+          continue;
+        }
+        // Menos de 12 cuadros: mejor una toma más abierta que otro corte.
+        if (d.cuadro - ultima.desde < CORTE_MINIMO_KIT) {
+          const focos = [...ultima.focos, f];
+          const enc = encuadrar(focos, false, true);
+          if (enc.zoom >= ZOOM_MINIMO_UNION_KIT) {
+            ultima.focos = focos;
+            ultima.encuadre = enc;
+            ultima.ultimaAccion = d.cuadro;
+            continue;
+          }
+        }
+      }
       if (d.cuadro - ultima.desde < JUNTAR_SI_MENOS_DE && ultima.celular === esCelular) {
         const focos = [...ultima.focos, f];
-        const enc = encuadrar(focos, esCelular);
+        const enc = encuadrar(focos, esCelular, !!registro.composicion(d.escena));
         // Composición del kit (visuales-v2): acciones seguidas en el mismo
         // lugar se ven como grupo ("todos aplauden"): basta con que el grupo
         // ocupe >= 50 %. Saltar de un niño a otro cada 10 cuadros marea.
         const mismaComposicion = !!registro.composicion(d.escena) && ultima.escena === d.escena;
-        const cabe = mismaComposicion ? ocupacion(unionRects(focos), enc) >= 0.5 : focos.every((g) => ocupacion(g, enc) >= 0.5);
+        const cabe = mismaComposicion ? ocupacion(unionRects(focos), enc) >= 0.5 && enc.zoom >= ZOOM_MINIMO_GRUPO_KIT : focos.every((g) => ocupacion(g, enc) >= 0.5);
         if (cabe) {
           ultima.focos = focos;
           ultima.encuadre = enc;
@@ -65,7 +97,7 @@ export function tomasDeCamara(disparos: Disparo[], recorrido: Recorrido, registr
         }
       }
     }
-    tomas.push({ desde: d.cuadro, ultimaAccion: d.cuadro, focos: [f], encuadre: encuadrar([f], esCelular), celular: esCelular, escena: d.escena });
+    tomas.push({ desde: d.cuadro, ultimaAccion: d.cuadro, focos: [f], encuadre: encuadrar([f], esCelular, !!registro.composicion(d.escena)), celular: esCelular, escena: d.escena });
   }
   return tomas;
 }
@@ -79,13 +111,74 @@ export function duracionViaje(a: Encuadre, b: Encuadre, fps: number): number {
 
 const empuje = (cuadros: number) => 1 + Math.min(0.05, 0.0012 * cuadros);
 
-export function puntosCamaraAutomatica(tomas: Toma[], total: number, fps: number): PuntoCamara[] {
-  if (tomas.length === 0) return [{ cuadro: 0, x: 1000, y: 1000, zoom: 1 }];
+// Puerta celular <-> lugar del kit (visuales-v2, 23 nov 2026): en vez de
+// viajar por el mundo oscuro entre islas, la cámara entra a la pantalla del
+// celular hasta llenarla, corta al lugar encuadrado en lo mismo que la
+// pantalla mostraba (la cartelera) y se abre. Al volver, al revés.
+export type Puerta = { cuadro: number; desde: "celular" | "kit"; kit: string };
+export type OpcionesPuerta = {
+  esKit: (escena: string | undefined) => boolean;
+  // Pantalla del celular (mundo) y lo que se encuadra del lugar al cortar.
+  pantalla: Rect | null;
+  cubrirKit: (escena: string) => Rect | null;
+};
+export const CUADROS_PUERTA = 14;
+export const ZOOM_PUERTA_MAXIMO = 1.6;
+
+export function cubrir(r: Rect, llenarAlto = false): Encuadre {
+  const zoom = Math.min(ZOOM_PUERTA_MAXIMO, llenarAlto ? Math.max(ANCHO_PANTALLA / r.ancho, ALTO_PANTALLA / r.alto) : ANCHO_PANTALLA / r.ancho);
+  return { x: r.x + r.ancho / 2, y: r.y + r.alto / 2, zoom };
+}
+
+export function puntosCamaraAutomatica(tomas: Toma[], total: number, fps: number, puertas?: OpcionesPuerta): PuntoCamara[] {
+  return planDeCamara(tomas, total, fps, puertas).puntos;
+}
+
+export function planDeCamara(tomas: Toma[], total: number, fps: number, opciones?: OpcionesPuerta): { puntos: PuntoCamara[]; puertas: Puerta[] } {
+  if (tomas.length === 0) return { puntos: [{ cuadro: 0, x: 1000, y: 1000, zoom: 1 }], puertas: [] };
   const puntos: PuntoCamara[] = [{ cuadro: 0, ...tomas[0].encuadre }];
+  const puertas: Puerta[] = [];
   let llegadaAnterior = 0;
   for (let i = 1; i < tomas.length; i++) {
     const a = tomas[i - 1].encuadre;
     const b = tomas[i].encuadre;
+    const ta = tomas[i - 1];
+    const tb = tomas[i];
+    const haciaKit = ta.celular && opciones?.esKit(tb.escena);
+    const desdeKit = tb.celular && opciones?.esKit(ta.escena);
+    if (opciones?.pantalla && (haciaKit || desdeKit)) {
+      const kit = (haciaKit ? tb.escena : ta.escena)!;
+      const lugar = opciones.cubrirKit(kit);
+      if (lugar) {
+        // Entra (CUADROS_PUERTA), corta en T, se abre (CUADROS_PUERTA).
+        let T = tb.desde + LLEGAR_TRAS_PALABRA - CUADROS_PUERTA;
+        const salidaMinima = Math.max(llegadaAnterior + PAUSA_MINIMA, ta.ultimaAccion + VER_ULTIMA_ACCION) + CUADROS_PUERTA;
+        if (T < salidaMinima) T = salidaMinima;
+        const pantalla = cubrir(opciones.pantalla, true);
+        const enLugar = cubrir(lugar);
+        puntos.push({ cuadro: T - CUADROS_PUERTA, ...acercar(a, empuje(T - CUADROS_PUERTA - llegadaAnterior), ta.celular ? "arriba" : "centro") });
+        // Saliendo del lugar: corte a la cartelera un poco más abierta y se
+        // cierra hasta llenarla (viajar desde un primer plano cruza el salón
+        // con encuadres sin sentido).
+        if (desdeKit) puntos.push({ cuadro: T - CUADROS_PUERTA + 1, ...enLugar, zoom: enLugar.zoom * 0.82 });
+        puntos.push({ cuadro: T - 1, ...(haciaKit ? pantalla : enLugar) });
+        puntos.push({ cuadro: T, ...(haciaKit ? enLugar : pantalla) });
+        puntos.push({ cuadro: T + CUADROS_PUERTA, ...b });
+        puertas.push({ cuadro: T, desde: haciaKit ? "celular" : "kit", kit });
+        llegadaAnterior = T + CUADROS_PUERTA;
+        continue;
+      }
+    }
+    // Dentro de un mismo lugar del kit: corte (como en el cine), no viaje.
+    // Un viaje de 0,5-1,5 s por toma, con tomas cada ~1 s, atrasa la cámara
+    // respecto a la voz y el atraso se acumula (v4: ~3 s al final).
+    if (opciones?.esKit(ta.escena) && ta.escena === tb.escena) {
+      const T = Math.max(tb.desde, llegadaAnterior + CORTE_MINIMO_KIT);
+      puntos.push({ cuadro: T - 1, ...acercar(a, empuje(T - 1 - llegadaAnterior), "centro") });
+      puntos.push({ cuadro: T, ...b });
+      llegadaAnterior = T;
+      continue;
+    }
     const dur = duracionViaje(a, b, fps);
     let llegada = tomas[i].desde + LLEGAR_TRAS_PALABRA;
     let inicio = llegada - dur;
@@ -101,7 +194,7 @@ export function puntosCamaraAutomatica(tomas: Toma[], total: number, fps: number
   const ultima = tomas[tomas.length - 1].encuadre;
   const fin = Math.max(total, llegadaAnterior + 1);
   puntos.push({ cuadro: fin, ...acercar(ultima, empuje(fin - llegadaAnterior), tomas[tomas.length - 1].celular ? "arriba" : "centro") });
-  return puntos;
+  return { puntos, puertas };
 }
 
 // Micro-acción: acercamiento corto (+5% en ~0,4 s) que se suelta en ~1,3 s.

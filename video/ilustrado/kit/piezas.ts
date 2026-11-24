@@ -3,8 +3,8 @@
 // solo dibuja <img> con transformaciones: barato y sin serializar SVG por
 // cuadro (meta <= 5 s de render por segundo de video).
 import { EXPRESIONES, MOTIVOS_DIBUJO, type Expresion, type MotivoDibujo } from "./catalogoKit";
-import { svgAntebrazo, svgBrazo, svgCabeza, svgCuerpo, svgPeloAtras, type AspectoPersonaje, type ParteSvg } from "./dibujoPersonaje";
-import { svgCartelera, svgDibujo, svgDulces, svgSalon } from "./dibujoObjetos";
+import { svgAntebrazo, svgBrazo, svgCabeza, svgCuerpo, svgPeloAtras, svgRasgos, type AspectoPersonaje, type Ojos, type ParteSvg } from "./dibujoPersonaje";
+import { svgCartelera, svgDibujo, svgDulces, svgPupitre, svgSalon, svgSilla } from "./dibujoObjetos";
 import type { ComposicionUbicada } from "./composicion";
 import type { FormaMano } from "./poses";
 
@@ -13,12 +13,15 @@ export const clave = {
   fondo: (cu: ComposicionUbicada) => `fondo:${cu.c.fondo}:${cu.pared}`,
   cuerpo: (a: AspectoPersonaje) => `cuerpo:${claveAspecto(a)}`,
   peloAtras: (a: AspectoPersonaje) => `peloatras:${claveAspecto(a)}`,
-  cabeza: (a: AspectoPersonaje, e: Expresion) => `cabeza:${claveAspecto(a)}:${e}`,
+  cabeza: (a: AspectoPersonaje) => `cabeza:${claveAspecto(a)}`,
+  rasgos: (a: AspectoPersonaje, e: Expresion, ojos: Ojos) => `rasgos:${claveAspecto(a)}:${e}:${ojos}`,
   brazo: (a: AspectoPersonaje) => `brazo:${claveAspecto(a)}`,
   antebrazo: (a: AspectoPersonaje, m: FormaMano) => `antebrazo:${claveAspecto(a)}:${m}`,
   cartelera: () => "cartelera",
   dibujo: (m: MotivoDibujo) => `dibujo:${m}`,
   dulces: () => "dulces",
+  pupitre: () => "pupitre",
+  silla: () => "silla",
 };
 
 export type Pieza = { clave: string; parte: ParteSvg };
@@ -52,7 +55,8 @@ export function piezasDeComposicion(cu: ComposicionUbicada): Pieza[] {
     poner(clave.peloAtras(a), () => svgPeloAtras(a));
     poner(clave.brazo(a), () => svgBrazo(a));
     for (const m of ["abierta", "senala"] as const) poner(clave.antebrazo(a, m), () => svgAntebrazo(a, m));
-    for (const e of EXPRESIONES) poner(clave.cabeza(a, e), () => svgCabeza(a, e));
+    poner(clave.cabeza(a), () => svgCabeza(a));
+    for (const e of EXPRESIONES) for (const ojos of ["abiertos", "cerrados"] as const) poner(clave.rasgos(a, e, ojos), () => svgRasgos(a, e, ojos));
   }
   for (const o of cu.objetos) {
     if (o.obj.tipo === "cartelera") {
@@ -61,6 +65,9 @@ export function piezasDeComposicion(cu: ComposicionUbicada): Pieza[] {
     } else if (o.obj.tipo === "dibujo") {
       const m = motivoDe(cu, o.obj.id);
       poner(clave.dibujo(m), () => svgDibujo(m));
+    } else if (o.obj.tipo === "pupitre") {
+      poner(clave.pupitre(), () => svgPupitre());
+      poner(clave.silla(), () => svgSilla());
     } else poner(clave.dulces(), () => svgDulces());
   }
   return [...piezas.entries()].map(([k, parte]) => ({ clave: k, parte }));

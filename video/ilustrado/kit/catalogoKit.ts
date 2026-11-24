@@ -15,10 +15,10 @@ export const NOMBRE_PERSONAJE: Record<TipoPersonaje, string> = { profesora: "una
 // "parado" es la pose base (sin acción). "ofrecer" (tender algo con la
 // mano) no estaba en la lista de la tanda 1: la pide el prototipo (el
 // niño que le trae dulces a la profesora).
-export const POSES = ["parado", "senalar", "celebrar", "aplaudir", "ofrecer"] as const;
+export const POSES = ["parado", "senalar", "celebrar", "aplaudir", "ofrecer", "levantar_mano"] as const;
 export type Pose = (typeof POSES)[number];
 // "normal" es la expresión base.
-export const EXPRESIONES = ["normal", "feliz", "triste"] as const;
+export const EXPRESIONES = ["normal", "feliz", "triste", "sorprendido"] as const;
 export type Expresion = (typeof EXPRESIONES)[number];
 
 export const PIELES = { clara: "#F5D0B5", triguena: "#E2AF86", media: "#C98E62", morena: "#9A6440", oscura: "#6B4128" } as const;
@@ -59,9 +59,9 @@ export const LUGARES_PISO = ["piso_izquierda", "piso_centro_izquierda", "piso_ce
 export type LugarObjeto = (typeof LUGARES_PARED)[number] | (typeof LUGARES_PISO)[number];
 
 // ---------- Objetos ----------
-export const TIPOS_OBJETO = ["cartelera", "dibujo", "dulces"] as const;
+export const TIPOS_OBJETO = ["cartelera", "dibujo", "dulces", "pupitre"] as const;
 export type TipoObjeto = (typeof TIPOS_OBJETO)[number];
-export const NOMBRE_OBJETO: Record<TipoObjeto, string> = { cartelera: "una cartelera de corcho llena de dibujos con un solo espacio vacío", dibujo: "un dibujo infantil", dulces: "una bolsa de dulces" };
+export const NOMBRE_OBJETO: Record<TipoObjeto, string> = { cartelera: "una cartelera de corcho llena de dibujos con un solo espacio vacío", dibujo: "un dibujo infantil", dulces: "una bolsa de dulces", pupitre: "un pupitre con su silla" };
 export const MOTIVOS_DIBUJO = ["sol_casa", "flor", "gato", "arcoiris", "arbol", "cohete", "pez", "corazon", "mariposa", "barco", "estrella", "perro"] as const;
 export type MotivoDibujo = (typeof MOTIVOS_DIBUJO)[number];
 
@@ -72,16 +72,19 @@ export const VERBOS_PERSONAJE = {
   celebra: { pose: "celebrar", descripcion: "celebra con los brazos arriba" },
   aplaude: { pose: "aplaudir", descripcion: "aplaude" },
   ofrece: { pose: "ofrecer", descripcion: "tiende lo que tiene en la mano" },
+  levanta_la_mano: { pose: "levantar_mano", descripcion: "levanta la mano" },
   quieto: { pose: "parado", descripcion: "se queda quieto" },
   feliz: { expresion: "feliz", descripcion: "sonríe feliz" },
   triste: { expresion: "triste", descripcion: "se pone triste" },
+  sorprendido: { expresion: "sorprendido", descripcion: "se sorprende" },
 } as const satisfies Record<string, { pose?: Pose; expresion?: Expresion; descripcion: string }>;
 export type VerboPersonaje = keyof typeof VERBOS_PERSONAJE;
 
 export const VERBOS_OBJETO: Record<TipoObjeto, Record<string, string>> = {
-  cartelera: { aparece: "aparece la cartelera", destaca_hueco: "el único espacio libre de la cartelera late" },
+  cartelera: { aparece: "aparece la cartelera", destaca: "la cartelera late", destaca_hueco: "el único espacio libre de la cartelera late" },
   dibujo: { aparece: "aparece el dibujo", destaca: "el dibujo brilla y salta", va_al_hueco: "el dibujo vuela al espacio libre de la cartelera" },
   dulces: { aparece: "aparecen los dulces", destaca: "los dulces brillan" },
+  pupitre: {},
 };
 
 // ---------- Composición (lo que escribe la IA) ----------
@@ -103,6 +106,10 @@ export const PersonajeKitSchema = z
     pelo: z.enum(Object.keys(PELOS) as [ColorPelo, ...ColorPelo[]]).optional(),
     peinado: z.enum(PEINADOS).optional(),
     accesorio: z.enum(ACCESORIOS).optional(),
+    // Sentado detrás de un pupitre de la composición (id del pupitre).
+    sentado_en: IdElemento.optional(),
+    // Hacia dónde mira cuando no pasa nada (id de otro elemento).
+    mira_a: IdElemento.optional(),
   })
   .strict();
 export const ObjetoKitSchema = z
@@ -113,6 +120,8 @@ export const ObjetoKitSchema = z
     lugar: z.enum([...LUGARES_PARED, ...LUGARES_PISO]).optional(),
     en_mano_de: IdElemento.optional(),
     motivo: z.enum(MOTIVOS_DIBUJO).optional(),
+    // En el piso: adelante o atrás (filas con profundidad).
+    plano: z.enum(["frente", "fondo"]).default("frente"),
     // false: no se ve hasta su acción "aparece".
     visible: z.boolean().default(true),
   })

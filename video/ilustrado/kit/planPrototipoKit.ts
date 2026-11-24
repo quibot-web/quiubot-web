@@ -17,29 +17,42 @@ export const NARRACION_PROTOTIPO_KIT = [
   { id: "e7", narracion: "Síguenos para más ideas como esta." },
 ];
 
+// Puesta en escena (v4): la cartelera en la pared, la profesora de pie a
+// su lado mirando a los niños, el niño de los dulces del otro lado y los
+// demás en pupitres (dos filas), mirando la cartelera.
 export const COMPOSICION_SALON = ComposicionKitSchema.parse({
   id: "k_salon",
   fondo: "salon",
   pared: "crema",
   personajes: [
-    { id: "nina2", tipo: "nina", posicion: "izquierda", mira: "derecha" },
-    { id: "nino2", tipo: "nino", posicion: "centro_izquierda", mira: "derecha" },
-    { id: "nina", tipo: "nina", posicion: "centro", mira: "derecha", peinado: "colitas", pelo: "pelirrojo", piel: "clara", ropa: "rosado", ropa2: "verde" },
-    { id: "nino", tipo: "nino", posicion: "centro_derecha", mira: "derecha", peinado: "rizado", pelo: "negro", piel: "morena", ropa: "amarillo", ropa2: "azul" },
-    { id: "profesora", tipo: "profesora", posicion: "derecha", mira: "izquierda", peinado: "mono", pelo: "castano", piel: "triguena", ropa: "turquesa", ropa2: "morado", accesorio: "gafas" },
+    { id: "nino", tipo: "nino", posicion: "izquierda", mira: "derecha", mira_a: "profesora", expresion: "feliz", peinado: "rizado", pelo: "negro", piel: "morena", ropa: "amarillo", ropa2: "azul" },
+    { id: "profesora", tipo: "profesora", posicion: "centro", mira: "derecha", mira_a: "nina", peinado: "mono", pelo: "castano", piel: "triguena", ropa: "turquesa", ropa2: "morado", accesorio: "gafas" },
+    { id: "nina", tipo: "nina", posicion: "derecha", mira: "izquierda", sentado_en: "pupitre_1", mira_a: "cartelera", pose: "ofrecer", peinado: "colitas", pelo: "pelirrojo", piel: "clara", ropa: "rosado", ropa2: "verde" },
+    { id: "nino2", tipo: "nino", posicion: "centro_derecha", mira: "izquierda", sentado_en: "pupitre_2", mira_a: "cartelera" },
+    { id: "nina2", tipo: "nina", posicion: "derecha", mira: "izquierda", sentado_en: "pupitre_3", mira_a: "cartelera" },
   ],
   objetos: [
-    { id: "cartelera", tipo: "cartelera", lugar: "pared_centro", visible: false },
+    { id: "cartelera", tipo: "cartelera", lugar: "pared_izquierda" },
     { id: "dulces", tipo: "dulces", en_mano_de: "nino" },
     { id: "dibujo_nina", tipo: "dibujo", en_mano_de: "nina", motivo: "arcoiris" },
+    { id: "pupitre_1", tipo: "pupitre", lugar: "piso_derecha", plano: "frente" },
+    { id: "pupitre_2", tipo: "pupitre", lugar: "piso_centro_derecha", plano: "fondo" },
+    { id: "pupitre_3", tipo: "pupitre", lugar: "piso_derecha", plano: "fondo" },
   ],
 });
 
 export const PLAN_PROTOTIPO_KIT: PlanIlustrado = {
   composiciones: [COMPOSICION_SALON],
   frases: [
-    { escena_id: "e1", acciones: [{ escena: "feed", accion: "desliza", palabra: 1 }, { escena: "k_salon", accion: "cartelera.aparece", palabra: 7 }] },
-    { escena_id: "e2", acciones: [{ escena: "k_salon", accion: "micro", palabra: 1 }, { escena: "k_salon", accion: "cartelera.destaca_hueco", palabra: 6 }] },
+    { escena_id: "e1", acciones: [{ escena: "feed", accion: "desliza", palabra: 1 }, { escena: "k_salon", accion: "cartelera.destaca", palabra: 7 }] },
+    {
+      escena_id: "e2",
+      acciones: [
+        { escena: "k_salon", accion: "nino2.levanta_la_mano", palabra: 1 },
+        { escena: "k_salon", accion: "nina2.sorprendido", palabra: 3 },
+        { escena: "k_salon", accion: "cartelera.destaca_hueco", palabra: 6 },
+      ],
+    },
     {
       escena_id: "e3",
       acciones: [
@@ -52,18 +65,19 @@ export const PLAN_PROTOTIPO_KIT: PlanIlustrado = {
       escena_id: "e4",
       acciones: [
         { escena: "k_salon", accion: "profesora.senala", palabra: 0, objetivo: "dibujo_nina" },
-        { escena: "k_salon", accion: "nino.triste", palabra: 2 },
+        { escena: "k_salon", accion: "nino.triste", palabra: 1 },
         { escena: "k_salon", accion: "dibujo_nina.va_al_hueco", palabra: 5 },
-        { escena: "k_salon", accion: "nina.feliz", palabra: 7 },
+        { escena: "k_salon", accion: "nina.feliz", palabra: 6 },
+        { escena: "k_salon", accion: "profesora.feliz", palabra: 8 },
       ],
     },
     {
       escena_id: "e5",
       acciones: [
         { escena: "k_salon", accion: "nina.celebra", palabra: 0 },
-        { escena: "k_salon", accion: "nino.feliz", palabra: 1 },
-        { escena: "k_salon", accion: "profesora.feliz", palabra: 2 },
-        { escena: "k_salon", accion: "nino.aplaude", palabra: 3 },
+        { escena: "k_salon", accion: "nino2.feliz", palabra: 1 },
+        { escena: "k_salon", accion: "nina2.feliz", palabra: 2 },
+        { escena: "k_salon", accion: "nino.feliz", palabra: 3 },
         { escena: "k_salon", accion: "nino2.aplaude", palabra: 4 },
         { escena: "k_salon", accion: "nina2.aplaude", palabra: 5 },
       ],

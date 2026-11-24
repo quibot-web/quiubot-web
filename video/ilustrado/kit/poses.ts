@@ -113,6 +113,11 @@ export function estadoPose(pose: Pose, t: number, fps: number, p: Proporciones, 
     }
     case "ofrecer":
       return { ...base, mira: { hombro: 48, codo: 38, mano: "abierta" }, otro: { hombro: 10, codo: -6, mano: "abierta" }, inclinacion: 3 };
+    case "levantar_mano": {
+      // Brazo bien arriba, con un vaivén de "¡yo, yo!".
+      const vaiven = Math.sin(t / 4) * 6;
+      return { ...base, mira: { hombro: 168 + vaiven, codo: 6, mano: "abierta" }, otro: { hombro: 8, codo: -4, mano: "abierta" }, inclinacion: -3 };
+    }
   }
 }
 
@@ -126,7 +131,7 @@ export function mezclarPoses(a: EstadoPose, b: EstadoPose, k: number): EstadoPos
 export const CUADROS_TRANSICION = 8;
 // Cuánto dura cada gesto antes de volver solo a "parado" (si no viene otro
 // antes): nadie se queda señalando todo el reel.
-export const DURACION_GESTO: Partial<Record<Pose, number>> = { senalar: 60, ofrecer: 75, celebrar: 90, aplaudir: 90 };
+export const DURACION_GESTO: Partial<Record<Pose, number>> = { senalar: 60, ofrecer: 75, celebrar: 90, aplaudir: 90, levantar_mano: 75 };
 
 export type CambioPose = { cuadro: number; pose: Pose; apunte?: number };
 
