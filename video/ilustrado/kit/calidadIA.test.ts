@@ -15,6 +15,7 @@ import { carasCortadas } from "../motor/encuadreKit";
 import { validarPlanIlustrado } from "../motor/validarPlan";
 import { disparosDeEscena } from "../motor/plan";
 import { tapanCaras } from "./EscenaKit";
+import { MOVIMIENTOS_CAMARA } from "./variedad";
 import type { PlanIlustrado } from "../motor/plan";
 import type { TiemposIlustrado } from "../tiempoIlustrado";
 
@@ -54,5 +55,22 @@ describe("calidad de la composición de la IA comparada con la hecha a mano (mis
 
   it("escena poblada: el salón de la IA tiene al menos 5 personajes (con los extras del código)", () => {
     for (const reel of [reelIA, reelAlumnos]) expect(reel.registro.composicion("k_salon")!.personajes.length).toBeGreaterThanOrEqual(5);
+  });
+});
+
+describe("ritmo de planos percibido (reel_1 de la variedad, 24 nov 2026)", () => {
+  it("el caso exacto de reel_1: la cartelera no se queda ~4 s (antes, una cobertura de 0,5 s entre dos planos iguales no contaba como cambio)", () => {
+    const plan = { ...(planIA as PlanIlustrado), variedad: { pared: "durazno", paleta: "calida", camara: "quieta" } as const };
+    const m = metricasKit(prepararReel(tiemposKit as TiemposIlustrado, plan, 30, ""), 30);
+    expect(m.planoMasLargo).toBeLessThanOrEqual(2.2);
+  });
+
+  it("con cualquier movimiento de cámara y semilla, ningún plano percibido de más de ~2 s en los planes de la IA", () => {
+    for (const camara of MOVIMIENTOS_CAMARA)
+      for (const [nombre, plan, tiempos] of [["cartelera", planIA, tiemposKit], ["alumnos", planAlumnos, tiemposAlumnos]] as const) {
+        const p = { ...(plan as PlanIlustrado), variedad: { pared: "crema", paleta: "fria", camara } as const };
+        const m = metricasKit(prepararReel(tiempos as TiemposIlustrado, p, 30, ""), 30);
+        expect(m.planoMasLargo, `${nombre} ${camara}`).toBeLessThanOrEqual(2.2);
+      }
   });
 });

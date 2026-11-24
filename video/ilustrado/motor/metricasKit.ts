@@ -37,6 +37,7 @@ export function metricasKit(reel: ReelPreparado, fps: number): MetricasKit {
   let planoMax = 0;
   let anterior: Encuadre | null = null;
   let pisoVacio = 0;
+  let planos: { enc: Encuadre; largo: number }[] = [];
   for (let f = 0; f < total; f++) {
     const cam = camaraDelCuadro(reel, f);
     const v = vistaDelMundo(cam);
@@ -45,14 +46,25 @@ export function metricasKit(reel: ReelPreparado, fps: number): MetricasKit {
     if (!enKit) {
       anterior = null;
       plano = 0;
+      planos = [];
       continue;
     }
     cuadros++;
     if (anterior && esCorte(anterior, cam)) {
       cortes++;
-      plano = 0;
+      // Un plano corto (< 20 cuadros) entre dos iguales no cuenta como
+      // cambio: se ve como un parpadeo del mismo plano (reel_1, 24 nov).
+      const ultimo = planos[planos.length - 1];
+      const penultimo = planos[planos.length - 2];
+      if (ultimo && penultimo && ultimo.largo < 20 && !esCorte(penultimo.enc, cam)) {
+        planos.pop();
+        penultimo.largo += ultimo.largo;
+      } else planos.push({ enc: cam, largo: 0 });
     }
-    plano++;
+    if (!planos.length) planos.push({ enc: cam, largo: 0 });
+    const actual = planos[planos.length - 1];
+    actual.largo++;
+    plano = actual.largo;
     planoMax = Math.max(planoMax, plano);
     anterior = cam;
     let area = 0;

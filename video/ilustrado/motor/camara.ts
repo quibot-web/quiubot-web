@@ -12,7 +12,7 @@
 import type { PuntoCamara } from "../tiempoIlustrado";
 import { MICRO, unionRects } from "./catalogo";
 import { REGISTRO_CATALOGO, type Registro } from "./registro";
-import { ALTO_PANTALLA, ANCHO_PANTALLA, acercar, desplazar, encuadre, ocupacion, type Encuadre, type Rect } from "./geometria";
+import { ALTO_PANTALLA, ANCHO_PANTALLA, acercar, desplazar, encuadre, ocupacion, vistaDelMundo, type Encuadre, type Rect } from "./geometria";
 import type { Disparo } from "./plan";
 import type { Recorrido } from "./recorrido";
 import { VERBOS_PERSONAJE } from "../kit/catalogoKit";
@@ -40,7 +40,8 @@ export function focoGlobal(d: Pick<Disparo, "escena" | "accion" | "objetivo">, r
 export type Toma = { desde: number; ultimaAccion: number; focos: Rect[]; encuadre: Encuadre; celular: boolean; escena?: string; grupo?: boolean; pendiente?: Rect; cobertura?: boolean };
 
 export const CALMA_KIT = 18;
-export const CORTE_MINIMO_KIT = 12;
+// 20 cuadros: un plano más corto entre dos parecidos se ve como un parpadeo (reel_1).
+export const CORTE_MINIMO_KIT = 20;
 const encuadrar = (focos: Rect[], celular: boolean) => encuadre(unionRects(focos), undefined, celular ? "arriba" : "centro");
 
 const igual = (a: Rect, b: Rect) => a.x === b.x && a.y === b.y && a.ancho === b.ancho && a.alto === b.alto;
@@ -221,6 +222,9 @@ function tomaDelKit(tomas: Toma[], d: Disparo, f: Rect, recorrido: Recorrido, re
 // nombró y no entró) y se vuelve al plano principal en cada acción, para
 // que se vea cuando la voz la nombra. Todos siguen las reglas de encuadre.
 export const MAX_PLANO_KIT = 60;
+// Ningún plano de cobertura más corto que esto (uno de 0,5 s entre dos
+// iguales se ve como un parpadeo del mismo plano: reel_1, 24 nov 2026).
+export const MIN_PLANO_KIT = 24;
 const PLANO_COBERTURA = 40;
 const VER_ACCION = 18; // cuadros que el plano principal se queda después de una acción
 const ANTES_ACCION = 4;
@@ -290,6 +294,12 @@ export function coberturasDeToma(t: Toma, recorrido: Recorrido, registro: Regist
   }
   return res;
 }
+function interseccion(a: Rect, b: Rect): Rect {
+  const x = Math.max(a.x, b.x);
+  const y = Math.max(a.y, b.y);
+  return { x, y, ancho: Math.max(0, Math.min(a.x + a.ancho, b.x + b.ancho) - x), alto: Math.max(0, Math.min(a.y + a.alto, b.y + b.alto) - y) };
+}
+const area = (r: Rect) => r.ancho * r.alto;
 function seTocanMucho(a: Rect, b: Rect): boolean {
   const ix = Math.max(0, Math.min(a.x + a.ancho, b.x + b.ancho) - Math.max(a.x, b.x));
   const iy = Math.max(0, Math.min(a.y + a.alto, b.y + b.alto) - Math.max(a.y, b.y));
@@ -304,6 +314,11 @@ export function conCobertura(tomasOriginales: Toma[], disparos: Disparo[], recor
     const ultima = tomas[tomas.length - 1];
     if (ultima && ultima.escena === t.escena && t.escena && registro.composicion(t.escena) && !distintos(ultima.encuadre, t.encuadre)) {
       ultima.ultimaAccion = Math.max(ultima.ultimaAccion, t.ultimaAccion);
+      // Si la que se suma es de grupo, el plano (ya igual) muestra al grupo.
+      if (t.grupo) {
+        ultima.grupo = true;
+        ultima.focos = t.focos;
+      }
       continue;
     }
     tomas.push({ ...t });
@@ -316,25 +331,55 @@ export function conCobertura(tomasOriginales: Toma[], disparos: Disparo[], recor
       return;
     }
     const deLaToma = disparos.filter((d) => d.escena === t.escena && d.accion !== MICRO && d.cuadro >= t.desde - CORTE_MINIMO_KIT && d.cuadro < fin);
-    const acciones = deLaToma.filter((d) => d.cuadro >= t.desde).map((d) => d.cuadro);
+    const acciones = deLaToma.filter((d) => d.cuadro >= t.desde);
     const candidatos = coberturasDeToma(t, recorrido, registro, deLaToma);
     res.push(t);
     if (!candidatos.length) return;
+    // ¿La cobertura ya muestra lo que nombra la acción? (un detalle de la
+    // cartelera muestra "la cartelera brilla"): entonces no hace falta volver.
+    const muestra = (c: { encuadre: Encuadre; focos: Rect[] }, d: Disparo) => {
+      const f = focoGlobal(d, recorrido, registro);
+      const v = vistaDelMundo(c.encuadre);
+      return area(interseccion(f, v)) >= 0.4 * area(f) || area(interseccion(c.focos[0], f)) >= 0.8 * area(c.focos[0]);
+    };
     let k = 0;
     let inicio = t.desde; // inicio del plano actual
     let enPrincipal = true;
-    while (fin - inicio > MAX_PLANO_KIT) {
+    for (let vueltas = 0; fin - inicio > MAX_PLANO_KIT && vueltas < 50; vueltas++) {
       let corte = inicio + (enPrincipal ? Math.min(45, MAX_PLANO_KIT) : PLANO_COBERTURA);
-      if (enPrincipal) for (const a of acciones) if (corte > a - ANTES_ACCION && corte < a + VER_ACCION) corte = a + VER_ACCION;
-      if (fin - corte < CORTE_MINIMO_KIT + 6) break;
-      // Si viene una acción pronto, la cobertura dura hasta ella y se vuelve.
-      const proxima = acciones.find((a) => a >= corte + CORTE_MINIMO_KIT);
-      const c = candidatos[k++ % candidatos.length];
+      if (enPrincipal) for (const a of acciones) if (corte > a.cuadro - ANTES_ACCION && corte < a.cuadro + VER_ACCION) corte = a.cuadro + VER_ACCION;
+      if (fin - corte < MIN_PLANO_KIT) break;
+      // Preferir una cobertura que ya muestre las acciones que vienen.
+      const ventana = (desde: number) => acciones.filter((a) => a.cuadro >= desde && a.cuadro < desde + PLANO_COBERTURA + 10);
+      const elegir = (desde: number) => {
+        for (let n = 0; n < candidatos.length; n++) {
+          const c = candidatos[(k + n) % candidatos.length];
+          if (ventana(desde).every((a) => muestra(c, a))) return { c, n };
+        }
+        return { c: candidatos[k % candidatos.length], n: 0 };
+      };
+      let { c, n } = elegir(corte);
+      let pendiente = ventana(corte).find((a) => !muestra(c, a));
+      // Si esa acción llegaría antes de que la cobertura dure lo mínimo,
+      // se corta antes (la cobertura entra entera antes de la acción).
+      if (pendiente && pendiente.cuadro - ANTES_ACCION - corte < MIN_PLANO_KIT && enPrincipal) {
+        const antes = pendiente.cuadro - ANTES_ACCION - MIN_PLANO_KIT;
+        if (antes - inicio >= MIN_PLANO_KIT) {
+          corte = antes;
+          ({ c, n } = elegir(corte));
+          pendiente = ventana(corte).find((a) => !muestra(c, a));
+        } else {
+          // No cabe: el plano principal sigue hasta después de la acción.
+          inicio = Math.max(inicio, pendiente.cuadro + VER_ACCION - Math.min(45, MAX_PLANO_KIT));
+          continue;
+        }
+      }
+      k += n + 1;
       res.push({ ...t, desde: corte, ultimaAccion: corte, focos: c.focos, encuadre: c.encuadre, cobertura: true, grupo: false, pendiente: undefined });
       inicio = corte;
       enPrincipal = false;
-      if (proxima !== undefined && proxima - corte <= PLANO_COBERTURA + 10) {
-        const vuelta = Math.max(proxima - ANTES_ACCION, corte + CORTE_MINIMO_KIT);
+      if (pendiente) {
+        const vuelta = Math.max(pendiente.cuadro - ANTES_ACCION, corte + MIN_PLANO_KIT);
         res.push({ ...t, desde: vuelta, pendiente: undefined });
         inicio = vuelta;
         enPrincipal = true;
