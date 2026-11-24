@@ -76,6 +76,8 @@ function rpcReclamar(args: { p_limite?: number; p_retraso_maximo_minutos?: numbe
     const u = (tablas.usuarios ?? []).find((x) => x.id === p.user_id);
     const vigente = !!u && (u.rol === "admin" || (["crecimiento", "escala"].includes(String(u.plan)) && ((u.en_trial === true && String(u.trial_termina_en) >= ahora) || (u.activo === true && String(u.fecha_vencimiento) >= ahora))));
     if (!vigente) return false;
+    // Filtro 6: con Meta conectada.
+    if (!u.meta_access_token || !u.meta_page_id) return false;
     const qc = p.control_calidad as { aprobado?: boolean; publicarIgual?: boolean } | null;
     if (qc && qc.aprobado === false && qc.publicarIgual !== true) return false;
     const pistaId = (p.guion as { musica?: { pista_id?: string } } | null)?.musica?.pista_id;
@@ -554,6 +556,34 @@ describe("cliente que baja a Arranque con reels programados: quedan en pausa", (
     tablas.publicaciones_organicas.push(pieza({ programada_para: haceMin(3 * 60) }));
     await ejecutarPublicadorOrganico();
     expect(piezaDb("p1").estado).toBe("vencida");
+    expect(llamadasMeta).toEqual([]);
+  });
+});
+
+describe("cliente sin Meta conectada (nunca la conectó o usó 'Desconectar Meta'): reels en pausa", () => {
+  const desconectar = () => Object.assign(tablas.usuarios[0], { meta_access_token: null, meta_page_id: null });
+
+  it("no se publica ni se toca Meta; queda en 'lista' con un aviso para conectar Meta; al reconectar se publica sola", async () => {
+    desconectar();
+    tablas.publicaciones_organicas.push(pieza());
+    await ejecutarPublicadorOrganico();
+    expect(piezaDb("p1").estado).toBe("lista");
+    expect(llamadasMeta).toEqual([]);
+    const avisos = mensajes().filter((m) => String((m.contenido as { texto?: string }).texto).includes("tu cuenta de Meta no está conectada"));
+    expect(avisos).toHaveLength(1);
+    Object.assign(tablas.usuarios[0], { meta_access_token: "tok", meta_page_id: "page1" });
+    await ejecutarPublicadorOrganico();
+    await ejecutarPublicadorOrganico();
+    expect(piezaDb("p1").estado).toBe("publicada");
+  });
+
+  it("con la RPC vieja, el código la devuelve a 'lista' (antes la marcaba como error de reconexión)", async () => {
+    desconectar();
+    rpcSinFiltros = true;
+    tablas.publicaciones_organicas.push(pieza());
+    const r = await reclamarYCrearContenedores();
+    expect(r.enPausaPorMeta).toBe(1);
+    expect(piezaDb("p1").estado).toBe("lista");
     expect(llamadasMeta).toEqual([]);
   });
 });

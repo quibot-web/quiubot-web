@@ -1,5 +1,5 @@
 -- Publicador orgánico: reclamar solo piezas de dueños con un plan que
--- incluye Contenido (23 nov 2026, decisión de Juan José: si un cliente baja
+-- incluye Contenido y con Meta conectada (23 nov 2026, decisión de Juan José: si un cliente baja
 -- a Arranque, sus reels programados quedan en pausa en vez de publicarse, y
 -- se reanudan solos si vuelve a subir de plan; los que pasan de 2 h de
 -- atraso quedan vencidos como siempre).
@@ -76,6 +76,11 @@ begin
                   )
                 )
               )
+              -- 6. (23 nov 2026) ...y con Meta conectada: sin token o sin
+              --    página (nunca conectó, o usó "Desconectar Meta") la pieza
+              --    queda en pausa igual que sin plan.
+              and u.meta_access_token is not null
+              and u.meta_page_id is not null
           )
         order by p.programada_para
         limit p_limite

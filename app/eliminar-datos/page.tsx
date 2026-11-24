@@ -18,7 +18,7 @@ export default function EliminarDatosPage() {
           Eliminación de datos
         </h1>
         <p style={{ fontSize: 13, color: "#999", marginBottom: 32 }}>
-          Última actualización: septiembre de 2026
+          Última actualización: noviembre de 2026
         </p>
 
         <div style={{ fontSize: 14, lineHeight: 1.7, color: "#333" }}>
@@ -35,9 +35,16 @@ export default function EliminarDatosPage() {
                 guardadas cifradas.
               </li>
               <li>
-                <strong>Datos de tu cuenta de Meta conectada:</strong> token de acceso, cuenta
-                publicitaria, página de Facebook, y píxel — todo lo necesario para publicar y
-                monitorear tus campañas en Meta Ads.
+                <strong>Datos de tu cuenta de Meta conectada:</strong> token de acceso, tu nombre
+                en Facebook, cuenta publicitaria y su negocio (Business Manager), página de
+                Facebook, la cuenta de Instagram profesional vinculada y píxel — todo lo necesario
+                para publicar y monitorear tus campañas en Meta Ads y para publicar en Instagram
+                lo que tú programes o apruebes.
+              </li>
+              <li>
+                <strong>Tus reels de Contenido:</strong> los reels que creaste, programaste o
+                publicaste desde Quiubot (idea, guion, voz, video, fecha programada y el enlace de
+                los que ya se publicaron).
               </li>
               <li>
                 <strong>ADN de marca:</strong> el análisis de identidad visual que genera
@@ -87,12 +94,26 @@ export default function EliminarDatosPage() {
           </section>
 
           <section style={{ marginBottom: 28 }}>
-            <h2 style={sectionTitle}>3. Qué pasa con tu conexión a Meta</h2>
+            <h2 style={sectionTitle}>3. Qué pasa con tu conexión a Meta y con tus reels</h2>
             <p>
-              Si conectaste tu cuenta de Meta (Facebook/Instagram) a Quiubot, al procesar tu
-              solicitud eliminamos el token de acceso y los datos de tu cuenta publicitaria,
-              página y píxel que teníamos guardados. Esto no afecta a tu cuenta de Meta en sí
-              — solo elimina la conexión y los datos que Quiubot había guardado de ella.
+              <strong>Sin esperar una solicitud:</strong> en cualquier momento puedes usar{" "}
+              <strong>Integraciones → Meta → &ldquo;Desconectar Meta&rdquo;</strong> en Quiubot.
+              Borramos el token de acceso y los datos de tu cuenta publicitaria, página y píxel que
+              teníamos guardados, y tus reels programados quedan en pausa (no se publican). Para
+              quitarle a Quiubot también el permiso en Facebook: Configuración y privacidad →
+              Configuración → Integraciones comerciales → Quiubot → Eliminar.
+            </p>
+            <p>
+              <strong>Al procesar tu solicitud de eliminación</strong> borramos además, de Quiubot,
+              la conexión con Meta y tus reels de Contenido (ideas, guiones, voces, videos y su
+              programación). Los reels que estaban programados ya no se publican.
+            </p>
+            <p>
+              <strong>Lo que queda, porque es tuyo:</strong> los reels que ya se publicaron en tu
+              Instagram siguen en tu cuenta (Quiubot no los borra; si quieres quitar alguno, hazlo
+              desde Instagram). Los videos y voces se guardan en tu propia cuenta de Cloudinary
+              (la que conectaste en Integraciones), así que también siguen ahí hasta que tú los
+              borres. Nada de esto afecta a tu cuenta de Meta en sí.
             </p>
           </section>
 

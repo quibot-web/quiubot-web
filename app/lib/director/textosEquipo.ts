@@ -145,7 +145,7 @@ export function textoReelPublicacionError(params: { motivo: "reconexion" | "revi
 // para Instagram). Los 2 últimos siguen en "lista": apenas se resuelva
 // el motivo, el Publicador lo sube en su siguiente vuelta.
 export function textoReelVencido(params: {
-  motivo: "sin_video" | "requiere_confirmacion" | "musica_sin_licencia" | "atrasada" | "plan_sin_contenido";
+  motivo: "sin_video" | "requiere_confirmacion" | "musica_sin_licencia" | "atrasada" | "plan_sin_contenido" | "sin_meta";
   piezaId?: string;
   horasMaximas?: number;
 }): MensajeEquipoContenido {
@@ -155,6 +155,14 @@ export function textoReelVencido(params: {
       textoInterno: "Director, no publiqué un reel porque estaba muy atrasado -- queda para que decidan si sale ahora o se reprograma.",
       respuestaDirector: "Entendido, le pregunto qué prefiere.",
       acciones: [{ label: "Publicar ahora o reprogramar", tipo: "link", href: params.piezaId ? `/contenido/${params.piezaId}` : "/contenido" }],
+    };
+  }
+  if (params.motivo === "sin_meta") {
+    return {
+      texto: "Tus reels programados están en pausa: tu cuenta de Meta no está conectada. Conéctala en Integraciones y se publican solos a su hora (los que lleven más de 2 horas de atraso quedan vencidos y puedes reprogramarlos).",
+      textoInterno: "Director, dejé en pausa los reels programados de esta cuenta: no tiene Meta conectada.",
+      respuestaDirector: "Entendido, le pido que conecte Meta.",
+      acciones: [{ label: "Conectar Meta", tipo: "link", href: "/api/meta/conectar" }],
     };
   }
   if (params.motivo === "plan_sin_contenido") {

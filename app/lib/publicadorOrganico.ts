@@ -75,6 +75,19 @@ export function enPausaPorPlan(usuario: UsuarioMeta | undefined): boolean {
   return !usuario || !puedeCrearContenido(usuario);
 }
 
+// Sin Meta conectada (nunca la conectó, o la desconectó con "Desconectar
+// Meta"): mismo trato que el plan -- en pausa en "lista", se reanudan
+// solas al volver a conectar dentro de la ventana de 2 h.
+export function enPausaPorMeta(usuario: UsuarioMeta | undefined): boolean {
+  return !usuario?.meta_page_id || !usuario.meta_access_token;
+}
+
+function motivoPausa(usuario: UsuarioMeta | undefined): "plan_sin_contenido" | "sin_meta" | null {
+  if (enPausaPorPlan(usuario)) return "plan_sin_contenido";
+  if (enPausaPorMeta(usuario)) return "sin_meta";
+  return null;
+}
+
 export type MotivoBloqueo = "no_es_instagram" | "requiere_confirmacion" | "musica_sin_licencia";
 
 // Misma regla que la RPC reclamar_publicaciones_organicas_vencidas
@@ -380,11 +393,13 @@ export async function avisarListasBloqueadas(ahora = new Date()): Promise<number
   let avisadas = 0;
   const avisadosPorPlan = new Set<string>();
   for (const pieza of piezas) {
-    // Plan sin Contenido: un solo aviso por cliente por día (no uno por reel).
-    if (enPausaPorPlan(usuarios.get(pieza.user_id))) {
+    // En pausa (plan sin Contenido o sin Meta): un solo aviso por cliente
+    // por día y por motivo (no uno por reel).
+    const pausa = motivoPausa(usuarios.get(pieza.user_id));
+    if (pausa) {
       if (avisadosPorPlan.has(pieza.user_id)) continue;
       avisadosPorPlan.add(pieza.user_id);
-      await avisarPublicador({ userId: pieza.user_id, piezaId: `plan-${ahora.toISOString().slice(0, 10)}`, tipoEvento: "reel_vencido", contenido: textoReelVencido({ motivo: "plan_sin_contenido" }), sufijo: "plan_sin_contenido" });
+      await avisarPublicador({ userId: pieza.user_id, piezaId: `pausa-${ahora.toISOString().slice(0, 10)}`, tipoEvento: "reel_vencido", contenido: textoReelVencido({ motivo: pausa }), sufijo: pausa });
       avisadas++;
       continue;
     }
@@ -518,8 +533,8 @@ async function devolverALista(piezaId: string, intentos?: number) {
 
 // 5. Reclamar "lista" vencidas con la RPC atómica (FOR UPDATE SKIP
 // LOCKED, nunca la misma pieza en dos vueltas) → cupo → contenedor REELS.
-export async function reclamarYCrearContenedores(): Promise<{ reclamadas: number; contenedores: number; devueltas: number; conError: number; sinCupo: number; enPausaPorPlan: number }> {
-  const resumen = { reclamadas: 0, contenedores: 0, devueltas: 0, conError: 0, sinCupo: 0, enPausaPorPlan: 0 };
+export async function reclamarYCrearContenedores(): Promise<{ reclamadas: number; contenedores: number; devueltas: number; conError: number; sinCupo: number; enPausaPorPlan: number; enPausaPorMeta: number }> {
+  const resumen = { reclamadas: 0, contenedores: 0, devueltas: 0, conError: 0, sinCupo: 0, enPausaPorPlan: 0, enPausaPorMeta: 0 };
   const { data, error } = await supabaseAdmin.rpc("reclamar_publicaciones_organicas_vencidas", {
     p_limite: LIMITE_POR_CORRIDA,
     p_retraso_maximo_minutos: RETRASO_MAXIMO_PUBLICACION_HORAS * 60,
@@ -542,11 +557,13 @@ export async function reclamarYCrearContenedores(): Promise<{ reclamadas: number
     const usuario = usuarios.get(pieza.user_id);
     const email = usuario?.email ?? null;
 
-    // Plan sin Contenido: en pausa, de vuelta a "lista" sin tocar Meta
-    // (barrera del código; la RPC con el filtro de plan ya ni la reclama).
-    if (enPausaPorPlan(usuario)) {
+    // En pausa (plan sin Contenido o sin Meta): de vuelta a "lista" sin
+    // tocar Meta (barrera del código; la RPC con el filtro ya ni la reclama).
+    const pausa = motivoPausa(usuario);
+    if (pausa) {
       await devolverALista(pieza.id);
-      resumen.enPausaPorPlan++;
+      if (pausa === "plan_sin_contenido") resumen.enPausaPorPlan++;
+      else resumen.enPausaPorMeta++;
       continue;
     }
 
@@ -560,10 +577,7 @@ export async function reclamarYCrearContenedores(): Promise<{ reclamadas: number
       if (await marcarError({ pieza, estadoEsperado: "publicando", tipoError: "sin_video", mensaje: "La pieza no tiene video para publicar.", email, paso: "sin_url_video" })) resumen.conError++;
       continue;
     }
-    if (!usuario?.meta_page_id || !usuario.meta_access_token) {
-      if (await marcarError({ pieza, estadoEsperado: "publicando", tipoError: "reconexion", mensaje: "Conecta tu cuenta de Meta para publicar en Instagram.", email, paso: "sin_meta" })) resumen.conError++;
-      continue;
-    }
+    if (!usuario?.meta_page_id || !usuario.meta_access_token) continue; // ya cubierto por motivoPausa
 
     const ig = await resolverIg(usuario);
     if ("error" in ig) {

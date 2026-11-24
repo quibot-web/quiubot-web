@@ -483,6 +483,36 @@ export default function Home() {
     }
   };
 
+  // "Desconectar Meta" (23 nov 2026): borra la conexión que Quiubot guarda
+  // (ver app/api/meta/desconectar). Los reels programados quedan en pausa.
+  const [desconectandoMeta, setDesconectandoMeta] = useState(false);
+  const [avisoDesconexionMeta, setAvisoDesconexionMeta] = useState<string | null>(null);
+  const handleDesconectarMeta = async () => {
+    if (
+      !confirm(
+        "¿Desconectar tu cuenta de Meta de Quiubot?\n\nSe borra la conexión que Quiubot guarda (cuenta publicitaria, página y píxel). Tus campañas dejan de publicarse y medirse desde Quiubot, y tus reels programados quedan en pausa hasta que vuelvas a conectar.\n\nPara quitarle el acceso a Quiubot también en Facebook: Configuración y privacidad → Configuración → Integraciones comerciales → Quiubot → Eliminar."
+      )
+    )
+      return;
+    setDesconectandoMeta(true);
+    try {
+      const res = await fetch("/api/meta/desconectar", { method: "POST" });
+      const datos = await res.json().catch(() => ({}));
+      if (!res.ok) {
+        setAvisoDesconexionMeta(datos.error || "No se pudo desconectar Meta. Intenta de nuevo.");
+        return;
+      }
+      setAvisoDesconexionMeta(
+        datos.enPausa > 0
+          ? `Meta desconectada. ${datos.enPausa === 1 ? "Tu reel programado queda" : `Tus ${datos.enPausa} reels programados quedan`} en pausa hasta que vuelvas a conectar.`
+          : "Meta desconectada."
+      );
+      cargarMetaInfo();
+    } finally {
+      setDesconectandoMeta(false);
+    }
+  };
+
   const handleDesconectarPixel = async () => {
     if (!confirm("¿Dejar de usar este pixel para optimizar tus campañas?")) return;
     const res = await fetch("/api/meta/pixel", {
@@ -1635,6 +1665,22 @@ export default function Home() {
                     </a>
                   </div>
                 )}
+                {(metaInfo?.conectado || metaInfo?.tokenVencido) && (
+                  <div style={{ borderTop: "1px solid #f0f0f0", marginTop: 14, paddingTop: 12 }}>
+                    <button
+                      type="button"
+                      onClick={handleDesconectarMeta}
+                      disabled={desconectandoMeta}
+                      style={{ background: "none", border: "none", color: "#DC2626", fontSize: 12, fontWeight: 600, cursor: "pointer", padding: 0 }}
+                    >
+                      {desconectandoMeta ? "Desconectando…" : "Desconectar Meta"}
+                    </button>
+                    <p style={{ fontSize: 11.5, color: "#888", margin: "6px 0 0", lineHeight: 1.5 }}>
+                      Borra la conexión que Quiubot guarda y pone en pausa tus reels programados. Para quitarle el acceso también en Facebook: Configuración y privacidad → Configuración → Integraciones comerciales → Quiubot → Eliminar.
+                    </p>
+                  </div>
+                )}
+                {avisoDesconexionMeta && <p style={{ fontSize: 12.5, color: "#3C3489", background: "#F3F2FE", borderRadius: 8, padding: "8px 10px", marginTop: 10 }}>{avisoDesconexionMeta}</p>}
               </ModalIntegracion>
             </>
           )}

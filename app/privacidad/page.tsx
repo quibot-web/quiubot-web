@@ -44,8 +44,8 @@ export default function PrivacidadPage() {
             <ul style={{ margin: "8px 0 0", paddingLeft: 20 }}>
               <li>Crear y administrar tu cuenta, y prestarte el servicio de la plataforma.</li>
               <li>Generar, con apoyo de inteligencia artificial, estrategia publicitaria, creativos, contenido y campañas para tus redes sociales.</li>
-              <li>Publicar y monitorear tus campañas en Meta Ads a través de tu cuenta de Meta conectada.</li>
-              <li>Publicar en tu cuenta de Instagram profesional los reels que tú programes o apruebes en la sección Contenido, en la fecha y hora que elijas.</li>
+              <li>Publicar y monitorear tus campañas en Meta Ads a través de tu cuenta de Meta conectada y, cuando apruebas una propuesta del Director, ajustarlas (por ejemplo, su presupuesto o sus creativos).</li>
+              <li>Publicar en tu cuenta de Instagram profesional los reels que tú programes o apruebes en la sección Contenido, en la fecha y hora que elijas, o los videos que elijas publicar desde tu Álbum de creativos.</li>
               <li>Procesar el pago de tu suscripción y gestionar la facturación.</li>
               <li>Brindarte soporte y comunicarte novedades sobre el servicio.</li>
               <li>Prevenir fraude y proteger la seguridad de la plataforma.</li>
@@ -64,14 +64,19 @@ export default function PrivacidadPage() {
                 guardadas cifradas.
               </li>
               <li>
-                <strong>Datos de tu cuenta de Meta conectada:</strong> token de acceso, cuenta
-                publicitaria, página de Facebook, cuenta de Instagram, y píxel — todo lo
-                necesario para publicar y monitorear tus campañas en Meta Ads, y para publicar
-                en Instagram los reels que tú programes o apruebes.
+                <strong>Datos de tu cuenta de Meta conectada:</strong> token de acceso; tu nombre
+                en Facebook; cuenta publicitaria y el negocio (Business Manager) al que pertenece;
+                página de Facebook; la cuenta de Instagram profesional vinculada a ella (nombre de
+                usuario, tipo de cuenta y número de seguidores, para verificar que esté lista para
+                publicar); píxel y su última actividad; y el rendimiento de tus campañas (alcance,
+                impresiones, clics, gasto y resultados) — todo lo necesario para publicar,
+                monitorear y ajustar tus campañas en Meta Ads, y para publicar en Instagram lo que
+                tú programes o apruebes.
               </li>
               <li>
                 <strong>ADN de marca:</strong> el análisis de identidad visual que genera
-                Quiubot a partir de tus creativos.
+                Quiubot a partir de tus creativos y de las imágenes de las publicaciones recientes
+                de tu página de Facebook.
               </li>
               <li>
                 <strong>Estrategias, creativos y videos generados</strong> con inteligencia
@@ -105,8 +110,10 @@ export default function PrivacidadPage() {
               Cuando programas o apruebas un reel en la sección <strong>Contenido</strong>, Quiubot
               lo publica en la cuenta de Instagram profesional que conectaste, en la fecha y hora
               que elegiste, usando los permisos que autorizaste al conectar tu cuenta de Meta.
-              Quiubot <strong>solo publica lo que tú programaste o aprobaste</strong>: nunca publica
-              otro contenido, ni lee ni publica nada más en tu cuenta.
+              Lo mismo pasa cuando eliges publicar un video desde tu <strong>Álbum de
+              creativos</strong>. Para esta función, Quiubot{" "}
+              <strong>solo publica lo que tú programaste o aprobaste</strong>: no modifica ni
+              elimina otras publicaciones de tu cuenta.
             </p>
             <p>Para publicar, Quiubot usa estos datos de Meta:</p>
             <ul style={{ margin: "8px 0 0", paddingLeft: 20 }}>
@@ -120,12 +127,15 @@ export default function PrivacidadPage() {
               Contenido.
             </p>
             <p>
-              <strong>Cómo revocar el acceso:</strong> puedes quitarle a Quiubot el acceso a tu
-              cuenta en cualquier momento desde la configuración de tu cuenta de Facebook
-              (Configuración y privacidad → Configuración → Integraciones comerciales → Quiubot →
-              Eliminar). Desde ese momento Quiubot ya no puede publicar en tu Instagram, y los
-              reels que tenías programados no se suben. También puedes pedir que eliminemos la
-              conexión y todos tus datos, como se explica en{" "}
+              <strong>Cómo revocar el acceso:</strong> en cualquier momento puedes usar{" "}
+              <strong>Integraciones → Meta → &ldquo;Desconectar Meta&rdquo;</strong> en Quiubot:
+              borramos el token de acceso y los datos de tu cuenta publicitaria, página y píxel que
+              teníamos guardados, y tus reels programados quedan en pausa (se reanudan si vuelves a
+              conectar). Para quitarle a Quiubot también el permiso en Facebook, hazlo desde la
+              configuración de tu cuenta de Facebook (Configuración y privacidad → Configuración →
+              Integraciones comerciales → Quiubot → Eliminar). Desde ese momento Quiubot ya no
+              puede publicar en tu Instagram. También puedes pedir que eliminemos la conexión y
+              todos tus datos, como se explica en{" "}
               <a href="/eliminar-datos" style={linkStyle}>quiubot.site/eliminar-datos</a>.
             </p>
           </section>
