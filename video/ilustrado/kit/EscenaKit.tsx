@@ -13,7 +13,7 @@ import { ID_TODOS, aIsla, casillaHuecoEnIsla, hashTexto, rectElemento, rectPerso
 import { CARTELERA, COLOR_LINEA_PISO, COLOR_PISO, SALON, Y_LINEAS_PISO, casillaCartelera } from "./dibujoObjetos";
 import { oscurecer, aclarar } from "./dibujoPersonaje";
 import { clave, motivoDe, motivosCartelera, type ImagenesKit, type ImagenPieza } from "./piezas";
-import { apunteHacia, poseEnCuadro, posicionMano, type AngulosBrazo, type CambioPose } from "./poses";
+import { apunteHacia, conVueltasAParado, poseEnCuadro, posicionMano, type AngulosBrazo, type CambioPose } from "./poses";
 
 // objetivos: a qué apunta cada acción que lo tiene ("profesora.senala" en
 // el cuadro c -> "dibujo_nina").
@@ -163,8 +163,10 @@ function Personaje({ u, cu, frame, fps, d, imagenes, objetivos, atenciones }: { 
         {cabeza && (
           <div style={{ position: "absolute", left: 0, top: 0, width: cabeza.ancho, height: cabeza.alto, ...giro(cabeza) }}>
             <Img img={cabeza} />
-            {mezcla < 1 && rasgos(previa, 1)}
-            {rasgos(expresion, mezcla)}
+            {/* Fundido entre expresiones (si se repite la misma, sin fundido: */}
+            {/* p. ej. "nina.feliz" y luego "todos.feliz"). */}
+            {mezcla < 1 && previa !== expresion && rasgos(previa, 1)}
+            {rasgos(expresion, previa === expresion ? 1 : mezcla)}
           </div>
         )}
       </div>
@@ -332,6 +334,10 @@ export function EscenaKit({ cu, frame, fps, d: disparos, imagenes, objetivos, vi
     else if (o.rect) piso.push({ z: o.rect.y + o.rect.alto, nodo: capa });
   }
 
+  const manosArriba = (u: PersonajeUbicado) => {
+    const actual = conVueltasAParado(cambiosDe(d, u, cu, objetivos).poses).filter((c) => c.cuadro <= frame).at(-1)?.pose ?? u.per.pose;
+    return actual === "aplaudir" || actual === "celebrar";
+  };
   // Personajes (con su silla y pupitre si están sentados). Más atrás =
   // antes; en la misma fila, los adultos detrás de los niños.
   for (const u of cu.personajes) {
@@ -345,9 +351,11 @@ export function EscenaKit({ cu, frame, fps, d: disparos, imagenes, objetivos, vi
       nodo: (
         <div key={u.per.id}>
           {s && silla && <Img img={silla} estilo={{ left: s.silla.x, top: s.silla.y, width: s.silla.ancho, height: s.silla.alto }} />}
+          {/* Aplaudiendo o celebrando, lo que tiene en la mano va detrás del cuerpo (si no, le tapa la cara). */}
+          {manosArriba(u) && enMano.get(u.per.id)}
           <Personaje u={u} cu={cu} frame={frame} fps={fps} d={d} imagenes={imagenes} objetivos={objetivos} atenciones={atenciones} />
           {s && pupitre && <Img img={pupitre} estilo={{ left: s.pupitre.x, top: s.pupitre.y, width: s.pupitre.ancho, height: s.pupitre.alto }} />}
-          {enMano.get(u.per.id)}
+          {!manosArriba(u) && enMano.get(u.per.id)}
         </div>
       ),
     });

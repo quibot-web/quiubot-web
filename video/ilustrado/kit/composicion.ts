@@ -225,6 +225,10 @@ export function focoDeAccionKit(cu: ComposicionUbicada, accion: string, objetivo
 }
 
 // ---------- Validación y descripción ----------
+// Cuánto de la cartelera puede quedar detrás de la cabeza y el torso de
+// alguien (un poco es natural en un salón; la mitad del centro, no).
+export const TAPA_MAXIMO_CARTELERA = 0.12;
+
 export function problemasComposicion(c: ComposicionKit): string[] {
   const p: string[] = [];
   const ids = [...c.personajes.map((x) => x.id), ...c.objetos.map((x) => x.id)];
@@ -236,6 +240,11 @@ export function problemasComposicion(c: ComposicionKit): string[] {
   }
   if (c.objetos.filter((o) => o.tipo === "cartelera").length > 1) p.push(`${c.id}: solo una cartelera por composición`);
   for (const o of c.objetos) if (o.tipo === "pupitre" && (o.en_mano_de || !o.lugar?.startsWith("piso_"))) p.push(`${c.id}: el pupitre "${o.id}" va en el piso`);
+  // Un dibujo en el piso no se entiende (primera corrida real de la IA, 24 nov 2026).
+  for (const o of c.objetos) if (o.tipo === "dibujo" && o.lugar?.startsWith("piso_")) p.push(`${c.id}: el dibujo "${o.id}" va en la pared o en la mano de alguien, no en el piso`);
+  // Cada personaje sostiene una sola cosa.
+  const manos = c.objetos.flatMap((o) => (o.en_mano_de ? [o.en_mano_de] : []));
+  for (const id of new Set(manos)) if (manos.filter((x) => x === id).length > 1) p.push(`${c.id}: "${id}" sostiene más de una cosa; cada personaje sostiene una sola`);
   for (const x of c.personajes) {
     if (x.sentado_en && !c.objetos.some((o) => o.id === x.sentado_en && o.tipo === "pupitre")) p.push(`${c.id}: "${x.id}" está sentado en "${x.sentado_en}", que no es un pupitre de la composición`);
     if (x.mira_a && !ids.includes(x.mira_a)) p.push(`${c.id}: "${x.id}" mira a "${x.mira_a}", que no existe en la composición`);
@@ -244,6 +253,23 @@ export function problemasComposicion(c: ComposicionKit): string[] {
   for (const id of new Set(sentados)) if (sentados.filter((x) => x === id).length > 1) p.push(`${c.id}: dos personajes sentados en el mismo pupitre "${id}"`);
   const posiciones = c.personajes.filter((x) => x.plano === "frente" && !x.sentado_en).map((x) => x.posicion);
   for (const pos of new Set(posiciones)) if (posiciones.filter((x) => x === pos).length > 1) p.push(`${c.id}: dos personajes en el frente en la misma posición "${pos}"`);
+  // Nadie tapa lo que está en la pared (primera corrida real de la IA, 24 nov
+  // 2026: la profesora de pie delante de la cartelera tapaba los dibujos y
+  // el espacio libre). Se mide con las piezas ya ubicadas.
+  if (p.length === 0) {
+    const cu = ubicarComposicion(c, "");
+    for (const o of cu.objetos) {
+      if (!o.rect || !o.obj.lugar?.startsWith("pared_")) continue;
+      const w = o.rect;
+      for (const u of cu.personajes) {
+        const r = rectCabezaTorso(u);
+        const ix = Math.max(0, Math.min(r.x + r.ancho, w.x + w.ancho) - Math.max(r.x, w.x));
+        const iy = Math.max(0, Math.min(r.y + r.alto, w.y + w.alto) - Math.max(r.y, w.y));
+        const limite = o.obj.tipo === "cartelera" ? TAPA_MAXIMO_CARTELERA : 0.25;
+        if ((ix * iy) / (w.ancho * w.alto) > limite) p.push(`${c.id}: "${u.per.id}" tapa ${o.obj.tipo === "cartelera" ? "la cartelera" : `"${o.obj.id}"`} (${o.obj.lugar}); ponlo en otra posición, a un lado de lo que está en la pared`);
+      }
+    }
+  }
   return p;
 }
 

@@ -141,6 +141,33 @@ describe("v4: lugar a pantalla completa, sentados, mirada y puerta celular↔sal
     }
   });
 
+  it("nadie tapa la cartelera: alguien de pie justo delante es un problema para la IA (la composición del prototipo pasa)", () => {
+    expect(problemasComposicion(COMPOSICION_SALON)).toEqual([]);
+    const c = ComposicionKitSchema.parse({
+      id: "k_x",
+      fondo: "salon",
+      personajes: [{ id: "profesora", tipo: "profesora", posicion: "centro" }],
+      objetos: [{ id: "cartelera", tipo: "cartelera", lugar: "pared_centro" }],
+    });
+    expect(problemasComposicion(c).join(" ")).toMatch(/"profesora" tapa la cartelera/);
+  });
+
+  it("un dibujo en el piso o alguien con dos cosas en la mano: problema para la IA", () => {
+    const c = ComposicionKitSchema.parse({
+      id: "k_x",
+      fondo: "salon",
+      personajes: [{ id: "a", tipo: "nino", posicion: "centro" }],
+      objetos: [
+        { id: "d", tipo: "dibujo", lugar: "piso_izquierda" },
+        { id: "e", tipo: "dibujo", en_mano_de: "a" },
+        { id: "f", tipo: "dulces", en_mano_de: "a" },
+      ],
+    });
+    const p = problemasComposicion(c).join(" ");
+    expect(p).toMatch(/"d" va en la pared o en la mano/);
+    expect(p).toMatch(/"a" sostiene más de una cosa/);
+  });
+
   it("dos niños en el mismo pupitre o sentado en algo que no es pupitre: problema para la IA", () => {
     const c = ComposicionKitSchema.parse({
       id: "k_x",

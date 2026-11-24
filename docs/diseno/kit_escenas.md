@@ -102,6 +102,35 @@ que incluye 30 composiciones al azar.
    y la pantalla del celular muestra ese mismo encuadre con los
    personajes, así el corte no se nota.
 
+## La IA compone con el kit (24 nov 2026)
+
+- **Cómo:**
+  - `construirPromptPlanIlustrado(..., { conKit: true })` agrega al prompt
+    del plan el catálogo del kit (`kit/promptKit.ts`): listas cerradas,
+    verbos, `todos.<verbo>`, `objetivo` y una composición de ejemplo.
+  - La IA devuelve `composiciones` en el mismo JSON del plan; nunca código
+    ni SVG.
+  - Solo se activa donde ya hay plan ilustrado, es decir, en las cuentas
+    de REELS_ILUSTRADOS_EMAILS (`generarGuionConVoz` y
+    `planTrasRegenerarVoz`).
+- **Cuándo no:** si la narración no habla de algo que el kit muestra tal
+  cual, la IA usa solo el catálogo. Lo comprobé con una narración de
+  control sobre responder mensajes: no usó el kit.
+- **Reglas nuevas del validador** (se le devuelven a la IA, que corrige en
+  el reintento; salieron de la primera corrida real):
+  - un dibujo va en la pared o en una mano, no en el piso;
+  - cada personaje sostiene una sola cosa;
+  - nadie de pie tapa la cartelera (más del 12 % de su área) ni algo
+    colgado en la pared.
+- **Dibujo:**
+  - al aplaudir o celebrar, lo que alguien tiene en la mano va detrás de
+    su cuerpo, para no taparle la cara;
+  - repetir la misma expresión no duplica la capa de la cara.
+- **Corrida real** (narración de la cartelera, gpt-5.6-sol): plan válido
+  en el 2.º intento; el primero tenía un dibujo en el piso. Video en
+  `~/Desktop/videos_quiubot/prototipo_kit/prototipo_kit_v6_ia.mp4`,
+  ~3 s/s.
+
 ## Pendiente (después de aprobar el estilo)
 
 1. **La IA compone con el kit:** prompt con las listas cerradas, elección literal por frase y metáforas completas. Si el concepto no existe, la composición más cercana; nunca texto.

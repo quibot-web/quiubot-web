@@ -6,7 +6,7 @@ import { renderToStaticMarkup } from "react-dom/server";
 import { ComposicionKitSchema, LUGARES_PISO, POSICIONES, TIPOS_PERSONAJE, type ComposicionKitEntrada } from "./catalogoKit";
 import { problemasComposicion } from "./composicion";
 import { conAccionesDeGrupo, EscenaKit, PuertaEnPantalla } from "./EscenaKit";
-import { piezasDeComposicion, urlsSinRasterizar } from "./piezas";
+import { clave, piezasDeComposicion, urlsSinRasterizar } from "./piezas";
 import { PLAN_PROTOTIPO_KIT } from "./planPrototipoKit";
 import tiemposKit from "../fixtures/tiemposPrototipoKit.json";
 import { camaraDelCuadro, prepararReel } from "../motor/preparar";
@@ -154,4 +154,32 @@ describe("propiedad: con cualquier composición, nadie con la cara cortada", () 
     expect(probadas).toBeGreaterThanOrEqual(15);
     expect(fallas).toEqual([]);
   }, 60_000);
+});
+
+describe("expresión repetida", () => {
+  it("la misma expresión dos veces seguidas (la suya y la de todos) no duplica la capa de la cara", () => {
+    const cu = reel.registro.composicion("k_salon")!;
+    const imagenes = urlsSinRasterizar(piezasDeComposicion(cu));
+    const una = renderToStaticMarkup(EscenaKit({ cu, frame: 100, fps: 30, d: { "nina.feliz": [60] }, imagenes }));
+    const dos = renderToStaticMarkup(EscenaKit({ cu, frame: 100, fps: 30, d: { "nina.feliz": [60, 100] }, imagenes }));
+    const n = (h: string) => (h.match(/<img/g) ?? []).length;
+    expect(n(dos)).toBe(n(una));
+  });
+});
+
+describe("lo que se tiene en la mano", () => {
+  it("al aplaudir, la bolsa de dulces va detrás del cuerpo (no tapa la cara)", () => {
+    const cu = reel.registro.composicion("k_salon")!;
+    const imagenes = urlsSinRasterizar(piezasDeComposicion(cu));
+    const nino = cu.personajes.find((u) => u.per.id === "nino")!;
+    const urlDulces = imagenes[clave.dulces()].url;
+    const urlCuerpo = imagenes[clave.cuerpo(nino.aspecto)].url;
+    // Posición de los dulces respecto del cuerpo del niño en el HTML (orden de dibujo).
+    const orden = (h: string) => ({ dulces: h.indexOf(urlDulces) - h.indexOf(urlCuerpo) });
+    const quieto = orden(renderToStaticMarkup(EscenaKit({ cu, frame: 200, fps: 30, d: {}, imagenes })));
+    const aplaude = orden(renderToStaticMarkup(EscenaKit({ cu, frame: 200, fps: 30, d: { "todos.aplaude": [190] }, imagenes })));
+    // Quieto: los dulces después del cuerpo (encima); aplaudiendo: antes (detrás).
+    expect(quieto.dulces).toBeGreaterThan(0);
+    expect(aplaude.dulces).toBeLessThan(0);
+  });
 });

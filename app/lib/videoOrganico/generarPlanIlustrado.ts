@@ -14,12 +14,13 @@ export type ResultadoPlanIlustrado =
 export async function generarPlanIlustrado(
   escenas: { id: string; narracion: string }[],
   llamarIA: (prompt: string) => Promise<string>,
-  maxIntentos = 3
+  maxIntentos = 3,
+  opciones: { conKit?: boolean } = {}
 ): Promise<ResultadoPlanIlustrado> {
   let errores: string[] | undefined;
   const historial: string[][] = [];
   for (let intento = 1; intento <= maxIntentos; intento++) {
-    const respuesta = await llamarIA(construirPromptPlanIlustrado(escenas, errores));
+    const respuesta = await llamarIA(construirPromptPlanIlustrado(escenas, errores, opciones));
     let crudo: unknown;
     try {
       crudo = JSON.parse(respuesta);
@@ -60,7 +61,7 @@ export async function planTrasRegenerarVoz<G extends { escenas: { id: string; na
   const ajustar = (plan: PlanIlustrado) => (guion.palabrasPorEscena ? ajustarConVozReal(plan, guion.palabrasPorEscena).plan : plan);
   if (guion.ilustrado && validarPlanIlustrado(guion.ilustrado, narraciones).length === 0) return { guion: { ...guion, ilustrado: ajustar(guion.ilustrado) }, estado: "se_mantiene" };
   if (opciones.activo) {
-    const r = await generarPlanIlustrado(narraciones, opciones.llamarIA);
+    const r = await generarPlanIlustrado(narraciones, opciones.llamarIA, 3, { conKit: true });
     if (r.ok) return { guion: { ...guion, ilustrado: ajustar(r.plan) }, estado: "replanificado" };
   }
   const sinPlan = { ...guion };

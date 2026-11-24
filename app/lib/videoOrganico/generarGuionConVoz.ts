@@ -316,7 +316,9 @@ export async function generarGuionConVoz(params: ParametrosGenerarGuionConVoz): 
   if (params.conPlanIlustrado) {
     const narraciones = resultado.guion.escenas.map((e) => ({ id: e.id, narracion: e.narracion ?? "" }));
     const llamar = params.llamarIAPlan ?? ((prompt: string) => llamarOpenAI(params.apiKeyUsuario, prompt));
-    const r = await generarPlanIlustrado(narraciones, llamar);
+    // Con el kit de escenas (visuales-v2): conPlanIlustrado ya es solo
+    // para las cuentas de REELS_ILUSTRADOS_EMAILS.
+    const r = await generarPlanIlustrado(narraciones, llamar, 3, { conKit: true });
     if (r.ok) {
       plan = r.plan;
       estadoPlan = { estado: "generado", intentos: r.intentos, ajustes: r.ajustes, historial: r.historial };
