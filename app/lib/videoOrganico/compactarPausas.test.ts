@@ -188,6 +188,23 @@ describe("compactarConSilenciosReales", () => {
     expect(tramosPorEscena[1][0].original.inicio_s).toBeGreaterThanOrEqual(8.874);
   });
 
+  it("caso real (prototipo del kit, 23 nov 2026): Whisper amontona TODAS las palabras de la última frase en un mismo instante -- la escena igual recibe su audio (antes quedaba con duración 0)", () => {
+    const palabras = [
+      { texto: "en", inicio_s: 17.44, fin_s: 17.74 },
+      { texto: "uso.", inicio_s: 17.74, fin_s: 17.8 },
+      ...["Síguenos", "para", "más", "ideas", "como", "esta."].map((texto) => ({ texto, inicio_s: 17.8, fin_s: 17.8 })),
+    ];
+    const silencios = [
+      { inicio_s: 17.93575, fin_s: 18.470083 },
+      { inicio_s: 19.806375, fin_s: 20.352 },
+    ];
+    const { tramosPorEscena } = compactarConSilenciosReales(palabras, silencios, [0, 0, 1, 1, 1, 1, 1, 1]);
+    expect(tramosPorEscena[1].length).toBeGreaterThan(0);
+    // La escena nueva empieza dentro de la pausa real entre "uso." y "Síguenos".
+    expect(tramosPorEscena[1][0].original.inicio_s).toBeGreaterThanOrEqual(17.93575);
+    expect(tramosPorEscena[1][0].original.inicio_s).toBeLessThanOrEqual(18.470083);
+  });
+
   it("regla de seguridad: con cualquier pausa y cualquier atraso de Whisper, ningún corte deja menos de 120 ms de silencio medido antes de una palabra, y todo lo quitado es silencio medido", () => {
     let semilla = 7;
     const azar = () => ((semilla = (semilla * 16807) % 2147483647) / 2147483647);

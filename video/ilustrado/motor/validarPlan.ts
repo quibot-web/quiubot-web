@@ -8,14 +8,20 @@
 // extra. La única cadena libre es "metafora", que NUNCA se dibuja: es la
 // explicación de la IA cuando el concepto no está en el catálogo.
 import { z } from "zod";
-import { CATALOGO, ID_ESCENAS, MICRO, definicionAccion, type IdEscena, type IdIsla } from "./catalogo";
+import { CATALOGO, ID_ESCENAS, MICRO, definicionAccion } from "./catalogo";
 import { problemasDelPlan, type PlanIlustrado } from "./plan";
+import { crearRegistro, type Registro } from "./registro";
+import { ComposicionKitSchema } from "../kit/catalogoKit";
+import { problemasComposicion } from "../kit/composicion";
 
+// escena: del catálogo o una composición del kit ("k_..."); que exista y
+// tenga la acción lo revisa problemasDelPlan con el registro del plan.
 const AccionSchema = z
   .object({
-    escena: z.enum(ID_ESCENAS as [IdEscena, ...IdEscena[]]),
+    escena: z.string().regex(/^[a-z][a-z0-9_]{0,30}$/),
     accion: z.string().min(1).max(40),
     palabra: z.number().int().min(0),
+    objetivo: z.string().regex(/^[a-z][a-z0-9_]{0,20}$/).optional(),
   })
   .strict();
 
@@ -33,6 +39,8 @@ export const PlanIlustradoSchema = z
           .strict()
       )
       .min(1),
+    // Kit de escenas (visuales-v2): lugares con personajes y objetos.
+    composiciones: z.array(ComposicionKitSchema).max(4).optional(),
   })
   .strict();
 
@@ -52,7 +60,7 @@ export const MIN_SEGUNDOS_ENTRE_ISLAS = 0.6;
 export const MIN_PALABRAS_POR_PANTALLA = 4;
 
 export const contarPalabras = (narracion: string) => narracion.trim().split(/\s+/).filter(Boolean).length;
-const islaDe = (escena: IdEscena) => CATALOGO[escena].isla as IdIsla;
+const islaEn = (registro: Registro) => (escena: string) => registro.escena(escena)?.isla ?? escena;
 
 // Escenas del guion (id + narración) -> problemas del plan, en español,
 // listos para devolverle a la IA en el reintento.
@@ -60,8 +68,10 @@ export function validarPlanIlustrado(plan: unknown, escenas: { id: string; narra
   const parseado = PlanIlustradoSchema.safeParse(plan);
   if (!parseado.success) return parseado.error.issues.map((i) => `${i.path.join(".") || "plan"}: ${i.message}`);
   const p = parseado.data as PlanIlustrado;
+  const registro = crearRegistro(p.composiciones);
+  const islaDe = islaEn(registro);
   const palabras = Object.fromEntries(escenas.map((e) => [e.id, contarPalabras(e.narracion)]));
-  const problemas = problemasDelPlan(p, palabras);
+  const problemas = [...(parseado.data.composiciones ?? []).flatMap((c) => problemasComposicion(c)), ...problemasDelPlan(p, palabras, registro)];
 
   const ids = p.frases.map((f) => f.escena_id);
   const esperados = escenas.map((e) => e.id);
@@ -144,7 +154,8 @@ export function validarPlanIlustrado(plan: unknown, escenas: { id: string; narra
 // cámara igual lo resuelve (llega hasta 0,8 s tarde); esto lo evita.
 export function ajustarPlanConTiempos(plan: PlanIlustrado, palabrasPorEscena: { escena_id: string; palabras: { inicio_s: number }[] }[]): { plan: PlanIlustrado; ajustes: string[] } {
   const ajustes: string[] = [];
-  const copia: PlanIlustrado = { frases: plan.frases.map((f) => ({ ...f, acciones: f.acciones.map((a) => ({ ...a })) })) };
+  const copia = copiar(plan);
+  const islaDe = islaEn(crearRegistro(plan.composiciones));
   const tiempo = (frase: string, i: number) => palabrasPorEscena.find((p) => p.escena_id === frase)?.palabras[i]?.inicio_s;
   const todas = () =>
     copia.frases
@@ -179,13 +190,15 @@ export function accionesDisponiblesTexto(): string {
 
 type AccionUbicada = { frase: string; indiceFrase: number; accion: PlanIlustrado["frases"][number]["acciones"][number] };
 
+// Conserva las composiciones del kit (antes solo copiaba las frases).
 function copiar(plan: PlanIlustrado): PlanIlustrado {
-  return { frases: plan.frases.map((f) => ({ ...f, acciones: f.acciones.map((a) => ({ ...a })) })) };
+  return { ...plan, frases: plan.frases.map((f) => ({ ...f, acciones: f.acciones.map((a) => ({ ...a })) })) };
 }
 
-function insertarMicro(plan: PlanIlustrado, frase: string, escena: IdEscena, palabra: number): boolean {
+function insertarMicro(plan: PlanIlustrado, frase: string, escena: string, palabra: number): boolean {
   const f = plan.frases.find((x) => x.escena_id === frase);
-  if (!f || f.acciones.length >= 8 || !(MICRO in CATALOGO[escena].acciones)) return false;
+  const def = crearRegistro(plan.composiciones).escena(escena);
+  if (!f || f.acciones.length >= 8 || !def || !(MICRO in def.acciones)) return false;
   if (f.acciones.some((a) => a.palabra === palabra)) return false;
   f.acciones.push({ escena, accion: MICRO, palabra });
   f.acciones.sort((x, y) => x.palabra - y.palabra);

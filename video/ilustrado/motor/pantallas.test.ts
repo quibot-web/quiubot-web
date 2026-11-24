@@ -7,7 +7,7 @@ import pieza from "../fixtures/guionLikesVsMensajes.json";
 import tiemposPrototipo from "../fixtures/tiemposPrototipoReales.json";
 import { PLAN_PROTOTIPO } from "../planPrototipo";
 import type { TiemposIlustrado } from "../tiempoIlustrado";
-import { CATALOGO, ESCENA_VISIBLE, MICRO } from "./catalogo";
+import { CATALOGO, ESCENA_VISIBLE, MICRO, type IdEscena } from "./catalogo";
 import { escenaEnCamara, pantallaEnCuadro, prepararReel } from "./preparar";
 import type { PlanIlustrado } from "./plan";
 import { MAX_PALABRAS_SIN_ACCION, MIN_PALABRAS_POR_PANTALLA, repararRitmoPorPalabras, tramoMasLargoSinCambio, validarPlanIlustrado } from "./validarPlan";
@@ -34,7 +34,7 @@ const PLAN_BUENO: PlanIlustrado = {
 function sinPantallaEquivocada(nombre: string, tiempos: TiemposIlustrado, plan: PlanIlustrado) {
   it(`${nombre}: en ningún cuadro se ve una pantalla del celular distinta a la de la acción que está ocurriendo, y no hay parpadeos`, () => {
     const reel = prepararReel(tiempos, plan, 30);
-    const delCelular = reel.disparos.filter((d) => CATALOGO[d.escena].isla === "celular" && d.accion !== MICRO);
+    const delCelular = reel.disparos.filter((d) => CATALOGO[d.escena as IdEscena]?.isla === "celular" && d.accion !== MICRO);
     delCelular.forEach((d, i) => {
       // Cada acción se ve en SU pantalla desde su cuadro y al menos 0,4 s
       // (o hasta la acción siguiente del celular, si llega antes). Con un
@@ -55,7 +55,7 @@ describe("pantallas del celular amarradas a sus acciones", () => {
     const reel = prepararReel(TIEMPOS_PIEZA, PLAN_IA, 30);
     for (const m of momentosControlIlustrado(TIEMPOS_PIEZA, PLAN_IA)) {
       const escena = escenaEnCamara(reel, Math.round(m.segundo * 30))!;
-      expect(m.esperado, m.etiqueta).toContain(ESCENA_VISIBLE[escena]);
+      expect(m.esperado, m.etiqueta).toContain(ESCENA_VISIBLE[escena as IdEscena]);
     }
   });
 });

@@ -2,7 +2,8 @@
 // cuadro (puro, se calcula una vez): línea de tiempo, disparos, dónde va
 // cada isla, cámara, qué pantalla muestra el celular y monedas que viajan.
 import { construirLineaDeTiempo, type LineaDeTiempo, type PuntoCamara, type TiemposIlustrado } from "../tiempoIlustrado";
-import { BOCA_BILLETERA_LOCAL, CATALOGO, MICRO, type IdEscena } from "./catalogo";
+import { BOCA_BILLETERA_LOCAL, MICRO, type IdEscena } from "./catalogo";
+import { crearRegistro, REGISTRO_CATALOGO, type Registro } from "./registro";
 import { puntosCamaraAutomatica, tomasDeCamara, type Toma } from "./camara";
 import { resolverDisparos, type Disparo, type PlanIlustrado } from "./plan";
 import { construirRecorrido, type Recorrido } from "./recorrido";
@@ -20,15 +21,20 @@ export type ReelPreparado = {
   viajes: Viaje[];
   // Cuadros de las micro-acciones (acercamiento corto de cámara).
   pulsos: number[];
+  // Escenas del catálogo + composiciones del kit de este plan.
+  registro: Registro;
 };
 
 export const DURACION_VIAJE = 20;
 
-export function prepararReel(tiempos: TiemposIlustrado, plan: PlanIlustrado, fps: number): ReelPreparado {
+// semilla: varía lo que la IA no fija en el kit (ropa, piel, peinado,
+// pared), así dos reels no se ven iguales.
+export function prepararReel(tiempos: TiemposIlustrado, plan: PlanIlustrado, fps: number, semilla = ""): ReelPreparado {
+  const registro = crearRegistro(plan.composiciones ?? [], semilla);
   const linea = construirLineaDeTiempo(tiempos, fps);
   const disparos = resolverDisparos(plan, linea);
-  const recorrido = construirRecorrido(disparos);
-  const tomas = tomasDeCamara(disparos, recorrido);
+  const recorrido = construirRecorrido(disparos, registro);
+  const tomas = tomasDeCamara(disparos, recorrido, registro);
   const camara = puntosCamaraAutomatica(tomas, linea.duracionCuadros, fps);
 
   // El celular cambia de pantalla amarrado a la acción que la pide:
@@ -39,11 +45,11 @@ export function prepararReel(tiempos: TiemposIlustrado, plan: PlanIlustrado, fps
   const pantallas: CambioPantalla[] = [];
   let anteriorCelular: number | null = null;
   for (const d of disparos) {
-    if (CATALOGO[d.escena].isla !== "celular") continue;
+    if (!registro.escena(d.escena)?.celular) continue;
     const actual = pantallas[pantallas.length - 1];
     if (actual?.pantalla !== d.escena && d.accion !== MICRO) {
       const cuadro = actual ? Math.min(d.cuadro, Math.max(actual.cuadro + 10, (anteriorCelular ?? 0) + 12, d.cuadro - 10)) : 0;
-      pantallas.push({ cuadro, pantalla: d.escena });
+      pantallas.push({ cuadro, pantalla: d.escena as IdEscena });
     }
     anteriorCelular = d.cuadro;
   }
@@ -62,7 +68,7 @@ export function prepararReel(tiempos: TiemposIlustrado, plan: PlanIlustrado, fps
     }
   }
   const pulsos = disparos.filter((d) => d.accion === MICRO).map((d) => d.cuadro);
-  return { linea, disparos, recorrido, tomas, camara, pantallas, viajes, pulsos };
+  return { linea, disparos, recorrido, tomas, camara, pantallas, viajes, pulsos, registro };
 }
 
 // Lo que el reel muestra en un cuadro (lo usan el render, el control de
@@ -73,11 +79,12 @@ export function pantallaEnCuadro(reel: Pick<ReelPreparado, "pantallas">, cuadro:
 
 // La escena que está en cámara: la pantalla activa del celular si la
 // toma en curso es del celular; si no, la escena de la isla de la toma.
-export function escenaEnCamara(reel: Pick<ReelPreparado, "pantallas" | "tomas" | "disparos">, cuadro: number): IdEscena | null {
+export function escenaEnCamara(reel: Pick<ReelPreparado, "pantallas" | "tomas" | "disparos"> & { registro?: Registro }, cuadro: number): string | null {
+  const registro = reel.registro ?? REGISTRO_CATALOGO;
   const toma = [...reel.tomas].reverse().find((t) => cuadro >= t.desde) ?? reel.tomas[0];
   if (!toma) return null;
   if (toma.celular) return pantallaEnCuadro(reel, cuadro);
-  const accion = [...reel.disparos].reverse().find((d) => d.cuadro <= Math.max(cuadro, toma.desde) && CATALOGO[d.escena].isla !== "celular");
+  const accion = [...reel.disparos].reverse().find((d) => d.cuadro <= Math.max(cuadro, toma.desde) && !registro.escena(d.escena)?.celular);
   return accion?.escena ?? null;
 }
 

@@ -10,7 +10,8 @@
 //   acercamiento lento para que nunca esté muerta), y no se va de una
 //   toma hasta que su última acción se vio al menos 0,4 s.
 import type { PuntoCamara } from "../tiempoIlustrado";
-import { CATALOGO, MICRO, definicionAccion, unionRects, type IdIsla } from "./catalogo";
+import { MICRO, unionRects } from "./catalogo";
+import { REGISTRO_CATALOGO, type Registro } from "./registro";
 import { ALTO_PANTALLA, ANCHO_PANTALLA, acercar, desplazar, encuadre, ocupacion, type Encuadre, type Rect } from "./geometria";
 import type { Disparo } from "./plan";
 import type { Recorrido } from "./recorrido";
@@ -20,27 +21,28 @@ export const PAUSA_MINIMA = 15; // cuadros (0,5 s)
 export const VER_ULTIMA_ACCION = 12; // cuadros (0,4 s)
 const LLEGAR_TRAS_PALABRA = 6; // cuadros
 
-export function focoGlobal(d: Pick<Disparo, "escena" | "accion">, recorrido: Recorrido): Rect {
-  const def = definicionAccion(d.escena, d.accion);
-  const isla = recorrido[CATALOGO[d.escena].isla as IdIsla];
-  if (!def || !isla) throw new Error(`Sin foco para ${d.escena}.${d.accion}`);
-  return desplazar(def.foco, isla.x, isla.y);
+export function focoGlobal(d: Pick<Disparo, "escena" | "accion" | "objetivo">, recorrido: Recorrido, registro: Registro = REGISTRO_CATALOGO): Rect {
+  const foco = registro.foco(d.escena, d.accion, d.objetivo);
+  const idIsla = registro.escena(d.escena)?.isla;
+  const isla = idIsla ? recorrido[idIsla] : undefined;
+  if (!foco || !isla) throw new Error(`Sin foco para ${d.escena}.${d.accion}`);
+  return desplazar(foco, isla.x, isla.y);
 }
 
-export type Toma = { desde: number; ultimaAccion: number; focos: Rect[]; encuadre: Encuadre; celular: boolean };
+export type Toma = { desde: number; ultimaAccion: number; focos: Rect[]; encuadre: Encuadre; celular: boolean; escena?: string };
 
 // Pantallas del celular: ancladas debajo del subtítulo.
 const encuadrar = (focos: Rect[], celular: boolean) => encuadre(unionRects(focos), undefined, celular ? "arriba" : "centro");
 
 const igual = (a: Rect, b: Rect) => a.x === b.x && a.y === b.y && a.ancho === b.ancho && a.alto === b.alto;
 
-export function tomasDeCamara(disparos: Disparo[], recorrido: Recorrido): Toma[] {
+export function tomasDeCamara(disparos: Disparo[], recorrido: Recorrido, registro: Registro = REGISTRO_CATALOGO): Toma[] {
   const tomas: Toma[] = [];
   for (const d of disparos) {
     // La micro-acción no cambia de toma (ver pulsoDeCamara).
     if (d.accion === MICRO) continue;
-    const f = focoGlobal(d, recorrido);
-    const esCelular = CATALOGO[d.escena].isla === "celular";
+    const f = focoGlobal(d, recorrido, registro);
+    const esCelular = registro.escena(d.escena)?.celular === true;
     const ultima = tomas[tomas.length - 1];
     if (ultima) {
       if (ultima.focos.some((g) => igual(g, f))) {
@@ -50,7 +52,12 @@ export function tomasDeCamara(disparos: Disparo[], recorrido: Recorrido): Toma[]
       if (d.cuadro - ultima.desde < JUNTAR_SI_MENOS_DE && ultima.celular === esCelular) {
         const focos = [...ultima.focos, f];
         const enc = encuadrar(focos, esCelular);
-        if (focos.every((g) => ocupacion(g, enc) >= 0.5)) {
+        // Composición del kit (visuales-v2): acciones seguidas en el mismo
+        // lugar se ven como grupo ("todos aplauden"): basta con que el grupo
+        // ocupe >= 50 %. Saltar de un niño a otro cada 10 cuadros marea.
+        const mismaComposicion = !!registro.composicion(d.escena) && ultima.escena === d.escena;
+        const cabe = mismaComposicion ? ocupacion(unionRects(focos), enc) >= 0.5 : focos.every((g) => ocupacion(g, enc) >= 0.5);
+        if (cabe) {
           ultima.focos = focos;
           ultima.encuadre = enc;
           ultima.ultimaAccion = d.cuadro;
@@ -58,7 +65,7 @@ export function tomasDeCamara(disparos: Disparo[], recorrido: Recorrido): Toma[]
         }
       }
     }
-    tomas.push({ desde: d.cuadro, ultimaAccion: d.cuadro, focos: [f], encuadre: encuadrar([f], esCelular), celular: esCelular });
+    tomas.push({ desde: d.cuadro, ultimaAccion: d.cuadro, focos: [f], encuadre: encuadrar([f], esCelular), celular: esCelular, escena: d.escena });
   }
   return tomas;
 }

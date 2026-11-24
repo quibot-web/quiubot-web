@@ -16,6 +16,8 @@ import { PantallaChat, PantallaFeed, PantallaPerfil } from "./escenas/Pantallas"
 import type { MarcaIlustrada, PaletaIlustrada, PropsEscena } from "./escenas/tipos";
 import type { TemaGuion } from "../../tema";
 import { recursosSinGenerar, type RecursosGenerados } from "../imagenesGeneradas";
+import { EscenaKit } from "../kit/EscenaKit";
+import type { ImagenesKit } from "../kit/piezas";
 
 const ISLAS_DEL_MUNDO: Partial<Record<IdIsla, ComponentType<PropsEscena>>> = {
   billetera: IslaBilletera,
@@ -37,8 +39,10 @@ const SE_SALE: Partial<Record<IdIsla, { izquierda: number; derecha: number; arri
   billetera: { izquierda: 200, derecha: 400, arriba: 600, abajo: 900 },
   multitud: { izquierda: 0, derecha: 0, arriba: 200, abajo: 0 },
 };
-function rectVisible(id: IdIsla, r: { x: number; y: number; ancho: number; alto: number }) {
-  const e = SE_SALE[id];
+// Composiciones del kit: los brazos en alto y los saltos se salen por arriba.
+const SE_SALE_KIT = { izquierda: 0, derecha: 0, arriba: 250, abajo: 0 };
+function rectVisible(id: string, r: { x: number; y: number; ancho: number; alto: number }, esKit = false) {
+  const e = esKit ? SE_SALE_KIT : SE_SALE[id as IdIsla];
   if (!e) return r;
   return { x: r.x - e.izquierda, y: r.y - e.arriba, ancho: r.ancho + e.izquierda + e.derecha, alto: r.alto + e.arriba + e.abajo };
 }
@@ -54,9 +58,11 @@ export type PropsMundo = {
   fotoUrl: string;
   // Foto apagada/clara y halo horneados (ReelIlustrado los genera al precargar).
   recursos?: RecursosGenerados;
+  // Piezas del kit (personajes, fondos, objetos) ya en PNG.
+  imagenesKit?: ImagenesKit;
 };
 
-export function MundoIlustrado({ frame, fps, reel, paleta, tema, marca, fotoUrl, recursos = recursosSinGenerar(fotoUrl) }: PropsMundo) {
+export function MundoIlustrado({ frame, fps, reel, paleta, tema, marca, fotoUrl, recursos = recursosSinGenerar(fotoUrl), imagenesKit = {} }: PropsMundo) {
   // Cámara + una deriva leve para que nunca esté quieta.
   const base = camaraEnCuadro(reel.camara, frame);
   // Deriva y pulso de las micro-acciones; con el celular en toma, anclados
@@ -66,9 +72,9 @@ export function MundoIlustrado({ frame, fps, reel, paleta, tema, marca, fotoUrl,
   const cam = { x: conPulso.x + Math.sin(frame / 40) * 8, y: conPulso.y + (enCelular ? 0 : Math.cos(frame / 52) * 8), zoom: conPulso.zoom };
   const vista = vistaDelMundo(cam);
   const pisoEnPantalla = ALTO_PANTALLA / 2 + (PISO_Y - cam.y) * cam.zoom;
-  const props = (escena: IdEscena): PropsEscena => ({ frame, fps, d: disparosDeEscena(reel.disparos, escena), paleta, tema, marca, fotoUrl, recursos });
+  const props = (escena: string): PropsEscena => ({ frame, fps, d: disparosDeEscena(reel.disparos, escena), paleta, tema, marca, fotoUrl, recursos });
 
-  const islas = (Object.keys(reel.recorrido) as IdIsla[]).filter((id) => seTocan(rectVisible(id, reel.recorrido[id]!), vista, MARGEN_CULLING));
+  const islas = Object.keys(reel.recorrido).filter((id) => seTocan(rectVisible(id, reel.recorrido[id], !!reel.registro.composicion(id)), vista, MARGEN_CULLING));
 
   // Pantallas del celular: la actual y, durante el fundido, la anterior.
   const iActual = reel.pantallas.reduce((acc, p, i) => (frame >= p.cuadro ? i : acc), 0);
@@ -94,7 +100,22 @@ export function MundoIlustrado({ frame, fps, reel, paleta, tema, marca, fotoUrl,
               </div>
             );
           }
-          const Isla = ISLAS_DEL_MUNDO[id];
+          const cu = reel.registro.composicion(id);
+          if (cu) {
+            return (
+              <div key={id} style={{ position: "absolute", left: r.x, top: r.y, width: r.ancho, height: r.alto }}>
+                <EscenaKit
+                  cu={cu}
+                  frame={frame}
+                  fps={fps}
+                  d={disparosDeEscena(reel.disparos, id)}
+                  imagenes={imagenesKit}
+                  objetivos={reel.disparos.filter((x) => x.escena === id && x.objetivo).map((x) => ({ accion: x.accion, cuadro: x.cuadro, objetivo: x.objetivo! }))}
+                />
+              </div>
+            );
+          }
+          const Isla = ISLAS_DEL_MUNDO[id as IdIsla];
           const escena = (Object.keys(CATALOGO) as IdEscena[]).find((e) => CATALOGO[e].isla === id)!;
           return Isla ? (
             <div key={id} style={{ position: "absolute", left: r.x, top: r.y, width: r.ancho, height: r.alto }}>
