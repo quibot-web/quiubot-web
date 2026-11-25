@@ -240,7 +240,7 @@ const ESTILOS = `
 .qb-clase .marca img { width: 32px; height: 32px; border-radius: 9px; }
 .qb-clase .acento { color: var(--purple); }
 
-.qb-clase .contenido { width: 100%; max-width: 560px; margin: 0 auto; padding: 8px 20px 32px; display: grid; gap: 28px; flex: 1; }
+.qb-clase .contenido { width: 100%; max-width: 560px; margin: 0 auto; padding: 8px 20px 32px; display: grid; gap: 28px; flex: 1; align-content: start; }
 
 .qb-clase .eyebrow { display: inline-flex; align-items: center; gap: 8px; margin: 0 0 16px; padding: 6px 12px; border-radius: 999px; background: var(--bg-alt); color: var(--purple-deep); font-family: var(--font-mono); font-size: 12px; font-weight: 600; letter-spacing: 0.1em; text-transform: uppercase; }
 .qb-clase .eyebrow .punto { width: 7px; height: 7px; border-radius: 50%; background: var(--purple-deep); }
