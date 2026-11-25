@@ -183,6 +183,6 @@ function mezclar(a: string, b: string, k: number): string {
 function oscurecerSiClaro(hex: string): string {
   const n = parseInt(hex.slice(1), 16);
   const luz = (0.299 * ((n >> 16) & 255) + 0.587 * ((n >> 8) & 255) + 0.114 * (n & 255)) / 255;
-  return luz > 0.75 ? mezclar(hex, "#1E1B2E", 0.45) : hex;
+  return luz > 0.6 ? mezclar(hex, "#1E1B2E", 0.45) : hex;
 }
 
