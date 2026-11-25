@@ -49,3 +49,63 @@ export async function enviarEventoCapi(params: {
     console.error(`Error enviando evento ${params.evento} a Conversions API:`, err);
   }
 }
+
+// Lead de /clase (25 nov 2026): el toque en "Unirme gratis" llega a
+// /clase/unirse, que redirige al grupo y manda este evento desde el
+// servidor con el MISMO event_id que el navegador usó en fbq (Meta
+// deduplica). Sin META_CAPI_ACCESS_TOKEN no hace nada. Nunca lanza: si
+// Meta falla o tarda, solo se registra en el log.
+export function metaCapiActivo(): boolean {
+  return Boolean(process.env.META_CAPI_ACCESS_TOKEN);
+}
+
+export type DatosLeadCapi = {
+  eventId: string;
+  urlOrigen: string;
+  contentName: string;
+  ip: string | null;
+  userAgent: string | null;
+  fbp: string | null;
+  fbc: string | null;
+};
+
+export function cuerpoLeadCapi(d: DatosLeadCapi, ahoraMs = Date.now()) {
+  const user_data: Record<string, string> = {};
+  if (d.ip) user_data.client_ip_address = d.ip;
+  if (d.userAgent) user_data.client_user_agent = d.userAgent;
+  if (d.fbp) user_data.fbp = d.fbp;
+  if (d.fbc) user_data.fbc = d.fbc;
+  return {
+    data: [
+      {
+        event_name: "Lead",
+        event_time: Math.floor(ahoraMs / 1000),
+        event_id: d.eventId,
+        action_source: "website",
+        event_source_url: d.urlOrigen,
+        user_data,
+        custom_data: { content_name: d.contentName },
+      },
+    ],
+    // Para verlo en "Probar eventos" del Administrador de eventos (opcional).
+    ...(process.env.META_CAPI_TEST_EVENT_CODE ? { test_event_code: process.env.META_CAPI_TEST_EVENT_CODE } : {}),
+  };
+}
+
+export async function enviarLeadCapi(d: DatosLeadCapi): Promise<void> {
+  const token = process.env.META_CAPI_ACCESS_TOKEN;
+  if (!token) return;
+  try {
+    // El token va en el cuerpo (como enviarEventoCapi), nunca en la URL:
+    // así no aparece en ningún log de error.
+    const res = await fetch(`https://graph.facebook.com/v21.0/${META_PIXEL_ID}/events`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ ...cuerpoLeadCapi(d), access_token: token }),
+      signal: AbortSignal.timeout(5000),
+    });
+    if (!res.ok) console.error(`Conversions API respondió ${res.status} al Lead de /clase:`, (await res.text()).slice(0, 300));
+  } catch (err) {
+    console.error("Error enviando el Lead de /clase a Conversions API:", err);
+  }
+}

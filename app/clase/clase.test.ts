@@ -28,7 +28,7 @@ const render = (ahora: number) => renderToString(createElement(ClaseEnVivo, { ah
 
 describe("/clase es pública", () => {
   it("la página, el .ics y las imágenes para compartir pasan sin sesión; el resto de la app sigue pidiendo login", async () => {
-    for (const ruta of ["/clase", "/clase/calendario.ics", "/clase/opengraph-image.jpg"]) {
+    for (const ruta of ["/clase", "/clase/unirse", "/clase/calendario.ics", "/clase/opengraph-image.jpg"]) {
       expect(esPaginaClasePublica(ruta), ruta).toBe(true);
       expect(await pedirSinSesion(ruta), ruta).toBe("pasa");
     }
@@ -123,7 +123,7 @@ describe("barra fija de abajo", () => {
     expect(barra).toContain('data-visible="false"');
     expect(barra).toContain("inert");
     const despues = html.slice(html.indexOf('data-testid="barra-fija"'));
-    expect(despues).toContain(`href="${ENLACE_COMUNIDAD}"`);
+    expect(despues).toContain('href="/clase/unirse"');
     expect(despues).toContain('tabindex="-1"');
   });
 });
@@ -134,7 +134,8 @@ describe("botón principal", () => {
     for (const t of [INICIO_CLASE - 60_000, INICIO_CLASE, FIN_EN_VIVO]) {
       const html = render(t);
       const boton = html.match(/<a[^>]*data-testid="boton-comunidad"[^>]*>/)?.[0] ?? "";
-      expect(boton).toContain(`href="${ENLACE_COMUNIDAD}"`);
+      // Pasa por /clase/unirse (Lead + redirección al grupo, ver unirse.test.ts).
+      expect(boton).toContain('href="/clase/unirse"');
       expect(boton).toContain('target="_blank"');
       expect(boton).toContain('rel="noopener noreferrer"');
       expect(html).toContain(TEXTO_BOTON);

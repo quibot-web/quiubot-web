@@ -5,7 +5,6 @@ import { ProveedorEsferas } from "@/app/components/esferas/ProveedorEsferas";
 import type { AsistenteId } from "@/app/components/esferas/esferasShared";
 import { ESTILOS } from "./estilos";
 import {
-  ENLACE_COMUNIDAD,
   enlaceGoogleCalendar,
   estadoClase,
   horaLocalSiDistinta,
@@ -60,11 +59,39 @@ function Personaje({ asistente, tamano, clase }: { asistente: AsistenteId; taman
   );
 }
 
+// El botón pasa por /clase/unirse (que redirige al grupo y manda el Lead
+// desde el servidor). Al tocarlo, el navegador dispara el Lead del píxel con
+// un eventID y se lo pasa a /clase/unirse para que Meta deduplique.
+export const RUTA_UNIRSE = "/clase/unirse";
+export const CONTENT_NAME_LEAD = "clase_26nov";
+
+export function nuevoEventId(): string {
+  const c = typeof crypto !== "undefined" ? crypto : undefined;
+  if (c && typeof c.randomUUID === "function") return c.randomUUID();
+  return `${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 12)}`;
+}
+
+// Si el píxel todavía no cargó (carga en diferido), el evento del
+// navegador no sale; lo cubre el del servidor si hay token de CAPI.
+export function registrarLead(eventID: string) {
+  if (typeof window !== "undefined" && typeof window.fbq === "function") {
+    window.fbq("track", "Lead", { content_name: CONTENT_NAME_LEAD }, { eventID });
+  }
+}
+
+function alTocarUnirse(e: React.MouseEvent<HTMLAnchorElement>) {
+  const eventID = nuevoEventId();
+  registrarLead(eventID);
+  // El navegador navega DESPUÉS de este manejador, ya con el eid.
+  e.currentTarget.href = `${RUTA_UNIRSE}?eid=${encodeURIComponent(eventID)}`;
+}
+
 function BotonComunidad({ id, oculto = false }: { id?: string; oculto?: boolean }) {
   return (
     <a
       className="btn-principal"
-      href={ENLACE_COMUNIDAD}
+      href={RUTA_UNIRSE}
+      onClick={alTocarUnirse}
       target="_blank"
       rel="noopener noreferrer"
       data-testid={id}
