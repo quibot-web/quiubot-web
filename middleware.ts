@@ -4,6 +4,14 @@ import { NOMBRE_COOKIE_ADMIN, verificarCandadoAdmin } from "@/lib/adminCandado"
 
 const DOMINIO_LANDING_ADS = "prueba-gratis.quiubot.site"
 
+// /clase: página pública de la clase en vivo (llegan desde Instagram, sin
+// cuenta). Incluye lo que cuelga de ella: /clase/calendario.ics y las
+// imágenes para compartir (/clase/opengraph-image.png, etc.). No lee base
+// de datos ni expone nada sensible.
+export function esPaginaClasePublica(pathname: string): boolean {
+  return pathname === "/clase" || pathname.startsWith("/clase/")
+}
+
 export default auth(async (req) => {
   const host = req.headers.get("host") || ""
 
@@ -18,6 +26,7 @@ export default auth(async (req) => {
   const isLoginPage = pathname === "/login"
   const isBienvenidaPage = pathname === "/bienvenida"
   const isTerminosPage = pathname === "/terminos"
+  const isClasePage = esPaginaClasePublica(pathname)
   // Meta necesita poder ver esta página sin sesión para aprobar la revisión
   // de Acceso Avanzado (URL de instrucciones de eliminación de datos) --
   // mismo caso que /terminos, no expone nada sensible.
@@ -64,7 +73,7 @@ export default auth(async (req) => {
 
   if (isActivarRoute || isWebhookRoute || isCronRoute) return NextResponse.next()
 
-  if (!isLoggedIn && !isLoginPage && !isBienvenidaPage && !isTerminosPage && !isEliminarDatosPage && !isTutorialesPublicosRoute && !isRegistroPage && !isOlvidePasswordPage && !isResetearPasswordPage && !isPricingPage && !isBillingPage && !isBillingRoute && !isCuposFundadorRoute) {
+  if (!isLoggedIn && !isLoginPage && !isBienvenidaPage && !isTerminosPage && !isClasePage && !isEliminarDatosPage && !isTutorialesPublicosRoute && !isRegistroPage && !isOlvidePasswordPage && !isResetearPasswordPage && !isPricingPage && !isBillingPage && !isBillingRoute && !isCuposFundadorRoute) {
     return NextResponse.redirect(new URL("/login?modo=ingresar", req.nextUrl))
   }
 
