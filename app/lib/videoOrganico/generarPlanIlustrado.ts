@@ -4,7 +4,7 @@ import { frasesDelCartel } from "@/app/lib/historiaNarrada";
 // cada reintento con los problemas del anterior. Si no sale válido, el
 // reel sigue con su estilo de siempre (nunca se bloquea la pieza).
 import type { PlanIlustrado } from "@/video/ilustrado/motor/plan";
-import { ajustarPlanConTiempos, rellenarRitmoPorTiempo, repararRitmoPorPalabras, validarPlanIlustrado } from "@/video/ilustrado/motor/validarPlan";
+import { ajustarPlanConTiempos, escenarioDeNarracion, rellenarRitmoPorTiempo, repararRitmoPorPalabras, validarPlanIlustrado } from "@/video/ilustrado/motor/validarPlan";
 import { construirPromptPlanIlustrado } from "@/video/ilustrado/promptPlanIlustrado";
 import { elegirVariedad, type HuellaVisual } from "@/video/ilustrado/kit/variedad";
 
@@ -46,7 +46,9 @@ export async function generarPlanIlustrado(
     if (problemas.length === 0) {
       // Variedad entre reels: pared, paleta de ropa y movimiento de cámara
       // que no repiten los de los últimos reels de la cuenta.
-      const plan = { ...(candidato as PlanIlustrado), variedad: elegirVariedad(historialVisual, escenas.map((e) => e.narracion).join(" ")) };
+      // Escenario (rubro, mensajes): lo pone el código según la voz.
+      const escenario = escenarioDeNarracion(escenas);
+      const plan = { ...(candidato as PlanIlustrado), variedad: elegirVariedad(historialVisual, escenas.map((e) => e.narracion).join(" ")), ...(escenario ? { escenario } : {}) };
       return { ok: true, plan, intentos: intento, ajustes, historial };
     }
     errores = problemas;
@@ -78,7 +80,7 @@ export async function planTrasRegenerarVoz<G extends { escenas: { id: string; na
   if (opciones.activo) {
     const r = await generarPlanIlustrado(historia, opciones.llamarIA, 3, { conKit: true });
     // Se conserva la variedad que ya tenía la pieza (pared, paleta, cámara).
-    if (r.ok) return { guion: { ...guion, ilustrado: ajustar({ ...r.plan, ...(guion.ilustrado?.variedad ? { variedad: guion.ilustrado.variedad } : {}) }) }, estado: "replanificado" };
+    if (r.ok) return { guion: { ...guion, ilustrado: ajustar({ ...r.plan, ...(guion.ilustrado?.variedad ? { variedad: guion.ilustrado.variedad } : {}), ...(escenarioDeNarracion(narraciones) ? { escenario: escenarioDeNarracion(narraciones) } : {}) }) }, estado: "replanificado" };
   }
   const sinPlan = { ...guion };
   delete sinPlan.ilustrado;

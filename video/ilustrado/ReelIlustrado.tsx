@@ -21,6 +21,7 @@ import { precargarImagenes, urlsImagenesFijas } from "./imagenesFijas";
 import { generarRecursos, tarjetaDeMarca, type RecursosGenerados } from "./imagenesGeneradas";
 import { aUrlLocal } from "./recursosLocales";
 import { piezasDeComposicion, rasterizarPiezas, type ImagenesKit } from "./kit/piezas";
+import { CLAVE_FOTO, piezasDeEscenario } from "./kit/fotosEscenario";
 
 export type PropsReelIlustrado = {
   tiempos: TiemposIlustrado;
@@ -70,21 +71,24 @@ export function ReelIlustrado({ tiempos, plan, vozUrl, fotoUrl, tema, marca, pis
       // una imagen remota sin CORS (contamina el canvas y el render falla).
       // Sin foto apta (o si no se pudo bajar): la tarjeta de marca, nunca una captura con texto.
       const tarjeta = () => tarjetaDeMarca(marca.colorMarca, marca.colorSecundario, marca.inicial);
-      const fotoLocal = (foto ? await aUrlLocal(foto) : null) || (await tarjeta()) || FOTO_POR_DEFECTO();
+      // Rubro conocido por la narración (ropa): fotos ilustradas del kit (la
+      // ropa en el perchero y alguien luciéndola), en vez de la tarjeta.
+      const fotosRubro = await rasterizarPiezas(piezasDeEscenario(plan.escenario?.rubro));
+      const fotoLocal = (foto ? await aUrlLocal(foto) : null) || fotosRubro[CLAVE_FOTO.modelo]?.url || (await tarjeta()) || FOTO_POR_DEFECTO();
       const generados = await generarRecursos(fotoLocal, paleta.luz);
       // Kit de escenas: cada parte de personajes, fondos y objetos a PNG, una vez.
       const piezas = (plan.composiciones ?? []).flatMap((c) => {
         const cu = reel.registro.composicion(c.id);
         return cu ? piezasDeComposicion(cu) : [];
       });
-      const kit = piezas.length ? await rasterizarPiezas(piezas) : {};
+      const kit = { ...(piezas.length ? await rasterizarPiezas(piezas) : {}), ...fotosRubro };
       await precargarImagenes([...urlsImagenesFijas(), fotoLocal, generados.fotoApagada, generados.fotoClara, generados.brilloLuz, ...Object.values(kit).map((k) => k.url)].filter(Boolean));
       if (vigente) setListo({ recursos: generados, foto: fotoLocal, kit });
     })();
     return () => {
       vigente = false;
     };
-  }, [foto, paleta.luz, marca.colorMarca, marca.colorSecundario, marca.inicial, plan.composiciones, reel.registro]);
+  }, [foto, paleta.luz, marca.colorMarca, marca.colorSecundario, marca.inicial, plan.composiciones, plan.escenario?.rubro, reel.registro]);
   useEffect(() => {
     if (listo) continueRender(espera);
   }, [listo, espera, continueRender]);

@@ -167,7 +167,7 @@ function barraDeRopa(s: string[], x0: number, x1: number, y: number, semilla: nu
   }
 }
 // Pilas de ropa doblada (en la repisa o en la mesa).
-function ropaDoblada(s: string[], x: number, yBase: number, ancho: number, semilla: number, capas = 4) {
+export function ropaDoblada(s: string[], x: number, yBase: number, ancho: number, semilla: number, capas = 4) {
   for (let k = 0; k < capas; k++) {
     const col = COLORES_PRENDA[(semilla + k * 3) % COLORES_PRENDA.length];
     const y = yBase - (k + 1) * 26;

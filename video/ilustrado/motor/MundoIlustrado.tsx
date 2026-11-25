@@ -10,12 +10,13 @@ import { disparosDeEscena } from "./plan";
 import { PISO_Y } from "./recorrido";
 import { camaraDelCuadro, type ReelPreparado } from "./preparar";
 import { IslaBilletera, IslaGrafica, IslaMultitud, IslaOpciones, IslaRelojCliente, TAM_MONEDA } from "./escenas/Islas";
-import { PantallaChat, PantallaFeed, PantallaPerfil } from "./escenas/Pantallas";
+import { PantallaChat, PantallaFeed, PantallaPerfil, PantallaPublicacion } from "./escenas/Pantallas";
 import type { MarcaIlustrada, PaletaIlustrada, PropsEscena } from "./escenas/tipos";
 import type { TemaGuion } from "../../tema";
 import { recursosSinGenerar, type RecursosGenerados } from "../imagenesGeneradas";
 import { ENTORNO, EscenaKit, PuertaEnPantalla } from "../kit/EscenaKit";
 import type { ImagenesKit } from "../kit/piezas";
+import { CLAVE_FOTO } from "../kit/fotosEscenario";
 
 const ISLAS_DEL_MUNDO: Partial<Record<IdIsla, ComponentType<PropsEscena>>> = {
   billetera: IslaBilletera,
@@ -28,6 +29,7 @@ const PANTALLAS: Partial<Record<IdEscena, ComponentType<PropsEscena>>> = {
   feed: PantallaFeed,
   chat: PantallaChat,
   perfil: PantallaPerfil,
+  publicacion: PantallaPublicacion,
 };
 // Margen chico para decidir si una isla se ve; lo que se sale de su
 // rectángulo lo declara cada isla (el cliente que se va camina 900 a la
@@ -66,7 +68,8 @@ export function MundoIlustrado({ frame, fps, reel, paleta, tema, marca, fotoUrl,
   const objetivosKit = (escena: string) => reel.disparos.filter((x) => x.escena === escena && x.objetivo).map((x) => ({ accion: x.accion, cuadro: x.cuadro, objetivo: x.objetivo! }));
   const vista = vistaDelMundo(cam);
   const pisoEnPantalla = ALTO_PANTALLA / 2 + (PISO_Y - cam.y) * cam.zoom;
-  const props = (escena: string): PropsEscena => ({ frame, fps, d: disparosDeEscena(reel.disparos, escena), paleta, tema, marca, fotoUrl, recursos, opciones: reel.opciones });
+  const fotoPrendas = imagenesKit[CLAVE_FOTO.prendas]?.url;
+  const props = (escena: string): PropsEscena => ({ frame, fps, d: disparosDeEscena(reel.disparos, escena), paleta, tema, marca, fotoUrl, recursos, opciones: reel.opciones, escenario: reel.escenario, fotoPrendas });
 
   const islas = Object.keys(reel.recorrido).filter((id) => seTocan(rectVisible(id, reel.recorrido[id], !!reel.registro.composicion(id)), vista, MARGEN_CULLING));
 

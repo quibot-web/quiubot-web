@@ -143,7 +143,10 @@ export function Post({
   comoHtml = false,
   fotoApagadaUrl,
   fotoClaraUrl,
+  textoCta = "Comprar ahora",
 }: {
+  // Botón del anuncio ("Enviar mensaje" si la historia habla de mensajes).
+  textoCta?: string;
   // Variantes horneadas de la foto (imagenesGeneradas.ts); sin ellas, la foto tal cual.
   fotoApagadaUrl?: string;
   fotoClaraUrl?: string;
@@ -218,7 +221,7 @@ export function Post({
       </div>
       {esAnuncio && (
         <div style={{ height: ALTO_CTA, background: colorMarca, color: colorTextoSobre(colorMarca), display: "flex", alignItems: "center", justifyContent: "space-between", padding: "0 26px", fontSize: 28, fontWeight: 700 }}>
-          <span>Comprar ahora</span>
+          <span>{textoCta}</span>
           <svg viewBox="0 0 24 24" width={34} height={34}>
             <path d="m9 18 6-6-6-6" fill="none" stroke={colorTextoSobre(colorMarca)} strokeWidth="2.6" strokeLinecap="round" strokeLinejoin="round" />
           </svg>

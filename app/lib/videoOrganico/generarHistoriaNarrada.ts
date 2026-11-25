@@ -11,6 +11,7 @@ import { seccionNegocio } from "@/video/promptGuionOrganico";
 import { limpiarHashtags } from "@/video/arreglosAutomaticosGuion";
 import { asignarEstilo, elegirEstilo, estilosDisponibles } from "@/video/estilos/estilos";
 import type { PlanIlustrado } from "@/video/ilustrado/motor/plan";
+import { escenarioDeNarracion } from "@/video/ilustrado/motor/validarPlan";
 import { erroresDatosDelGuion } from "./datosReales";
 import { ajustarConVozReal, generarPlanIlustrado } from "./generarPlanIlustrado";
 import { llamarOpenAI, regenerarVozParaGuion, type ParametrosGenerarGuionConVoz, type ResultadoGenerarGuionConVoz } from "./generarGuionConVoz";
@@ -55,7 +56,10 @@ export async function generarHistoriaNarrada(params: ParametrosGenerarGuionConVo
   const historia = preguntaEn === null ? narraciones : narraciones.slice(0, preguntaEn);
   const p = await generarPlanIlustrado(historia, params.llamarIAPlan ?? llamar, 3, { conKit: true, historial: params.historialVisual ?? [] });
   if (!p.ok) return { ok: false, status: 502, error: "No se pudo ilustrar tu historia después de varios intentos.", resumenErrores: p.errores };
-  const plan: PlanIlustrado = preguntaEn === null || !opciones ? p.plan : { ...p.plan, frases: [...p.plan.frases, ...frasesDelCartel(narraciones, preguntaEn)], opciones };
+  // El escenario sale de TODA la historia (también de la pregunta final).
+  const escenario = escenarioDeNarracion(narraciones);
+  const conEscenario: PlanIlustrado = { ...p.plan, ...(escenario ? { escenario } : {}) };
+  const plan: PlanIlustrado = preguntaEn === null || !opciones ? conEscenario : { ...conEscenario, frases: [...conEscenario.frases, ...frasesDelCartel(narraciones, preguntaEn)], opciones };
 
   // 3. La voz (con su control de voz incompleta) y los tiempos.
   const voz = await regenerarVozParaGuion(guion.escenas, { openaiKey: params.apiKeyUsuario, voz: params.voz, cloudinary: params.cloudinary }, "historia_narrada");

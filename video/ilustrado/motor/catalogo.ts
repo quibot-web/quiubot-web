@@ -27,6 +27,8 @@ const ZONA_POST: Rect = { x: B, y: B, ancho: PANTALLA.ancho, alto: ALTO_BARRA_AP
 export const POST_NOMBRADO: Rect = { x: B, y: B + ALTO_BARRA_APP, ancho: PANTALLA.ancho, alto: ALTO_POST_FEED };
 const ZONA_CHAT: Rect = { x: B, y: B, ancho: PANTALLA.ancho, alto: 1030 };
 const ZONA_PERFIL: Rect = { x: B, y: B, ancho: PANTALLA.ancho, alto: 1030 };
+// La publicación propia con su botón "Promocionar" (debajo de los Me gusta).
+const ZONA_PUBLICACION: Rect = { x: B, y: B, ancho: PANTALLA.ancho, alto: 1110 };
 
 // Billetera: 600 x 450 abajo, con lugar arriba para las monedas que saltan.
 export const BILLETERA_LOCAL: Rect = { x: 80, y: 450, ancho: 600, alto: 450 };
@@ -116,6 +118,15 @@ export const CATALOGO = {
       se_vuelve_venta: { descripcion: "el último mensaje del cliente se convierte en una bolsa de compra", foco: ZONA_CHAT },
     },
   },
+  publicacion: {
+    isla: "celular",
+    acciones: {
+      micro: { descripcion: "la publicación se mueve un poco (micro-acción neutra)", foco: ZONA_PUBLICACION },
+      aparece: { descripcion: "se abre una publicación PROPIA de la marca (su cuenta, sin \"Patrocinado\") con sus Me gusta", foco: ZONA_PUBLICACION },
+      suben_likes: { descripcion: "los Me gusta de esa publicación propia suben y saltan corazones", foco: ZONA_PUBLICACION },
+      toca_promocionar: { descripcion: "el dedo toca el botón Promocionar de la publicación propia", foco: ZONA_PUBLICACION },
+    },
+  },
   perfil: {
     isla: "celular",
     acciones: {
@@ -179,6 +190,7 @@ export const ESCENA_VISIBLE: Record<IdEscena, string> = {
   feed: "un celular grande con un feed de publicaciones (una publicación o anuncio con su foto)",
   chat: "un celular grande con un chat y burbujas de mensajes",
   perfil: "un celular grande con el perfil de una cuenta y el botón Seguir/Siguiendo",
+  publicacion: "un celular grande con una publicación de la marca, su contador de Me gusta y el botón Promocionar",
   billetera: "una billetera grande (con monedas)",
   multitud: "una multitud de personas ilustradas",
   reloj_cliente: "un reloj grande junto a un cliente ilustrado",

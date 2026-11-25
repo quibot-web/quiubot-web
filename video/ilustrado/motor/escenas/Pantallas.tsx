@@ -88,7 +88,7 @@ export function coreografiaFeed(acciones: { accion: string; cuadro: number }[]):
   return res;
 }
 
-export function PantallaFeed({ frame, fps, d, marca, fotoUrl, recursos }: PropsEscena) {
+export function PantallaFeed({ frame, fps, d, marca, fotoUrl, recursos, escenario }: PropsEscena) {
   const acciones = Object.entries(d).flatMap(([accion, cuadros]) => cuadros.map((cuadro) => ({ accion, cuadro })));
   const c = coreografiaFeed(acciones);
   const pos = claves(c.pares, frame);
@@ -122,6 +122,7 @@ export function PantallaFeed({ frame, fps, d, marca, fotoUrl, recursos }: PropsE
                 brillo={rampa(frame, aclara, 12)}
                 colorMarca={marca.colorMarca}
                 nombreTienda={marca.nombreTienda}
+                textoCta={escenario?.mensajes ? "Enviar mensaje" : "Comprar ahora"}
                 corazon={corazon ? spring({ frame: frame - corazon.cuadro, fps, config: { damping: 9, stiffness: 160 } }) : 0}
               />
             );
@@ -162,13 +163,17 @@ const HORAS = ["10:42", "10:42", "10:43", "10:43", "10:44", "10:44"];
 // abrirlo: el chat nunca arranca vacío (QC de staging, 23 nov 2026).
 const ADELANTAR_PRIMER_MENSAJE = 45; // cuadros (1,5 s)
 
-export function PantallaChat({ frame, fps, d, marca, desdePantalla }: PropsEscena) {
+// Lo que escribe la clienta según el rubro de la historia (sin precios ni datos).
+const MENSAJES_RUBRO: Record<string, string[]> = { ropa: ["Hola", "¿Precio?", "¿Hay talla M?"] };
+
+export function PantallaChat({ frame, fps, d, marca, desdePantalla, escenario }: PropsEscena) {
+  const mensajesCliente = (escenario?.rubro && MENSAJES_RUBRO[escenario.rubro]) || marca.chat.cliente;
   const aparece = (desde: number) => (frame >= desde ? spring({ frame: frame - desde, fps, config: { damping: 13 } }) : 0);
   const items = [
     ...(d.llega_mensaje ?? []).map((cuadro, k) => {
       // El primero, si llega poco después de abrir el chat, ya está al abrirlo (sin animación).
       const inmediato = k === 0 && desdePantalla !== undefined && cuadro - desdePantalla <= ADELANTAR_PRIMER_MENSAJE;
-      return { tipo: "cliente" as const, cuadro: inmediato ? Math.min(cuadro, desdePantalla!) : cuadro, inmediato, texto: marca.chat.cliente[k % marca.chat.cliente.length] };
+      return { tipo: "cliente" as const, cuadro: inmediato ? Math.min(cuadro, desdePantalla!) : cuadro, inmediato, texto: mensajesCliente[k % mensajesCliente.length] };
     }),
     ...(d.responde ?? []).slice(0, 1).map((cuadro) => ({ tipo: "tienda" as const, cuadro, inmediato: false, texto: marca.chat.respuesta })),
   ].sort((a, b) => a.cuadro - b.cuadro);
@@ -270,3 +275,65 @@ export function PantallaPerfil({ frame, d, marca, fotoUrl }: PropsEscena) {
     </div>
   );
 }
+
+// ---------- Publicación propia (con "Promocionar") ----------
+// La publicación de la MARCA (su cuenta, sin "Patrocinado"): los Me gusta
+// suben con corazones y el dedo toca "Promocionar". Historia narrada: la
+// opción "promocionar la publicación con más likes".
+const ALTO_FOTO_PUBLICACION = 600;
+const AZUL_PROMOCIONAR = "#0A84FF";
+const formatoMiles = (n: number) => Math.round(n).toString().replace(/\B(?=(\d{3})+(?!\d))/g, ".");
+export function PantallaPublicacion({ frame, fps, d, marca, fotoUrl, fotoPrendas }: PropsEscena) {
+  const suben = primero(d.suben_likes);
+  const toque = primero(d.toca_promocionar);
+  const k = rampa(frame, suben, 45);
+  const meGusta = 96 + (1204 - 96) * (1 - (1 - k) * (1 - k));
+  const lleno = suben !== undefined && frame >= suben;
+  const presion = toque !== undefined ? Math.sin(Math.min(1, Math.max(0, (frame - toque) / 10)) * Math.PI) : 0;
+  const promocionado = toque !== undefined && frame >= toque + 6;
+  const yFoto = ALTO_BARRA_FEED + 96;
+  const yBoton = yFoto + ALTO_FOTO_PUBLICACION + 84 + 56 + 12;
+  // La mano baja hasta el botón para tocarlo y se va.
+  const manoVisible = toque !== undefined && frame >= toque - 12 && frame <= toque + 26;
+  const manoY = toque !== undefined ? yBoton - 30 + 200 * (1 - rampa(frame, toque - 12, 12)) : 0;
+  return (
+    <div style={{ position: "absolute", inset: 0, background: "#fff", fontFamily: "Poppins, sans-serif", color: "#1c1c22" }}>
+      <div style={{ height: ALTO_BARRA_FEED, display: "flex", alignItems: "flex-end", gap: 18, padding: "0 26px 22px", borderBottom: "2px solid #eee" }}>
+        <ImagenFija nombre="ico-atras" ancho={46} alto={46} />
+        <span style={{ fontSize: 32, fontWeight: 700 }}>Publicaciones</span>
+      </div>
+      <div style={{ height: 96, display: "flex", alignItems: "center", gap: 18, padding: "0 26px" }}>
+        <div style={{ width: 64, height: 64, borderRadius: "50%", background: marca.colorMarca, color: colorTextoSobre(marca.colorMarca), display: "flex", alignItems: "center", justifyContent: "center", fontSize: 30, fontWeight: 800 }}>{marca.inicial}</div>
+        <span style={{ fontSize: 28, fontWeight: 700 }}>{marca.nombreTienda}</span>
+      </div>
+      <div style={{ position: "relative", height: ALTO_FOTO_PUBLICACION, overflow: "hidden", background: "#eee" }}>
+        {/* eslint-disable-next-line @next/next/no-img-element -- dibujo del video; precargada en ReelIlustrado */}
+        <img alt="" decoding="sync" crossOrigin="anonymous" src={fotoPrendas ?? fotoUrl} style={{ position: "absolute", inset: 0, width: "100%", height: "100%", objectFit: "cover" }} />
+        {/* Corazones que suben mientras crecen los Me gusta. */}
+        {suben !== undefined &&
+          [0, 1, 2, 3, 4, 5].map((i) => {
+            const t = frame - suben - i * 7;
+            if (t < 0 || t > 40) return null;
+            const q = t / 40;
+            return (
+              <div key={i} style={{ position: "absolute", left: 470 + ((i * 53) % 150), top: ALTO_FOTO_PUBLICACION - 140 - 380 * q, width: 110, height: 110, opacity: 1 - q, transform: `scale(${0.6 + 0.5 * Math.sin(q * Math.PI)})` }}>
+                <ImagenFija nombre="corazon-grande" ancho={110} alto={110} />
+              </div>
+            );
+          })}
+      </div>
+      <div style={{ height: 84, display: "flex", alignItems: "center", gap: 28, padding: "0 26px" }}>
+        <ImagenFija nombre={lleno ? "ico-corazon-lleno" : "ico-corazon"} ancho={50} alto={50} estilo={{ transform: `scale(${1 + 0.25 * latido(frame, d.suben_likes, 12)})` }} />
+        <ImagenFija nombre="ico-comentario" ancho={48} alto={48} />
+        <ImagenFija nombre="ico-compartir" ancho={48} alto={48} />
+      </div>
+      <div style={{ height: 56, padding: "0 26px", fontSize: 30, fontWeight: 800 }}>{formatoMiles(meGusta)} Me gusta</div>
+      <div style={{ position: "absolute", left: 26, right: 26, top: yBoton, height: 92, borderRadius: 18, background: promocionado ? "#0062CC" : AZUL_PROMOCIONAR, color: "#fff", display: "flex", alignItems: "center", justifyContent: "center", gap: 14, fontSize: 34, fontWeight: 800, transform: `scale(${1 - 0.05 * presion})` }}>
+        {promocionado && <IconoCheck tamano={40} />}
+        {promocionado ? "Promocionando" : "Promocionar"}
+      </div>
+      {manoVisible && <Mano x={330} y={manoY} escala={1 - 0.15 * presion} opacidad={1 - rampa(frame, (toque ?? 0) + 18, 8)} />}
+    </div>
+  );
+}
+

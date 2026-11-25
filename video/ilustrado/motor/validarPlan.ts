@@ -9,7 +9,7 @@
 // explicación de la IA cuando el concepto no está en el catálogo.
 import { z } from "zod";
 import { CATALOGO, ESCENAS_SOLO_CODIGO, ID_ESCENAS, MICRO, definicionAccion } from "./catalogo";
-import { problemasDelPlan, type PlanIlustrado } from "./plan";
+import { problemasDelPlan, type EscenarioPlan, type PlanIlustrado } from "./plan";
 import { caminantesDePlan, crearRegistro, type Registro } from "./registro";
 import { ComposicionKitSchema } from "../kit/catalogoKit";
 import { problemasVariedad, VariedadSchema, type HuellaVisual } from "../kit/variedad";
@@ -49,8 +49,17 @@ export const PlanIlustradoSchema = z
     variedad: VariedadSchema.optional(),
     // Historia narrada: los textos del cartel de opciones (los pone el código).
     opciones: z.object({ a: z.string().min(1).max(30), b: z.string().min(1).max(30) }).strict().optional(),
+    // Lo pone el código (escenarioDeNarracion).
+    escenario: z.object({ rubro: z.enum(["ropa"]).optional(), mensajes: z.boolean().optional() }).strict().optional(),
   })
   .strict();
+
+// El escenario de un reel según lo que dice la voz (lo pone el código).
+export function escenarioDeNarracion(narraciones: { narracion: string }[]): EscenarioPlan | undefined {
+  const t = narraciones.map((n) => n.narracion).join(" ");
+  const e: EscenarioPlan = { ...(HABLA_DE_ROPA.test(t) ? { rubro: "ropa" as const } : {}), ...(/whats\s?app|mensajes?\b|te escrib|escr[ií]ban/i.test(t) ? { mensajes: true } : {}) };
+  return Object.keys(e).length ? e : undefined;
+}
 
 // Ritmo: la voz va a ~2,8 palabras por segundo; 7 palabras ~ 2,5 s. Es
 // la GUÍA antes de la voz; la regla final es por tiempo (MAX_SEGUNDOS_SIN_CAMBIO).

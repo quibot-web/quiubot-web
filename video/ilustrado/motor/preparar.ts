@@ -11,7 +11,7 @@ import type { MovimientoCamara } from "../kit/variedad";
 import { acercar, desplazar, type Encuadre } from "./geometria";
 import { rectPersonaje } from "../kit/composicion";
 import { CELULAR_ISLA } from "./catalogo";
-import { resolverDisparos, type Disparo, type PlanIlustrado } from "./plan";
+import { resolverDisparos, type Disparo, type EscenarioPlan, type PlanIlustrado } from "./plan";
 import { construirRecorrido, type Recorrido } from "./recorrido";
 
 export type CambioPantalla = { cuadro: number; pantalla: IdEscena };
@@ -34,6 +34,7 @@ export type ReelPreparado = {
   movimiento?: MovimientoCamara;
   // Historia narrada: los textos del cartel de opciones.
   opciones?: OpcionesCartel;
+  escenario?: EscenarioPlan;
 };
 
 export const DURACION_VIAJE = 20;
@@ -103,7 +104,7 @@ export function prepararReel(tiempos: TiemposIlustrado, plan: PlanIlustrado, fps
     }
   }
   const pulsos = disparos.filter((d) => d.accion === MICRO).map((d) => d.cuadro);
-  return { linea, disparos, recorrido, tomas, camara, pantallas, viajes, pulsos, registro, puertas, movimiento: plan.variedad?.camara, opciones: plan.opciones };
+  return { linea, disparos, recorrido, tomas, camara, pantallas, viajes, pulsos, registro, puertas, movimiento: plan.variedad?.camara, opciones: plan.opciones, escenario: plan.escenario };
 }
 
 // Lo que el reel muestra en un cuadro (lo usan el render, el control de

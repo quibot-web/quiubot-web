@@ -16,7 +16,11 @@ export type FrasePlan = { escena_id: string; acciones: AccionPlan[]; metafora?: 
 // variedad: pared, paleta de ropa y movimiento de cámara que eligió el
 // código para este reel (lo leen los reels siguientes de la cuenta).
 // opciones: los textos del cartel final de una historia narrada (los pone el código).
-export type PlanIlustrado = { frases: FrasePlan[]; composiciones?: ComposicionKit[]; variedad?: Variedad; opciones?: OpcionesCartel };
+// escenario: lo que el código sabe de la historia por la narración (rubro,
+// si se habla de mensajes): cambia las fotos ilustradas, el botón del
+// anuncio y los mensajes del chat. Nunca lo escribe la IA.
+export type EscenarioPlan = { rubro?: "ropa"; mensajes?: boolean };
+export type PlanIlustrado = { frases: FrasePlan[]; composiciones?: ComposicionKit[]; variedad?: Variedad; opciones?: OpcionesCartel; escenario?: EscenarioPlan };
 
 // Una acción ya con su cuadro global.
 export type Disparo = AccionPlan & { cuadro: number; frase: string; inicioFrase: number };
