@@ -169,8 +169,13 @@ const MENSAJES_RUBRO: Record<string, string[]> = { ropa: ["Hola", "¿Precio?", "
 export function PantallaChat({ frame, fps, d, marca, desdePantalla, escenario }: PropsEscena) {
   const mensajesCliente = (escenario?.rubro && MENSAJES_RUBRO[escenario.rubro]) || marca.chat.cliente;
   const aparece = (desde: number) => (frame >= desde ? spring({ frame: frame - desde, fps, config: { damping: 13 } }) : 0);
+  // Si la historia habla de mensajes, el chat se llena: desde el primero,
+  // los mensajes del rubro llegan seguidos (cada ~0,27 s), así se ven todos
+  // aunque la voz nombre el chat al final de la frase.
+  const primeraLlegada = d.llega_mensaje?.[0];
+  const llegadas = escenario?.mensajes && primeraLlegada !== undefined ? mensajesCliente.map((_, k) => primeraLlegada + k * 8) : [...(d.llega_mensaje ?? [])];
   const items = [
-    ...(d.llega_mensaje ?? []).map((cuadro, k) => {
+    ...llegadas.map((cuadro, k) => {
       // El primero, si llega poco después de abrir el chat, ya está al abrirlo (sin animación).
       const inmediato = k === 0 && desdePantalla !== undefined && cuadro - desdePantalla <= ADELANTAR_PRIMER_MENSAJE;
       return { tipo: "cliente" as const, cuadro: inmediato ? Math.min(cuadro, desdePantalla!) : cuadro, inmediato, texto: mensajesCliente[k % mensajesCliente.length] };

@@ -57,3 +57,12 @@ describe("escenario de la historia", () => {
     expect(texto({ ...base, frame: 20, d }, PantallaFeed)).toMatch(/Comprar ahora/);
   });
 });
+
+describe("chat lleno cuando la historia habla de mensajes", () => {
+  it("con dos llegadas, los tres mensajes del rubro igual llegan (seguidos)", () => {
+    const d = { llega_mensaje: [0, 20] };
+    const t = texto({ ...base, frame: 80, d, escenario: { rubro: "ropa", mensajes: true } }, PantallaChat);
+    for (const m of ["Hola", "¿Precio?", "¿Hay talla M?"]) expect(t).toContain(m);
+    expect(texto({ ...base, frame: 80, d, escenario: { rubro: "ropa" } }, PantallaChat)).not.toMatch(/talla/);
+  });
+});
