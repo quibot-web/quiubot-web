@@ -639,7 +639,8 @@ export function EscenaKit({ cu, frame, fps, d: disparos, imagenes, objetivos, vi
     const s = u.sentado;
     // Quien pasa de largo va por detrás de lo que pasa (la vitrina): lo que
     // no mira sigue a la vista.
-    const z = d[`${u.per.id}.pasa_de_largo`]?.length ? zDetrasDelPaso(u, cu) : zDe(u);
+    // Quien cruza la puerta hacia el fondo queda detrás de los que están más adelante.
+    const z = d[`${u.per.id}.pasa_de_largo`]?.length ? zDetrasDelPaso(u, cu) : zDe(u) + (presenciaDe(u, cu, d, frame).dy ?? 0);
     const silla = imagenes[clave.silla()];
     const pupitre = s ? imagenes[clave.objeto(s.mueble)] : undefined;
     piso.push({

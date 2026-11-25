@@ -7,7 +7,8 @@
 // con la semilla (ropa, piel, peinado), respiran, parpadean y miran lo que
 // pasa (mira_a: la cartelera o el protagonista).
 import { LUGARES_PISO, POSICIONES, type ComposicionKit, type ObjetoKit, type PersonajeKit } from "./catalogoKit";
-import { hashTexto, problemasComposicion } from "./composicion";
+import { POS_X, hashTexto, problemasComposicion } from "./composicion";
+import { PUERTAS, PUERTA_X } from "./dibujoLugares";
 
 export const MIN_PERSONAJES_SALON = 5;
 export const MIN_SENTADOS_FONDO = 2;
@@ -95,7 +96,10 @@ function completarOtroLugar(c: ComposicionKit, semilla: string, admite: (c: Comp
     const i = POSICIONES.indexOf(o.lugar.replace("piso_", "") as (typeof POSICIONES)[number]);
     for (const j of [i - 1, i, i + 1]) tapados.add(j);
   }
-  const candidatos = POSICIONES.filter((pos) => !ocupadas.has(`${pos}-fondo`) && !tapados.has(POSICIONES.indexOf(pos))).sort((a, b) => Number(dePieAdelante.has(a)) - Number(dePieAdelante.has(b)) || (hashTexto(a + h) % 7) - (hashTexto(b + h) % 7));
+  // Ni delante de la puerta: por ahí entra y sale la gente (revisión de la
+  // tanda 2: un extra parado en la puerta tapaba al que se iba).
+  const enLaPuerta = (pos: (typeof POSICIONES)[number]) => !!PUERTAS[fondo] && Math.abs(POS_X[pos] - PUERTA_X[fondo]) < PUERTAS[fondo]!.ancho;
+  const candidatos = POSICIONES.filter((pos) => !ocupadas.has(`${pos}-fondo`) && !tapados.has(POSICIONES.indexOf(pos)) && !enLaPuerta(pos)).sort((a, b) => Number(dePieAdelante.has(a)) - Number(dePieAdelante.has(b)) || (hashTexto(a + h) % 7) - (hashTexto(b + h) % 7));
   let actual = c;
   let n = 0;
   for (const posicion of candidatos) {
