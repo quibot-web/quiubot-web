@@ -67,7 +67,7 @@ export const ESTILOS = `
 .qb-clase .p-estratega { animation-duration: 7s; animation-delay: -2s; }
 @keyframes qbFlota { 0%, 100% { transform: translate3d(0,0,0); } 50% { transform: translate3d(0,-4px,0); } }
 
-.qb-clase .contenido { width: 100%; max-width: 600px; margin: 0 auto; padding: 6px 20px 120px; display: grid; gap: 22px; flex: 1; align-content: start; }
+.qb-clase .contenido { width: 100%; max-width: 600px; margin: 0 auto; padding: 6px 20px 36px; display: grid; gap: 22px; flex: 1; align-content: start; }
 
 /* ---------- Título y fecha ---------- */
 .qb-clase h1 { font-size: clamp(30px, 8.6vw, 46px); line-height: 1.06; font-weight: 700; text-wrap: balance; color: #fff; }
@@ -120,6 +120,9 @@ export const ESTILOS = `
 .qb-clase .aprender li svg { flex: none; margin-top: 2px; color: #3BEA84; }
 
 .qb-clase .pie { display: flex; justify-content: center; gap: 8px; padding: 0 22px 22px; font-size: 13.5px; color: var(--muted); }
+/* Espacio al final de la página para la barra fija (celular): al llegar
+   abajo, ningún texto queda debajo de ella. */
+.qb-clase .espacio-barra { height: calc(88px + env(safe-area-inset-bottom)); flex: none; }
 
 /* ---------- Barra fija de abajo (solo celular) ---------- */
 .qb-clase .barra-fija { position: fixed; left: 0; right: 0; bottom: 0; z-index: 20; padding: 10px 16px calc(10px + env(safe-area-inset-bottom));
@@ -129,7 +132,7 @@ export const ESTILOS = `
 .qb-clase .barra-fija .btn-principal { min-height: 64px; animation: none; }
 
 @media (min-width: 920px) {
-  .qb-clase .barra-fija { display: none; }
+  .qb-clase .barra-fija, .qb-clase .espacio-barra { display: none; }
   .qb-clase .contenido { padding: 30px 20px 56px; }
 }
 

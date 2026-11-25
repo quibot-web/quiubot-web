@@ -219,6 +219,8 @@ export default function ClaseEnVivo({ ahoraServidor }: { ahoraServidor: number }
           <a href="https://quiubot.site">quiubot.site</a>
         </footer>
 
+        <div className="espacio-barra" aria-hidden="true" />
+
         {/* Barra fija de abajo, solo en celular: el mismo botón. Mientras
             no se ve, sale del orden de tabulación y del lector de pantalla. */}
         <div className="barra-fija" data-visible={conBarra} data-testid="barra-fija" inert={!conBarra}>
