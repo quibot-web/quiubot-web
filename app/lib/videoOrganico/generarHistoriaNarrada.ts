@@ -65,7 +65,7 @@ export async function generarHistoriaNarrada(params: ParametrosGenerarGuionConVo
   const plan: PlanIlustrado = preguntaEn === null || !opciones ? conEscenario : { ...conEscenario, frases: [...conEscenario.frases, ...frasesDelCartel(narraciones, preguntaEn)], opciones: { ...opciones, ...iconos } };
 
   // 3. La voz (con su control de voz incompleta) y los tiempos.
-  const voz = await regenerarVozParaGuion(guion.escenas, { openaiKey: params.apiKeyUsuario, voz: params.voz, cloudinary: params.cloudinary }, "historia_narrada");
+  const voz = await regenerarVozParaGuion(guion.escenas, { openaiKey: params.apiKeyUsuario, voz: params.voz, cloudinary: params.cloudinary, revisarVozCompleta: true }, "historia_narrada");
   if (!voz.ok) return voz;
   const ajuste = voz.campos.palabrasPorEscena ? ajustarConVozReal(plan, voz.campos.palabrasPorEscena) : { plan, ajustes: [] };
   const guionFinal: Guion = {

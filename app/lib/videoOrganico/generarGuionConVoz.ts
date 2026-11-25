@@ -104,7 +104,10 @@ export type ResultadoGenerarGuionConVoz =
     }
   | { ok: false; status: number; error: string; resumenErrores?: string[]; propuestaSerie?: PropuestaSerie };
 
-export type ParametrosRegenerarVoz = { openaiKey: string; voz: string; cloudinary: CredencialesCloudinary };
+// revisarVozCompleta: revisar que la voz diga todo el guion y pedirla una
+// vez más si llegó cortada. Solo para cuentas del reel ilustrado (y el
+// arnés admin): para los clientes la voz sigue igual que antes (un intento).
+export type ParametrosRegenerarVoz = { openaiKey: string; voz: string; cloudinary: CredencialesCloudinary; revisarVozCompleta?: boolean };
 
 export type ResultadoRegenerarVoz =
   | {
@@ -167,8 +170,8 @@ export async function generarVozYTiempos(narraciones: { id: string; narracion: s
   // alineación ANTES de seguir y se pide una vez más; si vuelve a fallar,
   // no se entrega (mejor un error claro que un reel sin su última frase).
   let intento = await generarYAlinear(textoCompleto, narraciones, params);
-  if (vozIncompleta(intento.alineacion).length > 0) intento = await generarYAlinear(textoCompleto, narraciones, params);
-  const faltas = vozIncompleta(intento.alineacion);
+  if (params.revisarVozCompleta && vozIncompleta(intento.alineacion).length > 0) intento = await generarYAlinear(textoCompleto, narraciones, params);
+  const faltas = params.revisarVozCompleta ? vozIncompleta(intento.alineacion) : [];
   if (faltas.length > 0) {
     return { ok: false, status: 502, error: "La voz generada llegó incompleta dos veces (le faltan palabras del guion).", resumenErrores: faltas };
   }
@@ -348,7 +351,7 @@ export async function generarGuionConVoz(params: ParametrosGenerarGuionConVoz): 
   // todos modos se iba a descartar. Comparte la segunda mitad del
   // pipeline con regenerarVozParaGuion() (revisión en /contenido tras
   // editar una narración a mano) -- una sola implementación real.
-  const resultadoVoz = await regenerarVozParaGuion(resultado.guion.escenas, { openaiKey: params.apiKeyUsuario, voz: params.voz, cloudinary: params.cloudinary });
+  const resultadoVoz = await regenerarVozParaGuion(resultado.guion.escenas, { openaiKey: params.apiKeyUsuario, voz: params.voz, cloudinary: params.cloudinary, revisarVozCompleta: params.conPlanIlustrado === true });
   if (!resultadoVoz.ok) {
     return resultadoVoz;
   }
