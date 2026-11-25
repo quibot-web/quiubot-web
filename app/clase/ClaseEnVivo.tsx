@@ -140,7 +140,7 @@ export default function ClaseEnVivo({ ahoraServidor }: { ahoraServidor: number }
           <p className="sub">{SUBTITULO_CLASE}</p>
           <p className="fecha-corta">
             <IconoCalendario />
-            <span>Jueves 26 de noviembre · 8:00 p. m. <span className="suave">hora de Colombia</span></span>
+            <span>Jueves 26 de noviembre · {"8:00\u00a0p.\u00a0m."} <span className="suave">hora de Colombia</span></span>
           </p>
         </section>
 
@@ -174,7 +174,7 @@ export default function ClaseEnVivo({ ahoraServidor }: { ahoraServidor: number }
             </div>
             <div>
               <dt>Hora</dt>
-              <dd>8:00 a 10:00 p. m., hora de Colombia</dd>
+              <dd>{"8:00 a 10:00\u00a0p.\u00a0m."}, hora de Colombia</dd>
             </div>
             {horaLocal && (
               <div className="tu-hora">
@@ -189,14 +189,16 @@ export default function ClaseEnVivo({ ahoraServidor }: { ahoraServidor: number }
           </dl>
         </section>
 
+        {estado === "antes" && (
         <section className="pasos" aria-labelledby="titulo-pasos">
           <h2 id="titulo-pasos">Cómo participar</h2>
           <ol>
             <li><span className="paso-num" aria-hidden="true">1</span><span>Únete al grupo de WhatsApp de la comunidad.</span></li>
             <li><span className="paso-num" aria-hidden="true">2</span><span>Guarda la fecha en tu calendario.</span></li>
-            <li><span className="paso-num" aria-hidden="true">3</span><span>Nos vemos el jueves 26 a las 8:00 p. m.</span></li>
+            <li><span className="paso-num" aria-hidden="true">3</span><span>{"Nos vemos el jueves 26 a las 8:00\u00a0p.\u00a0m."}</span></li>
           </ol>
         </section>
+        )}
       </div>
 
       <footer className="pie">

@@ -69,6 +69,7 @@ describe("los tres estados según la hora", () => {
     expect(html).toMatch(/>01<\/span><span class="unidad-nombre">días/);
     expect(html).toMatch(/>09<\/span><span class="unidad-nombre">horas/);
     expect(html).toContain("Agregar a mi calendario");
+    expect(html).toContain("Cómo participar");
     expect(html).not.toContain("está en vivo");
     expect(html).not.toContain("La clase terminó");
   });
@@ -79,6 +80,7 @@ describe("los tres estados según la hora", () => {
       expect(html).toContain("¡La clase está en vivo!");
       expect(html).not.toContain("La clase empieza en");
       expect(html).not.toContain("La clase terminó");
+      expect(html).not.toContain("Cómo participar");
     }
   });
 
@@ -87,6 +89,8 @@ describe("los tres estados según la hora", () => {
     expect(html).toContain("La clase terminó. Únete a la comunidad para la próxima");
     expect(html).not.toContain("La clase empieza en");
     expect(html).not.toContain("está en vivo");
+    expect(html).not.toContain("Agregar a mi calendario");
+    expect(html).not.toContain("Cómo participar");
   });
 });
 
