@@ -1,7 +1,7 @@
 import { createElement } from "react";
 import { renderToString } from "react-dom/server";
 import { describe, expect, it, vi } from "vitest";
-import ClaseEnVivo, { CHIP_POR_ESTADO, LO_QUE_VAS_A_APRENDER } from "./ClaseEnVivo";
+import ClaseEnVivo, { ESTADO_TEXTO, LO_QUE_VAS_A_APRENDER, TEXTO_BOTON, TITULO_CORTO } from "./ClaseEnVivo";
 import {
   ENLACE_COMUNIDAD,
   FIN_EN_VIVO,
@@ -66,59 +66,65 @@ describe("los tres estados según la hora", () => {
     expect(estadoClase(despues)).toBe("terminada");
   });
 
-  it("antes: cuenta regresiva con días, horas, minutos y segundos", () => {
+  it("antes: título corto, fecha en una línea y cuenta regresiva compacta (d h m s)", () => {
     expect(tiempoRestante(antes)).toEqual({ dias: 1, horas: 9, minutos: 30, segundos: 0 });
     expect(tiempoRestante(justoAntes)).toEqual({ dias: 0, horas: 0, minutos: 0, segundos: 0 });
     const html = render(antes);
-    expect(html).toContain("La clase empieza en");
+    expect(TITULO_CORTO).toBe("Clase gratis en vivo: cómo decide Meta qué anuncios mostrar");
+    expect(html).toContain("Clase gratis en vivo: ");
+    expect(html).toContain("Jueves 26 nov · 8:00\u00a0p.\u00a0m. (Colombia)");
+    expect(html).toContain("Empieza en");
     expect(html).toContain('role="timer"');
-    expect(html).toMatch(/>01<\/span><span class="unidad-nombre">días/);
-    expect(html).toMatch(/>09<\/span><span class="unidad-nombre">horas/);
+    expect(html).toMatch(/>01<\/span><span class="unidad-nombre">d</);
+    expect(html).toMatch(/>09<\/span><span class="unidad-nombre">h</);
     expect(html).toContain("Agregar a mi calendario");
-    expect(html).toContain("Cómo participar");
     expect(html).not.toContain("está en vivo");
     expect(html).not.toContain("La clase terminó");
+    // Sin relleno: ni "Cuándo" ni "Cómo participar".
+    expect(html).not.toContain("Cómo participar");
+    expect(html).not.toContain(">Cuándo<");
   });
 
   it("en vivo: desde las 8:00 p. m. y durante 4 h 30 min", () => {
     for (const t of [alEmpezar, casiTermina]) {
       const html = render(t);
-      expect(html).toContain("¡La clase está en vivo!");
-      expect(html).not.toContain("La clase empieza en");
+      expect(html).toContain(ESTADO_TEXTO.en_vivo);
+      expect(html).toContain('data-estado="en_vivo"');
+      expect(html).not.toContain("Empieza en");
       expect(html).not.toContain("La clase terminó");
-      expect(html).not.toContain("Cómo participar");
     }
   });
 
   it("después: la clase terminó, con el mismo botón", () => {
     const html = render(despues);
     expect(html).toContain("La clase terminó. Únete a la comunidad para la próxima");
-    expect(html).not.toContain("La clase empieza en");
+    expect(html).not.toContain("Empieza en");
     expect(html).not.toContain("está en vivo");
     expect(html).not.toContain("Agregar a mi calendario");
-    expect(html).not.toContain("Cómo participar");
-  });
-});
-
-describe("chip de arriba según el estado", () => {
-  const chip = (html: string) => html.match(/data-testid="chip-estado"[^>]*>(?:<span[^>]*><\/span>)?([^<]*)</)?.[1];
-  it("antes dice Online (nunca \"en vivo\"), durante \"En vivo ahora\", después \"Próxima clase en la comunidad\"", () => {
-    expect(chip(render(INICIO_CLASE - 1))).toBe("Clase gratuita · Online");
-    expect(chip(render(INICIO_CLASE))).toBe("En vivo ahora");
-    expect(chip(render(FIN_EN_VIVO))).toBe("Próxima clase en la comunidad");
-    expect(CHIP_POR_ESTADO.antes.toLowerCase()).not.toContain("en vivo");
   });
 });
 
 describe("Lo que vas a aprender", () => {
-  it("los cuatro puntos, antes y durante la clase; no después", () => {
-    expect(LO_QUE_VAS_A_APRENDER).toHaveLength(4);
+  it("tres líneas cortas, antes y durante la clase; no después", () => {
+    expect(LO_QUE_VAS_A_APRENDER).toEqual(["Meta y la subasta", "Por qué Instagram muestra unas publicaciones y otras no", "Anuncios que detienen el dedo"]);
     for (const t of [INICIO_CLASE - 1, INICIO_CLASE]) {
       const html = render(t);
       expect(html).toContain("Lo que vas a aprender");
       for (const punto of LO_QUE_VAS_A_APRENDER) expect(html).toContain(punto);
     }
     expect(render(FIN_EN_VIVO)).not.toContain("Lo que vas a aprender");
+  });
+});
+
+describe("barra fija de abajo", () => {
+  it("existe con el mismo enlace, pero al cargar está oculta y fuera del foco (aparece solo cuando el botón sale de pantalla)", () => {
+    const html = render(INICIO_CLASE - 60_000);
+    const barra = html.match(/<div[^>]*data-testid="barra-fija"[^>]*>/)?.[0] ?? "";
+    expect(barra).toContain('data-visible="false"');
+    expect(barra).toContain("inert");
+    const despues = html.slice(html.indexOf('data-testid="barra-fija"'));
+    expect(despues).toContain(`href="${ENLACE_COMUNIDAD}"`);
+    expect(despues).toContain('tabindex="-1"');
   });
 });
 
@@ -131,7 +137,8 @@ describe("botón principal", () => {
       expect(boton).toContain(`href="${ENLACE_COMUNIDAD}"`);
       expect(boton).toContain('target="_blank"');
       expect(boton).toContain('rel="noopener noreferrer"');
-      expect(html).toContain("Unirme a la comunidad");
+      expect(html).toContain(TEXTO_BOTON);
+      expect(TEXTO_BOTON).toBe("Unirme gratis →");
     }
   });
 });
