@@ -36,6 +36,12 @@ describe("/clase es pública", () => {
     expect(await pedirSinSesion("/clases")).toMatch(/\/login/);
     expect(await pedirSinSesion("/contenido")).toMatch(/\/login/);
   });
+
+  it("/privacidad, /terminos y /eliminar-datos también se abren sin sesión (revisión de Meta)", async () => {
+    for (const ruta of ["/privacidad", "/terminos", "/eliminar-datos"]) {
+      expect(await pedirSinSesion(ruta), ruta).toBe("pasa");
+    }
+  });
 });
 
 describe("hora de la clase", () => {
