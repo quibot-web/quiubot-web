@@ -65,7 +65,11 @@ const ZONA_RELOJ_CLIENTE: Rect = unionRects([
 // Cartel de opciones (Historia narrada): la pregunta final con A y B y la
 // invitación a comentar. Lo pone el código, nunca la IA, y es la única
 // excepción a "nada de texto grande" del reel ilustrado.
-export type OpcionesCartel = { a: string; b: string };
+// iconoA / iconoB: la miniatura animada de la escena que ilustró cada
+// opción (la pone el código), para que el cartel tenga vida.
+export const ICONOS_OPCION = ["likes", "mensajes", "monedas"] as const;
+export type IconoOpcion = (typeof ICONOS_OPCION)[number];
+export type OpcionesCartel = { a: string; b: string; iconoA?: IconoOpcion; iconoB?: IconoOpcion };
 export const CARTEL_LOCAL: Rect = { x: 40, y: 40, ancho: 820, alto: 1180 };
 const ZONA_CARTEL: Rect = { x: 0, y: 0, ancho: 900, alto: 1260 };
 // Escenas que solo pone el código (no se le ofrecen a la IA).

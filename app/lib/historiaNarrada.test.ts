@@ -2,7 +2,8 @@ import { describe, expect, it } from "vitest";
 import { GuionSchema } from "@/video/guion.schema";
 import { validarPlanIlustrado, accionesDisponiblesTexto } from "@/video/ilustrado/motor/validarPlan";
 import { construirPromptPlanIlustrado } from "@/video/ilustrado/promptPlanIlustrado";
-import { frasesDeLasOpciones, frasesDelCartel, guionDesdeHistoria, pareceHistoria, problemasDeLaHistoria, terminaEnOpciones, type RespuestaHistoria } from "./historiaNarrada";
+import { focoDelCartel } from "@/video/ilustrado/motor/escenas/Islas";
+import { frasesDeLasOpciones, frasesDelCartel, guionDesdeHistoria, iconoDeFrase, pareceHistoria, problemasDeLaHistoria, terminaEnOpciones, type RespuestaHistoria } from "./historiaNarrada";
 
 // El episodio 1 de la tienda de ropa (pedido del 24 nov 2026).
 const TEXTO =
@@ -128,5 +129,34 @@ describe("Historia narrada: cada opción con su propia escena", () => {
     expect(p).toMatch(/frase e3 es la opción A y la frase e4 es la opción B/);
     expect(p).toMatch(/publicacion \(aparece, suben_likes, toca_promocionar\)/);
     expect(construirPromptPlanIlustrado(escenas)).not.toMatch(/DOS OPCIONES/);
+  });
+});
+
+describe("Historia narrada: el cartel nunca se queda quieto", () => {
+  it("el foco va de A a B (y cuando la voz nombra una, esa): ningún tramo de más de ~1,3 s sin cambio", () => {
+    const aparece = 0;
+    const [ra, rb] = [120, 150];
+    let ultimo = "";
+    let desde = 0;
+    let maximo = 0;
+    for (let f = aparece; f < 330; f++) {
+      const { a, b } = focoDelCartel(f, aparece, ra, rb);
+      const estado = a > 0.5 ? "a" : b > 0.5 ? "b" : ultimo;
+      if (estado !== ultimo) {
+        maximo = Math.max(maximo, f - desde);
+        desde = f;
+        ultimo = estado;
+      }
+    }
+    maximo = Math.max(maximo, 330 - desde);
+    expect(maximo).toBeLessThanOrEqual(40);
+    // Cuando la voz nombra B, el foco es B.
+    expect(focoDelCartel(rb + 10, aparece, ra, rb).b).toBe(1);
+  });
+
+  it("cada opción lleva la miniatura de la escena que la ilustró", () => {
+    const plan = { frases: [{ escena_id: "e3", acciones: [{ escena: "publicacion", accion: "suben_likes", palabra: 1 }] }, { escena_id: "e4", acciones: [{ escena: "feed", accion: "aparece_anuncio", palabra: 1 }, { escena: "chat", accion: "llega_mensaje", palabra: 6 }] }] };
+    expect(iconoDeFrase(plan, "e3")).toBe("likes");
+    expect(iconoDeFrase(plan, "e4")).toBe("mensajes");
   });
 });

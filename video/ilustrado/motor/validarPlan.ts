@@ -8,7 +8,7 @@
 // extra. La única cadena libre es "metafora", que NUNCA se dibuja: es la
 // explicación de la IA cuando el concepto no está en el catálogo.
 import { z } from "zod";
-import { CATALOGO, ESCENAS_SOLO_CODIGO, ID_ESCENAS, MICRO, definicionAccion } from "./catalogo";
+import { CATALOGO, ESCENAS_SOLO_CODIGO, ICONOS_OPCION, ID_ESCENAS, MICRO, definicionAccion } from "./catalogo";
 import { problemasDelPlan, type EscenarioPlan, type PlanIlustrado } from "./plan";
 import { caminantesDePlan, crearRegistro, type Registro } from "./registro";
 import { ComposicionKitSchema } from "../kit/catalogoKit";
@@ -48,7 +48,7 @@ export const PlanIlustradoSchema = z
     // Variedad entre reels (la pone el código, no la IA).
     variedad: VariedadSchema.optional(),
     // Historia narrada: los textos del cartel de opciones (los pone el código).
-    opciones: z.object({ a: z.string().min(1).max(30), b: z.string().min(1).max(30) }).strict().optional(),
+    opciones: z.object({ a: z.string().min(1).max(30), b: z.string().min(1).max(30), iconoA: z.enum(ICONOS_OPCION).optional(), iconoB: z.enum(ICONOS_OPCION).optional() }).strict().optional(),
     // Lo pone el código (escenarioDeNarracion).
     escenario: z.object({ rubro: z.enum(["ropa"]).optional(), mensajes: z.boolean().optional() }).strict().optional(),
   })

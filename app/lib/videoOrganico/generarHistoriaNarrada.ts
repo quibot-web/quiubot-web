@@ -5,7 +5,7 @@ import "server-only";
 // guion, la IA ilustra la historia (plan ilustrado) y el código pone el
 // cartel de opciones si termina en "A o B". Sin plan ilustrado válido no
 // hay reel: este formato es solo para cuentas de REELS_ILUSTRADOS_EMAILS.
-import { construirPromptHistoria, frasesDeLasOpciones, frasesDelCartel, guionDesdeHistoria, leerRespuestaHistoria, problemasDeLaHistoria } from "@/app/lib/historiaNarrada";
+import { construirPromptHistoria, frasesDeLasOpciones, frasesDelCartel, iconoDeFrase, guionDesdeHistoria, leerRespuestaHistoria, problemasDeLaHistoria } from "@/app/lib/historiaNarrada";
 import { GuionSchema, type Guion } from "@/video/guion.schema";
 import { seccionNegocio } from "@/video/promptGuionOrganico";
 import { limpiarHashtags } from "@/video/arreglosAutomaticosGuion";
@@ -59,7 +59,10 @@ export async function generarHistoriaNarrada(params: ParametrosGenerarGuionConVo
   // El escenario sale de TODA la historia (también de la pregunta final).
   const escenario = escenarioDeNarracion(narraciones);
   const conEscenario: PlanIlustrado = { ...p.plan, ...(escenario ? { escenario } : {}) };
-  const plan: PlanIlustrado = preguntaEn === null || !opciones ? conEscenario : { ...conEscenario, frases: [...conEscenario.frases, ...frasesDelCartel(narraciones, preguntaEn)], opciones };
+  // Cada opción del cartel con la miniatura de la escena que la ilustró.
+  const deOpciones = frasesDeLasOpciones(historia);
+  const iconos = deOpciones ? { iconoA: iconoDeFrase(p.plan, deOpciones.a), iconoB: iconoDeFrase(p.plan, deOpciones.b) } : {};
+  const plan: PlanIlustrado = preguntaEn === null || !opciones ? conEscenario : { ...conEscenario, frases: [...conEscenario.frases, ...frasesDelCartel(narraciones, preguntaEn)], opciones: { ...opciones, ...iconos } };
 
   // 3. La voz (con su control de voz incompleta) y los tiempos.
   const voz = await regenerarVozParaGuion(guion.escenas, { openaiKey: params.apiKeyUsuario, voz: params.voz, cloudinary: params.cloudinary }, "historia_narrada");

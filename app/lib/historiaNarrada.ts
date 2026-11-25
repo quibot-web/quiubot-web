@@ -8,7 +8,7 @@
 import type { GanchoTipoOrganico } from "@/video/guion.schema";
 import type { TemaGuion } from "@/video/tema";
 import type { FrasePlan } from "@/video/ilustrado/motor/plan";
-import type { OpcionesCartel } from "@/video/ilustrado/motor/catalogo";
+import type { IconoOpcion, OpcionesCartel } from "@/video/ilustrado/motor/catalogo";
 
 export const MIN_FRASES_HISTORIA = 3;
 export const MAX_FRASES_HISTORIA = 7;
@@ -205,6 +205,16 @@ export function frasesDeLasOpciones(escenas: { id: string; narracion: string }[]
   const a = de("a");
   const b = de("b");
   return a && b ? { a, b } : undefined;
+}
+
+// La miniatura de cada opción en el cartel: la escena con que se ilustró
+// (likes de la publicación, mensajes del chat, monedas de la billetera).
+export function iconoDeFrase(plan: { frases: FrasePlan[] }, escenaId: string): IconoOpcion | undefined {
+  const escenas = new Set(plan.frases.find((f) => f.escena_id === escenaId)?.acciones.map((a) => a.escena) ?? []);
+  if (escenas.has("chat")) return "mensajes";
+  if (escenas.has("publicacion") || escenas.has("feed")) return "likes";
+  if (escenas.has("billetera")) return "monedas";
+  return undefined;
 }
 
 // ---------- Cierre con el cartel de opciones ----------
