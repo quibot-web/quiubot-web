@@ -198,6 +198,15 @@ export function guionDesdeHistoria(r: RespuestaHistoria, base: { tema: TemaGuion
   };
 }
 
+// Las frases de la opción A y de la B ("Opción A: ..."), si las hay: cada
+// una se ilustra con su propia escena (validarPlan).
+export function frasesDeLasOpciones(escenas: { id: string; narracion: string }[]): { a: string; b: string } | undefined {
+  const de = (letra: string) => escenas.find((e) => new RegExp(`^\\s*opci[oó]n\\s+${letra}\\b`, "i").test(e.narracion))?.id;
+  const a = de("a");
+  const b = de("b");
+  return a && b ? { a, b } : undefined;
+}
+
 // ---------- Cierre con el cartel de opciones ----------
 // La pregunta y la invitación a comentar las ilustra el código (no la IA):
 // el cartel aparece en la pregunta, y en la invitación se resaltan A y B

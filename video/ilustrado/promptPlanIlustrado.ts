@@ -3,7 +3,7 @@
 // qué palabra dispara cada acción. Puro (lo prueba promptPlanIlustrado.test.ts).
 import { catalogoKitTexto } from "./kit/promptKit";
 import { textoVariedadParaPrompt, type HuellaVisual } from "./kit/variedad";
-import { accionesDisponiblesTexto, MAX_PALABRAS_SIN_ACCION, MIN_PALABRAS_ENTRE_ISLAS, MIN_PALABRAS_POR_PANTALLA } from "./motor/validarPlan";
+import { accionesDisponiblesTexto, MAX_PALABRAS_SIN_ACCION, MIN_PALABRAS_ENTRE_ISLAS, MIN_PALABRAS_POR_PANTALLA, type OpcionesDeHistoria } from "./motor/validarPlan";
 
 // Conceptos frecuentes de un negocio -> la metáfora más cercana del
 // catálogo actual (fase 2: solo las escenas del prototipo).
@@ -22,7 +22,9 @@ const METAFORAS = [
 // conKit (visuales-v2, solo cuentas de REELS_ILUSTRADOS_EMAILS): la IA
 // también puede armar lugares con el kit de escenas.
 // historial: huellas de los últimos reels de la cuenta (variedad).
-export function construirPromptPlanIlustrado(escenas: { id: string; narracion: string }[], erroresPrevios?: string[], opciones: { conKit?: boolean; historial?: HuellaVisual[] } = {}): string {
+// opcionesDeHistoria: en una historia narrada, las frases de la opción A y
+// de la opción B (cada una con su propia escena, ver validarPlan).
+export function construirPromptPlanIlustrado(escenas: { id: string; narracion: string }[], erroresPrevios?: string[], opciones: { conKit?: boolean; historial?: HuellaVisual[]; opcionesDeHistoria?: OpcionesDeHistoria } = {}): string {
   const variedad = textoVariedadParaPrompt(opciones.historial ?? []);
   const frases = escenas
     .map((e) => {
@@ -50,13 +52,18 @@ REGLAS
 2. Cada acción va amarrada a la palabra que la nombra o la provoca ("palabra" = el número entre corchetes de ESA frase). Ejemplo: en "se te va una moneda", sale_moneda va en "moneda".
 3. La primera acción del reel va en la palabra 0 o 1 de la primera frase (movimiento desde el inicio).
 4. Nunca más de ${MAX_PALABRAS_SIN_ACCION} palabras seguidas sin una acción (contando entre frases).
-5. Dos acciones seguidas en lugares distintos (por ejemplo feed y billetera, o chat y reloj_cliente) van separadas al menos ${MIN_PALABRAS_ENTRE_ISLAS} palabras: la cámara viaja entre ellas. feed, chat y perfil son el MISMO lugar (el celular).
+5. Dos acciones seguidas en lugares distintos (por ejemplo feed y billetera, o chat y reloj_cliente) van separadas al menos ${MIN_PALABRAS_ENTRE_ISLAS} palabras: la cámara viaja entre ellas. feed, publicacion, chat y perfil son el MISMO lugar (el celular).
 6. Usa pocas escenas distintas (2 a 5 en todo el reel) y vuelve a las mismas: es un solo mundo con una cámara continua.
 7. De 1 a 4 acciones por frase.
-8. El celular muestra UNA pantalla a la vez (feed, chat o perfil). Cuando cambias de pantalla, la nueva se queda al menos ${MIN_PALABRAS_POR_PANTALLA} palabras; no saltes entre feed, chat y perfil a cada rato.
+8. El celular muestra UNA pantalla a la vez (feed, publicacion, chat o perfil). Cuando cambias de pantalla, la nueva se queda al menos ${MIN_PALABRAS_POR_PANTALLA} palabras; no saltes entre pantallas a cada rato.
 9. El perfil (aparece, toque_seguir) va SOLO en la última frase, que es el cierre, y después de toque_seguir no va ninguna otra acción.
 10. Cada acción en su propia palabra: nunca dos acciones en la misma palabra.
-11. Nunca inventes datos: las escenas no muestran precios, descuentos, reseñas, horarios ni promesas, y tú no escribes ningún texto para la pantalla. Solo eliges escena, acción y palabra.
+11. Nunca inventes datos: las escenas no muestran precios, descuentos, reseñas, horarios ni promesas, y tú no escribes ningún texto para la pantalla. Solo eliges escena, acción y palabra.${
+    opciones.opcionesDeHistoria
+      ? `
+12. DOS OPCIONES: la frase ${opciones.opcionesDeHistoria.a} es la opción A y la frase ${opciones.opcionesDeHistoria.b} es la opción B. Son dos caminos distintos y se tienen que VER distintos: cada una con su propia escena, sin repetir ninguna escena ni composición entre las dos. Que lo que se ve explique la diferencia. Por ejemplo: promocionar una publicación que ya existe = publicacion (aparece, suben_likes, toca_promocionar), sin chat (nadie escribe); un anuncio nuevo para que te escriban = feed.aparece_anuncio y después chat.llega_mensaje varias veces (el chat se llena).`
+      : ""
+  }
 
 RESPONDE SOLO este JSON:
 ${

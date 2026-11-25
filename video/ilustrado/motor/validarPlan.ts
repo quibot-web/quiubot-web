@@ -90,7 +90,9 @@ const islaEn = (registro: Registro) => (escena: string) => registro.escena(escen
 // listos para devolverle a la IA en el reintento.
 // historial: huellas de los últimos reels de la cuenta (variedad: la
 // apertura no se repite).
-export function validarPlanIlustrado(plan: unknown, escenas: { id: string; narracion: string }[], opciones: { historial?: HuellaVisual[] } = {}): string[] {
+// Historia narrada: las frases (escena_id) de la opción A y de la B.
+export type OpcionesDeHistoria = { a: string; b: string };
+export function validarPlanIlustrado(plan: unknown, escenas: { id: string; narracion: string }[], opciones: { historial?: HuellaVisual[]; opcionesDeHistoria?: OpcionesDeHistoria } = {}): string[] {
   const parseado = PlanIlustradoSchema.safeParse(plan);
   if (!parseado.success) return parseado.error.issues.map((i) => `${i.path.join(".") || "plan"}: ${i.message}`);
   const p = parseado.data as PlanIlustrado;
@@ -154,6 +156,15 @@ export function validarPlanIlustrado(plan: unknown, escenas: { id: string; narra
   // (revisión del episodio 1: la tienda de frascos no ayudaba a entender).
   const narracionTotal = escenas.map((e) => e.narracion).join(" ");
   if (HABLA_DE_ROPA.test(narracionTotal)) for (const c of p.composiciones ?? []) if (c.fondo === "tienda") problemas.push(`${c.id}: la narración habla de ropa: usa "fondo": "tienda_ropa" (percheros, ropa doblada, maniquí), no la tienda de estantes con frascos`);
+  // Dos opciones, dos escenas: A y B no comparten ninguna (revisión del
+  // episodio 1: las dos se ilustraban con el mismo feed y no ayudaban a decidir).
+  if (opciones.opcionesDeHistoria) {
+    const deFrase = (id: string) => new Set(p.frases.find((f) => f.escena_id === id)?.acciones.filter((a) => a.accion !== MICRO).map((a) => a.escena) ?? []);
+    const a = deFrase(opciones.opcionesDeHistoria.a);
+    const b = deFrase(opciones.opcionesDeHistoria.b);
+    const comunes = [...a].filter((x) => b.has(x));
+    if (comunes.length) problemas.push(`las opciones A (${opciones.opcionesDeHistoria.a}) y B (${opciones.opcionesDeHistoria.b}) repiten ${comunes.map((c) => `"${c}"`).join(", ")}: cada opción con su propia escena, que se vean distintas`);
+  }
   // Emociones con motivo: celebrar o aplaudir solo si la frase lo justifica
   // (un logro, una venta, algo que salió bien), nunca "porque sí".
   const narracionDe = Object.fromEntries(escenas.map((e) => [e.id, e.narracion]));

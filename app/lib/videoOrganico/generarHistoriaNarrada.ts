@@ -5,7 +5,7 @@ import "server-only";
 // guion, la IA ilustra la historia (plan ilustrado) y el código pone el
 // cartel de opciones si termina en "A o B". Sin plan ilustrado válido no
 // hay reel: este formato es solo para cuentas de REELS_ILUSTRADOS_EMAILS.
-import { construirPromptHistoria, frasesDelCartel, guionDesdeHistoria, leerRespuestaHistoria, problemasDeLaHistoria } from "@/app/lib/historiaNarrada";
+import { construirPromptHistoria, frasesDeLasOpciones, frasesDelCartel, guionDesdeHistoria, leerRespuestaHistoria, problemasDeLaHistoria } from "@/app/lib/historiaNarrada";
 import { GuionSchema, type Guion } from "@/video/guion.schema";
 import { seccionNegocio } from "@/video/promptGuionOrganico";
 import { limpiarHashtags } from "@/video/arreglosAutomaticosGuion";
@@ -54,7 +54,7 @@ export async function generarHistoriaNarrada(params: ParametrosGenerarGuionConVo
   // es el cartel). Antes de pagar la voz.
   const narraciones = guion.escenas.map((e) => ({ id: e.id, narracion: e.narracion ?? "" }));
   const historia = preguntaEn === null ? narraciones : narraciones.slice(0, preguntaEn);
-  const p = await generarPlanIlustrado(historia, params.llamarIAPlan ?? llamar, 3, { conKit: true, historial: params.historialVisual ?? [] });
+  const p = await generarPlanIlustrado(historia, params.llamarIAPlan ?? llamar, 3, { conKit: true, historial: params.historialVisual ?? [], opcionesDeHistoria: frasesDeLasOpciones(historia) });
   if (!p.ok) return { ok: false, status: 502, error: "No se pudo ilustrar tu historia después de varios intentos.", resumenErrores: p.errores };
   // El escenario sale de TODA la historia (también de la pregunta final).
   const escenario = escenarioDeNarracion(narraciones);

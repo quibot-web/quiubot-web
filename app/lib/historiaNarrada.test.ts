@@ -1,7 +1,8 @@
 import { describe, expect, it } from "vitest";
 import { GuionSchema } from "@/video/guion.schema";
 import { validarPlanIlustrado, accionesDisponiblesTexto } from "@/video/ilustrado/motor/validarPlan";
-import { frasesDelCartel, guionDesdeHistoria, pareceHistoria, problemasDeLaHistoria, terminaEnOpciones, type RespuestaHistoria } from "./historiaNarrada";
+import { construirPromptPlanIlustrado } from "@/video/ilustrado/promptPlanIlustrado";
+import { frasesDeLasOpciones, frasesDelCartel, guionDesdeHistoria, pareceHistoria, problemasDeLaHistoria, terminaEnOpciones, type RespuestaHistoria } from "./historiaNarrada";
 
 // El episodio 1 de la tienda de ropa (pedido del 24 nov 2026).
 const TEXTO =
@@ -95,5 +96,37 @@ describe("Historia narrada: el guion y el cartel", () => {
     const plan = { frases: [{ escena_id: "e1", acciones: [{ escena: "opciones", accion: "aparece", palabra: 0 }] }] };
     expect(validarPlanIlustrado(plan, escenas).join(" ")).toMatch(/"opciones" no está disponible/);
     expect(validarPlanIlustrado({ ...plan, opciones: { a: "x", b: "y" } }, escenas).join(" ")).not.toMatch(/no está disponible/);
+  });
+});
+
+describe("Historia narrada: cada opción con su propia escena", () => {
+  const escenas = BUENA.frases.slice(0, 4).map((n, i) => ({ id: `e${i + 1}`, narracion: n }));
+  const plan = (a: { escena: string; accion: string }[], b: { escena: string; accion: string }[]) => ({
+    frases: [
+      { escena_id: "e1", acciones: [{ escena: "billetera", accion: "se_llena", palabra: 1 }, { escena: "billetera", accion: "sale_moneda", palabra: 6 }] },
+      { escena_id: "e2", acciones: [{ escena: "billetera", accion: "sale_moneda", palabra: 2 }, { escena: "billetera", accion: "se_cierra", palabra: 9 }] },
+      { escena_id: "e3", acciones: a.map((x, i) => ({ ...x, palabra: 1 + i * 5 })) },
+      { escena_id: "e4", acciones: b.map((x, i) => ({ ...x, palabra: 1 + i * 6 })) },
+    ],
+  });
+
+  it("encuentra las frases de la opción A y de la B", () => {
+    expect(frasesDeLasOpciones(escenas)).toEqual({ a: "e3", b: "e4" });
+    expect(frasesDeLasOpciones(escenas.slice(0, 2))).toBeUndefined();
+  });
+
+  it("A y B con la misma escena se rechazan; publicación propia vs. anuncio + chat pasa", () => {
+    const opcionesDeHistoria = { a: "e3", b: "e4" };
+    const igual = plan([{ escena: "feed", accion: "vuelve" }, { escena: "feed", accion: "se_detiene" }], [{ escena: "feed", accion: "aparece_anuncio" }, { escena: "chat", accion: "llega_mensaje" }]);
+    expect(validarPlanIlustrado(igual, escenas, { opcionesDeHistoria }).join(" ")).toMatch(/repiten "feed"/);
+    const distintas = plan([{ escena: "publicacion", accion: "aparece" }, { escena: "publicacion", accion: "suben_likes" }, { escena: "publicacion", accion: "toca_promocionar" }], [{ escena: "feed", accion: "aparece_anuncio" }, { escena: "chat", accion: "llega_mensaje" }]);
+    expect(validarPlanIlustrado(distintas, escenas, { opcionesDeHistoria }).join(" ")).not.toMatch(/repiten/);
+  });
+
+  it("el prompt del plan le explica a la IA las dos opciones", () => {
+    const p = construirPromptPlanIlustrado(escenas, undefined, { opcionesDeHistoria: { a: "e3", b: "e4" } });
+    expect(p).toMatch(/frase e3 es la opción A y la frase e4 es la opción B/);
+    expect(p).toMatch(/publicacion \(aparece, suben_likes, toca_promocionar\)/);
+    expect(construirPromptPlanIlustrado(escenas)).not.toMatch(/DOS OPCIONES/);
   });
 });

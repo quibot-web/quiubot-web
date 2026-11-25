@@ -4,7 +4,7 @@ import { frasesDelCartel } from "@/app/lib/historiaNarrada";
 // cada reintento con los problemas del anterior. Si no sale válido, el
 // reel sigue con su estilo de siempre (nunca se bloquea la pieza).
 import type { PlanIlustrado } from "@/video/ilustrado/motor/plan";
-import { ajustarPlanConTiempos, escenarioDeNarracion, rellenarRitmoPorTiempo, repararRitmoPorPalabras, validarPlanIlustrado } from "@/video/ilustrado/motor/validarPlan";
+import { ajustarPlanConTiempos, escenarioDeNarracion, rellenarRitmoPorTiempo, repararRitmoPorPalabras, validarPlanIlustrado, type OpcionesDeHistoria } from "@/video/ilustrado/motor/validarPlan";
 import { construirPromptPlanIlustrado } from "@/video/ilustrado/promptPlanIlustrado";
 import { elegirVariedad, type HuellaVisual } from "@/video/ilustrado/kit/variedad";
 
@@ -17,13 +17,13 @@ export async function generarPlanIlustrado(
   escenas: { id: string; narracion: string }[],
   llamarIA: (prompt: string) => Promise<string>,
   maxIntentos = 3,
-  opciones: { conKit?: boolean; historial?: HuellaVisual[] } = {}
+  opciones: { conKit?: boolean; historial?: HuellaVisual[]; opcionesDeHistoria?: OpcionesDeHistoria } = {}
 ): Promise<ResultadoPlanIlustrado> {
   const historialVisual = opciones.historial ?? [];
   let errores: string[] | undefined;
   const historial: string[][] = [];
   for (let intento = 1; intento <= maxIntentos; intento++) {
-    const respuesta = await llamarIA(construirPromptPlanIlustrado(escenas, errores, { conKit: opciones.conKit, historial: historialVisual }));
+    const respuesta = await llamarIA(construirPromptPlanIlustrado(escenas, errores, { conKit: opciones.conKit, historial: historialVisual, opcionesDeHistoria: opciones.opcionesDeHistoria }));
     let crudo: unknown;
     try {
       crudo = JSON.parse(respuesta);
@@ -37,12 +37,13 @@ export async function generarPlanIlustrado(
     let candidato = crudo;
     let ajustes: string[] = [];
     // Problemas de ritmo (huecos entre acciones o al final del reel): se arreglan solos.
-    if (validarPlanIlustrado(crudo, escenas, { historial: historialVisual }).every((p) => /ningún cambio/.test(p))) {
+    const reglas = { historial: historialVisual, opcionesDeHistoria: opciones.opcionesDeHistoria };
+    if (validarPlanIlustrado(crudo, escenas, reglas).every((p) => /ningún cambio/.test(p))) {
       const reparado = repararRitmoPorPalabras(crudo as PlanIlustrado, escenas);
       candidato = reparado.plan;
       ajustes = reparado.ajustes;
     }
-    const problemas = validarPlanIlustrado(candidato, escenas, { historial: historialVisual });
+    const problemas = validarPlanIlustrado(candidato, escenas, reglas);
     if (problemas.length === 0) {
       // Variedad entre reels: pared, paleta de ropa y movimiento de cámara
       // que no repiten los de los últimos reels de la cuenta.
