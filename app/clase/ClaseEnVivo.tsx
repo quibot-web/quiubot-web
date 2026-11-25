@@ -126,7 +126,6 @@ function CuentaRegresiva({ ahora }: { ahora: number }) {
   ];
   return (
     <>
-      <p className="panel-etiqueta">La clase empieza en</p>
       {/* role="timer" sin aria-live: un lector de pantalla no anuncia cada segundo. */}
       <div className="reloj" role="timer" aria-label={`Faltan ${r.dias} días, ${r.horas} horas, ${r.minutos} minutos`}>
         {unidades.map(([nombre, valor]) => (
@@ -188,6 +187,9 @@ export default function ClaseEnVivo({ ahoraServidor }: { ahoraServidor: number }
             <img src="/marca/icono-quiubot.svg" alt="" width={32} height={32} />
             <span>quiu<span className="acento">bot</span></span>
           </a>
+          {/* En celular el director vive en la barra, en su propio espacio:
+              los personajes nunca se montan sobre textos ni botones. */}
+          <Personaje asistente="director" tamano={30} clase="p-director-barra" />
         </header>
 
         <div className="contenido">
@@ -210,15 +212,22 @@ export default function ClaseEnVivo({ ahoraServidor }: { ahoraServidor: number }
 
           <section className="accion">
             <div className="panel" data-estado={estado}>
-              <Personaje asistente="creativo" tamano={40} clase="p-creativo" />
-              <Personaje asistente="publicador" tamano={40} clase="p-publicador" />
+              {/* Personajes en la misma fila que el texto, cada uno en su
+                  espacio (nunca encima del texto). */}
+              <div className="panel-cabecera">
+                <Personaje asistente="creativo" tamano={28} clase="p-creativo" />
+                <div className="panel-centro">
+                  {estado === "antes" && <p className="panel-etiqueta">La clase empieza en</p>}
+                  {estado === "en_vivo" && (
+                    <h2 className="panel-titulo"><span className="punto-vivo" aria-hidden="true" />¡La clase está en vivo!</h2>
+                  )}
+                  {estado === "terminada" && (
+                    <h2 className="panel-titulo">La clase terminó. Únete a la comunidad para la próxima</h2>
+                  )}
+                </div>
+                <Personaje asistente="publicador" tamano={28} clase="p-publicador" />
+              </div>
               {estado === "antes" && <CuentaRegresiva ahora={ahora} />}
-              {estado === "en_vivo" && (
-                <h2 className="panel-titulo"><span className="punto-vivo" aria-hidden="true" />¡La clase está en vivo!</h2>
-              )}
-              {estado === "terminada" && (
-                <h2 className="panel-titulo">La clase terminó. Únete a la comunidad para la próxima</h2>
-              )}
             </div>
 
             <div className="botones">
@@ -230,8 +239,10 @@ export default function ClaseEnVivo({ ahoraServidor }: { ahoraServidor: number }
 
           {estado !== "terminada" && (
             <section className="tarjeta aprender" aria-labelledby="titulo-aprender">
-              <Personaje asistente="estratega" tamano={36} clase="p-estratega" />
-              <h2 id="titulo-aprender">Lo que vas a aprender</h2>
+              <div className="tarjeta-cabecera">
+                <h2 id="titulo-aprender">Lo que vas a aprender</h2>
+                <Personaje asistente="estratega" tamano={30} clase="p-estratega" />
+              </div>
               <ul>
                 {LO_QUE_VAS_A_APRENDER.map((texto, i) => (
                   <li key={texto}>

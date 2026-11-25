@@ -74,7 +74,7 @@ export const ESTILOS = `
 @keyframes qbDeriva { 0%, 100% { transform: translate3d(0,0,0); } 50% { transform: translate3d(10px,-16px,0); } }
 
 /* ---------- Barra ---------- */
-.qb-clase .barra { padding: 12px 20px; max-width: 1120px; width: 100%; margin: 0 auto; }
+.qb-clase .barra { padding: 10px 20px; max-width: 1120px; width: 100%; margin: 0 auto; display: flex; align-items: center; justify-content: space-between; }
 .qb-clase .marca { display: inline-flex; align-items: center; gap: 10px; font-weight: 700; font-size: 19px; text-decoration: none; color: #fff; }
 .qb-clase .marca img { width: 32px; height: 32px; border-radius: 9px; }
 .qb-clase .acento { color: var(--lila); }
@@ -82,14 +82,16 @@ export const ESTILOS = `
 .qb-clase .contenido { width: 100%; max-width: 560px; margin: 0 auto; padding: 4px 20px 36px; display: grid; gap: 22px; flex: 1; align-content: start; }
 
 /* ---------- Personajes ---------- */
-.qb-clase .personaje { position: absolute; z-index: 3; animation: qbFlota 6s ease-in-out infinite; }
+/* Regla: un personaje nunca se monta sobre un texto o un botón. En la barra,
+   el panel y la tarjeta de aprendizajes van en el flujo, en su propio espacio;
+   solo en escritorio hay dos posicionados (director y marca), en zonas
+   vacías -- verificado con el chequeo de solapes en 320 a 1440 px. */
+.qb-clase .personaje { position: relative; z-index: 3; flex: none; animation: qbFlota 6s ease-in-out infinite; }
 @keyframes qbFlota { 0%, 100% { transform: translate3d(0,0,0) rotate(0deg); } 50% { transform: translate3d(0,-9px,0) rotate(3deg); } }
-.qb-clase .p-director { top: -18px; right: -18px; }
-.qb-clase .p-marca { display: none; }
-.qb-clase .p-creativo { top: -40px; left: -22px; animation-duration: 5.2s; animation-delay: -1.5s; }
-.qb-clase .p-publicador { top: -40px; right: -22px; animation-duration: 6.6s; animation-delay: -3s; }
-.qb-clase .p-estratega { top: -30px; right: -12px; animation-duration: 7s; animation-delay: -2s; }
-@media (max-width: 359px) { .qb-clase .p-director { display: none; } }
+.qb-clase .p-director, .qb-clase .p-marca { display: none; position: absolute; }
+.qb-clase .p-creativo { animation-duration: 5.2s; animation-delay: -1.5s; }
+.qb-clase .p-publicador { animation-duration: 6.6s; animation-delay: -3s; }
+.qb-clase .p-estratega { animation-duration: 7s; animation-delay: -2s; }
 
 /* ---------- Hero ---------- */
 .qb-clase .hero { position: relative; padding-top: 4px; }
@@ -110,12 +112,15 @@ export const ESTILOS = `
 
 /* ---------- Panel: cuenta regresiva / en vivo / terminó ---------- */
 .qb-clase .accion { display: grid; gap: 16px; }
-.qb-clase .panel { position: relative; border-radius: 24px; padding: 20px 12px 16px; margin-top: 10px;
+.qb-clase .panel { position: relative; border-radius: 24px; padding: 14px 12px 16px; margin-top: 4px;
   background: radial-gradient(70% 80% at 88% 0%, rgba(127,216,240,.22), transparent 70%), linear-gradient(160deg, #2E2672, #120F2E 62%);
   border: 1px solid rgba(201,194,255,.28);
   box-shadow: 0 0 0 1px rgba(124,108,242,.12), 0 24px 60px -20px rgba(124,108,242,.55); }
 .qb-clase .panel > :not(.personaje) { position: relative; z-index: 1; }
-.qb-clase .panel-etiqueta { margin: 0 0 12px; text-align: center; font-family: var(--font-mono); font-size: 12.5px; font-weight: 700; letter-spacing: .14em; text-transform: uppercase; color: var(--lila); }
+.qb-clase .panel-cabecera { display: flex; align-items: center; gap: 4px; margin-bottom: 10px; }
+.qb-clase .panel-centro { flex: 1; min-width: 0; text-align: center; }
+.qb-clase .panel[data-estado="en_vivo"] .panel-cabecera, .qb-clase .panel[data-estado="terminada"] .panel-cabecera { margin-bottom: 0; }
+.qb-clase .panel-etiqueta { margin: 0; text-wrap: balance; text-align: center; font-family: var(--font-mono); font-size: 12.5px; font-weight: 700; letter-spacing: .14em; text-transform: uppercase; color: var(--lila); }
 .qb-clase .reloj { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 8px; }
 .qb-clase .unidad { background: rgba(12,10,23,.6); border: 1px solid rgba(185,174,255,.3); border-radius: 16px; padding: 11px 0 9px; display: flex; flex-direction: column; align-items: center; gap: 6px; }
 /* Ancho fijo por dígito (monoespaciada + tabular): el número no "baila" de
@@ -125,7 +130,7 @@ export const ESTILOS = `
   font-size: clamp(34px, 10.5vw, 56px); font-weight: 700; line-height: 1; min-width: 2.1ch; text-align: center; color: #fff;
   text-shadow: 0 0 6px rgba(201,194,255,.9), 0 0 18px rgba(124,108,242,.85), 0 0 38px rgba(127,216,240,.45); }
 .qb-clase .unidad-nombre { font-size: 12.5px; font-weight: 700; color: var(--lila); }
-.qb-clase .panel-titulo { font-size: clamp(24px, 6.6vw, 32px); line-height: 1.18; text-align: center; text-wrap: balance; padding: 8px 10px; color: #fff;
+.qb-clase .panel-titulo { font-size: clamp(24px, 6.6vw, 32px); line-height: 1.18; text-align: center; text-wrap: balance; padding: 6px 0; color: #fff;
   text-shadow: 0 0 18px rgba(124,108,242,.7); }
 .qb-clase .punto-vivo { display: inline-block; width: 14px; height: 14px; margin-right: 10px; vertical-align: .1em; border-radius: 50%; background: #FF5A5F; box-shadow: 0 0 14px #FF5A5F; animation: qbLate 1.3s ease-in-out infinite; }
 
@@ -134,7 +139,7 @@ export const ESTILOS = `
 .qb-clase .btn-principal { position: relative; isolation: isolate; overflow: hidden; display: flex; align-items: center; justify-content: center;
   min-height: 66px; padding: 16px 20px; border-radius: 18px; text-decoration: none;
   background: linear-gradient(100deg, #5EE0A8 0%, #7FD8F0 52%, #B9AEFF 100%);
-  color: #0C0A17; font-size: 19px; font-weight: 800; letter-spacing: -.01em;
+  color: #0C0A17; font-size: clamp(16px, 4.9vw, 19px); font-weight: 800; letter-spacing: -.01em; white-space: nowrap;
   box-shadow: 0 0 0 1px rgba(255,255,255,.5) inset, 0 14px 36px -10px rgba(94,224,168,.75), 0 0 46px -6px rgba(127,216,240,.55);
   animation: qbPulso 2.6s ease-in-out infinite; -webkit-tap-highlight-color: transparent; }
 .qb-clase .btn-principal::after { content: ""; position: absolute; z-index: 0; top: -10%; bottom: -10%; left: 0; width: 38%;
@@ -162,6 +167,8 @@ export const ESTILOS = `
 /* ---------- Tarjetas ---------- */
 .qb-clase .tarjeta { position: relative; background: var(--card); border: 1px solid var(--line); border-radius: 22px; padding: 22px 20px; }
 .qb-clase .tarjeta h2 { font-size: 20px; margin-bottom: 16px; color: #fff; }
+.qb-clase .tarjeta-cabecera { display: flex; align-items: center; justify-content: space-between; gap: 8px; margin: -8px 0 8px; }
+.qb-clase .tarjeta-cabecera h2 { margin-bottom: 0; }
 .qb-clase .aprender ul { list-style: none; margin: 0; padding: 0; display: grid; gap: 14px; }
 .qb-clase .aprender li { display: flex; align-items: center; gap: 14px; font-size: 16px; line-height: 1.4; font-weight: 600; color: var(--ink); }
 .qb-clase .icono-aprender { flex-shrink: 0; width: 44px; height: 44px; border-radius: 14px; display: flex; align-items: center; justify-content: center; color: #0C0A17; }
@@ -191,7 +198,8 @@ export const ESTILOS = `
   .qb-clase .cuando { grid-column: 1; grid-row: 3; }
   .qb-clase .pasos { grid-column: 1; grid-row: 4; }
   .qb-clase .sub { font-size: 19px; max-width: 36ch; }
-  .qb-clase .p-director { top: -34px; right: 0; }
+  .qb-clase .p-director { display: block; top: -34px; right: 0; }
+  .qb-clase .p-director-barra { display: none; }
   .qb-clase .panel { padding: 34px 22px 26px; }
   .qb-clase .planeta-grande { width: 520px; height: 520px; left: -220px; bottom: -220px; }
   .qb-clase .planeta-chico { right: 5%; top: 38%; }
