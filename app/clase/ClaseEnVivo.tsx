@@ -212,7 +212,6 @@ export default function ClaseEnVivo({ ahoraServidor }: { ahoraServidor: number }
             <div className="panel" data-estado={estado}>
               <Personaje asistente="creativo" tamano={40} clase="p-creativo" />
               <Personaje asistente="publicador" tamano={40} clase="p-publicador" />
-              <div className="panel-fondo" aria-hidden="true" />
               {estado === "antes" && <CuentaRegresiva ahora={ahora} />}
               {estado === "en_vivo" && (
                 <h2 className="panel-titulo"><span className="punto-vivo" aria-hidden="true" />¡La clase está en vivo!</h2>

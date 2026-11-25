@@ -62,11 +62,11 @@ export const ESTILOS = `
 .qb-clase .planeta-grande { width: 360px; height: 360px; left: -170px; bottom: -150px; opacity: .55;
   background: radial-gradient(circle at 62% 30%, #8C82F2 0%, #4A3FAE 38%, #221A63 66%, transparent 71%);
   animation: qbDeriva 26s ease-in-out infinite; }
-.qb-clase .planeta-chico { width: 64px; height: 64px; right: 7%; top: 110px; opacity: .55;
+.qb-clase .planeta-chico { width: 64px; height: 64px; right: -38px; top: 46%; opacity: .55;
   background: radial-gradient(circle at 35% 30%, #CFF6FF 0%, #2DB2C2 45%, #0D5E69 75%, transparent 77%);
   box-shadow: 0 0 40px rgba(127,216,240,.25);
   animation: qbDeriva 18s ease-in-out infinite reverse; }
-.qb-clase .planeta-anillo { width: 96px; height: 96px; right: -26px; top: 58%; opacity: .5;
+.qb-clase .planeta-anillo { display: none; width: 96px; height: 96px; right: 3%; top: 64%; opacity: .5;
   background: radial-gradient(circle at 35% 30%, #FFD9E7 0%, #E06C9F 45%, #8C2E5C 75%, transparent 77%);
   animation: qbDeriva 22s ease-in-out infinite; }
 .qb-clase .planeta-anillo i { position: absolute; left: -30%; top: 38%; width: 160%; height: 26%; border-radius: 50%;
@@ -74,12 +74,12 @@ export const ESTILOS = `
 @keyframes qbDeriva { 0%, 100% { transform: translate3d(0,0,0); } 50% { transform: translate3d(10px,-16px,0); } }
 
 /* ---------- Barra ---------- */
-.qb-clase .barra { padding: 16px 20px; max-width: 1120px; width: 100%; margin: 0 auto; }
+.qb-clase .barra { padding: 12px 20px; max-width: 1120px; width: 100%; margin: 0 auto; }
 .qb-clase .marca { display: inline-flex; align-items: center; gap: 10px; font-weight: 700; font-size: 19px; text-decoration: none; color: #fff; }
 .qb-clase .marca img { width: 32px; height: 32px; border-radius: 9px; }
 .qb-clase .acento { color: var(--lila); }
 
-.qb-clase .contenido { width: 100%; max-width: 560px; margin: 0 auto; padding: 8px 20px 36px; display: grid; gap: 30px; flex: 1; align-content: start; }
+.qb-clase .contenido { width: 100%; max-width: 560px; margin: 0 auto; padding: 4px 20px 36px; display: grid; gap: 22px; flex: 1; align-content: start; }
 
 /* ---------- Personajes ---------- */
 .qb-clase .personaje { position: absolute; z-index: 3; animation: qbFlota 6s ease-in-out infinite; }
@@ -92,8 +92,8 @@ export const ESTILOS = `
 @media (max-width: 359px) { .qb-clase .p-director { display: none; } }
 
 /* ---------- Hero ---------- */
-.qb-clase .hero { position: relative; padding-top: 8px; }
-.qb-clase .chip { display: inline-flex; align-items: center; gap: 8px; margin: 0 0 18px; padding: 7px 13px; border-radius: 999px;
+.qb-clase .hero { position: relative; padding-top: 4px; }
+.qb-clase .chip { display: inline-flex; align-items: center; gap: 8px; margin: 0 0 14px; padding: 6px 12px; border-radius: 999px;
   font-family: var(--font-mono); font-size: 12px; font-weight: 700; letter-spacing: .08em; text-transform: uppercase;
   background: rgba(94,224,168,.12); border: 1px solid rgba(94,224,168,.42); color: var(--menta); }
 .qb-clase .chip .punto { width: 8px; height: 8px; border-radius: 50%; background: currentColor; box-shadow: 0 0 10px currentColor; }
@@ -103,24 +103,21 @@ export const ESTILOS = `
 @keyframes qbLate { 50% { opacity: .3; } }
 .qb-clase h1 { font-size: clamp(32px, 9vw, 58px); line-height: 1.04; font-weight: 700; text-wrap: balance; color: #fff; }
 .qb-clase .resaltado { background: linear-gradient(95deg, #C9C2FF 0%, #7FD8F0 55%, #5EE0A8 100%); -webkit-background-clip: text; background-clip: text; color: transparent; }
-.qb-clase .sub { font-size: 17px; line-height: 1.5; color: var(--muted); margin: 16px 0 0; text-wrap: pretty; }
-.qb-clase .fecha-corta { display: flex; align-items: flex-start; gap: 8px; margin: 18px 0 0; font-weight: 700; font-size: 15.5px; line-height: 1.4; color: #fff; }
+.qb-clase .sub { font-size: 16px; line-height: 1.45; color: var(--muted); margin: 12px 0 0; text-wrap: pretty; }
+.qb-clase .fecha-corta { display: flex; align-items: flex-start; gap: 8px; margin: 14px 0 0; font-weight: 700; font-size: 15px; line-height: 1.4; color: #fff; }
 .qb-clase .fecha-corta svg { flex-shrink: 0; margin-top: 1px; color: var(--cian); }
 .qb-clase .fecha-corta .suave { font-weight: 500; color: var(--muted); }
 
 /* ---------- Panel: cuenta regresiva / en vivo / terminó ---------- */
 .qb-clase .accion { display: grid; gap: 16px; }
-.qb-clase .panel { position: relative; border-radius: 24px; padding: 26px 14px 20px; margin-top: 12px;
-  background: linear-gradient(160deg, rgba(124,108,242,.30), rgba(18,15,46,.92) 60%);
+.qb-clase .panel { position: relative; border-radius: 24px; padding: 20px 12px 16px; margin-top: 10px;
+  background: radial-gradient(70% 80% at 88% 0%, rgba(127,216,240,.22), transparent 70%), linear-gradient(160deg, #2E2672, #120F2E 62%);
   border: 1px solid rgba(201,194,255,.28);
   box-shadow: 0 0 0 1px rgba(124,108,242,.12), 0 24px 60px -20px rgba(124,108,242,.55); }
-.qb-clase .panel > :not(.panel-fondo):not(.personaje) { position: relative; z-index: 1; }
-.qb-clase .panel-fondo { position: absolute; inset: 0; border-radius: inherit; overflow: hidden; pointer-events: none; }
-.qb-clase .panel-fondo::before { content: ""; position: absolute; width: 70%; height: 140%; right: -20%; top: -60%;
-  background: radial-gradient(circle, rgba(127,216,240,.28), transparent 65%); }
-.qb-clase .panel-etiqueta { margin: 0 0 14px; text-align: center; font-family: var(--font-mono); font-size: 12.5px; font-weight: 700; letter-spacing: .14em; text-transform: uppercase; color: var(--lila); }
+.qb-clase .panel > :not(.personaje) { position: relative; z-index: 1; }
+.qb-clase .panel-etiqueta { margin: 0 0 12px; text-align: center; font-family: var(--font-mono); font-size: 12.5px; font-weight: 700; letter-spacing: .14em; text-transform: uppercase; color: var(--lila); }
 .qb-clase .reloj { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 8px; }
-.qb-clase .unidad { background: rgba(12,10,23,.6); border: 1px solid rgba(185,174,255,.3); border-radius: 16px; padding: 14px 0 11px; display: flex; flex-direction: column; align-items: center; gap: 6px; }
+.qb-clase .unidad { background: rgba(12,10,23,.6); border: 1px solid rgba(185,174,255,.3); border-radius: 16px; padding: 11px 0 9px; display: flex; flex-direction: column; align-items: center; gap: 6px; }
 /* Ancho fijo por dígito (monoespaciada + tabular): el número no "baila" de
    un segundo a otro ni cuando termina de cargar la fuente. El brillo neón es
    text-shadow, que no mueve nada de lugar. */
@@ -197,8 +194,8 @@ export const ESTILOS = `
   .qb-clase .p-director { top: -34px; right: 0; }
   .qb-clase .panel { padding: 34px 22px 26px; }
   .qb-clase .planeta-grande { width: 520px; height: 520px; left: -220px; bottom: -220px; }
-  .qb-clase .planeta-chico { right: 14%; top: 70px; }
-  .qb-clase .planeta-anillo { right: 3%; top: 64%; }
+  .qb-clase .planeta-chico { right: 5%; top: 38%; }
+  .qb-clase .planeta-anillo { display: block; }
 }
 
 @media (min-width: 1240px) {
