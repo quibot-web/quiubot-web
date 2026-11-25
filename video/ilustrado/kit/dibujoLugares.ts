@@ -13,7 +13,7 @@ const Y_PARED = SALON.pared.y1;
 
 // Por dónde entra y sale la gente (x en la isla). El que entra aparece ahí
 // y camina a su lugar; el que se va camina hasta ahí y desaparece.
-export const PUERTA_X: Record<Fondo, number> = { salon: 2120, tienda: 330, cocina: 2060, calle: 1100 };
+export const PUERTA_X: Record<Fondo, number> = { salon: 2120, tienda: 330, cocina: 2060, calle: 1100, tienda_ropa: 330 };
 
 // La hoja de cada puerta (lo que se abre, en coordenadas de la isla) y el
 // color del vano al abrirla: quien entra o se va cruza la puerta abierta
@@ -24,6 +24,7 @@ export const PUERTAS: Partial<Record<Fondo, Puerta>> = {
   tienda: { x: PUERTA_X.tienda - 130, y: 300, ancho: 260, alto: Y_PARED - 300, afuera: "#FFF1CF" },
   cocina: { x: PUERTA_X.cocina - 90, y: 340, ancho: 180, alto: Y_PARED - 340, afuera: "#FFF1CF" },
   calle: { x: PUERTA_X.calle - 130, y: 620, ancho: 260, alto: Y_PARED - 620, afuera: "#4A3B45" },
+  tienda_ropa: { x: PUERTA_X.tienda_ropa - 130, y: 300, ancho: 260, alto: Y_PARED - 300, afuera: "#FFF1CF" },
 };
 
 // La hoja sola (igual a como está pintada en el fondo), para abrirla.
@@ -34,7 +35,7 @@ export function svgHojaPuerta(fondo: Fondo): ParteSvg | null {
   const s: string[] = [];
   if (fondo === "cocina") {
     s.push(`<rect x="0" y="0" width="${w}" height="${h}" fill="#C98E5A"/><circle cx="${PUERTA_X.cocina + 60 - p.x}" cy="${680 - p.y}" r="12" fill="#E8C34A"/>`);
-  } else if (fondo === "tienda") {
+  } else if (fondo === "tienda" || fondo === "tienda_ropa") {
     s.push(`<rect x="0" y="0" width="${w}" height="${h}" fill="#BFE3F2"/>`);
     s.push(`<path d="M30 40 l60 -40 M30 120 l120 -100" stroke="#FFFFFF" stroke-width="16" opacity="0.6"/>`);
     s.push(`<rect x="${w / 2 - 7}" y="0" width="14" height="${h}" fill="#6E4628"/><rect x="${w / 2 + 22}" y="360" width="14" height="70" rx="6" fill="#E8C34A"/>`);
@@ -54,6 +55,7 @@ export function coloresEntorno(fondo: Fondo, pared: Pared): ColoresEntorno {
   if (fondo === "calle") return { arriba: "#BFE3F7", pared: aclarar(c, 0.1), zocalo: null, piso: "#C9C6C0", lineaPiso: "#ADA9A2", techo: false, abajo: "#55565C" };
   if (fondo === "tienda") return { arriba: aclarar(c, 0.35), pared: c, zocalo: oscurecer(c, 0.12), piso: "#E6DED2", lineaPiso: "#CFC5B5", techo: true, abajo: "#E6DED2" };
   if (fondo === "cocina") return { arriba: aclarar(c, 0.35), pared: c, zocalo: null, piso: "#D9CBB4", lineaPiso: "#BFAF95", techo: true, abajo: "#D9CBB4" };
+  if (fondo === "tienda_ropa") return { arriba: aclarar(c, 0.35), pared: c, zocalo: oscurecer(c, 0.1), piso: "#DDBB92", lineaPiso: "#C79E72", techo: true, abajo: "#DDBB92" };
   return { arriba: aclarar(c, 0.35), pared: c, zocalo: oscurecer(c, 0.12), piso: COLOR_PISO, lineaPiso: COLOR_LINEA_PISO, techo: true, abajo: COLOR_PISO };
 }
 
@@ -128,6 +130,78 @@ export function svgTienda(pared: Pared): ParteSvg {
   const colores = ["#E85D5D", "#F2C230", "#3FA66B", "#3F6FD8"];
   for (let i = 0; i < 14; i++) s.push(`<path d="M${600 + i * 110} 70 l44 0 l-22 46 z" fill="${colores[i % 4]}"/>`);
   s.push(`<path d="M590 70 L2150 70" stroke="#7A5A3A" stroke-width="5"/>`);
+  s.push(`<rect x="0" y="${Y_PARED}" width="${W}" height="22" fill="rgba(60,40,20,0.15)"/>`);
+  return { svg: svg(W, H, s.join("")), ancho: W, alto: H, ancla: { x: 0, y: 0 } };
+}
+
+// ---------- Tienda de ropa (por dentro) ----------
+// Prendas sin letras ni marcas: camisas y vestidos colgados de colores.
+const COLORES_PRENDA = ["#E86A9A", "#3F6FD8", "#F2C230", "#3FA66B", "#EE8A35", "#7A55C7", "#2FB3B0", "#E85D5D", "#F4EFE4"];
+export function prenda(cx: number, y: number, tipo: number, col: string): string {
+  const gancho = `<path d="M${cx} ${y} q0 -16 12 -16" stroke="#8A8F98" stroke-width="5" fill="none"/><path d="M${cx - 42} ${y + 30} L${cx} ${y + 8} L${cx + 42} ${y + 30}" stroke="#8A8F98" stroke-width="6" fill="none"/>`;
+  const sombra = oscurecer(col, 0.14);
+  if (tipo % 2 === 0) {
+    // Camisa: mangas, cuerpo y cuello.
+    return (
+      gancho +
+      `<path d="M${cx - 40} ${y + 28} l-34 24 l16 30 l18 -10 v148 h80 v-148 l18 10 l16 -30 l-34 -24 z" fill="${col}"/>` +
+      `<path d="M${cx + 6} ${y + 28} h34 l34 24 l-16 30 l-18 -10 v148 h-34 z" fill="${sombra}"/>` +
+      `<path d="M${cx - 16} ${y + 28} l16 22 l16 -22 z" fill="${aclarar(col, 0.5)}"/>`
+    );
+  }
+  // Vestido: tirantes y falda acampanada.
+  return (
+    gancho +
+    `<path d="M${cx - 26} ${y + 28} h52 l8 56 l40 140 h-148 l40 -140 z" fill="${col}"/>` +
+    `<path d="M${cx + 6} ${y + 28} h20 l8 56 l40 140 h-68 z" fill="${sombra}"/>` +
+    `<rect x="${cx - 30}" y="${y + 80}" width="60" height="10" fill="${aclarar(col, 0.45)}"/>`
+  );
+}
+function barraDeRopa(s: string[], x0: number, x1: number, y: number, semilla: number) {
+  s.push(`<rect x="${x0 - 20}" y="${y - 30}" width="14" height="40" fill="#5E5A66"/><rect x="${x1 + 6}" y="${y - 30}" width="14" height="40" fill="#5E5A66"/>`);
+  s.push(`<rect x="${x0 - 20}" y="${y - 22}" width="${x1 - x0 + 40}" height="12" rx="6" fill="#8A8F98"/>`);
+  let i = semilla;
+  for (let x = x0 + 50; x < x1 - 30; x += 100) {
+    s.push(prenda(x, y - 10, i, COLORES_PRENDA[(i * 4) % COLORES_PRENDA.length]));
+    i++;
+  }
+}
+// Pilas de ropa doblada (en la repisa o en la mesa).
+function ropaDoblada(s: string[], x: number, yBase: number, ancho: number, semilla: number, capas = 4) {
+  for (let k = 0; k < capas; k++) {
+    const col = COLORES_PRENDA[(semilla + k * 3) % COLORES_PRENDA.length];
+    const y = yBase - (k + 1) * 26;
+    s.push(`<rect x="${x + (k % 2) * 4}" y="${y}" width="${ancho}" height="24" rx="6" fill="${col}"/><rect x="${x + (k % 2) * 4}" y="${y + 16}" width="${ancho}" height="8" rx="4" fill="${oscurecer(col, 0.15)}"/>`);
+  }
+}
+function maniqui(s: string[], cx: number, yPiso: number) {
+  // Pie, poste, torso con un vestido y cuello sin cabeza.
+  s.push(`<ellipse cx="${cx}" cy="${yPiso - 10}" rx="90" ry="18" fill="#5E5A66"/><rect x="${cx - 8}" y="${yPiso - 330}" width="16" height="320" fill="#8A8F98"/>`);
+  s.push(`<path d="M${cx - 70} ${yPiso - 640} q70 -40 140 0 l-10 120 l60 190 h-240 l60 -190 z" fill="#E86A9A"/>`);
+  s.push(`<path d="M${cx + 10} ${yPiso - 660} q50 6 60 20 l-10 120 l60 190 h-110 z" fill="${oscurecer("#E86A9A", 0.14)}"/>`);
+  s.push(`<rect x="${cx - 18}" y="${yPiso - 700}" width="36" height="50" rx="12" fill="#E8DCCB"/>`);
+}
+
+export function svgTiendaRopa(pared: Pared): ParteSvg {
+  const c = PAREDES[pared];
+  const s: string[] = [];
+  s.push(`<rect x="0" y="0" width="${W}" height="${Y_PARED}" fill="${c}"/>`);
+  s.push(`<rect x="0" y="${Y_PARED - 100}" width="${W}" height="100" fill="${oscurecer(c, 0.1)}"/>`);
+  baldosas(s, Y_PARED, "#DDBB92", "#C79E72");
+  puertaVidrio(s, PUERTA_X.tienda_ropa - 130, 260, "#2E2A33");
+  // Repisa alta con ropa doblada.
+  s.push(`<rect x="590" y="190" width="1150" height="18" rx="6" fill="#B58B5E"/>`);
+  for (let i = 0; i < 9; i++) ropaDoblada(s, 610 + i * 124, 190, 96, i, 3);
+  // Dos barras de ropa colgada y el maniquí entre las dos.
+  barraDeRopa(s, 620, 1120, 330, 0);
+  barraDeRopa(s, 1360, 1720, 330, 5);
+  maniqui(s, 1240, Y_PARED + 20);
+  // Espejo de cuerpo entero.
+  s.push(`<rect x="1790" y="230" width="190" height="700" rx="90" fill="#C9A646"/><rect x="1806" y="246" width="158" height="668" rx="80" fill="#DCEFF6"/>`);
+  s.push(`<path d="M1830 330 l60 -50 M1830 420 l100 -90" stroke="#FFFFFF" stroke-width="14" opacity="0.7"/>`);
+  // Probador con cortina.
+  s.push(`<rect x="2010" y="150" width="190" height="16" fill="#5E5A66"/>`);
+  for (let k = 0; k < 4; k++) s.push(`<path d="M${2016 + k * 46} 166 q23 ${440} 0 ${Y_PARED - 166} h46 q-23 -${440} 0 -${Y_PARED - 166} z" fill="${k % 2 ? "#A3485E" : "#B5536B"}"/>`);
   s.push(`<rect x="0" y="${Y_PARED}" width="${W}" height="22" fill="rgba(60,40,20,0.15)"/>`);
   return { svg: svg(W, H, s.join("")), ancho: W, alto: H, ancla: { x: 0, y: 0 } };
 }
@@ -336,6 +410,28 @@ export function svgVitrina(): ParteSvg {
   ];
   return { svg: svg(w, h, s.join("")), ancho: w, alto: h, ancla: { x: 0, y: 0 } };
 }
+// Perchero rodante con prendas (tienda de ropa).
+export const PERCHERO = { ancho: 620, alto: 720 } as const;
+export function svgPerchero(): ParteSvg {
+  const { ancho: w, alto: h } = PERCHERO;
+  const s: string[] = [`<ellipse cx="${w / 2}" cy="${h - 6}" rx="${w / 2 - 10}" ry="12" fill="rgba(20,16,30,0.22)"/>`];
+  s.push(`<rect x="30" y="40" width="16" height="${h - 80}" fill="#8A8F98"/><rect x="${w - 46}" y="40" width="16" height="${h - 80}" fill="#8A8F98"/>`);
+  s.push(`<rect x="20" y="${h - 50}" width="${w - 40}" height="16" rx="6" fill="#5E5A66"/><circle cx="50" cy="${h - 22}" r="16" fill="#2A2C31"/><circle cx="${w - 50}" cy="${h - 22}" r="16" fill="#2A2C31"/>`);
+  s.push(`<rect x="20" y="40" width="${w - 40}" height="14" rx="7" fill="#8A8F98"/>`);
+  for (let i = 0; i < 5; i++) s.push(prenda(110 + i * 100, 60, i + 1, COLORES_PRENDA[(i * 2 + 1) % COLORES_PRENDA.length]));
+  return { svg: svg(w, h, s.join("")), ancho: w, alto: h, ancla: { x: 0, y: 0 } };
+}
+// Mesa con ropa doblada en pilas.
+export const MESA_ROPA = { ancho: 560, alto: 330, tapa: 170 } as const;
+export function svgMesaRopa(): ParteSvg {
+  const { ancho: w, alto: h, tapa } = MESA_ROPA;
+  const mad = "#B58B5E";
+  const s: string[] = [`<ellipse cx="${w / 2}" cy="${h - 6}" rx="${w / 2 - 20}" ry="10" fill="rgba(20,16,30,0.22)"/>`];
+  s.push(`<rect x="40" y="${tapa}" width="22" height="${h - tapa - 6}" fill="${oscurecer(mad, 0.25)}"/><rect x="${w - 62}" y="${tapa}" width="22" height="${h - tapa - 6}" fill="${oscurecer(mad, 0.25)}"/>`);
+  s.push(`<rect x="10" y="${tapa}" width="${w - 20}" height="30" rx="8" fill="${mad}"/>`);
+  for (let i = 0; i < 4; i++) ropaDoblada(s, 30 + i * 128, tapa, 110, i * 2, 5);
+  return { svg: svg(w, h, s.join("")), ancho: w, alto: h, ancla: { x: 0, y: 0 } };
+}
 export const MESA = { ancho: 460, alto: 300, tapa: 36 } as const;
 export function svgMesa(): ParteSvg {
   const { ancho: w, alto: h, tapa } = MESA;
@@ -353,5 +449,6 @@ export function svgFondo(fondo: Fondo, pared: Pared): ParteSvg | null {
   if (fondo === "tienda") return svgTienda(pared);
   if (fondo === "cocina") return svgCocina(pared);
   if (fondo === "calle") return svgCalle(pared);
+  if (fondo === "tienda_ropa") return svgTiendaRopa(pared);
   return null;
 }

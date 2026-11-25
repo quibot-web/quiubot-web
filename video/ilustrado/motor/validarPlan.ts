@@ -70,6 +70,9 @@ export const MIN_PALABRAS_POR_PANTALLA = 4;
 export const MIN_PALABRAS_IRSE_Y_VOLVER = 4;
 // Entre dos que pasan de largo en el mismo lugar (de a uno, nunca dos a la vez).
 export const MIN_PALABRAS_ENTRE_PASOS = 5;
+export const HABLA_DE_ROPA = /\b(ropa|prendas?|boutique|vestidos?|camisas?|blusas?|jeans|moda)\b/i;
+// Lo que justifica celebrar o aplaudir en la frase.
+export const JUSTIFICA_CELEBRAR = /(logr|gan[oóaé]|vend[ií]|vendes|vende\b|compr[aó]|éxito|exito|felic|celebr|aplau|lo hiciste|funcion[oó]|resultado|meta\b|r[eé]cord|genial|incre[ií]ble|por fin|¡)/i;
 
 export const contarPalabras = (narracion: string) => narracion.trim().split(/\s+/).filter(Boolean).length;
 const islaEn = (registro: Registro) => (escena: string) => registro.escena(escena)?.isla ?? escena;
@@ -138,6 +141,18 @@ export function validarPlanIlustrado(plan: unknown, escenas: { id: string; narra
       } else if (!esta) problemas.push(`${a.frase}: "${id}" se fue de ${a.escena} y no puede "${a.accion}" hasta que vuelva a entrar (${id}.entra)`);
     }
   }
+  // El lugar es el que nombra la voz: si habla de ropa, la tienda de ropa
+  // (revisión del episodio 1: la tienda de frascos no ayudaba a entender).
+  const narracionTotal = escenas.map((e) => e.narracion).join(" ");
+  if (HABLA_DE_ROPA.test(narracionTotal)) for (const c of p.composiciones ?? []) if (c.fondo === "tienda") problemas.push(`${c.id}: la narración habla de ropa: usa "fondo": "tienda_ropa" (percheros, ropa doblada, maniquí), no la tienda de estantes con frascos`);
+  // Emociones con motivo: celebrar o aplaudir solo si la frase lo justifica
+  // (un logro, una venta, algo que salió bien), nunca "porque sí".
+  const narracionDe = Object.fromEntries(escenas.map((e) => [e.id, e.narracion]));
+  for (const f of p.frases)
+    for (const a of f.acciones) {
+      const verbo = a.accion.split(".")[1];
+      if ((verbo === "celebra" || verbo === "aplaude") && !JUSTIFICA_CELEBRAR.test(narracionDe[f.escena_id] ?? "")) problemas.push(`${f.escena_id}: "${a.accion}" sin motivo: la frase no habla de un logro ni de algo que salió bien; usa una acción que muestre lo que dice (p. ej. <id>.acomoda, <id>.senala, <id>.quieto)`);
+    }
   // Reglas de director (revisión de la v6): cada acción del kit se puede
   // mostrar con un plano limpio; si no, se le dice a la IA quién estorba.
   if (problemas.length === 0) {

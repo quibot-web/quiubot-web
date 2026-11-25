@@ -166,6 +166,13 @@ export function estadoPose(pose: Pose, t: number, fps: number, p: Proporciones, 
       const brazo = { hombro, codo: total - hombro + 14, mano: "abierta" as const };
       return { mira: brazo, otro: brazo, saltoY: 0, inclinacion: 7 + Math.sin(t / 30) * 1 };
     }
+    case "acomodar": {
+      // Las dos manos hacia el perchero (a la altura del pecho), corriendo
+      // los ganchos: un vaivén corto de un lado a otro.
+      const vaiven = Math.sin(t / 7) * 7;
+      // El otro brazo, doblado frente al cuerpo (como sosteniendo una prenda).
+      return { ...base, mira: { hombro: (apunte ?? 60) + vaiven, codo: 20 - vaiven, mano: "abierta" }, otro: { hombro: -8, codo: -95 - vaiven, mano: "abierta" }, inclinacion: 4 + Math.sin(t / 7) * 1.5 };
+    }
     case "levantar_mano": {
       // Brazo arriba en diagonal (lejos de la cabeza: vertical quedaba detrás
       // de ella y parecía que se rascaba, v7), con un vaivén de "¡yo, yo!".

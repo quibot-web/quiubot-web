@@ -24,11 +24,12 @@ export function esExtra(id: string): boolean {
 // admite: chequeo extra del que llama (el registro verifica que la cartelera
 // siga teniendo un plano limpio con el extra puesto).
 // Otros lugares (tanda 2): gente de fondo, de pie, que encaja con el lugar.
-export const MIN_PERSONAJES: Record<Exclude<ComposicionKit["fondo"], "salon">, number> = { tienda: 3, calle: 3, cocina: 2 };
+export const MIN_PERSONAJES: Record<Exclude<ComposicionKit["fondo"], "salon">, number> = { tienda: 3, calle: 3, cocina: 2, tienda_ropa: 2 };
 const EXTRAS_DE: Record<Exclude<ComposicionKit["fondo"], "salon">, PersonajeKit["tipo"][]> = {
   tienda: ["cliente", "abuela", "mama", "papa", "emprendedora"],
   calle: ["cliente", "papa", "abuela", "nino", "mama"],
   cocina: ["nino", "nina"],
+  tienda_ropa: ["cliente", "mama", "emprendedora"],
 };
 
 export function completarAmbiente(c: ComposicionKit, semilla: string, admite: (c: ComposicionKit) => boolean = () => true): ComposicionKit {
@@ -92,7 +93,7 @@ function completarOtroLugar(c: ComposicionKit, semilla: string, admite: (c: Comp
   // vitrina, el mostrador, el carro): se ve tapado y le roba el plano al objeto.
   const tapados = new Set<number>();
   for (const o of c.objetos) {
-    if (!o.lugar?.startsWith("piso_") || o.plano !== "frente" || !["mostrador", "vitrina", "mesa", "moto", "carro"].includes(o.tipo)) continue;
+    if (!o.lugar?.startsWith("piso_") || o.plano !== "frente" || !["mostrador", "vitrina", "mesa", "moto", "carro", "perchero", "mesa_ropa"].includes(o.tipo)) continue;
     const i = POSICIONES.indexOf(o.lugar.replace("piso_", "") as (typeof POSICIONES)[number]);
     for (const j of [i - 1, i, i + 1]) tapados.add(j);
   }

@@ -50,7 +50,7 @@ export const ROPA_DE_TIPO: Record<TipoPersonaje, "falda" | "pantalon" | "vestido
 // (atento: el cuerpo hacia lo que pasa) son estados, no gestos: se quedan.
 // Tanda 2: "saludar" (la mano en alto, moviéndose), "comer" (lo que tiene en
 // la mano, a la boca y de vuelta) y "mirar_celular" (estado: mira el celular).
-export const POSES = ["parado", "senalar", "celebrar", "aplaudir", "ofrecer", "levantar_mano", "apoyar_cabeza", "inclinarse", "saludar", "comer", "mirar_celular"] as const;
+export const POSES = ["parado", "senalar", "celebrar", "aplaudir", "ofrecer", "levantar_mano", "apoyar_cabeza", "inclinarse", "saludar", "comer", "mirar_celular", "acomodar"] as const;
 export type Pose = (typeof POSES)[number];
 // "normal" es la expresión base.
 export const EXPRESIONES = ["normal", "feliz", "triste", "sorprendido", "aburrido", "atento"] as const;
@@ -79,13 +79,14 @@ export type ColorRopa = keyof typeof COLORES_ROPA;
 export type Accesorio = (typeof ACCESORIOS)[number];
 
 // ---------- Lugares ----------
-export const FONDOS = ["salon", "tienda", "cocina", "calle"] as const;
+export const FONDOS = ["salon", "tienda", "cocina", "calle", "tienda_ropa"] as const;
 export type Fondo = (typeof FONDOS)[number];
 export const NOMBRE_FONDO: Record<Fondo, string> = {
   salon: "un salón de clases",
   tienda: "una tienda de barrio por dentro (estantes con productos, puerta de vidrio)",
   cocina: "una cocina de casa (mesón, estufa, nevera, ventana)",
   calle: "una calle con locales (fachadas con toldos y la puerta de una tienda) y un andén",
+  tienda_ropa: "una tienda de ropa por dentro (ropa colgada en barras, maniquí, espejo, probador, puerta de vidrio)",
 };
 // Colores de pared que rotan entre reels (variedad, mismo estilo).
 export const PAREDES = { crema: "#EFE3CC", menta: "#D4E8DA", celeste: "#D6E4F0", durazno: "#F2D9C4" } as const;
@@ -99,7 +100,7 @@ export const LUGARES_PISO = ["piso_izquierda", "piso_centro_izquierda", "piso_ce
 export type LugarObjeto = (typeof LUGARES_PARED)[number] | (typeof LUGARES_PISO)[number];
 
 // ---------- Objetos ----------
-export const TIPOS_OBJETO = ["cartelera", "dibujo", "dulces", "pupitre", "torta", "helado", "caja", "bolsa", "celular", "moto", "carro", "mostrador", "vitrina", "mesa"] as const;
+export const TIPOS_OBJETO = ["cartelera", "dibujo", "dulces", "pupitre", "torta", "helado", "caja", "bolsa", "celular", "moto", "carro", "mostrador", "vitrina", "mesa", "perchero", "mesa_ropa"] as const;
 export type TipoObjeto = (typeof TIPOS_OBJETO)[number];
 export const NOMBRE_OBJETO: Record<TipoObjeto, string> = {
   cartelera: "una cartelera de corcho llena de dibujos con un solo espacio vacío",
@@ -116,6 +117,8 @@ export const NOMBRE_OBJETO: Record<TipoObjeto, string> = {
   mostrador: "un mostrador (el vendedor atiende detrás)",
   vitrina: "una vitrina de vidrio para exhibir",
   mesa: "una mesa con su silla",
+  perchero: "un perchero con prendas colgadas (camisas, vestidos)",
+  mesa_ropa: "una mesa con ropa doblada en pilas",
 };
 // Muebles: van en el piso; encima ("sobre") se pueden poner cosas, y en la
 // mesa y el pupitre alguien se puede sentar.
@@ -130,8 +133,10 @@ export const LUGARES_DE_OBJETO: Partial<Record<TipoObjeto, readonly Fondo[]>> = 
   pupitre: ["salon"],
   moto: ["calle"],
   carro: ["calle"],
-  mostrador: ["tienda", "cocina"],
+  mostrador: ["tienda", "cocina", "tienda_ropa"],
   vitrina: ["tienda", "cocina", "calle"],
+  perchero: ["tienda_ropa"],
+  mesa_ropa: ["tienda_ropa"],
 };
 export const MOTIVOS_DIBUJO = ["sol_casa", "flor", "gato", "arcoiris", "arbol", "cohete", "pez", "corazon", "mariposa", "barco", "estrella", "perro"] as const;
 export type MotivoDibujo = (typeof MOTIVOS_DIBUJO)[number];
@@ -156,6 +161,8 @@ export const VERBOS_PERSONAJE = {
   saluda: { pose: "saludar", expresion: "feliz", descripcion: "saluda con la mano, sonriendo" },
   come: { pose: "comer", expresion: "feliz", descripcion: "come lo que tiene en la mano y lo disfruta" },
   mira_el_celular: { pose: "mirar_celular", descripcion: "mira el celular y no le presta atención a nadie" },
+  // Acomoda la ropa del perchero o de la mesa (la dueña en su tienda): hacia el objetivo.
+  acomoda: { pose: "acomodar", descripcion: "acomoda la ropa del perchero o de la mesa (con objetivo: el perchero o la mesa_ropa)" },
   // Se aburre de pie (sin apoyar la cabeza): quien espera y nadie lo atiende.
   se_aburre: { expresion: "aburrido", descripcion: "se aburre de esperar: cara de aburrido, mira para otro lado" },
   // Caminan entre su lugar y la puerta del lugar (aparece o desaparece en ella).
@@ -182,6 +189,8 @@ export const VERBOS_OBJETO: Record<TipoObjeto, Record<string, string>> = {
   mostrador: {},
   vitrina: { destaca: "la vitrina brilla" },
   mesa: {},
+  perchero: { destaca: "el perchero brilla" },
+  mesa_ropa: { destaca: "la ropa doblada brilla" },
 };
 
 // ---------- Composición (lo que escribe la IA) ----------

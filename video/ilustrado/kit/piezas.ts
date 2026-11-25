@@ -3,7 +3,7 @@
 // solo dibuja <img> con transformaciones: barato y sin serializar SVG por
 // cuadro (meta <= 5 s de render por segundo de video).
 import { EXPRESIONES, MOTIVOS_DIBUJO, type MotivoDibujo, type TipoObjeto } from "./catalogoKit";
-import { svgBolsa, svgCaja, svgCarro, svgCelular, svgFondo, svgHelado, svgHojaPuerta, svgMesa, svgMostrador, svgMoto, svgTorta, svgVitrina } from "./dibujoLugares";
+import { svgBolsa, svgCaja, svgCarro, svgCelular, svgFondo, svgHelado, svgHojaPuerta, svgMesa, svgMesaRopa, svgPerchero, svgMostrador, svgMoto, svgTorta, svgVitrina } from "./dibujoLugares";
 import { svgAntebrazo, svgBrazo, svgCabeza, svgCuerpo, svgPeloAtras, svgPierna, svgRasgos, type AspectoPersonaje, type Cara, type Ojos, type ParteSvg } from "./dibujoPersonaje";
 import { svgCartelera, svgDibujo, svgDulces, svgPupitre, svgSalon, svgSilla } from "./dibujoObjetos";
 import type { ComposicionUbicada } from "./composicion";
@@ -44,6 +44,8 @@ const SVG_OBJETO: Partial<Record<TipoObjeto, () => ParteSvg>> = {
   carro: svgCarro,
   mostrador: svgMostrador,
   vitrina: svgVitrina,
+  perchero: svgPerchero,
+  mesa_ropa: svgMesaRopa,
 };
 
 // Motivos de la cartelera: los 11 primeros que NO usa un dibujo suelto de

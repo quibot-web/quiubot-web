@@ -31,7 +31,7 @@ import {
   POSICIONES,
   type Posicion,
 } from "./catalogoKit";
-import { BOLSA, CAJA, CARRO, CELULAR, HELADO, MESA, MOSTRADOR, MOTO, PUERTAS, PUERTA_X, TORTA, VITRINA } from "./dibujoLugares";
+import { BOLSA, CAJA, CARRO, CELULAR, HELADO, MESA, MESA_ROPA, MOSTRADOR, MOTO, PERCHERO, PUERTAS, PUERTA_X, TORTA, VITRINA } from "./dibujoLugares";
 import { CARTELERA, DIBUJO, DULCES, PUPITRE, SALON, SILLA, casillaCartelera } from "./dibujoObjetos";
 import type { AspectoPersonaje } from "./dibujoPersonaje";
 import { ropasDePaleta, type Variedad } from "./variedad";
@@ -43,6 +43,7 @@ export const ISLA_KIT: Record<Fondo, { ancho: number; alto: number }> = {
   tienda: { ancho: SALON.ancho, alto: SALON.alto },
   cocina: { ancho: SALON.ancho, alto: SALON.alto },
   calle: { ancho: SALON.ancho, alto: SALON.alto },
+  tienda_ropa: { ancho: SALON.ancho, alto: SALON.alto },
 };
 
 export const POS_X = { izquierda: 360, centro_izquierda: 740, centro: 1100, centro_derecha: 1460, derecha: 1840 } as const;
@@ -136,6 +137,8 @@ const TAM_BASE: Record<TipoObjeto, { ancho: number; alto: number }> = {
   mostrador: MOSTRADOR,
   vitrina: VITRINA,
   mesa: MESA,
+  perchero: PERCHERO,
+  mesa_ropa: MESA_ROPA,
 };
 function tamObjeto(o: ObjetoKit, plano: "frente" | "fondo" = o.plano): { ancho: number; alto: number } {
   const t = TAM_BASE[o.tipo];
