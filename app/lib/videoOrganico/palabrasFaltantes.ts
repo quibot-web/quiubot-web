@@ -6,13 +6,10 @@
 // Whisper (una letra distinta, "Quiubot" -> "Kiubot"); estricto con la
 // primera palabra de cada frase.
 
-export function normalizarPalabra(p: string): string {
-  return p
-    .toLowerCase()
-    .normalize("NFD")
-    .replace(/[̀-ͯ]/g, "")
-    .replace(/[^a-z0-9ñ]/g, "");
-}
+// Los números se comparan ya normalizados (ver numerosEspanol.ts): la
+// narración los trae en letras y Whisper suele darlos en dígitos.
+export { normalizarPalabra } from "./numerosEspanol";
+import { tokensNormalizados } from "./numerosEspanol";
 
 function distancia(a: string, b: string): number {
   const d = Array.from({ length: a.length + 1 }, (_, i) => [i, ...Array(b.length).fill(0)]);
@@ -24,6 +21,8 @@ function distancia(a: string, b: string): number {
 
 function parecidas(a: string, b: string): boolean {
   if (a === b) return true;
+  // Un número es exacto: 300000 y 30000 no son "parecidos".
+  if (/^\d+$/.test(a) || /^\d+$/.test(b)) return false;
   return distancia(a, b) <= Math.max(1, Math.floor(Math.min(a.length, b.length) / 3));
 }
 
@@ -32,15 +31,11 @@ export type PalabraFaltante = { palabra: string; escena_id: string; primeraDeFra
 export function palabrasFaltantes(narraciones: { id: string; narracion: string }[], transcripcion: string): PalabraFaltante[] {
   const esperadas: { n: string; original: string; escena_id: string; primeraDeFrase: boolean }[] = [];
   for (const e of narraciones) {
-    let inicioDeFrase = true;
-    for (const w of e.narracion.split(/\s+/)) {
-      const n = normalizarPalabra(w);
-      if (!n) continue;
-      esperadas.push({ n, original: w.replace(/[.,;:!?¿¡"]/g, ""), escena_id: e.id, primeraDeFrase: inicioDeFrase });
-      inicioDeFrase = /[.?!;:]$/.test(w);
+    for (const t of tokensNormalizados(e.narracion)) {
+      esperadas.push({ n: t.n, original: t.original.replace(/[.,;:!?¿¡"]/g, ""), escena_id: e.id, primeraDeFrase: t.primeraDeFrase });
     }
   }
-  const oidas = transcripcion.split(/\s+/).map(normalizarPalabra).filter(Boolean);
+  const oidas = tokensNormalizados(transcripcion).map((t) => t.n);
 
   // Alineación (subsecuencia común más larga, con palabras "parecidas").
   const A = esperadas.length;
