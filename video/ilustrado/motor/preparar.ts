@@ -4,6 +4,7 @@
 import { camaraEnCuadro, construirLineaDeTiempo, type LineaDeTiempo, type PuntoCamara, type TiemposIlustrado } from "../tiempoIlustrado";
 import { BOCA_BILLETERA_LOCAL, MICRO, type IdEscena } from "./catalogo";
 import { caminantesDePlan, crearRegistro, REGISTRO_CATALOGO, type Registro } from "./registro";
+import type { OpcionesCartel } from "./catalogo";
 import { conCobertura, cuerposEnMundo, encuadreDeAccionKit, planDeCamara, pulsoDeCamara, tomasDeCamara, type Puerta, type Toma } from "./camara";
 import { encuadrarKit } from "./encuadreKit";
 import type { MovimientoCamara } from "../kit/variedad";
@@ -31,6 +32,8 @@ export type ReelPreparado = {
   // Cortes de coincidencia celular <-> lugar del kit.
   puertas: Puerta[];
   movimiento?: MovimientoCamara;
+  // Historia narrada: los textos del cartel de opciones.
+  opciones?: OpcionesCartel;
 };
 
 export const DURACION_VIAJE = 20;
@@ -100,7 +103,7 @@ export function prepararReel(tiempos: TiemposIlustrado, plan: PlanIlustrado, fps
     }
   }
   const pulsos = disparos.filter((d) => d.accion === MICRO).map((d) => d.cuadro);
-  return { linea, disparos, recorrido, tomas, camara, pantallas, viajes, pulsos, registro, puertas, movimiento: plan.variedad?.camara };
+  return { linea, disparos, recorrido, tomas, camara, pantallas, viajes, pulsos, registro, puertas, movimiento: plan.variedad?.camara, opciones: plan.opciones };
 }
 
 // Lo que el reel muestra en un cuadro (lo usan el render, el control de

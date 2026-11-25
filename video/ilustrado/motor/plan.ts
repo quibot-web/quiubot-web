@@ -5,6 +5,7 @@
 import type { Variedad } from "../kit/variedad";
 import type { LineaDeTiempo } from "../tiempoIlustrado";
 import type { ComposicionKit } from "../kit/catalogoKit";
+import type { OpcionesCartel } from "./catalogo";
 import { crearRegistro, type Registro } from "./registro";
 
 // escena: una del catálogo (feed, chat, billetera...) o el id de una
@@ -14,7 +15,8 @@ export type AccionPlan = { escena: string; accion: string; palabra: number; obje
 export type FrasePlan = { escena_id: string; acciones: AccionPlan[]; metafora?: string };
 // variedad: pared, paleta de ropa y movimiento de cámara que eligió el
 // código para este reel (lo leen los reels siguientes de la cuenta).
-export type PlanIlustrado = { frases: FrasePlan[]; composiciones?: ComposicionKit[]; variedad?: Variedad };
+// opciones: los textos del cartel final de una historia narrada (los pone el código).
+export type PlanIlustrado = { frases: FrasePlan[]; composiciones?: ComposicionKit[]; variedad?: Variedad; opciones?: OpcionesCartel };
 
 // Una acción ya con su cuadro global.
 export type Disparo = AccionPlan & { cuadro: number; frase: string; inicioFrase: number };

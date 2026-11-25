@@ -4,6 +4,7 @@ import { registrarError } from "@/lib/registrarError";
 import { accesoContenido, duenoParaLeer, recursosSonDelUsuario } from "@/app/lib/accesoContenido";
 import { CrearPiezaManualSchema, elegirGanchoTipoMenosUsado, lunesDeLaSemana, type PublicacionOrganica } from "@/app/lib/contenido";
 import { vencerPiezasSinVideo } from "@/app/lib/publicadorOrganico";
+import { reelIlustradoActivo } from "@/app/lib/reelIlustrado";
 import { fechaBogota, hoyBogota, inicioDiaBogota, finDiaBogota } from "@/app/lib/fechaBogota";
 
 // Calendario de /contenido (commit 4a, ver docs/diseno/plan_contenido_organico.md
@@ -76,6 +77,10 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ error: "Datos inválidos para crear el reel." }, { status: 400 });
   }
   const { receta_organica, programada_para, producto_id, media_ids, tema } = resultado.data;
+  // Historia narrada (visuales-v2): solo cuentas del reel ilustrado.
+  if (receta_organica === "historia_narrada" && !reelIlustradoActivo(emailBusqueda)) {
+    return NextResponse.json({ error: "El formato Historia narrada todavía no está disponible para tu cuenta." }, { status: 403 });
+  }
   // El producto y las piezas del álbum tienen que ser de este usuario.
   if (!(await recursosSonDelUsuario(usuario.id, { producto_id, media_ids }))) {
     return NextResponse.json({ error: "El producto o las piezas del álbum elegidas no son de tu cuenta." }, { status: 400 });

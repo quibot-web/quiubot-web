@@ -9,7 +9,7 @@ import { ALTO_PANTALLA, ANCHO_PANTALLA, seTocan, vistaDelMundo } from "./geometr
 import { disparosDeEscena } from "./plan";
 import { PISO_Y } from "./recorrido";
 import { camaraDelCuadro, type ReelPreparado } from "./preparar";
-import { IslaBilletera, IslaGrafica, IslaMultitud, IslaRelojCliente, TAM_MONEDA } from "./escenas/Islas";
+import { IslaBilletera, IslaGrafica, IslaMultitud, IslaOpciones, IslaRelojCliente, TAM_MONEDA } from "./escenas/Islas";
 import { PantallaChat, PantallaFeed, PantallaPerfil } from "./escenas/Pantallas";
 import type { MarcaIlustrada, PaletaIlustrada, PropsEscena } from "./escenas/tipos";
 import type { TemaGuion } from "../../tema";
@@ -22,6 +22,7 @@ const ISLAS_DEL_MUNDO: Partial<Record<IdIsla, ComponentType<PropsEscena>>> = {
   multitud: IslaMultitud,
   reloj_cliente: IslaRelojCliente,
   grafica: IslaGrafica,
+  opciones: IslaOpciones,
 };
 const PANTALLAS: Partial<Record<IdEscena, ComponentType<PropsEscena>>> = {
   feed: PantallaFeed,
@@ -65,7 +66,7 @@ export function MundoIlustrado({ frame, fps, reel, paleta, tema, marca, fotoUrl,
   const objetivosKit = (escena: string) => reel.disparos.filter((x) => x.escena === escena && x.objetivo).map((x) => ({ accion: x.accion, cuadro: x.cuadro, objetivo: x.objetivo! }));
   const vista = vistaDelMundo(cam);
   const pisoEnPantalla = ALTO_PANTALLA / 2 + (PISO_Y - cam.y) * cam.zoom;
-  const props = (escena: string): PropsEscena => ({ frame, fps, d: disparosDeEscena(reel.disparos, escena), paleta, tema, marca, fotoUrl, recursos });
+  const props = (escena: string): PropsEscena => ({ frame, fps, d: disparosDeEscena(reel.disparos, escena), paleta, tema, marca, fotoUrl, recursos, opciones: reel.opciones });
 
   const islas = Object.keys(reel.recorrido).filter((id) => seTocan(rectVisible(id, reel.recorrido[id], !!reel.registro.composicion(id)), vista, MARGEN_CULLING));
 

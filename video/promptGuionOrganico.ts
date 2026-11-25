@@ -105,7 +105,7 @@ function seccionGancho(asignado: GanchoTipoOrganico): string {
   return `TIPO DE GANCHO ASIGNADO PARA ESTA PIEZA (ya decidido por el código para que varíe a lo largo de la semana -- no lo cambies ni elijas otro): el gancho tiene que ser de tipo "${asignado}" -- ${GANCHO_TIPOS_DESC[asignado]}. Escribe el gancho en ese estilo.`;
 }
 
-function seccionNegocio(infoAdicionalMarca: string | null, productos: ProductoResumenNegocio[]): string {
+export function seccionNegocio(infoAdicionalMarca: string | null, productos: ProductoResumenNegocio[]): string {
   const lineaProductos =
     productos.length > 0
       ? productos

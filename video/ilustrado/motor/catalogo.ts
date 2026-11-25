@@ -60,6 +60,15 @@ const ZONA_RELOJ_CLIENTE: Rect = unionRects([
   rectPersona(CLIENTE_LOCAL.x, CLIENTE_LOCAL.pies, CLIENTE_LOCAL.escala),
 ]);
 
+// Cartel de opciones (Historia narrada): la pregunta final con A y B y la
+// invitación a comentar. Lo pone el código, nunca la IA, y es la única
+// excepción a "nada de texto grande" del reel ilustrado.
+export type OpcionesCartel = { a: string; b: string };
+export const CARTEL_LOCAL: Rect = { x: 40, y: 40, ancho: 820, alto: 1180 };
+const ZONA_CARTEL: Rect = { x: 0, y: 0, ancho: 900, alto: 1260 };
+// Escenas que solo pone el código (no se le ofrecen a la IA).
+export const ESCENAS_SOLO_CODIGO = ["opciones"] as const;
+
 export function unionRects(rs: Rect[]): Rect {
   const x = Math.min(...rs.map((r) => r.x));
   const y = Math.min(...rs.map((r) => r.y));
@@ -79,6 +88,7 @@ export const ISLAS = {
   multitud: { ancho: 2000, alto: 1200 },
   reloj_cliente: { ancho: 1000, alto: 1100 },
   grafica: { ancho: 640, alto: 680 },
+  opciones: { ancho: 900, alto: 1260 },
 } as const;
 export type IdIsla = keyof typeof ISLAS;
 
@@ -150,6 +160,16 @@ export const CATALOGO = {
       sube: { descripcion: "las barras y la línea suben", foco: GRAFICA_LOCAL },
     },
   },
+  opciones: {
+    isla: "opciones",
+    acciones: {
+      micro: { descripcion: "el cartel late (micro-acción neutra)", foco: ZONA_CARTEL },
+      aparece: { descripcion: "aparece el cartel con las opciones A y B", foco: ZONA_CARTEL },
+      comenta: { descripcion: "llega una burbuja de comentario", foco: ZONA_CARTEL },
+      resalta_a: { descripcion: "se resalta la opción A", foco: ZONA_CARTEL },
+      resalta_b: { descripcion: "se resalta la opción B", foco: ZONA_CARTEL },
+    },
+  },
 } as const satisfies Record<string, DefinicionEscena>;
 
 export type IdEscena = keyof typeof CATALOGO;
@@ -163,6 +183,7 @@ export const ESCENA_VISIBLE: Record<IdEscena, string> = {
   multitud: "una multitud de personas ilustradas",
   reloj_cliente: "un reloj grande junto a un cliente ilustrado",
   grafica: "una gráfica de barras con una línea que sube",
+  opciones: "un cartel con dos opciones, A y B, y una burbuja de comentario",
 };
 
 // Micro-acción neutra (fase 2, arreglo de ritmo): la escena que está en

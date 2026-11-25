@@ -123,9 +123,12 @@ export type ResultadoRegenerarVoz =
 // validadores de audio (un evento con palabra fuera de rango por el
 // nuevo conteo de palabras tiene que detectarse ACÁ, no solo en la
 // generación inicial).
-export async function regenerarVozParaGuion(escenas: Guion["escenas"], params: ParametrosRegenerarVoz): Promise<ResultadoRegenerarVoz> {
-  const hallazgosAudio = validarEdicionDesdeAudio(escenas).map((h) => `${h.escenaId}: ${h.mensaje}`);
-  const hallazgosEstructura = validarEstructuraConsejosNumeradosAudio(escenas).map((h) => `${h.escenaId}: ${h.mensaje}`);
+// recetaId "historia_narrada": sin visuales por escena ni la estructura
+// de consejos (lo que se ve lo decide el plan ilustrado).
+export async function regenerarVozParaGuion(escenas: Guion["escenas"], params: ParametrosRegenerarVoz, recetaId?: RecetaOrganicaId): Promise<ResultadoRegenerarVoz> {
+  const sinEstructura = recetaId === "historia_narrada";
+  const hallazgosAudio = sinEstructura ? [] : validarEdicionDesdeAudio(escenas).map((h) => `${h.escenaId}: ${h.mensaje}`);
+  const hallazgosEstructura = sinEstructura ? [] : validarEstructuraConsejosNumeradosAudio(escenas).map((h) => `${h.escenaId}: ${h.mensaje}`);
   const erroresTotales = [...hallazgosAudio, ...hallazgosEstructura];
   if (erroresTotales.length > 0) {
     return { ok: false, status: 400, error: "La narración editada ya no es consistente con sus eventos/visuales.", resumenErrores: erroresTotales };

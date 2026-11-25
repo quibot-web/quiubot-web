@@ -13,11 +13,12 @@ Mucha gente compra la talla equivocada por internet.
 Ejemplo: a Laura le pasó con un jean y ahora siempre mide primero.
 Cierre: "Escríbenos tus medidas y te decimos tu talla."`;
 
-export default function CampoIdea({ valor, onCambio, onBlur, deshabilitado }: { valor: string; onCambio: (v: string) => void; onBlur?: () => void; deshabilitado?: boolean }) {
+// ayuda: reemplaza el texto de abajo (p. ej. en Historia narrada, donde no hay puntos ni series).
+export default function CampoIdea({ valor, onCambio, onBlur, deshabilitado, ayuda, etiqueta }: { valor: string; onCambio: (v: string) => void; onBlur?: () => void; deshabilitado?: boolean; ayuda?: string; etiqueta?: string }) {
   const tipo = clasificarIdea(valor);
   return (
     <div>
-      <label style={{ display: "block", fontSize: 12, fontWeight: 700, color: "#444", marginBottom: 6 }}>Tu idea para el video (opcional)</label>
+      <label style={{ display: "block", fontSize: 12, fontWeight: 700, color: "#444", marginBottom: 6 }}>{etiqueta ?? "Tu idea para el video (opcional)"}</label>
       <textarea
         value={valor}
         onChange={(e) => onCambio(e.target.value.slice(0, LIMITE_IDEA))}
@@ -30,11 +31,11 @@ export default function CampoIdea({ valor, onCambio, onBlur, deshabilitado }: { 
       />
       <div style={{ display: "flex", justifyContent: "space-between", fontSize: 11.5, color: "#777", marginTop: 4 }}>
         <span>
-          {tipo === "idea"
+          {ayuda ?? (tipo === "idea"
             ? "El reel va a seguir tus puntos, en tu orden, con tus ejemplos y datos. Si no cabe en un reel, te proponemos una serie."
             : tipo === "tema"
               ? "Tema corto: el reel desarrolla los consejos."
-              : "Sin idea: el reel elige un tema de tu negocio."}
+              : "Sin idea: el reel elige un tema de tu negocio.")}
         </span>
         <span style={{ color: valor.length > LIMITE_IDEA * 0.9 ? "#b45309" : "#777", whiteSpace: "nowrap", marginLeft: 8 }}>
           {valor.length} / {LIMITE_IDEA}

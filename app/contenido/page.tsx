@@ -1,6 +1,7 @@
 "use client";
 
 import CampoIdea from "./CampoIdea";
+import { pareceHistoria } from "@/app/lib/historiaNarrada";
 import { useEffect, useState, useCallback } from "react";
 import { useRouter } from "next/navigation";
 import {
@@ -104,6 +105,8 @@ export default function ContenidoPage() {
   const [sinAcceso, setSinAcceso] = useState<{ mensaje: string | null; suscripcion: boolean }>({ mensaje: null, suscripcion: false });
   // Arranque (o plan vencido): ve la página, pero no crea ni genera.
   const [avisoPlan, setAvisoPlan] = useState<{ codigo: string; mensaje: string } | null>(null);
+  // Cuentas con el reel ilustrado: además pueden elegir "Historia narrada".
+  const [reelIlustrado, setReelIlustrado] = useState(false);
   const [vista, setVista] = useState<Vista>("semana");
   const [semana, setSemana] = useState<string>(() => lunesDeLaSemana(hoyBogota()));
   const [mes, setMes] = useState<string>(() => hoyBogota().slice(0, 7));
@@ -156,6 +159,7 @@ export default function ContenidoPage() {
           return;
         }
         if (!accesoData.puedeCrear && accesoData.motivo) setAvisoPlan(accesoData.motivo);
+        setReelIlustrado(accesoData.reelIlustrado === true);
         fetch("/api/marca-adn")
           .then((r) => r.json())
           .then((d) => setAdnMarca(d.adn_marca ?? null))
@@ -433,6 +437,7 @@ export default function ContenidoPage() {
       {mostrarFormulario && (
         <FormularioAgregarReel
           fechaInicial={fechaFormulario}
+          conHistoria={reelIlustrado}
           onCerrar={() => setMostrarFormulario(false)}
           onCreado={() => {
             setMostrarFormulario(false);
@@ -659,7 +664,7 @@ function TarjetaPieza({
   );
 }
 
-function FormularioAgregarReel({ fechaInicial, onCerrar, onCreado }: { fechaInicial: string; onCerrar: () => void; onCreado: () => void }) {
+function FormularioAgregarReel({ fechaInicial, conHistoria, onCerrar, onCreado }: { fechaInicial: string; conHistoria: boolean; onCerrar: () => void; onCreado: () => void }) {
   const [receta, setReceta] = useState<RecetaOrganicaId>(RECETAS_ORGANICAS_INFO[0].id);
   const [fecha, setFecha] = useState(fechaInicial);
   const [hora, setHora] = useState("12:00");
@@ -708,7 +713,15 @@ function FormularioAgregarReel({ fechaInicial, onCerrar, onCreado }: { fechaInic
     setPiezasElegidas((prev) => prev.filter((p) => p.id !== id));
   }
 
+  const esHistoria = receta === "historia_narrada";
+  // La idea parece un relato ("Imagina...", una pregunta A o B): se sugiere el formato.
+  const sugerirHistoria = conHistoria && !esHistoria && pareceHistoria(tema);
+
   async function guardar() {
+    if (esHistoria && !tema.trim()) {
+      setError("Escribe tu historia: la voz la narra frase por frase.");
+      return;
+    }
     if (faltaMediaParaEstaReceta) {
       setError("Esta receta exige al menos una foto o video del álbum.");
       return;
@@ -758,7 +771,7 @@ function FormularioAgregarReel({ fechaInicial, onCerrar, onCreado }: { fechaInic
 
         <label style={etiquetaCampo}>Receta</label>
         <select value={receta} onChange={(e) => setReceta(e.target.value as RecetaOrganicaId)} style={campo}>
-          {RECETAS_ORGANICAS_INFO.map((r) => {
+          {RECETAS_ORGANICAS_INFO.filter((r) => r.id !== "historia_narrada" || conHistoria).map((r) => {
             const bloqueada = RECETAS_QUE_EXIGEN_MEDIA.includes(r.id) && piezasElegidas.length === 0;
             // Fase B v2.0 (narración + voz + subtítulos sincronizados)
             // solo está en consejos_numerados por ahora -- las demás
@@ -766,7 +779,7 @@ function FormularioAgregarReel({ fechaInicial, onCerrar, onCreado }: { fechaInic
             // Fase B v2.1 las generalice. Se dejan seleccionables (no
             // se ocultan, para no cortar producción mientras eso pasa),
             // solo marcadas para que quede claro qué esperar.
-            const esVersionAnterior = r.id !== "consejos_numerados";
+            const esVersionAnterior = r.id !== "consejos_numerados" && r.id !== "historia_narrada";
             return (
               <option key={r.id} value={r.id} disabled={bloqueada}>
                 {r.label}
@@ -788,7 +801,21 @@ function FormularioAgregarReel({ fechaInicial, onCerrar, onCreado }: { fechaInic
           </div>
         </div>
 
-        <CampoIdea valor={tema} onCambio={setTema} />
+        <CampoIdea
+          valor={tema}
+          onCambio={setTema}
+          {...(esHistoria
+            ? { etiqueta: "Tu historia", ayuda: "La voz la narra frase por frase, en tu orden, solo adaptada para que se escuche bien. Si termina en una pregunta A o B, el final muestra las dos opciones e invita a comentar." }
+            : {})}
+        />
+        {sugerirHistoria && (
+          <div style={{ marginTop: 8, padding: "10px 12px", borderRadius: 8, background: "#F3F0FF", border: "1px solid #D9D2FF", fontSize: 12.5, color: "#3D2F8F", display: "flex", alignItems: "center", justifyContent: "space-between", gap: 10 }}>
+            <span>Tu idea parece una historia. ¿La narramos frase por frase en vez de convertirla en consejos?</span>
+            <button type="button" onClick={() => setReceta("historia_narrada")} style={{ flexShrink: 0, padding: "6px 10px", borderRadius: 6, border: "none", background: "#534AB7", color: "#fff", fontSize: 12, fontWeight: 700, cursor: "pointer" }}>
+              Usar Historia narrada
+            </button>
+          </div>
+        )}
 
         <label style={etiquetaCampo}>Producto o servicio (opcional)</label>
         <SelectorProducto valor={productoValor} onCambio={alCambiarProducto} errorGuardado={errorProducto} onValidezCambia={setProductoValido} />

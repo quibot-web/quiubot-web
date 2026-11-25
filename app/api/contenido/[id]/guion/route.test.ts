@@ -104,6 +104,8 @@ vi.mock("@/lib/registrarError", () => ({ registrarError: (...args: unknown[]) =>
 // tiene su propia batería en generarGuionConVoz.test.ts.
 const generarGuionConVozMock = vi.fn();
 vi.mock("@/app/lib/videoOrganico/generarGuionConVoz", () => ({ generarGuionConVoz: (...args: unknown[]) => generarGuionConVozMock(...args) }));
+const generarHistoriaNarradaMock = vi.fn();
+vi.mock("@/app/lib/videoOrganico/generarHistoriaNarrada", () => ({ generarHistoriaNarrada: (...args: unknown[]) => generarHistoriaNarradaMock(...args) }));
 
 const { POST } = await import("./route");
 
@@ -147,6 +149,8 @@ describe("POST /api/contenido/[id]/guion", () => {
     fromMock.mockClear();
     registrarErrorMock.mockReset();
     rateLimitMock.mockReturnValue(true);
+    generarGuionConVozMock.mockReset();
+    generarHistoriaNarradaMock.mockReset();
     updatesRealizados = [];
     authMock.mockResolvedValue({ user: { email: "marca@quiubot.com" } });
     usuarioActual = USUARIO_ADMIN;
@@ -618,6 +622,33 @@ describe("POST /api/contenido/[id]/guion -- receta con voz vs. receta de siempre
     const res = await POST(req(), contexto());
     expect(res.status).toBe(422);
     expect((await res.json()).propuestaSerie.partes).toHaveLength(2);
+    vi.unstubAllGlobals();
+  });
+
+  it("historia_narrada: con reel ilustrado usa su propio generador (sin proponer serie); otra cuenta, 403 sin gastar IA", async () => {
+    // Una historia de más de 3 "puntos" no se parte en serie: se narra entera.
+    const tema = "Imagina que eres dueña de una tienda. 1. Tienes poco dinero. 2. Opción A: promocionar. 3. Opción B: anuncio nuevo. 4. ¿Qué harías? Comenta A o B.";
+    piezaActual = { id: "pieza-1", receta_organica: "historia_narrada", estado: "borrador", media_ids: null, semana: "2026-11-09", tema, gancho_tipo: "pregunta" };
+    vi.stubGlobal("fetch", vi.fn());
+    generarHistoriaNarradaMock.mockResolvedValue({
+      ok: true,
+      guion: { version: 1, formato: "9x16", fps: 30, uso: "organico", receta_organica: "historia_narrada", escenas: [], publicacion: { caption: "cap", hashtags: ["#a", "#b", "#c"] }, vozUrl: "https://cloudinary.test/voz.mp3" },
+      puntajeAlineacion: 1,
+      intentosGuion: 1,
+      crudo: { palabrasPorEscenaCrudo: [], silencios: [] },
+      planIlustrado: { estado: "generado", intentos: 1, ajustes: [], historial: [] },
+    });
+    vi.stubEnv("REELS_ILUSTRADOS_EMAILS", "marca@quiubot.com");
+    const ok = await POST(req(), contexto());
+    expect(ok.status).toBe(200);
+    expect(generarHistoriaNarradaMock).toHaveBeenCalledTimes(1);
+    expect(generarHistoriaNarradaMock.mock.calls[0][0].entrada.tema).toBe(tema);
+    expect(generarGuionConVozMock).not.toHaveBeenCalled();
+    vi.stubEnv("REELS_ILUSTRADOS_EMAILS", "otra@cuenta.com");
+    const no = await POST(req(), contexto());
+    expect(no.status).toBe(403);
+    expect(generarHistoriaNarradaMock).toHaveBeenCalledTimes(1);
+    vi.unstubAllEnvs();
     vi.unstubAllGlobals();
   });
 

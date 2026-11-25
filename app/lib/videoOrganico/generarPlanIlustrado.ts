@@ -1,3 +1,4 @@
+import { frasesDelCartel } from "@/app/lib/historiaNarrada";
 // Reel ilustrado, fase 2: la IA escribe el plan (escena + acción +
 // palabra por frase) sobre una narración ya validada. Hasta 3 intentos,
 // cada reintento con los problemas del anterior. Si no sale válido, el
@@ -65,10 +66,17 @@ export async function planTrasRegenerarVoz<G extends { escenas: { id: string; na
 ): Promise<{ guion: G; estado: "sin_plan" | "se_mantiene" | "replanificado" | "respaldo" }> {
   if (!guion.ilustrado && !opciones.activo) return { guion, estado: "sin_plan" };
   const narraciones = guion.escenas.map((e) => ({ id: e.id, narracion: e.narracion ?? "" }));
-  const ajustar = (plan: PlanIlustrado) => (guion.palabrasPorEscena ? ajustarConVozReal(plan, guion.palabrasPorEscena).plan : plan);
-  if (guion.ilustrado && validarPlanIlustrado(guion.ilustrado, narraciones).length === 0) return { guion: { ...guion, ilustrado: ajustar(guion.ilustrado) }, estado: "se_mantiene" };
+  // Historia narrada con cartel de opciones: el cartel lo arma el código;
+  // solo la historia (antes de la pregunta) se revalida o se replanifica.
+  const cartel = guion.ilustrado?.opciones;
+  const preguntaEn = cartel ? guion.ilustrado!.frases.findIndex((f) => f.acciones.some((a) => a.escena === "opciones")) : -1;
+  const historia = preguntaEn > 0 ? narraciones.slice(0, preguntaEn) : narraciones;
+  const conCartel = (plan: PlanIlustrado): PlanIlustrado => (preguntaEn > 0 && cartel ? { ...plan, frases: [...plan.frases.slice(0, preguntaEn), ...frasesDelCartel(narraciones, preguntaEn)], opciones: cartel } : plan);
+  const soloHistoria = (plan: PlanIlustrado): PlanIlustrado => (preguntaEn > 0 ? { ...plan, frases: plan.frases.slice(0, preguntaEn), opciones: undefined } : plan);
+  const ajustar = (plan: PlanIlustrado) => (guion.palabrasPorEscena ? ajustarConVozReal(conCartel(plan), guion.palabrasPorEscena).plan : conCartel(plan));
+  if (guion.ilustrado && validarPlanIlustrado(soloHistoria(guion.ilustrado), historia).length === 0) return { guion: { ...guion, ilustrado: ajustar(guion.ilustrado) }, estado: "se_mantiene" };
   if (opciones.activo) {
-    const r = await generarPlanIlustrado(narraciones, opciones.llamarIA, 3, { conKit: true });
+    const r = await generarPlanIlustrado(historia, opciones.llamarIA, 3, { conKit: true });
     // Se conserva la variedad que ya tenía la pieza (pared, paleta, cámara).
     if (r.ok) return { guion: { ...guion, ilustrado: ajustar({ ...r.plan, ...(guion.ilustrado?.variedad ? { variedad: guion.ilustrado.variedad } : {}) }) }, estado: "replanificado" };
   }

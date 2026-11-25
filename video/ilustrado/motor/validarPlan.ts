@@ -8,7 +8,7 @@
 // extra. La única cadena libre es "metafora", que NUNCA se dibuja: es la
 // explicación de la IA cuando el concepto no está en el catálogo.
 import { z } from "zod";
-import { CATALOGO, ID_ESCENAS, MICRO, definicionAccion } from "./catalogo";
+import { CATALOGO, ESCENAS_SOLO_CODIGO, ID_ESCENAS, MICRO, definicionAccion } from "./catalogo";
 import { problemasDelPlan, type PlanIlustrado } from "./plan";
 import { caminantesDePlan, crearRegistro, type Registro } from "./registro";
 import { ComposicionKitSchema } from "../kit/catalogoKit";
@@ -47,6 +47,8 @@ export const PlanIlustradoSchema = z
     composiciones: z.array(ComposicionKitSchema).max(4).optional(),
     // Variedad entre reels (la pone el código, no la IA).
     variedad: VariedadSchema.optional(),
+    // Historia narrada: los textos del cartel de opciones (los pone el código).
+    opciones: z.object({ a: z.string().min(1).max(30), b: z.string().min(1).max(30) }).strict().optional(),
   })
   .strict();
 
@@ -85,6 +87,8 @@ export function validarPlanIlustrado(plan: unknown, escenas: { id: string; narra
   const palabras = Object.fromEntries(escenas.map((e) => [e.id, contarPalabras(e.narracion)]));
   const problemas = [...(parseado.data.composiciones ?? []).flatMap((c) => problemasComposicion(c)), ...problemasDelPlan(p, palabras, registro), ...problemasVariedad(p, opciones.historial ?? [])];
 
+  // El cartel de opciones solo lo pone el código (con sus textos en el plan).
+  if (!p.opciones && p.frases.some((f) => f.acciones.some((a) => (ESCENAS_SOLO_CODIGO as readonly string[]).includes(a.escena)))) problemas.push(`la escena "opciones" no está disponible: usa las del catálogo`);
   const ids = p.frases.map((f) => f.escena_id);
   const esperados = escenas.map((e) => e.id);
   if (ids.join("|") !== esperados.join("|")) problemas.push(`el plan debe tener una entrada por frase, en orden: ${esperados.join(", ")} (llegó: ${ids.join(", ")})`);
@@ -250,7 +254,7 @@ export function ajustarPlanConTiempos(plan: PlanIlustrado, palabrasPorEscena: { 
 }
 
 export function accionesDisponiblesTexto(): string {
-  return ID_ESCENAS.map((e) => `- ${e} (${CATALOGO[e].isla === "celular" ? "pantalla del celular" : "objeto del mundo"}):\n${Object.keys(CATALOGO[e].acciones).filter((a) => a !== MICRO).map((a) => `    · ${a}: ${definicionAccion(e, a)!.descripcion}`).join("\n")}`).join("\n");
+  return ID_ESCENAS.filter((e) => !(ESCENAS_SOLO_CODIGO as readonly string[]).includes(e)).map((e) => `- ${e} (${CATALOGO[e].isla === "celular" ? "pantalla del celular" : "objeto del mundo"}):\n${Object.keys(CATALOGO[e].acciones).filter((a) => a !== MICRO).map((a) => `    · ${a}: ${definicionAccion(e, a)!.descripcion}`).join("\n")}`).join("\n");
 }
 
 // ---------- Arreglos de ritmo (fase 2, staging 23 nov 2026) ----------
