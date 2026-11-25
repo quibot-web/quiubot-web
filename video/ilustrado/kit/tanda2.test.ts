@@ -5,6 +5,7 @@
 // de la IA con las narraciones de muestra.
 import { describe, expect, it } from "vitest";
 import { renderToStaticMarkup } from "react-dom/server";
+import { createElement } from "react";
 import planTienda from "../fixtures/planIATienda.json";
 import planTorta from "../fixtures/planIATorta.json";
 import tiemposTienda from "../fixtures/tiemposTienda.json";
@@ -118,6 +119,10 @@ describe("tanda 2: reglas de composición y presencia", () => {
     expect(cruzando.dy!).toBeLessThan(0);
     expect(cruzando.escala!).toBeLessThan(1);
     expect(aperturaPuerta(cu, d, salida + dur - CUADROS_CERRAR / 2 - CUADROS_CRUZAR / 2)).toBe(1);
+    // La puerta abierta se dibuja con lo que el render del navegador soporta.
+    const html = renderToStaticMarkup(createElement(EscenaKit, { cu, frame: salida + dur - CUADROS_CERRAR / 2 - CUADROS_CRUZAR / 2, fps: 30, d, imagenes: urlsSinRasterizar(piezasDeComposicion(cu)) }));
+    expect(html).toMatch(/scaleX\(0\.18/); // la hoja, abierta del todo
+    expect(html).not.toMatch(/filter:|box-shadow|radial-gradient/);
     // Al final ya no está, la puerta quedó cerrada (sin volver a entrar).
     expect(presenciaDe(cliente, cu, { "cliente.se_va": [100] }, 100 + dur).alpha).toBe(0);
     expect(aperturaPuerta(cu, { "cliente.se_va": [100] }, 100 + dur + CUADROS_CERRAR / 2)).toBe(0);

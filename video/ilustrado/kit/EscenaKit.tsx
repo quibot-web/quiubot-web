@@ -541,8 +541,9 @@ function PuertaAbierta({ cu, d, frame, imagenes }: { cu: ComposicionUbicada; d: 
   return (
     <div style={{ position: "absolute", left: puerta.x, top: puerta.y, width: puerta.ancho, height: puerta.alto }}>
       <div style={{ position: "absolute", inset: 0, background: puerta.afuera }} />
-      {/* El borde de la hoja abierta, un poco más oscuro (se ve de canto). */}
-      <Img img={hoja} estilo={{ transformOrigin: "0 50%", transform: `scaleX(${1 - 0.82 * a})`, boxShadow: `inset -${Math.round(10 * a)}px 0 0 rgba(40,30,20,0.35)` }} />
+      <Img img={hoja} estilo={{ transformOrigin: "0 50%", transform: `scaleX(${1 - 0.82 * a})` }} />
+      {/* El canto de la hoja abierta, más oscuro (sin box-shadow: el render del navegador no lo dibuja). */}
+      <div style={{ position: "absolute", top: 0, height: puerta.alto, left: puerta.ancho * (1 - 0.82 * a) - 12 * a, width: 12 * a, background: "rgba(40,30,20,0.35)" }} />
     </div>
   );
 }
