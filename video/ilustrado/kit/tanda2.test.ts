@@ -112,15 +112,15 @@ describe("tanda 2: reglas de composición y presencia", () => {
     // Saliendo por la puerta: se abre, camina hacia el fondo (sube y se
     // achica hasta caber en el vano), de espaldas, y desaparece; se cierra.
     const dur = duracionCaminar(cliente, cu, "se_va");
-    const cruzando = presenciaDe(cliente, cu, d, salida + dur - CUADROS_CERRAR - CUADROS_CRUZAR / 2);
+    const cruzando = presenciaDe(cliente, cu, d, salida + dur - CUADROS_CERRAR / 2 - CUADROS_CRUZAR / 2);
     expect(cruzando.camina).toBe(true);
     expect(cruzando.deEspaldas).toBe(true);
     expect(cruzando.dy!).toBeLessThan(0);
     expect(cruzando.escala!).toBeLessThan(1);
-    expect(aperturaPuerta(cu, d, salida + dur - CUADROS_CERRAR - CUADROS_CRUZAR / 2)).toBe(1);
+    expect(aperturaPuerta(cu, d, salida + dur - CUADROS_CERRAR / 2 - CUADROS_CRUZAR / 2)).toBe(1);
     // Al final ya no está, la puerta quedó cerrada (sin volver a entrar).
     expect(presenciaDe(cliente, cu, { "cliente.se_va": [100] }, 100 + dur).alpha).toBe(0);
-    expect(aperturaPuerta(cu, { "cliente.se_va": [100] }, 100 + dur)).toBe(0);
+    expect(aperturaPuerta(cu, { "cliente.se_va": [100] }, 100 + dur + CUADROS_CERRAR / 2)).toBe(0);
     // Quien está lejos de la puerta primero camina de costado hasta ella, mirando hacia allá.
     const lejos = { ...cliente, cx: cliente.cx + 500 };
     const caminando = presenciaDe(lejos, cu, { "cliente.se_va": [0] }, 10);
@@ -283,5 +283,36 @@ describe("después de que alguien se va, el lugar vacío dura poco", () => {
     const plan = structuredClone(planTienda) as PlanIlustrado;
     plan.composiciones![0].personajes.find((x) => x.id === "cliente")!.posicion = "derecha";
     expect(validarPlanIlustrado(plan, tiemposTienda.escenas).join(" ")).toMatch(/muy lejos de la puerta.*"izquierda" o "centro_izquierda"/);
+  });
+});
+
+describe("pasa de largo: de a uno y con el producto grande", () => {
+  const comp = {
+    id: "k_t",
+    fondo: "tienda" as const,
+    personajes: [
+      { id: "cliente", tipo: "cliente" as const, posicion: "izquierda" as const, mira: "derecha" as const },
+      { id: "abuela", tipo: "abuela" as const, posicion: "derecha" as const, mira: "izquierda" as const },
+    ],
+    objetos: [
+      { id: "vitrina", tipo: "vitrina" as const, lugar: "piso_centro" as const },
+      { id: "torta", tipo: "torta" as const, sobre: "vitrina" },
+    ],
+  };
+
+  it("si el segundo llega antes de que el primero salga, espera: nunca dos a la vez", () => {
+    const cu = crearRegistro([comp], "s", { caminantes: { k_t: ["cliente:pasa", "abuela:pasa"] } }).composicion("k_t")!;
+    const [cli, abu] = ["cliente", "abuela"].map((id) => cu.personajes.find((u) => u.per.id === id)!);
+    const d = { "cliente.pasa_de_largo": [10], "abuela.pasa_de_largo": [25] };
+    for (let f = 0; f < 200; f++) expect(presenciaDe(cli, cu, d, f).alpha > 0 && presenciaDe(abu, cu, d, f).alpha > 0, `cuadro ${f}`).toBe(false);
+    // Y la segunda igual pasa entera.
+    expect(Array.from({ length: 200 }, (_, f) => presenciaDe(abu, cu, d, f).alpha).some((a) => a === 1)).toBe(true);
+  });
+
+  it("el validador pide al menos 5 palabras entre dos que pasan de largo", () => {
+    const escenas = [{ id: "e1", narracion: "Una torta en la vitrina no se vende sola" }];
+    const plan = (a: number, b: number) => ({ composiciones: [comp], frases: [{ escena_id: "e1", acciones: [{ escena: "k_t", accion: "cliente.pasa_de_largo", palabra: a }, { escena: "k_t", accion: "abuela.pasa_de_largo", palabra: b }] }] });
+    expect(validarPlanIlustrado(plan(5, 7), escenas).join(" ")).toMatch(/de a uno/);
+    expect(validarPlanIlustrado(plan(1, 7), escenas).join(" ")).not.toMatch(/de a uno/);
   });
 });

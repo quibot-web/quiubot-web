@@ -277,7 +277,9 @@ export function planoMedio(u: PersonajeUbicado, r: Rect): Rect {
 }
 
 // Cuánto camina el que pasa de largo, a cada lado del centro de su paso.
-export const PASO_LARGO = 420;
+// (Largo: entra y sale por los bordes del plano, que es cerrado sobre lo
+// que no mira; revisión de la tanda 2.)
+export const PASO_LARGO = 700;
 // Quien pasa de largo cruza por delante del objeto principal más cercano (la
 // vitrina, el mostrador, la cartelera, un vehículo): así se ve que pasa al
 // lado de eso sin mirarlo. Sin objetos: alrededor de su lugar. Devuelve el
@@ -348,7 +350,9 @@ export function accionesDeComposicion(cu: ComposicionUbicada): Record<string, De
         verbo === "entra" || verbo === "se_va"
           ? union(r, { ...r, x: r.x + (PUERTAS[cu.c.fondo] ? camino : tramoVisible(camino)) })
           : verbo === "pasa_de_largo"
-            ? union({ ...r, x: r.x + centroDePaso(u, cu) - PASO_LARGO }, { ...r, x: r.x + centroDePaso(u, cu) + PASO_LARGO })
+            ? // El foco es quien pasa justo delante de lo que no mira (no todo el
+              // cruce): el plano queda cerrado y el producto se ve grande.
+              { ...r, x: r.x + centroDePaso(u, cu) }
             : u.sentado
               ? r
               : planoMedio(u, r);

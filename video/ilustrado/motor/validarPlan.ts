@@ -66,6 +66,8 @@ export const MIN_SEGUNDOS_ENTRE_ISLAS = 0.6;
 export const MIN_PALABRAS_POR_PANTALLA = 4;
 // Entre que alguien se va y vuelve a entrar (la salida se ve completa).
 export const MIN_PALABRAS_IRSE_Y_VOLVER = 4;
+// Entre dos que pasan de largo en el mismo lugar (de a uno, nunca dos a la vez).
+export const MIN_PALABRAS_ENTRE_PASOS = 5;
 
 export const contarPalabras = (narracion: string) => narracion.trim().split(/\s+/).filter(Boolean).length;
 const islaEn = (registro: Registro) => (escena: string) => registro.escena(escena)?.isla ?? escena;
@@ -92,6 +94,7 @@ export function validarPlanIlustrado(plan: unknown, escenas: { id: string; narra
   if (problemas.length === 0) {
     const presente = new Map<string, boolean>();
     const seFue = new Map<string, number>(); // palabra global en que se fue
+    const ultimoPaso = new Map<string, number>(); // por lugar: palabra global del último que pasó de largo
     const inicioDe: Record<string, number> = {};
     let acum = 0;
     for (const e of escenas) {
@@ -119,6 +122,9 @@ export function validarPlanIlustrado(plan: unknown, escenas: { id: string; narra
         if (!esta && fue !== undefined && pos - fue < MIN_PALABRAS_IRSE_Y_VOLVER) problemas.push(`${a.frase}: "${id}" vuelve a entrar ${pos - fue} palabras después de irse; deja al menos ${MIN_PALABRAS_IRSE_Y_VOLVER} palabras entre ${id}.se_va y ${id}.entra (la salida tiene que verse completa)`);
         presente.set(clave, true);
       } else if (verbo === "pasa_de_largo") {
+        const previo = ultimoPaso.get(a.escena);
+        if (previo !== undefined && pos - previo < MIN_PALABRAS_ENTRE_PASOS) problemas.push(`${a.frase}: "${a.accion}" llega ${pos - previo} palabras después del anterior que pasa de largo en ${a.escena}; de a uno: deja al menos ${MIN_PALABRAS_ENTRE_PASOS} palabras entre los dos (o deja uno solo)`);
+        ultimoPaso.set(a.escena, pos);
         if (esta) problemas.push(`${a.frase}: "${id}" ya está en ${a.escena}; quien pasa de largo no está antes (cruza y se va): usa otro personaje o quita sus otras acciones`);
         presente.set(clave, false);
       } else if (verbo === "se_va") {

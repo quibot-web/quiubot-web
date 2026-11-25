@@ -18,6 +18,7 @@ import type { Recorrido } from "./recorrido";
 import { VERBOS_PERSONAJE } from "../kit/catalogoKit";
 import { ID_TODOS, aIsla, enCamino, rectCabezaTorso, rectPersonaje } from "../kit/composicion";
 import { duracionCaminar, presenciaDe, rectEnPresencia } from "../kit/presencia";
+import { esExtra } from "../kit/ambiente";
 import type { MovimientoCamara } from "../kit/variedad";
 import { ZOOM_MAXIMO_KIT, cabeEnFranja, encuadrarKit, encuadreSeguro, ocupacionUtil, type Cuerpo, type ResultadoEncuadre } from "./encuadreKit";
 export { ZOOM_MAXIMO_KIT };
@@ -215,21 +216,54 @@ function conCorteTrasSalida(tomas: Toma[], disparos: Disparo[], recorrido: Recor
     const fin = d.cuadro + cuadrosCaminando(d, registro);
     const i = res.findIndex((t) => t.desde > fin);
     const siguiente = res[i];
+    const previa = res[i - 1];
     // Sin plano siguiente (el reel termina en el lugar) o corte pronto: nada que hacer.
     if (!siguiente || siguiente.desde - fin <= VACIO_TRAS_SALIDA) continue;
     const enEscena = disparosDeEscena(disparos, d.escena);
     const quedan = cu.personajes.filter((u) => u.per.id !== id && presenciaDe(u, cu, enEscena, fin).alpha >= 1 && presenciaDe(u, cu, enEscena, siguiente.desde - 1).alpha >= 1);
     if (!quedan.length) continue;
+    // Primero los del plan (la gente de ambiente solo si no queda nadie más).
+    const delPlan = quedan.filter((u) => !esExtra(u.per.id));
     const xSale = cu.personajes.find((x) => x.per.id === id)?.cx ?? 0;
-    const otro = quedan.reduce((a, b) => (Math.abs(b.cx - xSale) < Math.abs(a.cx - xSale) ? b : a));
+    const otro = (delPlan.length ? delPlan : quedan).reduce((a, b) => (Math.abs(b.cx - xSale) < Math.abs(a.cx - xSale) ? b : a));
     const tiempo: VentanaCuerpos = { d: enEscena, desde: fin, hasta: siguiente.desde };
     const e = encuadreDeAccionKit(d.escena, `${otro.per.id}.quieto`, undefined, recorrido, registro, tiempo);
     if (!e) continue;
-    // Se corta apenas se cierra la puerta (si queda poco, igual: mejor un plano corto que el lugar vacío).
+    // Se corta apenas desaparece (si queda poco, igual: mejor un plano corto que el lugar vacío).
     const desde = fin + Math.max(0, Math.min(VACIO_TRAS_SALIDA - 8, siguiente.desde - fin - MIN_PLANO_KIT));
-    res.splice(i, 0, { desde, ultimaAccion: desde, focos: e.focos, encuadre: e.r.encuadre, celular: false, escena: d.escena });
+    const corte: Toma = { desde, ultimaAccion: desde, focos: e.focos, encuadre: e.r.encuadre, celular: false, escena: d.escena };
+    // Lo que el plano anterior todavía iba a mostrar después del corte (p.
+    // ej. que vuelva a entrar): se retoma con el mismo encuadre en esa acción.
+    const despues = enEscenaKit(disparos, d.escena).filter((x) => x.cuadro > desde && x.cuadro < siguiente.desde);
+    const nuevas: Toma[] = [corte];
+    if (previa && previa.escena === d.escena && despues.length) {
+      const caminaHasta = Math.max(0, ...despues.filter((x) => /\.(entra|se_va)$/.test(x.accion)).map((x) => x.cuadro + cuadrosCaminando(x, registro)));
+      nuevas.push({ ...previa, desde: despues[0].cuadro, ultimaAccion: despues.at(-1)!.cuadro, caminaHasta: caminaHasta || undefined });
+    }
+    if (previa && previa.escena === d.escena) {
+      previa.caminaHasta = Math.min(previa.caminaHasta ?? fin, fin);
+      previa.ultimaAccion = Math.min(previa.ultimaAccion, fin);
+    }
+    res.splice(i, 0, ...nuevas);
   }
   return res;
+}
+const enEscenaKit = (disparos: Disparo[], escena: string) => disparos.filter((x) => x.escena === escena && x.accion !== MICRO).sort((a, b) => a.cuadro - b.cuadro);
+
+// Qué parte de la altura de la pantalla ocupa la persona más grande que se
+// ve entera en un encuadre (1 si no se ve nadie entero: no hay a quién
+// achicar). Un plano de gente
+// la necesita al menos en ALTURA_MINIMA_PERSONA.
+export const ALTURA_MINIMA_PERSONA = 0.45;
+function alturaPersonaMayor(escena: string, e: Encuadre, recorrido: Recorrido, registro: Registro): number {
+  const v = vistaDelMundo(e);
+  let mayor = 0;
+  for (const c of cuerposEnMundo(escena, recorrido, registro)) {
+    const r = c.completo ?? c.rect;
+    if (r.x < v.x || r.x + r.ancho > v.x + v.ancho || r.y < v.y || r.y + r.alto > v.y + v.alto) continue;
+    mayor = Math.max(mayor, (r.alto * e.zoom) / ALTO_PANTALLA);
+  }
+  return mayor || 1;
 }
 
 // Una acción en un lugar del kit (ver encuadreKit.ts para las reglas).
@@ -269,7 +303,9 @@ function tomaDelKit(tomas: Toma[], d: Disparo, f: Rect, recorrido: Recorrido, re
       // Si alguna es caminar, la toma junta va de cuerpo entero.
       const camina = verbo === "entra" || verbo === "se_va" || verbo === "pasa_de_largo" || ultima.cuerpoEntero === true;
       const r = encuadrarKit({ obligatorios: focos, cuerpos, soloNormal: true, anclarAbajo: deGente, cuerpoEntero: camina });
-      if (r && ocupacionUtil(unionRects(focos), r.encuadre) >= 0.5) {
+      // Y sin achicar a la gente: si quedan lejos, mejor dos planos (revisión
+      // de la tanda 2; el salón, ya aprobado y con niños más bajos, no cambia).
+      if (r && ocupacionUtil(unionRects(focos), r.encuadre) >= 0.5 && (registro.composicion(d.escena)?.c.fondo === "salon" || alturaPersonaMayor(d.escena, r.encuadre, recorrido, registro) >= ALTURA_MINIMA_PERSONA)) {
         ultima.focos = focos;
         ultima.encuadre = r.encuadre;
         ultima.ultimaAccion = d.cuadro;

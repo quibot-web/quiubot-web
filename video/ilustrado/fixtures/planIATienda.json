@@ -3,51 +3,51 @@
   {
    "id": "k_tienda",
    "fondo": "tienda",
-   "pared": "menta",
+   "pared": "crema",
    "personajes": [
-    {
-     "id": "cliente",
-     "tipo": "cliente",
-     "posicion": "izquierda",
-     "plano": "frente",
-     "mira": "derecha",
-     "pose": "parado",
-     "expresion": "normal",
-     "ropa": "azul",
-     "ropa2": "gris",
-     "piel": "triguena",
-     "pelo": "castano",
-     "peinado": "corto",
-     "mira_a": "vendedor"
-    },
     {
      "id": "vendedor",
      "tipo": "vendedor",
      "posicion": "centro_derecha",
      "plano": "fondo",
      "mira": "izquierda",
-     "pose": "mirar_celular",
+     "pose": "parado",
      "expresion": "normal",
      "ropa": "verde",
      "ropa2": "blanco",
+     "piel": "triguena",
+     "pelo": "castano",
+     "peinado": "corto",
+     "mira_a": "cliente"
+    },
+    {
+     "id": "cliente",
+     "tipo": "cliente",
+     "posicion": "centro_izquierda",
+     "plano": "frente",
+     "mira": "derecha",
+     "pose": "parado",
+     "expresion": "normal",
+     "ropa": "azul",
+     "ropa2": "gris",
      "piel": "morena",
      "pelo": "negro",
      "peinado": "corto",
-     "mira_a": "celular_vendedor"
+     "mira_a": "vendedor"
     }
    ],
    "objetos": [
     {
-     "id": "vitrina",
-     "tipo": "vitrina",
-     "lugar": "piso_centro",
+     "id": "mostrador",
+     "tipo": "mostrador",
+     "lugar": "piso_centro_derecha",
      "plano": "frente",
      "visible": true
     },
     {
-     "id": "caja_producto",
+     "id": "caja",
      "tipo": "caja",
-     "sobre": "vitrina",
+     "sobre": "mostrador",
      "plano": "frente",
      "visible": true
     },
@@ -59,7 +59,7 @@
      "visible": true
     },
     {
-     "id": "bolsa_compra",
+     "id": "bolsa_cliente",
      "tipo": "bolsa",
      "en_mano_de": "cliente",
      "plano": "frente",
@@ -84,6 +84,11 @@
     },
     {
      "escena": "k_tienda",
+     "accion": "cliente.se_aburre",
+     "palabra": 10
+    },
+    {
+     "escena": "k_tienda",
      "accion": "cliente.se_va",
      "palabra": 12
     }
@@ -101,7 +106,12 @@
      "escena": "k_tienda",
      "accion": "vendedor.senala",
      "palabra": 6,
-     "objetivo": "caja_producto"
+     "objetivo": "caja"
+    },
+    {
+     "escena": "k_tienda",
+     "accion": "cliente.presta_atencion",
+     "palabra": 9
     }
    ]
   },
@@ -110,7 +120,7 @@
    "acciones": [
     {
      "escena": "k_tienda",
-     "accion": "bolsa_compra.aparece",
+     "accion": "bolsa_cliente.aparece",
      "palabra": 0
     }
    ]
@@ -120,13 +130,8 @@
    "acciones": [
     {
      "escena": "perfil",
-     "accion": "aparece",
-     "palabra": 0
-    },
-    {
-     "escena": "perfil",
      "accion": "toque_seguir",
-     "palabra": 1
+     "palabra": 0
     }
    ]
   }

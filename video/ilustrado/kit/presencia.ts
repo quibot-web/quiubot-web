@@ -15,7 +15,10 @@ export const CUADROS_CAMINAR = 36;
 // dy: hacia atrás (al salir por la puerta del fondo); pasa: va de largo (mira al frente).
 // deEspaldas: cruzando la puerta hacia afuera (o recién entrando): sin rasgos de la cara.
 export type Presencia = { dx: number; dy?: number; alpha: number; camina: boolean; mira?: "izquierda" | "derecha"; t: number; escala?: number; pasa?: boolean; deEspaldas?: boolean };
-export const CUADROS_PASAR = 46;
+// Pasa a paso rápido (~26 unidades por cuadro): unos 1,4 s a la vista
+// (CUADROS_PASAR cuenta desde que la voz lo nombra).
+export const CUADROS_PASAR = 44;
+const ADELANTO_PASO = 10;
 export const PROFUNDIDAD_PUERTA = 170;
 // Paso de caminar: arranca suave y sigue a paso parejo (al irse); al
 // llegar, paso parejo y frena suave. (Con aceleración y freno en los dos
@@ -23,12 +26,35 @@ export const PROFUNDIDAD_PUERTA = 170;
 const arrancar = (k: number) => (k < 0.3 ? (k * k) / 0.6 : k - 0.15) / 0.85;
 const frenar = (k: number) => 1 - arrancar(1 - k);
 
+// Quienes pasan de largo en un lugar, de a uno: si el siguiente llega
+// antes de que el anterior haya salido del plano (la voz va rápida), espera
+// (revisión de la tanda 2: dos personas fundidas a la vez). Clave "id@cuadro".
+export const SEPARACION_PASOS = CUADROS_PASAR;
+const memoPasos = new WeakMap<DisparosEscena, WeakMap<ComposicionUbicada, Map<string, number>>>();
+export function iniciosDePasar(cu: ComposicionUbicada, d: DisparosEscena): Map<string, number> {
+  let porCu = memoPasos.get(d);
+  if (!porCu) memoPasos.set(d, (porCu = new WeakMap()));
+  const hecho = porCu.get(cu);
+  if (hecho) return hecho;
+  const res = new Map<string, number>();
+  const todos = cu.personajes.flatMap((u) => (d[`${u.per.id}.pasa_de_largo`] ?? []).map((c) => ({ id: u.per.id, c }))).sort((a, b) => a.c - b.c);
+  let libre = -Infinity;
+  for (const p of todos) {
+    const inicio = Math.max(p.c, libre);
+    res.set(`${p.id}@${p.c}`, inicio);
+    libre = inicio + SEPARACION_PASOS;
+  }
+  porCu.set(cu, res);
+  return res;
+}
+
 export function presenciaDe(u: PersonajeUbicado, cu: ComposicionUbicada, d: DisparosEscena, frame: number): Presencia {
   const id = u.per.id;
+  const pasos = iniciosDePasar(cu, d);
   const eventos = [
     ...(d[`${id}.entra`] ?? []).map((c) => ({ c, tipo: "entra" as const })),
     ...(d[`${id}.se_va`] ?? []).map((c) => ({ c, tipo: "se_va" as const })),
-    ...(d[`${id}.pasa_de_largo`] ?? []).map((c) => ({ c, tipo: "pasa" as const })),
+    ...(d[`${id}.pasa_de_largo`] ?? []).map((c) => ({ c: pasos.get(`${id}@${c}`) ?? c, tipo: "pasa" as const })),
   ].sort((a, b) => a.c - b.c);
   if (!eventos.length) return { dx: 0, alpha: 1, camina: false, t: 0 };
   const hasta = caminoDe(u, cu.c.fondo);
@@ -41,7 +67,9 @@ export function presenciaDe(u: PersonajeUbicado, cu: ComposicionUbicada, d: Disp
   // Pasa de largo: cruza de un lado al otro (pasando por su lugar) mirando
   // al frente; aparece y desaparece en los extremos; antes y después, no está.
   if (ultimo.tipo === "pasa") {
-    const kp = t / CUADROS_PASAR;
+    // Arranca ya avanzado (el comienzo del recorrido queda fuera del plano):
+    // entra al cuadro cuando la voz lo nombra, no medio segundo después.
+    const kp = (t + ADELANTO_PASO) / (CUADROS_PASAR + ADELANTO_PASO);
     if (kp >= 1) return { ...ausente, t };
     const dir = u.per.mira === "izquierda" ? -1 : 1;
     const alpha = Math.min(1, t / 10, (CUADROS_PASAR - t) / 10);
@@ -77,9 +105,9 @@ export function presenciaDe(u: PersonajeUbicado, cu: ComposicionUbicada, d: Disp
 // hacia el vano (se achica un poco) y desaparece; la puerta se cierra.
 // Entrar: al revés. Así se lee "se va" / "llega" aunque el dibujo sea de
 // frente (revisión de la tanda 2).
-export const VELOCIDAD_CAMINAR = 18; // unidades de la isla por cuadro
+export const VELOCIDAD_CAMINAR = 24; // unidades de la isla por cuadro (paso decidido)
 export const CUADROS_ABRIR = 8;
-export const CUADROS_CRUZAR = 18;
+export const CUADROS_CRUZAR = 15;
 export const CUADROS_CERRAR = 8;
 const suaveK = (k: number) => (k <= 0 ? 0 : k >= 1 ? 1 : k * k * (3 - 2 * k));
 
@@ -93,12 +121,13 @@ function inicioCruce(cuadros: number, tipo: "entra" | "se_va"): number {
   return tipo === "se_va" ? Math.max(cuadros, CUADROS_ABRIR) : CUADROS_ABRIR - 2;
 }
 
-// Cuántos cuadros dura entrar o irse (la cámara no corta antes).
+// Cuántos cuadros dura entrar o irse (la cámara no corta antes): al irse,
+// hasta que desapareció y la puerta va a medio cerrar.
 export function duracionCaminar(u: PersonajeUbicado, cu: ComposicionUbicada, tipo: "entra" | "se_va"): number {
   if (!PUERTAS[cu.c.fondo]) return CUADROS_CAMINAR;
   const { cuadros } = hastaLaPuerta(u, cu);
   const cruce = inicioCruce(cuadros, tipo);
-  return tipo === "se_va" ? cruce + CUADROS_CRUZAR + CUADROS_CERRAR : cruce + CUADROS_CRUZAR + Math.max(cuadros, CUADROS_CERRAR);
+  return tipo === "se_va" ? cruce + CUADROS_CRUZAR + CUADROS_CERRAR / 2 : cruce + CUADROS_CRUZAR + Math.max(cuadros, CUADROS_CERRAR);
 }
 
 function porLaPuerta(u: PersonajeUbicado, cu: ComposicionUbicada, tipo: "entra" | "se_va", t: number): Presencia {

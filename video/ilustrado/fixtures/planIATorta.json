@@ -8,34 +8,26 @@
     {
      "id": "cliente",
      "tipo": "cliente",
-     "posicion": "izquierda",
+     "posicion": "centro_izquierda",
      "plano": "frente",
      "mira": "derecha",
      "pose": "parado",
-     "expresion": "normal"
-    },
-    {
-     "id": "abuela",
-     "tipo": "abuela",
-     "posicion": "derecha",
-     "plano": "frente",
-     "mira": "izquierda",
-     "pose": "parado",
-     "expresion": "normal"
+     "expresion": "normal",
+     "mira_a": "vitrina"
     }
    ],
    "objetos": [
     {
-     "id": "vitrina_torta",
+     "id": "vitrina",
      "tipo": "vitrina",
-     "lugar": "piso_centro",
+     "lugar": "piso_centro_derecha",
      "plano": "frente",
      "visible": true
     },
     {
      "id": "torta_vitrina",
      "tipo": "torta",
-     "sobre": "vitrina_torta",
+     "sobre": "vitrina",
      "plano": "frente",
      "visible": true
     }
@@ -44,7 +36,7 @@
   {
    "id": "k_cocina",
    "fondo": "cocina",
-   "pared": "durazno",
+   "pared": "menta",
    "personajes": [
     {
      "id": "mama",
@@ -52,7 +44,7 @@
      "posicion": "centro",
      "plano": "frente",
      "mira": "izquierda",
-     "pose": "parado",
+     "pose": "ofrecer",
      "expresion": "feliz"
     }
    ],
@@ -80,11 +72,6 @@
      "escena": "k_tienda",
      "accion": "cliente.pasa_de_largo",
      "palabra": 5
-    },
-    {
-     "escena": "k_tienda",
-     "accion": "abuela.pasa_de_largo",
-     "palabra": 8
     }
    ]
   },
@@ -99,12 +86,7 @@
     {
      "escena": "k_cocina",
      "accion": "mama.come",
-     "palabra": 2
-    },
-    {
-     "escena": "k_cocina",
-     "accion": "micro",
-     "palabra": 5
+     "palabra": 3
     }
    ]
   },
