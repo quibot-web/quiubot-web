@@ -15,7 +15,7 @@ export function esPaginaLegalPublica(pathname: string): boolean {
 
 // /clase: página pública de la clase en vivo (llegan desde Instagram, sin
 // cuenta). Incluye lo que cuelga de ella: /clase/calendario.ics y las
-// imágenes para compartir (/clase/opengraph-image.png, etc.). No lee base
+// imágenes para compartir (/clase/opengraph-image.jpg, etc.). No lee base
 // de datos ni expone nada sensible.
 export function esPaginaClasePublica(pathname: string): boolean {
   return pathname === "/clase" || pathname.startsWith("/clase/")

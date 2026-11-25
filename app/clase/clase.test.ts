@@ -1,7 +1,7 @@
 import { createElement } from "react";
 import { renderToString } from "react-dom/server";
 import { describe, expect, it, vi } from "vitest";
-import ClaseEnVivo from "./ClaseEnVivo";
+import ClaseEnVivo, { CHIP_POR_ESTADO, LO_QUE_VAS_A_APRENDER } from "./ClaseEnVivo";
 import {
   ENLACE_COMUNIDAD,
   FIN_EN_VIVO,
@@ -28,7 +28,7 @@ const render = (ahora: number) => renderToString(createElement(ClaseEnVivo, { ah
 
 describe("/clase es pública", () => {
   it("la página, el .ics y las imágenes para compartir pasan sin sesión; el resto de la app sigue pidiendo login", async () => {
-    for (const ruta of ["/clase", "/clase/calendario.ics", "/clase/opengraph-image.png"]) {
+    for (const ruta of ["/clase", "/clase/calendario.ics", "/clase/opengraph-image.jpg"]) {
       expect(esPaginaClasePublica(ruta), ruta).toBe(true);
       expect(await pedirSinSesion(ruta), ruta).toBe("pasa");
     }
@@ -97,6 +97,28 @@ describe("los tres estados según la hora", () => {
     expect(html).not.toContain("está en vivo");
     expect(html).not.toContain("Agregar a mi calendario");
     expect(html).not.toContain("Cómo participar");
+  });
+});
+
+describe("chip de arriba según el estado", () => {
+  const chip = (html: string) => html.match(/data-testid="chip-estado"[^>]*>(?:<span[^>]*><\/span>)?([^<]*)</)?.[1];
+  it("antes dice Online (nunca \"en vivo\"), durante \"En vivo ahora\", después \"Próxima clase en la comunidad\"", () => {
+    expect(chip(render(INICIO_CLASE - 1))).toBe("Clase gratuita · Online");
+    expect(chip(render(INICIO_CLASE))).toBe("En vivo ahora");
+    expect(chip(render(FIN_EN_VIVO))).toBe("Próxima clase en la comunidad");
+    expect(CHIP_POR_ESTADO.antes.toLowerCase()).not.toContain("en vivo");
+  });
+});
+
+describe("Lo que vas a aprender", () => {
+  it("los cuatro puntos, antes y durante la clase; no después", () => {
+    expect(LO_QUE_VAS_A_APRENDER).toHaveLength(4);
+    for (const t of [INICIO_CLASE - 1, INICIO_CLASE]) {
+      const html = render(t);
+      expect(html).toContain("Lo que vas a aprender");
+      for (const punto of LO_QUE_VAS_A_APRENDER) expect(html).toContain(punto);
+    }
+    expect(render(FIN_EN_VIVO)).not.toContain("Lo que vas a aprender");
   });
 });
 

@@ -8,6 +8,9 @@ import { SUBTITULO_CLASE, TITULO_CLASE } from "./evento";
 
 const DESCRIPCION = `${SUBTITULO_CLASE}. Jueves 26 de noviembre, 8:00 p. m. hora de Colombia.`;
 
+// Barra del navegador del mismo color que el fondo de la página.
+export const viewport = { themeColor: "#0C0A17" };
+
 export const metadata: Metadata = {
   title: { absolute: `${TITULO_CLASE} · Quiubot` },
   description: DESCRIPCION,
