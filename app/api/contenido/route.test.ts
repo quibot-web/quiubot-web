@@ -213,6 +213,18 @@ describe("POST /api/contenido (agregar reel a mano)", () => {
     expect(body.pieza).toEqual(piezaCreadaActual);
   });
 
+  it("Historia narrada: solo cuentas del reel ilustrado (otra cuenta: 403, sin crear nada)", async () => {
+    vi.stubEnv("REELS_ILUSTRADOS_EMAILS", "otra@cuenta.com");
+    const no = await POST(postReq({ receta_organica: "historia_narrada", programada_para: isoEnElFuturo(48), tema: "Imagina que eres dueña de una tienda." }));
+    expect(no.status).toBe(403);
+    expect(insertadoCon).toBeNull();
+    vi.stubEnv("REELS_ILUSTRADOS_EMAILS", "marca@quiubot.com");
+    const si = await POST(postReq({ receta_organica: "historia_narrada", programada_para: isoEnElFuturo(48), tema: "Imagina que eres dueña de una tienda." }));
+    expect(si.status).toBe(201);
+    expect(insertadoCon).toMatchObject({ receta_organica: "historia_narrada" });
+    vi.unstubAllEnvs();
+  });
+
   it("guarda media_ids cuando se eligieron piezas del álbum", async () => {
     await POST(
       postReq({

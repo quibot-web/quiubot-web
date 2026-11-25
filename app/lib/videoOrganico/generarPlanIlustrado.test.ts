@@ -80,3 +80,41 @@ describe("arreglo automático de ritmo antes de reintentar (pieza 67d87ce8)", ()
     if (r.ok) expect(r.ajustes.some((a) => a.startsWith("e2: micro-acción"))).toBe(true);
   });
 });
+
+describe("generarPlanIlustrado con el kit (visuales-v2)", () => {
+  it("con conKit el prompt trae el kit y un plan con composiciones válido se acepta tal cual", async () => {
+    const { PLAN_PROTOTIPO_KIT, NARRACION_PROTOTIPO_KIT } = await import("@/video/ilustrado/kit/planPrototipoKit");
+    const prompts: string[] = [];
+    const r = await generarPlanIlustrado(NARRACION_PROTOTIPO_KIT, async (p) => (prompts.push(p), JSON.stringify(PLAN_PROTOTIPO_KIT)), 3, { conKit: true });
+    expect(prompts[0]).toMatch(/KIT DE LUGARES/);
+    expect(r.ok).toBe(true);
+    if (r.ok) expect(r.plan.composiciones?.[0].id).toBe("k_salon");
+  });
+
+  it("una composición con problemas se rechaza con mensajes para la IA y se reintenta", async () => {
+    const { PLAN_PROTOTIPO_KIT, NARRACION_PROTOTIPO_KIT } = await import("@/video/ilustrado/kit/planPrototipoKit");
+    const malo = { ...PLAN_PROTOTIPO_KIT, composiciones: [{ ...PLAN_PROTOTIPO_KIT.composiciones![0], personajes: [...PLAN_PROTOTIPO_KIT.composiciones![0].personajes, { id: "todos", tipo: "nino", posicion: "centro", plano: "fondo" }] }] };
+    const prompts: string[] = [];
+    const respuestas = [JSON.stringify(malo), JSON.stringify(PLAN_PROTOTIPO_KIT)];
+    const r = await generarPlanIlustrado(NARRACION_PROTOTIPO_KIT, async (p) => (prompts.push(p), respuestas.shift()!), 3, { conKit: true });
+    expect(r.ok && r.intentos).toBe(2);
+    expect(prompts[1]).toMatch(/reservado/);
+  });
+});
+
+describe("generarPlanIlustrado con variedad entre reels", () => {
+  it("el prompt trae los últimos reels y el plan aceptado lleva una variedad que no repite la de ellos", async () => {
+    const { PLAN_PROTOTIPO_KIT, NARRACION_PROTOTIPO_KIT } = await import("@/video/ilustrado/kit/planPrototipoKit");
+    const historial = [{ apertura: "chat", pared: "crema" as const, paleta: "calida" as const, camara: "acercar" as const }];
+    const prompts: string[] = [];
+    const r = await generarPlanIlustrado(NARRACION_PROTOTIPO_KIT, async (p) => (prompts.push(p), JSON.stringify(PLAN_PROTOTIPO_KIT)), 3, { conKit: true, historial });
+    expect(prompts[0]).toMatch(/Abrieron con: chat/);
+    expect(r.ok).toBe(true);
+    if (r.ok) {
+      expect(r.plan.variedad).toBeDefined();
+      expect(r.plan.variedad!.pared).not.toBe("crema");
+      expect(r.plan.variedad!.paleta).not.toBe("calida");
+      expect(r.plan.variedad!.camara).not.toBe("acercar");
+    }
+  });
+});

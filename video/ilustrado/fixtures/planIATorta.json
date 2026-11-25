@@ -1,0 +1,109 @@
+{
+ "composiciones": [
+  {
+   "id": "k_tienda",
+   "fondo": "tienda",
+   "pared": "crema",
+   "personajes": [
+    {
+     "id": "cliente",
+     "tipo": "cliente",
+     "posicion": "centro_izquierda",
+     "plano": "frente",
+     "mira": "derecha",
+     "pose": "parado",
+     "expresion": "normal",
+     "mira_a": "vitrina"
+    }
+   ],
+   "objetos": [
+    {
+     "id": "vitrina",
+     "tipo": "vitrina",
+     "lugar": "piso_centro_derecha",
+     "plano": "frente",
+     "visible": true
+    },
+    {
+     "id": "torta_vitrina",
+     "tipo": "torta",
+     "sobre": "vitrina",
+     "plano": "frente",
+     "visible": true
+    }
+   ]
+  },
+  {
+   "id": "k_cocina",
+   "fondo": "cocina",
+   "pared": "menta",
+   "personajes": [
+    {
+     "id": "mama",
+     "tipo": "mama",
+     "posicion": "centro",
+     "plano": "frente",
+     "mira": "izquierda",
+     "pose": "ofrecer",
+     "expresion": "feliz"
+    }
+   ],
+   "objetos": [
+    {
+     "id": "torta_mama",
+     "tipo": "torta",
+     "en_mano_de": "mama",
+     "plano": "frente",
+     "visible": true
+    }
+   ]
+  }
+ ],
+ "frases": [
+  {
+   "escena_id": "e1",
+   "acciones": [
+    {
+     "escena": "k_tienda",
+     "accion": "torta_vitrina.destaca",
+     "palabra": 1
+    },
+    {
+     "escena": "k_tienda",
+     "accion": "cliente.pasa_de_largo",
+     "palabra": 5
+    }
+   ]
+  },
+  {
+   "escena_id": "e2",
+   "acciones": [
+    {
+     "escena": "k_cocina",
+     "accion": "torta_mama.destaca",
+     "palabra": 0
+    },
+    {
+     "escena": "k_cocina",
+     "accion": "mama.come",
+     "palabra": 3
+    }
+   ]
+  },
+  {
+   "escena_id": "e3",
+   "acciones": [
+    {
+     "escena": "perfil",
+     "accion": "toque_seguir",
+     "palabra": 0
+    }
+   ]
+  }
+ ],
+ "variedad": {
+  "pared": "menta",
+  "paleta": "calida",
+  "camara": "barrer_derecha"
+ }
+}

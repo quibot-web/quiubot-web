@@ -129,6 +129,7 @@ export const RECETAS_ORGANICAS_INFO: { id: RecetaOrganicaId; label: string; desc
   { id: "serie_partes", label: "Serie en partes", desc: '"Parte 1 de 3" -- la siguiente pieza retoma el tema.' },
   { id: "pregunta_comunidad", label: "Pregunta a la comunidad", desc: "Elige A o B, opina en los comentarios." },
   { id: "detras_de_marca", label: "Detrás de la marca", desc: "Valores, cómo se hace, por qué existe la marca." },
+  { id: "historia_narrada", label: "Historia narrada", desc: "Tu relato, frase por frase, con voz e ilustraciones." },
 ];
 
 export function labelReceta(id: RecetaOrganicaId): string {

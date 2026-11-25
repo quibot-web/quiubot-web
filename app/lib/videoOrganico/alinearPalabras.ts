@@ -17,7 +17,11 @@ export type PalabrasDeEscena = { escena_id: string; palabras: PalabraConTiempo[]
 // video/visuales/index.tsx lo necesita para resolver "visual.eventos"
 // (video/visuales/schema.ts), que apunta a una palabra puntual dentro
 // de la narración de su propia escena, nunca a la escena completa.
-export type ResultadoAlineacion = { tiemposRender: TiempoRenderEscena[]; palabrasPorEscena: PalabrasDeEscena[]; puntaje: number };
+// cobertura: cuántas palabras de cada frase encontró Whisper en la voz (las
+// demás se interpolan). Una frase casi sin palabras encontradas = la voz
+// no la dijo (TTS cortada), ver vozIncompleta.
+export type CoberturaEscena = { escena_id: string; encontradas: number; total: number };
+export type ResultadoAlineacion = { tiemposRender: TiempoRenderEscena[]; palabrasPorEscena: PalabrasDeEscena[]; puntaje: number; cobertura: CoberturaEscena[] };
 
 // Mismo criterio de normalización en los dos lados (lo esperado y lo
 // que transcribió Whisper) -- minúsculas, sin puntuación pegada a la
@@ -97,6 +101,7 @@ export function alinearPalabras(escenas: EscenaConNarracion[], palabrasReales: P
       tiemposRender: escenas.map((e) => ({ escena_id: e.id, inicio_s: 0, fin_s: 0 })),
       palabrasPorEscena: escenas.map((e) => ({ escena_id: e.id, palabras: [] })),
       puntaje: 0,
+      cobertura: escenas.map((e, i) => ({ escena_id: e.id, encontradas: 0, total: porEscena[i].length })),
     };
   }
 
@@ -159,5 +164,29 @@ export function alinearPalabras(escenas: EscenaConNarracion[], palabrasReales: P
   }
 
   const puntaje = pares.size / esperadas.length;
-  return { tiemposRender, palabrasPorEscena, puntaje };
+  const cobertura: CoberturaEscena[] = [];
+  let desde = 0;
+  for (let k = 0; k < escenas.length; k++) {
+    const total = porEscena[k].length;
+    let encontradas = 0;
+    for (let i = desde; i < desde + total; i++) if (pares.has(i)) encontradas++;
+    cobertura.push({ escena_id: escenas[k].id, encontradas, total });
+    desde += total;
+  }
+  return { tiemposRender, palabrasPorEscena, puntaje, cobertura };
+}
+
+// ¿La voz llegó incompleta? (24 nov 2026: una TTS de la narración de la
+// torta llegó cortada, 6,3 s en vez de ~10 s: Whisper no encontró la última
+// frase, que quedó con 0,17 s interpolados. El control después del render
+// lo habría visto recién con el video hecho.) Se mira antes de seguir:
+// el puntaje global y que cada frase tenga al menos la mitad de sus
+// palabras en la voz.
+export const PUNTAJE_MINIMO_ALINEACION = 0.85;
+export const COBERTURA_MINIMA_FRASE = 0.5;
+export function vozIncompleta(a: Pick<ResultadoAlineacion, "puntaje" | "cobertura">): string[] {
+  const hallazgos: string[] = [];
+  if (a.puntaje < PUNTAJE_MINIMO_ALINEACION) hallazgos.push(`la voz solo dice el ${Math.round(a.puntaje * 100)} % de las palabras del guion`);
+  for (const c of a.cobertura) if (c.total > 0 && c.encontradas / c.total < COBERTURA_MINIMA_FRASE) hallazgos.push(`${c.escena_id}: la voz dice ${c.encontradas} de ${c.total} palabras de la frase`);
+  return hallazgos;
 }

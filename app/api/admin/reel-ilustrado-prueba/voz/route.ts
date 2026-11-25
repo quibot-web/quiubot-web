@@ -57,6 +57,7 @@ export async function POST(req: Request) {
       openaiKey,
       voz,
       cloudinary: { cloudName: usuario.cloudinary_name, apiKey: cloudinaryKey, apiSecret: cloudinarySecret },
+      revisarVozCompleta: true,
     });
     if (!resultado.ok) return NextResponse.json({ error: resultado.error, resumenErrores: resultado.resumenErrores }, { status: resultado.status });
     const { tiemposRender, palabrasPorEscena, segmentosAudio, vozUrl } = resultado.campos;

@@ -160,6 +160,33 @@ describe("generarGuionConVoz", () => {
     expect(generarVozMock).toHaveBeenCalledWith(textoCompleto, { openaiKey: "sk-test", voz: "cedar", cloudinary: { cloudName: "demo", apiKey: "k", apiSecret: "s" } });
   });
 
+  it("voz incompleta (la TTS llegó cortada, caso real de la torta): se detecta antes del render y se pide una vez más; si la segunda sale bien, sigue", async () => {
+    const textoCompleto = GUION_CON_AUDIO_VALIDO.escenas.map((e) => e.narracion).join(" ");
+    vi.stubGlobal("fetch", vi.fn().mockResolvedValue(respuestaOpenAI(GUION_CON_AUDIO_VALIDO)));
+    const completa = palabrasParaTexto(textoCompleto);
+    const cortada = completa.slice(0, Math.floor(completa.length * 0.6));
+    generarVozMock.mockResolvedValueOnce({ audioUrl: "https://cloudinary.test/cortada.mp3", palabras: cortada, silencios: [] });
+    generarVozMock.mockResolvedValueOnce({ audioUrl: "https://cloudinary.test/voz.mp3", palabras: completa, silencios: [] });
+    const resultado = await generarGuionConVoz(parametrosBase());
+    expect(generarVozMock).toHaveBeenCalledTimes(2);
+    expect(resultado.ok).toBe(true);
+    if (resultado.ok) expect(resultado.guion.vozUrl).toBe("https://cloudinary.test/voz.mp3");
+  });
+
+  it("voz incompleta dos veces: error claro antes del render (nunca un reel sin su última frase)", async () => {
+    const textoCompleto = GUION_CON_AUDIO_VALIDO.escenas.map((e) => e.narracion).join(" ");
+    vi.stubGlobal("fetch", vi.fn().mockResolvedValue(respuestaOpenAI(GUION_CON_AUDIO_VALIDO)));
+    const cortada = palabrasParaTexto(textoCompleto).slice(0, 10);
+    generarVozMock.mockResolvedValue({ audioUrl: "https://cloudinary.test/cortada.mp3", palabras: cortada, silencios: [] });
+    const resultado = await generarGuionConVoz(parametrosBase());
+    expect(generarVozMock).toHaveBeenCalledTimes(2);
+    expect(resultado.ok).toBe(false);
+    if (!resultado.ok) {
+      expect(resultado.status).toBe(502);
+      expect(resultado.error).toMatch(/incompleta/);
+    }
+  });
+
   it("guion con numeración doble ('1/3 ' antepuesta por la IA): se limpia sola antes de validar, sin gastar reintento -- la IA sí llamó una sola vez", async () => {
     // Caso real migrado desde app/api/contenido/[id]/guion/route.test.ts:
     // consejos_numerados ya no pasa por el pipeline viejo, pero

@@ -25,17 +25,19 @@ import { elegirGanchoTipoMenosUsado, elegirPistaMusicalOrganica } from "@/app/li
 import type { RecetaOrganicaId } from "@/video/guion.schema";
 import { obtenerSaludInstagram } from "@/app/lib/metaInstagramSalud";
 import { generarGuionConVoz } from "@/app/lib/videoOrganico/generarGuionConVoz";
+import { generarHistoriaNarrada } from "@/app/lib/videoOrganico/generarHistoriaNarrada";
 import { reelIlustradoActivo } from "@/app/lib/reelIlustrado";
 import { clasificarIdea, proponerSerie, serieDesdeIdea, type ContextoSerie } from "@/app/lib/ideaUsuario";
 import { erroresDatosDelGuion } from "@/app/lib/videoOrganico/datosReales";
 import { VENTANA_ROTACION } from "@/video/estilos/estilos";
+import { huellasDePiezas } from "@/video/ilustrado/kit/variedad";
 
 // Receta que ya pasó al pipeline nuevo (narración + voz real, ver
 // app/lib/videoOrganico/generarGuionConVoz.ts -- el mismo código que
 // ya probó 12 rondas reales en el arnés admin). Las otras 5 recetas se
 // quedan en construirPromptGuionOrganico de siempre, sin voz, "versión
 // anterior" (ver app/contenido/page.tsx) hasta la Fase B v2.1.
-const RECETAS_CON_VOZ = new Set<RecetaOrganicaId>(["consejos_numerados"]);
+const RECETAS_CON_VOZ = new Set<RecetaOrganicaId>(["consejos_numerados", "historia_narrada"]);
 const VOZ_POR_DEFECTO = "cedar";
 
 // Genera (o regenera) el guion de una pieza orgánica -- commit 4b,
@@ -67,6 +69,8 @@ const DURACION_POR_DEFECTO_S: Record<RecetaOrganicaId, number> = {
   serie_partes: 16,
   pregunta_comunidad: 10,
   detras_de_marca: 16,
+  // Una escena por frase (hasta 7): la duración real sale de la voz.
+  historia_narrada: 24,
 };
 
 async function llamarOpenAI(apiKey: string, prompt: string): Promise<string> {
@@ -344,19 +348,29 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
     // Si la consulta falla, se genera igual (sin historial).
     const { data: piezasAnteriores } = await supabaseAdmin
       .from("publicaciones_organicas")
-      .select("estilo:guion->estilo->>id")
+      .select("estilo:guion->estilo->>id, ilustrado:guion->ilustrado")
       .eq("user_id", usuario.id)
       .neq("id", id)
       .neq("estado", "cancelada")
       .order("creado_en", { ascending: false })
       .limit(VENTANA_ROTACION);
     const historialEstilos = (piezasAnteriores ?? []).map((p) => ((p as { estilo?: string | null }).estilo ?? null));
+    // Variedad entre reels ilustrados (visuales-v2): la huella de cada plan
+    // guardado en el guion (sin columnas nuevas).
+    const historialVisual = huellasDePiezas(piezasAnteriores ?? []);
     const recetaConAudio = recetaParaPromptConAudio(entrada);
+
+    // Historia narrada (visuales-v2): solo cuentas del reel ilustrado; sigue
+    // el texto del usuario frase por frase (sin propuesta de serie).
+    const esHistoria = recetaId === "historia_narrada";
+    if (esHistoria && !reelIlustradoActivo(emailBusqueda)) {
+      return NextResponse.json({ error: "El formato Historia narrada todavía no está disponible para tu cuenta." }, { status: 403 });
+    }
 
     try {
       // "Tu idea para el video": más de 3 puntos marcados no caben en un
       // reel de ~30 s -- se propone la serie sin gastar IA ni voz.
-      const serie = clasificarIdea(entrada.tema) === "idea" && !entrada.serie && !entrada.unSoloReel ? proponerSerie(entrada.tema ?? "") : "cabe";
+      const serie = esHistoria ? "cabe" : clasificarIdea(entrada.tema) === "idea" && !entrada.serie && !entrada.unSoloReel ? proponerSerie(entrada.tema ?? "") : "cabe";
       if (serie === null) {
         return NextResponse.json({ error: "Tu idea tiene demasiados puntos incluso para una serie de 3 reels. Acórtala o divídela tú en varias ideas." }, { status: 422 });
       }
@@ -364,7 +378,7 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
         return NextResponse.json({ error: "Tu idea no cabe en un reel de ~30 segundos.", propuestaSerie: serie }, { status: 422 });
       }
 
-      const resultado = await generarGuionConVoz({
+      const resultado = await (esHistoria ? generarHistoriaNarrada : generarGuionConVoz)({
         apiKeyUsuario,
         cloudinary: { cloudName: usuario.cloudinary_name, apiKey: cloudinaryKey, apiSecret: cloudinarySecret },
         voz,
@@ -378,6 +392,7 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
         maxReintentos: MAX_REINTENTOS,
         historialEstilos,
         conPlanIlustrado: reelIlustradoActivo(emailBusqueda),
+        historialVisual,
       });
 
       if (!resultado.ok) {

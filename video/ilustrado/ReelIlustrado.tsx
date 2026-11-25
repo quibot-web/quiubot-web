@@ -20,6 +20,8 @@ import type { MarcaIlustrada } from "./motor/escenas/tipos";
 import { precargarImagenes, urlsImagenesFijas } from "./imagenesFijas";
 import { generarRecursos, tarjetaDeMarca, type RecursosGenerados } from "./imagenesGeneradas";
 import { aUrlLocal } from "./recursosLocales";
+import { piezasDeComposicion, rasterizarPiezas, type ImagenesKit } from "./kit/piezas";
+import { CLAVE_FOTO, piezasDeEscenario } from "./kit/fotosEscenario";
 
 export type PropsReelIlustrado = {
   tiempos: TiemposIlustrado;
@@ -34,6 +36,9 @@ export type PropsReelIlustrado = {
   volumenMusica?: number;
   // Parte de una serie: "Parte k de N" al inicio.
   serie?: { parte: number; total: number };
+  // Varía lo que el plan no fija en el kit (ropa, piel, peinado, pared):
+  // dos reels no se ven iguales. Por defecto, el tema del reel.
+  semilla?: string;
 };
 
 const FPS = 30;
@@ -44,10 +49,11 @@ export function duracionReelIlustrado(props: Pick<PropsReelIlustrado, "tiempos">
   return Math.max(1, construirLineaDeTiempo(props.tiempos, FPS).duracionCuadros);
 }
 
-export function ReelIlustrado({ tiempos, plan, vozUrl, fotoUrl, tema, marca, pistaMusicaUrl, volumenMusica = 0.35, serie }: PropsReelIlustrado) {
+export function ReelIlustrado({ tiempos, plan, vozUrl, fotoUrl, tema, marca, pistaMusicaUrl, volumenMusica = 0.35, serie, semilla }: PropsReelIlustrado) {
   const frame = useCurrentFrame();
   const { fps } = useVideoConfig();
-  const reel = useMemo(() => prepararReel(tiempos, plan, fps), [tiempos, plan, fps]);
+  const semillaReel = semilla ?? JSON.stringify(tiempos.palabrasPorEscena.map((p) => p.palabras.length));
+  const reel = useMemo(() => prepararReel(tiempos, plan, fps, semillaReel), [tiempos, plan, fps, semillaReel]);
   const paleta = paletaNoche(tema);
   const foto = fotoUrl ?? null;
   // Una sola espera al inicio: imágenes fijas, foto y recursos horneados
@@ -56,7 +62,7 @@ export function ReelIlustrado({ tiempos, plan, vozUrl, fotoUrl, tema, marca, pis
   // cuadro 0 sale completo (nunca el celular en blanco).
   const { delayRender, continueRender } = useDelayRender();
   const [espera] = useState(() => delayRender("Precargando imágenes del reel ilustrado"));
-  const [listo, setListo] = useState<{ recursos: RecursosGenerados; foto: string } | null>(null);
+  const [listo, setListo] = useState<{ recursos: RecursosGenerados; foto: string; kit: ImagenesKit } | null>(null);
   useEffect(() => {
     let vigente = true;
     (async () => {
@@ -65,21 +71,30 @@ export function ReelIlustrado({ tiempos, plan, vozUrl, fotoUrl, tema, marca, pis
       // una imagen remota sin CORS (contamina el canvas y el render falla).
       // Sin foto apta (o si no se pudo bajar): la tarjeta de marca, nunca una captura con texto.
       const tarjeta = () => tarjetaDeMarca(marca.colorMarca, marca.colorSecundario, marca.inicial);
-      const fotoLocal = (foto ? await aUrlLocal(foto) : null) || (await tarjeta()) || FOTO_POR_DEFECTO();
+      // Rubro conocido por la narración (ropa): fotos ilustradas del kit (la
+      // ropa en el perchero y alguien luciéndola), en vez de la tarjeta.
+      const fotosRubro = await rasterizarPiezas(piezasDeEscenario(plan.escenario?.rubro));
+      const fotoLocal = (foto ? await aUrlLocal(foto) : null) || fotosRubro[CLAVE_FOTO.modelo]?.url || (await tarjeta()) || FOTO_POR_DEFECTO();
       const generados = await generarRecursos(fotoLocal, paleta.luz);
-      await precargarImagenes([...urlsImagenesFijas(), fotoLocal, generados.fotoApagada, generados.fotoClara, generados.brilloLuz].filter(Boolean));
-      if (vigente) setListo({ recursos: generados, foto: fotoLocal });
+      // Kit de escenas: cada parte de personajes, fondos y objetos a PNG, una vez.
+      const piezas = (plan.composiciones ?? []).flatMap((c) => {
+        const cu = reel.registro.composicion(c.id);
+        return cu ? piezasDeComposicion(cu) : [];
+      });
+      const kit = { ...(piezas.length ? await rasterizarPiezas(piezas) : {}), ...fotosRubro };
+      await precargarImagenes([...urlsImagenesFijas(), fotoLocal, generados.fotoApagada, generados.fotoClara, generados.brilloLuz, ...Object.values(kit).map((k) => k.url)].filter(Boolean));
+      if (vigente) setListo({ recursos: generados, foto: fotoLocal, kit });
     })();
     return () => {
       vigente = false;
     };
-  }, [foto, paleta.luz, marca.colorMarca, marca.colorSecundario, marca.inicial]);
+  }, [foto, paleta.luz, marca.colorMarca, marca.colorSecundario, marca.inicial, plan.composiciones, plan.escenario?.rubro, reel.registro]);
   useEffect(() => {
     if (listo) continueRender(espera);
   }, [listo, espera, continueRender]);
   return (
     <AbsoluteFill style={{ fontFamily: familiaDeFuente(tema.fuente), background: paleta.fondoProfundo, overflow: "hidden" }}>
-      {listo && <MundoIlustrado frame={frame} fps={fps} reel={reel} paleta={paleta} tema={tema} marca={marca} fotoUrl={listo.foto} recursos={listo.recursos} />}
+      {listo && <MundoIlustrado frame={frame} fps={fps} reel={reel} paleta={paleta} tema={tema} marca={marca} fotoUrl={listo.foto} recursos={listo.recursos} imagenesKit={listo.kit} />}
       <Subtitulo linea={reel.linea} frame={frame} luz={paleta.luz} etiqueta={serie ? textoSerie(serie) : null} />
       {pistaMusicaUrl && reel.linea.palabras.length > 0 && (
         <CapaMusicaConDucking

@@ -1,0 +1,145 @@
+{
+ "composiciones": [
+  {
+   "id": "k_salon",
+   "fondo": "salon",
+   "pared": "crema",
+   "personajes": [
+    {
+     "id": "profesora",
+     "tipo": "profesora",
+     "posicion": "izquierda",
+     "plano": "frente",
+     "mira": "derecha",
+     "pose": "parado",
+     "expresion": "normal",
+     "ropa": "turquesa",
+     "ropa2": "morado",
+     "piel": "triguena",
+     "pelo": "castano",
+     "peinado": "mono",
+     "accesorio": "gafas",
+     "mira_a": "dibujo"
+    },
+    {
+     "id": "nino",
+     "tipo": "nino",
+     "posicion": "centro_derecha",
+     "plano": "frente",
+     "mira": "izquierda",
+     "pose": "parado",
+     "expresion": "normal",
+     "ropa": "amarillo",
+     "ropa2": "azul",
+     "piel": "morena",
+     "pelo": "negro",
+     "peinado": "rizado",
+     "mira_a": "dibujo"
+    },
+    {
+     "id": "nina",
+     "tipo": "nina",
+     "posicion": "derecha",
+     "plano": "fondo",
+     "mira": "izquierda",
+     "pose": "parado",
+     "expresion": "normal",
+     "ropa": "rosado",
+     "ropa2": "verde",
+     "piel": "clara",
+     "pelo": "pelirrojo",
+     "peinado": "colitas",
+     "sentado_en": "pupitre",
+     "mira_a": "dibujo"
+    }
+   ],
+   "objetos": [
+    {
+     "id": "dibujo",
+     "tipo": "dibujo",
+     "lugar": "pared_centro",
+     "motivo": "arbol",
+     "plano": "frente",
+     "visible": true
+    },
+    {
+     "id": "pupitre",
+     "tipo": "pupitre",
+     "lugar": "piso_derecha",
+     "plano": "fondo",
+     "visible": true
+    }
+   ]
+  }
+ ],
+ "frases": [
+  {
+   "escena_id": "e1",
+   "acciones": [
+    {
+     "escena": "k_salon",
+     "accion": "profesora.senala",
+     "palabra": 1,
+     "objetivo": "nino"
+    }
+   ],
+   "metafora": "Los clientes se representan como alumnos dentro de un salón."
+  },
+  {
+   "escena_id": "e2",
+   "acciones": [
+    {
+     "escena": "k_salon",
+     "accion": "micro",
+     "palabra": 0
+    },
+    {
+     "escena": "k_salon",
+     "accion": "nino.se_distrae",
+     "palabra": 4
+    },
+    {
+     "escena": "k_salon",
+     "accion": "nina.se_distrae",
+     "palabra": 6
+    }
+   ]
+  },
+  {
+   "escena_id": "e3",
+   "acciones": [
+    {
+     "escena": "k_salon",
+     "accion": "profesora.senala",
+     "palabra": 2,
+     "objetivo": "dibujo"
+    },
+    {
+     "escena": "k_salon",
+     "accion": "dibujo.destaca",
+     "palabra": 4
+    },
+    {
+     "escena": "k_salon",
+     "accion": "nino.levanta_la_mano",
+     "palabra": 7
+    },
+    {
+     "escena": "k_salon",
+     "accion": "nina.levanta_la_mano",
+     "palabra": 9
+    }
+   ]
+  },
+  {
+   "escena_id": "e4",
+   "acciones": [
+    {
+     "escena": "perfil",
+     "accion": "toque_seguir",
+     "palabra": 2
+    }
+   ]
+  }
+ ]
+}

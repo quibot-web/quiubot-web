@@ -1,0 +1,232 @@
+{
+ "escenas": [
+  {
+   "id": "e1",
+   "narracion": "Una torta en la vitrina no se vende sola:"
+  },
+  {
+   "id": "e2",
+   "narracion": "muéstrala cuando alguien la está disfrutando."
+  },
+  {
+   "id": "e3",
+   "narracion": "Síguenos para más ideas como esta."
+  }
+ ],
+ "tiemposRender": [
+  {
+   "escena_id": "e1",
+   "inicio_s": 0,
+   "fin_s": 3.552624
+  },
+  {
+   "escena_id": "e2",
+   "inicio_s": 3.552624,
+   "fin_s": 6.983208
+  },
+  {
+   "escena_id": "e3",
+   "inicio_s": 6.983208,
+   "fin_s": 9.466958076293945
+  }
+ ],
+ "palabrasPorEscena": [
+  {
+   "escena_id": "e1",
+   "palabras": [
+    {
+     "texto": "Una",
+     "inicio_s": 0,
+     "fin_s": 0.5199999809265137
+    },
+    {
+     "texto": "torta",
+     "inicio_s": 0.5199999809265137,
+     "fin_s": 0.9800000190734863
+    },
+    {
+     "texto": "en",
+     "inicio_s": 1.238292,
+     "fin_s": 1.4077499570846557
+    },
+    {
+     "texto": "la",
+     "inicio_s": 1.4077499570846557,
+     "fin_s": 1.7077500286102294
+    },
+    {
+     "texto": "vitrina",
+     "inicio_s": 1.7077500286102294,
+     "fin_s": 1.98775
+    },
+    {
+     "texto": "no",
+     "inicio_s": 1.98775,
+     "fin_s": 2.5747910858306886
+    },
+    {
+     "texto": "se",
+     "inicio_s": 2.5747910858306886,
+     "fin_s": 2.974790942779541
+    },
+    {
+     "texto": "vende",
+     "inicio_s": 2.974790942779541,
+     "fin_s": 2.974790942779541
+    },
+    {
+     "texto": "sola:",
+     "inicio_s": 2.974790942779541,
+     "fin_s": 3.354791057220459
+    }
+   ]
+  },
+  {
+   "escena_id": "e2",
+   "palabras": [
+    {
+     "texto": "muéstrala",
+     "inicio_s": 4.193040923706055,
+     "fin_s": 4.453041152587891
+    },
+    {
+     "texto": "cuando",
+     "inicio_s": 4.453041152587891,
+     "fin_s": 4.89304120980835
+    },
+    {
+     "texto": "alguien",
+     "inicio_s": 4.89304120980835,
+     "fin_s": 5.353040771118164
+    },
+    {
+     "texto": "la",
+     "inicio_s": 5.353040771118164,
+     "fin_s": 5.953041152587891
+    },
+    {
+     "texto": "está",
+     "inicio_s": 5.953041152587891,
+     "fin_s": 6.113041
+    },
+    {
+     "texto": "disfrutando.",
+     "inicio_s": 6.113041,
+     "fin_s": 6.983208
+    }
+   ]
+  },
+  {
+   "escena_id": "e3",
+   "palabras": [
+    {
+     "texto": "Síguenos",
+     "inicio_s": 7.550124580383301,
+     "fin_s": 7.770124847412109
+    },
+    {
+     "texto": "para",
+     "inicio_s": 7.770124847412109,
+     "fin_s": 8.286957771118164
+    },
+    {
+     "texto": "más",
+     "inicio_s": 8.286957771118164,
+     "fin_s": 8.6069584196167
+    },
+    {
+     "texto": "ideas",
+     "inicio_s": 8.6069584196167,
+     "fin_s": 8.88695815258789
+    },
+    {
+     "texto": "como",
+     "inicio_s": 8.88695815258789,
+     "fin_s": 9.186958343322754
+    },
+    {
+     "texto": "esta.",
+     "inicio_s": 9.186958343322754,
+     "fin_s": 9.466958076293945
+    }
+   ]
+  }
+ ],
+ "segmentosAudio": [
+  {
+   "escena_id": "e1",
+   "tramos": [
+    {
+     "original": {
+      "inicio_s": 0,
+      "fin_s": 1.113292
+     },
+     "compactado": {
+      "inicio_s": 0,
+      "fin_s": 1.113292
+     }
+    },
+    {
+     "original": {
+      "inicio_s": 1.125542,
+      "fin_s": 2.224708
+     },
+     "compactado": {
+      "inicio_s": 1.113292,
+      "fin_s": 2.212458
+     }
+    },
+    {
+     "original": {
+      "inicio_s": 2.297667,
+      "fin_s": 3.637833
+     },
+     "compactado": {
+      "inicio_s": 2.212458,
+      "fin_s": 3.552624
+     }
+    }
+   ]
+  },
+  {
+   "escena_id": "e2",
+   "tramos": [
+    {
+     "original": {
+      "inicio_s": 3.939583,
+      "fin_s": 7.370167
+     },
+     "compactado": {
+      "inicio_s": 3.552624,
+      "fin_s": 6.983208
+     }
+    }
+   ]
+  },
+  {
+   "escena_id": "e3",
+   "tramos": [
+    {
+     "original": {
+      "inicio_s": 7.873083,
+      "fin_s": 8.842958
+     },
+     "compactado": {
+      "inicio_s": 6.983208,
+      "fin_s": 7.9530829999999995
+     }
+    },
+    {
+     "original": {
+      "inicio_s": 8.906125,
+      "fin_s": 10.420000076293945
+     },
+     "compactado": {
+      "inicio_s": 7.9530829999999995,
+      "fin_s": 9.466958076293945
+     }
+    }
+   ]
+  }
+ ]
+}

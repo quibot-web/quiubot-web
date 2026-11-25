@@ -1,5 +1,6 @@
 import type { TemaGuion } from "../../../tema";
-import type { DisparosEscena } from "../plan";
+import type { DisparosEscena, EscenarioPlan } from "../plan";
+import type { OpcionesCartel } from "../catalogo";
 import type { RecursosGenerados } from "../../imagenesGeneradas";
 
 export type PaletaIlustrada = { fondo: string; fondoProfundo: string; luz: string };
@@ -28,4 +29,9 @@ export type PropsEscena = {
   recursos: RecursosGenerados;
   // Solo pantallas del celular: cuadro en que esta pantalla se vuelve visible.
   desdePantalla?: number;
+  // Historia narrada: los textos del cartel de opciones.
+  opciones?: OpcionesCartel;
+  // Lo que se sabe por la narración (rubro, mensajes) y sus fotos ilustradas.
+  escenario?: EscenarioPlan;
+  fotoPrendas?: string;
 };

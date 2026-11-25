@@ -40,6 +40,9 @@ export const RECETAS_ORGANICAS_IDS = [
   "serie_partes",
   "pregunta_comunidad",
   "detras_de_marca",
+  // Visuales-v2 (24 nov 2026): el texto del usuario narrado frase por frase,
+  // ilustrado con el kit. Solo cuentas de REELS_ILUSTRADOS_EMAILS.
+  "historia_narrada",
 ] as const;
 
 export type RecetaOrganicaId = (typeof RECETAS_ORGANICAS_IDS)[number];

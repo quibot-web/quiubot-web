@@ -574,7 +574,8 @@ export async function PATCH(req: NextRequest, { params }: { params: Promise<{ id
         openaiKey: apiKeyUsuario,
         voz,
         cloudinary: { cloudName: usuarioCreds.cloudinary_name, apiKey: cloudinaryKey, apiSecret: cloudinarySecret },
-      });
+        revisarVozCompleta: reelIlustradoActivo(emailBusqueda),
+      }, guionActual.receta_organica);
     } catch (err) {
       // Antes una falla de OpenAI acá salía como un 500 vacío.
       const errorOpenAI = errorDeOpenAI(err);

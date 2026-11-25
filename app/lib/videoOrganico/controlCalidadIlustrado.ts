@@ -12,7 +12,7 @@
 // Una respuesta incompleta del modelo cuenta como problema.
 // El QC completo por acción es la fase 5. Puro: corre en el navegador y en el servidor.
 import { escenaEnCamara, prepararReel } from "@/video/ilustrado/motor/preparar";
-import { CATALOGO, ESCENA_VISIBLE, MICRO } from "@/video/ilustrado/motor/catalogo";
+import { MICRO } from "@/video/ilustrado/motor/catalogo";
 import type { PlanIlustrado } from "@/video/ilustrado/motor/plan";
 import type { TiemposIlustrado } from "@/video/ilustrado/tiempoIlustrado";
 
@@ -34,8 +34,11 @@ export function momentosControlIlustrado(tiempos: TiemposIlustrado, plan: PlanIl
     const escena = escenaEnCamara(reel, cuadro);
     if (!escena) return "la escena del reel";
     const accion = [...reel.disparos].reverse().find((d) => d.escena === escena && d.cuadro <= cuadro && d.accion !== MICRO);
-    const def = accion ? (CATALOGO[escena].acciones as Record<string, { descripcion: string }>)[accion.accion] : null;
-    return def ? `${ESCENA_VISIBLE[escena]}; en ese momento: ${def.descripcion}` : ESCENA_VISIBLE[escena];
+    // Escenas del catálogo y composiciones del kit (registro del plan).
+    const definicion = reel.registro.escena(escena);
+    if (!definicion) return "la escena del reel";
+    const def = accion ? definicion.acciones[accion.accion] : null;
+    return def ? `${definicion.visible}; en ese momento: ${def.descripcion}` : definicion.visible;
   };
   const momentos: MomentoQC[] = [{ etiqueta: "inicio", segundo: 0.1, esperado: queSeVe(3) }];
   for (let tercio = 0; tercio < 3; tercio++) {

@@ -8,14 +8,24 @@
 // extra. La única cadena libre es "metafora", que NUNCA se dibuja: es la
 // explicación de la IA cuando el concepto no está en el catálogo.
 import { z } from "zod";
-import { CATALOGO, ID_ESCENAS, MICRO, definicionAccion, type IdEscena, type IdIsla } from "./catalogo";
-import { problemasDelPlan, type PlanIlustrado } from "./plan";
+import { CATALOGO, ESCENAS_SOLO_CODIGO, ICONOS_OPCION, ID_ESCENAS, MICRO, definicionAccion } from "./catalogo";
+import { problemasDelPlan, type EscenarioPlan, type PlanIlustrado } from "./plan";
+import { caminantesDePlan, crearRegistro, type Registro } from "./registro";
+import { ComposicionKitSchema } from "../kit/catalogoKit";
+import { problemasVariedad, VariedadSchema, type HuellaVisual } from "../kit/variedad";
+import { DISTANCIA_MAXIMA_PUERTA, caminoDe, posicionesCercaDeLaPuerta, problemasComposicion } from "../kit/composicion";
+import { PUERTAS } from "../kit/dibujoLugares";
+import { esExtra } from "../kit/ambiente";
+import { planoLimpio } from "./camara";
 
+// escena: del catálogo o una composición del kit ("k_..."); que exista y
+// tenga la acción lo revisa problemasDelPlan con el registro del plan.
 const AccionSchema = z
   .object({
-    escena: z.enum(ID_ESCENAS as [IdEscena, ...IdEscena[]]),
+    escena: z.string().regex(/^[a-z][a-z0-9_]{0,30}$/),
     accion: z.string().min(1).max(40),
     palabra: z.number().int().min(0),
+    objetivo: z.string().regex(/^[a-z][a-z0-9_]{0,20}$/).optional(),
   })
   .strict();
 
@@ -33,8 +43,23 @@ export const PlanIlustradoSchema = z
           .strict()
       )
       .min(1),
+    // Kit de escenas (visuales-v2): lugares con personajes y objetos.
+    composiciones: z.array(ComposicionKitSchema).max(4).optional(),
+    // Variedad entre reels (la pone el código, no la IA).
+    variedad: VariedadSchema.optional(),
+    // Historia narrada: los textos del cartel de opciones (los pone el código).
+    opciones: z.object({ a: z.string().min(1).max(30), b: z.string().min(1).max(30), iconoA: z.enum(ICONOS_OPCION).optional(), iconoB: z.enum(ICONOS_OPCION).optional() }).strict().optional(),
+    // Lo pone el código (escenarioDeNarracion).
+    escenario: z.object({ rubro: z.enum(["ropa"]).optional(), mensajes: z.boolean().optional() }).strict().optional(),
   })
   .strict();
+
+// El escenario de un reel según lo que dice la voz (lo pone el código).
+export function escenarioDeNarracion(narraciones: { narracion: string }[]): EscenarioPlan | undefined {
+  const t = narraciones.map((n) => n.narracion).join(" ");
+  const e: EscenarioPlan = { ...(HABLA_DE_ROPA.test(t) ? { rubro: "ropa" as const } : {}), ...(/whats\s?app|mensajes?\b|te escrib|escr[ií]ban/i.test(t) ? { mensajes: true } : {}) };
+  return Object.keys(e).length ? e : undefined;
+}
 
 // Ritmo: la voz va a ~2,8 palabras por segundo; 7 palabras ~ 2,5 s. Es
 // la GUÍA antes de la voz; la regla final es por tiempo (MAX_SEGUNDOS_SIN_CAMBIO).
@@ -50,22 +75,119 @@ export const MIN_SEGUNDOS_ENTRE_ISLAS = 0.6;
 // dentro de esa permanencia, los cambios son acciones o micro-acciones
 // de la MISMA pantalla.
 export const MIN_PALABRAS_POR_PANTALLA = 4;
+// Entre que alguien se va y vuelve a entrar (la salida se ve completa).
+export const MIN_PALABRAS_IRSE_Y_VOLVER = 4;
+// Entre dos que pasan de largo en el mismo lugar (de a uno, nunca dos a la vez).
+export const MIN_PALABRAS_ENTRE_PASOS = 5;
+export const HABLA_DE_ROPA = /\b(ropa|prendas?|boutique|vestidos?|camisas?|blusas?|jeans|moda)\b/i;
+// Lo que justifica celebrar o aplaudir en la frase.
+export const JUSTIFICA_CELEBRAR = /(logr|gan[oóaé]|vend[ií]|vendes|vende\b|compr[aó]|éxito|exito|felic|celebr|aplau|lo hiciste|funcion[oó]|resultado|meta\b|r[eé]cord|genial|incre[ií]ble|por fin|¡)/i;
 
 export const contarPalabras = (narracion: string) => narracion.trim().split(/\s+/).filter(Boolean).length;
-const islaDe = (escena: IdEscena) => CATALOGO[escena].isla as IdIsla;
+const islaEn = (registro: Registro) => (escena: string) => registro.escena(escena)?.isla ?? escena;
 
 // Escenas del guion (id + narración) -> problemas del plan, en español,
 // listos para devolverle a la IA en el reintento.
-export function validarPlanIlustrado(plan: unknown, escenas: { id: string; narracion: string }[]): string[] {
+// historial: huellas de los últimos reels de la cuenta (variedad: la
+// apertura no se repite).
+// Historia narrada: las frases (escena_id) de la opción A y de la B.
+export type OpcionesDeHistoria = { a: string; b: string };
+export function validarPlanIlustrado(plan: unknown, escenas: { id: string; narracion: string }[], opciones: { historial?: HuellaVisual[]; opcionesDeHistoria?: OpcionesDeHistoria } = {}): string[] {
   const parseado = PlanIlustradoSchema.safeParse(plan);
   if (!parseado.success) return parseado.error.issues.map((i) => `${i.path.join(".") || "plan"}: ${i.message}`);
   const p = parseado.data as PlanIlustrado;
+  const registro = crearRegistro(p.composiciones, "", { caminantes: caminantesDePlan(p) });
+  const islaDe = islaEn(registro);
   const palabras = Object.fromEntries(escenas.map((e) => [e.id, contarPalabras(e.narracion)]));
-  const problemas = problemasDelPlan(p, palabras);
+  const problemas = [...(parseado.data.composiciones ?? []).flatMap((c) => problemasComposicion(c)), ...problemasDelPlan(p, palabras, registro), ...problemasVariedad(p, opciones.historial ?? [])];
 
+  // El cartel de opciones solo lo pone el código (con sus textos en el plan).
+  if (!p.opciones && p.frases.some((f) => f.acciones.some((a) => (ESCENAS_SOLO_CODIGO as readonly string[]).includes(a.escena)))) problemas.push(`la escena "opciones" no está disponible: usa las del catálogo`);
   const ids = p.frases.map((f) => f.escena_id);
   const esperados = escenas.map((e) => e.id);
   if (ids.join("|") !== esperados.join("|")) problemas.push(`el plan debe tener una entrada por frase, en orden: ${esperados.join(", ")} (llegó: ${ids.join(", ")})`);
+  // Entrar e irse (tanda 2): solo entra quien no está (al principio, si su
+  // primera acción es entrar, o después de irse) y solo se va quien está;
+  // quien se fue no hace nada hasta que vuelve a entrar.
+  if (problemas.length === 0) {
+    const presente = new Map<string, boolean>();
+    const seFue = new Map<string, number>(); // palabra global en que se fue
+    const ultimoPaso = new Map<string, number>(); // por lugar: palabra global del último que pasó de largo
+    const inicioDe: Record<string, number> = {};
+    let acum = 0;
+    for (const e of escenas) {
+      inicioDe[e.id] = acum;
+      acum += palabras[e.id];
+    }
+    const enOrden = p.frases.flatMap((f) => f.acciones.map((a) => ({ ...a, frase: f.escena_id }))).filter((a) => registro.composicion(a.escena) && a.accion !== MICRO);
+    for (const a of enOrden) {
+      const [id, verbo] = a.accion.split(".");
+      if (!registro.composicion(a.escena)!.personajes.some((u) => u.per.id === id)) continue;
+      const clave = `${a.escena}|${id}`;
+      if (!presente.has(clave)) presente.set(clave, verbo !== "entra" && verbo !== "pasa_de_largo");
+      const esta = presente.get(clave)!;
+      const pos = (inicioDe[a.frase] ?? 0) + a.palabra;
+      // Por la puerta: quien entra o se va tiene que estar cerca de ella (el
+      // plano muestra el recorrido entero, de su lugar a la puerta).
+      const cu = registro.composicion(a.escena)!;
+      const u = cu.personajes.find((x) => x.per.id === id)!;
+      if ((verbo === "entra" || verbo === "se_va") && PUERTAS[cu.c.fondo] && Math.abs(caminoDe(u, cu.c.fondo)) > DISTANCIA_MAXIMA_PUERTA)
+        problemas.push(`${a.frase}: "${id}" está muy lejos de la puerta de ${a.escena} para "${a.accion}"; ponlo en "posicion": ${posicionesCercaDeLaPuerta(cu.c.fondo).map((x) => `"${x}"`).join(" o ")}`);
+      if (verbo === "entra") {
+        if (esta) problemas.push(`${a.frase}: "${id}" ya está en ${a.escena} cuando "${a.accion}"; para que vuelva, primero ${id}.se_va (o quita esta entrada)`);
+        // Irse y volver: la salida tiene que verse completa (~1,3 s caminando).
+        const fue = seFue.get(clave);
+        if (!esta && fue !== undefined && pos - fue < MIN_PALABRAS_IRSE_Y_VOLVER) problemas.push(`${a.frase}: "${id}" vuelve a entrar ${pos - fue} palabras después de irse; deja al menos ${MIN_PALABRAS_IRSE_Y_VOLVER} palabras entre ${id}.se_va y ${id}.entra (la salida tiene que verse completa)`);
+        presente.set(clave, true);
+      } else if (verbo === "pasa_de_largo") {
+        const previo = ultimoPaso.get(a.escena);
+        if (previo !== undefined && pos - previo < MIN_PALABRAS_ENTRE_PASOS) problemas.push(`${a.frase}: "${a.accion}" llega ${pos - previo} palabras después del anterior que pasa de largo en ${a.escena}; de a uno: deja al menos ${MIN_PALABRAS_ENTRE_PASOS} palabras entre los dos (o deja uno solo)`);
+        ultimoPaso.set(a.escena, pos);
+        if (esta) problemas.push(`${a.frase}: "${id}" ya está en ${a.escena}; quien pasa de largo no está antes (cruza y se va): usa otro personaje o quita sus otras acciones`);
+        presente.set(clave, false);
+      } else if (verbo === "se_va") {
+        if (!esta) problemas.push(`${a.frase}: "${id}" no está en ${a.escena} cuando "${a.accion}"`);
+        presente.set(clave, false);
+        seFue.set(clave, pos);
+      } else if (!esta) problemas.push(`${a.frase}: "${id}" se fue de ${a.escena} y no puede "${a.accion}" hasta que vuelva a entrar (${id}.entra)`);
+    }
+  }
+  // El lugar es el que nombra la voz: si habla de ropa, la tienda de ropa
+  // (revisión del episodio 1: la tienda de frascos no ayudaba a entender).
+  const narracionTotal = escenas.map((e) => e.narracion).join(" ");
+  if (HABLA_DE_ROPA.test(narracionTotal)) for (const c of p.composiciones ?? []) if (c.fondo === "tienda") problemas.push(`${c.id}: la narración habla de ropa: usa "fondo": "tienda_ropa" (percheros, ropa doblada, maniquí), no la tienda de estantes con frascos`);
+  // Dos opciones, dos escenas: A y B no comparten ninguna (revisión del
+  // episodio 1: las dos se ilustraban con el mismo feed y no ayudaban a decidir).
+  if (opciones.opcionesDeHistoria) {
+    const deFrase = (id: string) => new Set(p.frases.find((f) => f.escena_id === id)?.acciones.filter((a) => a.accion !== MICRO).map((a) => a.escena) ?? []);
+    const a = deFrase(opciones.opcionesDeHistoria.a);
+    const b = deFrase(opciones.opcionesDeHistoria.b);
+    const comunes = [...a].filter((x) => b.has(x));
+    if (comunes.length) problemas.push(`las opciones A (${opciones.opcionesDeHistoria.a}) y B (${opciones.opcionesDeHistoria.b}) repiten ${comunes.map((c) => `"${c}"`).join(", ")}: cada opción con su propia escena, que se vean distintas`);
+  }
+  // Emociones con motivo: celebrar o aplaudir solo si la frase lo justifica
+  // (un logro, una venta, algo que salió bien), nunca "porque sí".
+  const narracionDe = Object.fromEntries(escenas.map((e) => [e.id, e.narracion]));
+  for (const f of p.frases)
+    for (const a of f.acciones) {
+      const verbo = a.accion.split(".")[1];
+      if ((verbo === "celebra" || verbo === "aplaude") && !JUSTIFICA_CELEBRAR.test(narracionDe[f.escena_id] ?? "")) problemas.push(`${f.escena_id}: "${a.accion}" sin motivo: la frase no habla de un logro ni de algo que salió bien; usa una acción que muestre lo que dice (p. ej. <id>.acomoda, <id>.senala, <id>.quieto)`);
+    }
+  // Reglas de director (revisión de la v6): cada acción del kit se puede
+  // mostrar con un plano limpio; si no, se le dice a la IA quién estorba.
+  if (problemas.length === 0) {
+    const vistas = new Set<string>();
+    for (const f of p.frases)
+      for (const a of f.acciones) {
+        if (!registro.composicion(a.escena) || a.accion === MICRO) continue;
+        const clave = `${a.escena}|${a.accion}|${a.objetivo ?? ""}`;
+        if (vistas.has(clave)) continue;
+        vistas.add(clave);
+        const r = planoLimpio(a.escena, a.accion, a.objetivo, registro);
+        const estorban = r.estorban.filter((id) => !esExtra(id));
+        if (!r.ok) problemas.push(`${f.escena_id}: la cámara no puede mostrar "${a.accion}" sin cortar a alguien en el borde${estorban.length ? ` (estorban: ${estorban.join(", ")})` : ""}; deja espacio alrededor: mueve a esos personajes a otra posicion, al "plano": "fondo" o a un pupitre`);
+      }
+  }
   if (problemas.length > 0) return problemas;
 
   // Posición global de cada acción en palabras habladas desde el inicio
@@ -144,7 +266,8 @@ export function validarPlanIlustrado(plan: unknown, escenas: { id: string; narra
 // cámara igual lo resuelve (llega hasta 0,8 s tarde); esto lo evita.
 export function ajustarPlanConTiempos(plan: PlanIlustrado, palabrasPorEscena: { escena_id: string; palabras: { inicio_s: number }[] }[]): { plan: PlanIlustrado; ajustes: string[] } {
   const ajustes: string[] = [];
-  const copia: PlanIlustrado = { frases: plan.frases.map((f) => ({ ...f, acciones: f.acciones.map((a) => ({ ...a })) })) };
+  const copia = copiar(plan);
+  const islaDe = islaEn(crearRegistro(plan.composiciones));
   const tiempo = (frase: string, i: number) => palabrasPorEscena.find((p) => p.escena_id === frase)?.palabras[i]?.inicio_s;
   const todas = () =>
     copia.frases
@@ -166,7 +289,7 @@ export function ajustarPlanConTiempos(plan: PlanIlustrado, palabrasPorEscena: { 
 }
 
 export function accionesDisponiblesTexto(): string {
-  return ID_ESCENAS.map((e) => `- ${e} (${CATALOGO[e].isla === "celular" ? "pantalla del celular" : "objeto del mundo"}):\n${Object.keys(CATALOGO[e].acciones).filter((a) => a !== MICRO).map((a) => `    · ${a}: ${definicionAccion(e, a)!.descripcion}`).join("\n")}`).join("\n");
+  return ID_ESCENAS.filter((e) => !(ESCENAS_SOLO_CODIGO as readonly string[]).includes(e)).map((e) => `- ${e} (${CATALOGO[e].isla === "celular" ? "pantalla del celular" : "objeto del mundo"}):\n${Object.keys(CATALOGO[e].acciones).filter((a) => a !== MICRO).map((a) => `    · ${a}: ${definicionAccion(e, a)!.descripcion}`).join("\n")}`).join("\n");
 }
 
 // ---------- Arreglos de ritmo (fase 2, staging 23 nov 2026) ----------
@@ -179,13 +302,15 @@ export function accionesDisponiblesTexto(): string {
 
 type AccionUbicada = { frase: string; indiceFrase: number; accion: PlanIlustrado["frases"][number]["acciones"][number] };
 
+// Conserva las composiciones del kit (antes solo copiaba las frases).
 function copiar(plan: PlanIlustrado): PlanIlustrado {
-  return { frases: plan.frases.map((f) => ({ ...f, acciones: f.acciones.map((a) => ({ ...a })) })) };
+  return { ...plan, frases: plan.frases.map((f) => ({ ...f, acciones: f.acciones.map((a) => ({ ...a })) })) };
 }
 
-function insertarMicro(plan: PlanIlustrado, frase: string, escena: IdEscena, palabra: number): boolean {
+function insertarMicro(plan: PlanIlustrado, frase: string, escena: string, palabra: number): boolean {
   const f = plan.frases.find((x) => x.escena_id === frase);
-  if (!f || f.acciones.length >= 8 || !(MICRO in CATALOGO[escena].acciones)) return false;
+  const def = crearRegistro(plan.composiciones).escena(escena);
+  if (!f || f.acciones.length >= 8 || !def || !(MICRO in def.acciones)) return false;
   if (f.acciones.some((a) => a.palabra === palabra)) return false;
   f.acciones.push({ escena, accion: MICRO, palabra });
   f.acciones.sort((x, y) => x.palabra - y.palabra);

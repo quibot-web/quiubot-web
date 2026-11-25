@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import { alinearPalabras } from "./alinearPalabras";
+import { alinearPalabras, vozIncompleta } from "./alinearPalabras";
 
 function palabra(texto: string, inicio_s: number, fin_s: number) {
   return { texto, inicio_s, fin_s };
@@ -85,5 +85,26 @@ describe("alinearPalabras", () => {
     const reales = [palabra("sabías", 0, 0.3), palabra("esto", 0.3, 0.6), palabra("es", 0.6, 0.7), palabra("grande", 0.7, 1.0)];
     const { puntaje } = alinearPalabras(escenas, reales);
     expect(puntaje).toBe(1);
+  });
+});
+
+describe("vozIncompleta (TTS cortada, caso real de la torta, 24 nov 2026)", () => {
+  const narraciones = [
+    { id: "e1", narracion: "Una torta en la vitrina no se vende sola:" },
+    { id: "e2", narracion: "muéstrala cuando alguien la está disfrutando." },
+    { id: "e3", narracion: "Síguenos para más ideas como esta." },
+  ];
+  const palabras = (texto: string) => texto.split(" ").map((p, i) => ({ texto: p, inicio_s: i * 0.4, fin_s: i * 0.4 + 0.3 }));
+  it("si la voz no dice la última frase, se detecta (puntaje bajo y la frase sin palabras)", () => {
+    const voz = palabras(`${narraciones[0].narracion} ${narraciones[1].narracion}`);
+    const a = alinearPalabras(narraciones, voz);
+    expect(a.cobertura.find((c) => c.escena_id === "e3")).toEqual({ escena_id: "e3", encontradas: 0, total: 6 });
+    const h = vozIncompleta(a).join(" ");
+    expect(h).toMatch(/e3: la voz dice 0 de 6/);
+    expect(h).toMatch(/solo dice el/);
+  });
+  it("la voz completa pasa", () => {
+    const a = alinearPalabras(narraciones, palabras(narraciones.map((n) => n.narracion).join(" ")));
+    expect(vozIncompleta(a)).toEqual([]);
   });
 });

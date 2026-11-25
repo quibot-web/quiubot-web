@@ -3,6 +3,7 @@ import { LIMITE_IDEA, MAX_PARTES_SERIE, MAX_PUNTOS_POR_REEL, clasificarIdea, pro
 import { erroresDatosDelGuion } from "./datosReales";
 import { ajustarConVozReal, generarPlanIlustrado } from "./generarPlanIlustrado";
 import type { PlanIlustrado } from "@/video/ilustrado/motor/plan";
+import type { HuellaVisual } from "@/video/ilustrado/kit/variedad";
 import { asignarEstilo, elegirEstilo, estilosDisponibles, idsFotosSinTexto } from "@/video/estilos/estilos";
 import { GuionSchema, idsDeMediaUsados, type Guion, type RecetaOrganicaId } from "@/video/guion.schema";
 import type { TemaGuion } from "@/video/tema";
@@ -12,7 +13,7 @@ import { detectarFrasesDescargo, detectarFrasesVacias, recopilarTextosEscenas } 
 import { ajustarDuracionesProporcional, limpiarHashtags, limpiarNumeracionItemsLista } from "@/video/arreglosAutomaticosGuion";
 import { validarEdicionDesdeAudio, validarEstructuraConsejosNumeradosAudio } from "@/video/visuales/validarEdicionDesdeAudio";
 import { generarVoz, type CredencialesCloudinary } from "./generarVoz";
-import { alinearPalabras } from "./alinearPalabras";
+import { alinearPalabras, vozIncompleta } from "./alinearPalabras";
 import { construirCamposDeTiempo } from "./compactarPausas";
 import { UMBRAL_SILENCIO_VOZ_DB } from "./detectarSilenciosReales";
 import { verificarPalabrasCompletas } from "./verificarPalabrasCompletas";
@@ -79,6 +80,9 @@ export type ParametrosGenerarGuionConVoz = {
   historialEstilos?: (string | null)[];
   // Reel ilustrado (fase 2): solo cuentas de REELS_ILUSTRADOS_EMAILS.
   conPlanIlustrado?: boolean;
+  // Huellas visuales de los últimos reels ilustrados de la cuenta (la más
+  // reciente primero): variedad entre reels (visuales-v2).
+  historialVisual?: HuellaVisual[];
   // Inyectable para pruebas; por defecto la misma IA del guion.
   llamarIAPlan?: (prompt: string) => Promise<string>;
 };
@@ -100,7 +104,10 @@ export type ResultadoGenerarGuionConVoz =
     }
   | { ok: false; status: number; error: string; resumenErrores?: string[]; propuestaSerie?: PropuestaSerie };
 
-export type ParametrosRegenerarVoz = { openaiKey: string; voz: string; cloudinary: CredencialesCloudinary };
+// revisarVozCompleta: revisar que la voz diga todo el guion y pedirla una
+// vez más si llegó cortada. Solo para cuentas del reel ilustrado (y el
+// arnés admin): para los clientes la voz sigue igual que antes (un intento).
+export type ParametrosRegenerarVoz = { openaiKey: string; voz: string; cloudinary: CredencialesCloudinary; revisarVozCompleta?: boolean };
 
 export type ResultadoRegenerarVoz =
   | {
@@ -119,9 +126,12 @@ export type ResultadoRegenerarVoz =
 // validadores de audio (un evento con palabra fuera de rango por el
 // nuevo conteo de palabras tiene que detectarse ACÁ, no solo en la
 // generación inicial).
-export async function regenerarVozParaGuion(escenas: Guion["escenas"], params: ParametrosRegenerarVoz): Promise<ResultadoRegenerarVoz> {
-  const hallazgosAudio = validarEdicionDesdeAudio(escenas).map((h) => `${h.escenaId}: ${h.mensaje}`);
-  const hallazgosEstructura = validarEstructuraConsejosNumeradosAudio(escenas).map((h) => `${h.escenaId}: ${h.mensaje}`);
+// recetaId "historia_narrada": sin visuales por escena ni la estructura
+// de consejos (lo que se ve lo decide el plan ilustrado).
+export async function regenerarVozParaGuion(escenas: Guion["escenas"], params: ParametrosRegenerarVoz, recetaId?: RecetaOrganicaId): Promise<ResultadoRegenerarVoz> {
+  const sinEstructura = recetaId === "historia_narrada";
+  const hallazgosAudio = sinEstructura ? [] : validarEdicionDesdeAudio(escenas).map((h) => `${h.escenaId}: ${h.mensaje}`);
+  const hallazgosEstructura = sinEstructura ? [] : validarEstructuraConsejosNumeradosAudio(escenas).map((h) => `${h.escenaId}: ${h.mensaje}`);
   const erroresTotales = [...hallazgosAudio, ...hallazgosEstructura];
   if (erroresTotales.length > 0) {
     return { ok: false, status: 400, error: "La narración editada ya no es consistente con sus eventos/visuales.", resumenErrores: erroresTotales };
@@ -156,12 +166,17 @@ export type ResultadoVozYTiempos =
 // que trae su propia narración fija.
 export async function generarVozYTiempos(narraciones: { id: string; narracion: string }[], params: ParametrosRegenerarVoz): Promise<ResultadoVozYTiempos> {
   const textoCompleto = narraciones.map((e) => e.narracion).join(" ");
-  const { audioUrl, palabras, silencios } = await generarVoz(textoCompleto, {
-    openaiKey: params.openaiKey,
-    voz: params.voz,
-    cloudinary: params.cloudinary,
-  });
-  const { palabrasPorEscena: palabrasPorEscenaCrudo, puntaje } = alinearPalabras(narraciones, palabras);
+  // La voz puede llegar incompleta (TTS cortada): se revisa con la
+  // alineación ANTES de seguir y se pide una vez más; si vuelve a fallar,
+  // no se entrega (mejor un error claro que un reel sin su última frase).
+  let intento = await generarYAlinear(textoCompleto, narraciones, params);
+  if (params.revisarVozCompleta && vozIncompleta(intento.alineacion).length > 0) intento = await generarYAlinear(textoCompleto, narraciones, params);
+  const faltas = params.revisarVozCompleta ? vozIncompleta(intento.alineacion) : [];
+  if (faltas.length > 0) {
+    return { ok: false, status: 502, error: "La voz generada llegó incompleta dos veces (le faltan palabras del guion).", resumenErrores: faltas };
+  }
+  const { audioUrl, silencios } = intento.voz;
+  const { palabrasPorEscena: palabrasPorEscenaCrudo, puntaje } = intento.alineacion;
   const { tiemposRender, palabrasPorEscena, segmentosAudio, palabrasFlat, tramosPorEscena } = construirCamposDeTiempo(palabrasPorEscenaCrudo, silencios);
 
   const hallazgosPalabrasPerdidas = verificarPalabrasCompletas(palabrasFlat, tramosPorEscena, silencios);
@@ -180,6 +195,11 @@ export async function generarVozYTiempos(narraciones: { id: string; narracion: s
     puntajeAlineacion: puntaje,
     crudo: { palabrasPorEscenaCrudo, silencios, silenciosUmbral_db: UMBRAL_SILENCIO_VOZ_DB },
   };
+}
+
+async function generarYAlinear(texto: string, narraciones: { id: string; narracion: string }[], params: ParametrosRegenerarVoz) {
+  const voz = await generarVoz(texto, { openaiKey: params.openaiKey, voz: params.voz, cloudinary: params.cloudinary });
+  return { voz, alineacion: alinearPalabras(narraciones, voz.palabras) };
 }
 
 export async function generarGuionConVoz(params: ParametrosGenerarGuionConVoz): Promise<ResultadoGenerarGuionConVoz> {
@@ -316,7 +336,9 @@ export async function generarGuionConVoz(params: ParametrosGenerarGuionConVoz): 
   if (params.conPlanIlustrado) {
     const narraciones = resultado.guion.escenas.map((e) => ({ id: e.id, narracion: e.narracion ?? "" }));
     const llamar = params.llamarIAPlan ?? ((prompt: string) => llamarOpenAI(params.apiKeyUsuario, prompt));
-    const r = await generarPlanIlustrado(narraciones, llamar);
+    // Con el kit de escenas (visuales-v2): conPlanIlustrado ya es solo
+    // para las cuentas de REELS_ILUSTRADOS_EMAILS.
+    const r = await generarPlanIlustrado(narraciones, llamar, 3, { conKit: true, historial: params.historialVisual ?? [] });
     if (r.ok) {
       plan = r.plan;
       estadoPlan = { estado: "generado", intentos: r.intentos, ajustes: r.ajustes, historial: r.historial };
@@ -329,7 +351,7 @@ export async function generarGuionConVoz(params: ParametrosGenerarGuionConVoz): 
   // todos modos se iba a descartar. Comparte la segunda mitad del
   // pipeline con regenerarVozParaGuion() (revisión en /contenido tras
   // editar una narración a mano) -- una sola implementación real.
-  const resultadoVoz = await regenerarVozParaGuion(resultado.guion.escenas, { openaiKey: params.apiKeyUsuario, voz: params.voz, cloudinary: params.cloudinary });
+  const resultadoVoz = await regenerarVozParaGuion(resultado.guion.escenas, { openaiKey: params.apiKeyUsuario, voz: params.voz, cloudinary: params.cloudinary, revisarVozCompleta: params.conPlanIlustrado === true });
   if (!resultadoVoz.ok) {
     return resultadoVoz;
   }

@@ -27,6 +27,8 @@ const ZONA_POST: Rect = { x: B, y: B, ancho: PANTALLA.ancho, alto: ALTO_BARRA_AP
 export const POST_NOMBRADO: Rect = { x: B, y: B + ALTO_BARRA_APP, ancho: PANTALLA.ancho, alto: ALTO_POST_FEED };
 const ZONA_CHAT: Rect = { x: B, y: B, ancho: PANTALLA.ancho, alto: 1030 };
 const ZONA_PERFIL: Rect = { x: B, y: B, ancho: PANTALLA.ancho, alto: 1030 };
+// La publicación propia con su botón "Promocionar" (debajo de los Me gusta).
+const ZONA_PUBLICACION: Rect = { x: B, y: B, ancho: PANTALLA.ancho, alto: 1110 };
 
 // Billetera: 600 x 450 abajo, con lugar arriba para las monedas que saltan.
 export const BILLETERA_LOCAL: Rect = { x: 80, y: 450, ancho: 600, alto: 450 };
@@ -60,6 +62,19 @@ const ZONA_RELOJ_CLIENTE: Rect = unionRects([
   rectPersona(CLIENTE_LOCAL.x, CLIENTE_LOCAL.pies, CLIENTE_LOCAL.escala),
 ]);
 
+// Cartel de opciones (Historia narrada): la pregunta final con A y B y la
+// invitación a comentar. Lo pone el código, nunca la IA, y es la única
+// excepción a "nada de texto grande" del reel ilustrado.
+// iconoA / iconoB: la miniatura animada de la escena que ilustró cada
+// opción (la pone el código), para que el cartel tenga vida.
+export const ICONOS_OPCION = ["likes", "mensajes", "monedas"] as const;
+export type IconoOpcion = (typeof ICONOS_OPCION)[number];
+export type OpcionesCartel = { a: string; b: string; iconoA?: IconoOpcion; iconoB?: IconoOpcion };
+export const CARTEL_LOCAL: Rect = { x: 40, y: 40, ancho: 820, alto: 1180 };
+const ZONA_CARTEL: Rect = { x: 0, y: 0, ancho: 900, alto: 1260 };
+// Escenas que solo pone el código (no se le ofrecen a la IA).
+export const ESCENAS_SOLO_CODIGO = ["opciones"] as const;
+
 export function unionRects(rs: Rect[]): Rect {
   const x = Math.min(...rs.map((r) => r.x));
   const y = Math.min(...rs.map((r) => r.y));
@@ -79,6 +94,7 @@ export const ISLAS = {
   multitud: { ancho: 2000, alto: 1200 },
   reloj_cliente: { ancho: 1000, alto: 1100 },
   grafica: { ancho: 640, alto: 680 },
+  opciones: { ancho: 900, alto: 1260 },
 } as const;
 export type IdIsla = keyof typeof ISLAS;
 
@@ -104,6 +120,15 @@ export const CATALOGO = {
       llega_mensaje: { descripcion: "llega un mensaje del cliente", foco: ZONA_CHAT },
       responde: { descripcion: "la tienda responde al instante (burbuja verde)", foco: ZONA_CHAT },
       se_vuelve_venta: { descripcion: "el último mensaje del cliente se convierte en una bolsa de compra", foco: ZONA_CHAT },
+    },
+  },
+  publicacion: {
+    isla: "celular",
+    acciones: {
+      micro: { descripcion: "la publicación se mueve un poco (micro-acción neutra)", foco: ZONA_PUBLICACION },
+      aparece: { descripcion: "se abre una publicación PROPIA de la marca (su cuenta, sin \"Patrocinado\") con sus Me gusta", foco: ZONA_PUBLICACION },
+      suben_likes: { descripcion: "los Me gusta de esa publicación propia suben y saltan corazones", foco: ZONA_PUBLICACION },
+      toca_promocionar: { descripcion: "el dedo toca el botón Promocionar de la publicación propia", foco: ZONA_PUBLICACION },
     },
   },
   perfil: {
@@ -150,6 +175,16 @@ export const CATALOGO = {
       sube: { descripcion: "las barras y la línea suben", foco: GRAFICA_LOCAL },
     },
   },
+  opciones: {
+    isla: "opciones",
+    acciones: {
+      micro: { descripcion: "el cartel late (micro-acción neutra)", foco: ZONA_CARTEL },
+      aparece: { descripcion: "aparece el cartel con las opciones A y B", foco: ZONA_CARTEL },
+      comenta: { descripcion: "llega una burbuja de comentario", foco: ZONA_CARTEL },
+      resalta_a: { descripcion: "se resalta la opción A", foco: ZONA_CARTEL },
+      resalta_b: { descripcion: "se resalta la opción B", foco: ZONA_CARTEL },
+    },
+  },
 } as const satisfies Record<string, DefinicionEscena>;
 
 export type IdEscena = keyof typeof CATALOGO;
@@ -159,10 +194,12 @@ export const ESCENA_VISIBLE: Record<IdEscena, string> = {
   feed: "un celular grande con un feed de publicaciones (una publicación o anuncio con su foto)",
   chat: "un celular grande con un chat y burbujas de mensajes",
   perfil: "un celular grande con el perfil de una cuenta y el botón Seguir/Siguiendo",
+  publicacion: "un celular grande con una publicación de la marca, su contador de Me gusta y el botón Promocionar",
   billetera: "una billetera grande (con monedas)",
   multitud: "una multitud de personas ilustradas",
   reloj_cliente: "un reloj grande junto a un cliente ilustrado",
   grafica: "una gráfica de barras con una línea que sube",
+  opciones: "un cartel con dos opciones, A y B, y una burbuja de comentario",
 };
 
 // Micro-acción neutra (fase 2, arreglo de ritmo): la escena que está en

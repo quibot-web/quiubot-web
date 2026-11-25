@@ -4,7 +4,10 @@
 import { spring } from "remotion";
 import { Billetera, Grafica, Moneda, Persona, Reloj, SombraPiso } from "../../Objetos";
 import { rampa, cuantas, latido, primero } from "../animacion";
-import { BILLETERA_LOCAL, BOCA_BILLETERA_LOCAL, CLIENTE_LOCAL, ELEGIDOS_MULTITUD, GRAFICA_LOCAL, ISLAS, PERSONAS_MULTITUD, RELOJ_LOCAL } from "../catalogo";
+import { BILLETERA_LOCAL, BOCA_BILLETERA_LOCAL, CARTEL_LOCAL, type IconoOpcion, CLIENTE_LOCAL, ELEGIDOS_MULTITUD, GRAFICA_LOCAL, ISLAS, PERSONAS_MULTITUD, RELOJ_LOCAL } from "../catalogo";
+import { IconoBurbuja } from "../../../iconos";
+import { colorTextoSobre } from "../../../tema";
+import { quitarGlifosFueraDeFuentes } from "../../../glifos";
 import type { PropsEscena } from "./tipos";
 import { ImagenFija } from "../../imagenesFijas";
 
@@ -130,3 +133,113 @@ export function IslaRelojCliente({ frame, d, recursos }: PropsEscena) {
 export function IslaGrafica({ frame, d, paleta }: PropsEscena) {
   return <Grafica avance={rampa(frame, primero(d.sube), 26)} color={paleta.luz} rect={GRAFICA_LOCAL} />;
 }
+
+// ---------- Cartel de opciones (Historia narrada) ----------
+// La pregunta final: A y B con su letra, la miniatura animada de la escena
+// que ilustró cada una y la invitación a comentar. Es el único texto
+// grande del reel ilustrado (lo pone el código, no la IA). Nunca quieto:
+// mientras la voz no nombra una opción, el foco va de A a B y vuelve
+// (cada ~1,2 s) y la miniatura de la que tiene el foco se anima.
+export const CUADROS_ALTERNAR = 36;
+export function focoDelCartel(frame: number, aparece: number, resaltaA?: number, resaltaB?: number): { a: number; b: number } {
+  const t = (c: number | undefined, dur = 8) => rampa(frame, c, dur);
+  // La voz nombra A y luego B: ese resaltado manda ~1 s.
+  const nombrada = [resaltaA !== undefined && frame >= resaltaA && frame < resaltaA + 30 ? "a" : null, resaltaB !== undefined && frame >= resaltaB && frame < resaltaB + 30 ? "b" : null].filter(Boolean).pop();
+  if (nombrada === "a") return { a: t(resaltaA), b: 0 };
+  if (nombrada === "b") return { a: 0, b: t(resaltaB) };
+  // Si no: alterna con un fundido suave entre una y otra. Tras un
+  // resaltado, arranca por la OTRA opción (nunca dos tramos seguidos iguales).
+  let desde = aparece;
+  let primera: "a" | "b" = "a";
+  if (resaltaB !== undefined && frame >= resaltaB + 30) [desde, primera] = [resaltaB + 30, "a"];
+  else if (resaltaA !== undefined && frame >= resaltaA + 30) [desde, primera] = [resaltaA + 30, "b"];
+  const k = (frame - desde) / CUADROS_ALTERNAR;
+  const fase = Math.floor(k);
+  const suave = Math.min(1, (k - fase) / 0.25);
+  const letra = (fase % 2 === 0) === (primera === "a") ? "a" : "b";
+  return letra === "a" ? { a: suave, b: 0 } : { a: 0, b: suave };
+}
+
+function Miniatura({ icono, color, t, activa }: { icono?: IconoOpcion; color: string; t: number; activa: boolean }) {
+  if (!icono) return null;
+  const caja = { position: "relative" as const, width: 130, height: 130, flexShrink: 0, borderRadius: 30, background: "#FFFFFF", overflow: "hidden" as const };
+  if (icono === "likes") {
+    return (
+      <div style={caja}>
+        <ImagenFija nombre="corazon-grande" ancho={86} alto={86} estilo={{ position: "absolute", left: 22, top: 26, transform: `scale(${1 + (activa ? 0.12 * Math.abs(Math.sin(t / 5)) : 0)})` }} />
+        {activa &&
+          [0, 1, 2].map((i) => {
+            const q = ((t + i * 12) % 36) / 36;
+            return <ImagenFija key={i} nombre="corazon-grande" ancho={34} alto={34} estilo={{ position: "absolute", left: 20 + i * 34, top: 100 - 90 * q, opacity: 1 - q }} />;
+          })}
+      </div>
+    );
+  }
+  if (icono === "mensajes") {
+    const n = activa ? 1 + (Math.floor(t / 12) % 3) : 3;
+    return (
+      <div style={{ ...caja, display: "flex", flexDirection: "column", justifyContent: "center", gap: 10, padding: "0 16px" }}>
+        {[0, 1, 2].map((i) => (
+          <div key={i} style={{ alignSelf: i === 1 ? "flex-end" : "flex-start", width: i === 1 ? 60 : 80, height: 26, borderRadius: 13, background: i === 1 ? "#0F7A3C" : color, opacity: i < n ? 1 : 0.15 }} />
+        ))}
+      </div>
+    );
+  }
+  // Monedas: una que sube y baja.
+  return (
+    <div style={caja}>
+      <ImagenFija nombre="moneda" ancho={80} alto={80} estilo={{ position: "absolute", left: 25, top: 26 - (activa ? 18 * Math.abs(Math.sin(t / 6)) : 0) }} />
+    </div>
+  );
+}
+
+export function IslaOpciones({ frame, fps, d, tema, opciones }: PropsEscena) {
+  if (!opciones) return null;
+  const aparece = primero(d.aparece);
+  if (aparece === undefined || frame < aparece) return null;
+  const entrada = spring({ frame: frame - aparece, fps, config: { damping: 13 } });
+  const foco = focoDelCartel(frame, aparece, primero(d.resalta_a), primero(d.resalta_b));
+  const comenta = primero(d.comenta);
+  const burbuja = comenta !== undefined && frame >= comenta ? spring({ frame: frame - comenta, fps, config: { damping: 11 } }) : 0;
+  // La invitación a comentar late suave mientras está en pantalla.
+  const lateBurbuja = burbuja >= 1 ? 1 + 0.04 * Math.sin((frame - (comenta ?? 0)) / 6) : 1;
+  const late = 1 + 0.02 * latido(frame, d.micro);
+  const { x, y, ancho, alto } = CARTEL_LOCAL;
+  const t = frame - aparece;
+  const colorB = tema.color_secundario === "#FFFFFF" ? tema.color_primario : oscurecerSiClaro(tema.color_secundario);
+  const fila = (letra: "A" | "B", texto: string, color: string, enfoque: number, otra: number, icono: IconoOpcion | undefined, top: number) => (
+    <div style={{ position: "absolute", left: 40, right: 40, top, height: 330, borderRadius: 40, background: enfoque > 0 ? mezclar("#F3F1F8", color, 0.18 * enfoque) : "#F3F1F8", border: `${6 + 4 * enfoque}px solid ${enfoque > 0 ? color : "#E2DEEC"}`, display: "flex", alignItems: "center", gap: 26, padding: "0 30px", opacity: 1 - 0.4 * otra, transform: `scale(${1 + 0.05 * enfoque})` }}>
+      <div style={{ width: 130, height: 130, flexShrink: 0, borderRadius: "50%", background: color, color: colorTextoSobre(color), display: "flex", alignItems: "center", justifyContent: "center", fontSize: 84, fontWeight: 900 }}>{letra}</div>
+      <div style={{ flex: 1, fontSize: 56, fontWeight: 800, lineHeight: 1.12, color: "#1E1B2E" }}>{quitarGlifosFueraDeFuentes(texto)}</div>
+      <Miniatura icono={icono} color={color} t={t} activa={enfoque > 0.5} />
+    </div>
+  );
+  return (
+    <div style={{ position: "absolute", inset: 0, opacity: Math.min(1, entrada * 1.4), transformOrigin: "50% 50%", transform: `scale(${(0.85 + 0.15 * entrada) * late})` }}>
+      {/* Sombra (sin box-shadow: el render del navegador no la dibuja). */}
+      <div style={{ position: "absolute", left: x + 14, top: y + 26, width: ancho, height: alto, borderRadius: 64, background: "rgba(20,16,40,0.22)" }} />
+      <div style={{ position: "absolute", left: x, top: y, width: ancho, height: alto, borderRadius: 64, background: "#FFFFFF" }}>
+        {fila("A", opciones.a, tema.color_primario, foco.a, foco.b, opciones.iconoA, 90)}
+        {fila("B", opciones.b, colorB, foco.b, foco.a, opciones.iconoB, 470)}
+        {/* Invitación a comentar. */}
+        <div style={{ position: "absolute", left: 90, right: 90, top: 880, height: 190, borderRadius: 95, background: tema.color_primario, color: colorTextoSobre(tema.color_primario), display: "flex", alignItems: "center", justifyContent: "center", gap: 28, fontSize: 64, fontWeight: 900, opacity: Math.min(1, burbuja * 1.5), transform: `scale(${(0.6 + 0.4 * burbuja) * lateBurbuja})` }}>
+          <IconoBurbuja tamano={84} />
+          <span>Comenta A o B</span>
+        </div>
+      </div>
+    </div>
+  );
+}
+function mezclar(a: string, b: string, k: number): string {
+  const n = (h: string) => parseInt(h.slice(1), 16);
+  const [x, y] = [n(a), n(b)];
+  const c = (s: number) => Math.round(((x >> s) & 255) * (1 - k) + ((y >> s) & 255) * k);
+  return `#${((c(16) << 16) | (c(8) << 8) | c(0)).toString(16).padStart(6, "0")}`;
+}
+// Un secundario muy claro (casi blanco) no se ve sobre el cartel blanco.
+function oscurecerSiClaro(hex: string): string {
+  const n = parseInt(hex.slice(1), 16);
+  const luz = (0.299 * ((n >> 16) & 255) + 0.587 * ((n >> 8) & 255) + 0.114 * (n & 255)) / 255;
+  return luz > 0.6 ? mezclar(hex, "#1E1B2E", 0.45) : hex;
+}
+
